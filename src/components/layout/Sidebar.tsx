@@ -57,22 +57,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className={cn('flex items-center gap-3 px-4 py-6', collapsed && 'justify-center px-3')}>
-          <div className="bg-white rounded-xl p-2 shadow-lg flex items-center justify-center">
+        <div className={cn('flex items-center px-4 py-6', collapsed ? 'justify-center px-3' : 'justify-center')}>
+          <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
             <Image
               src="/images/eyeadvanced-logo.png"
               alt="EyeAdvanced"
-              width={collapsed ? 32 : 36}
-              height={collapsed ? 32 : 36}
+              width={collapsed ? 32 : 160}
+              height={collapsed ? 32 : 40}
               priority
             />
           </div>
-          {!collapsed && (
-            <div>
-              <div className="font-extrabold text-base leading-5">EyeAdvanced</div>
-              <div className="text-[10px] font-semibold tracking-wide text-accent">MEDICAL SOLUTIONS</div>
-            </div>
-          )}
         </div>
 
         {/* Toggle button */}
