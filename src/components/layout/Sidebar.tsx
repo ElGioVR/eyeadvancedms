@@ -14,10 +14,10 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Eye,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -59,13 +59,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Logo */}
         <div className={cn('flex items-center px-4 py-6', collapsed ? 'justify-center px-3' : 'justify-center')}>
           <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
-            <Image
-              src="/images/eyeadvanced-logo.png"
-              alt="EyeAdvanced"
-              width={collapsed ? 32 : 160}
-              height={collapsed ? 32 : 40}
-              priority
-            />
+            <Eye className="w-8 h-8 text-[#174c78]" />
           </div>
         </div>
 
