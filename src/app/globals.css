@@ -11,6 +11,11 @@
   --success: #27ae60;
   --warning: #f39c12;
   --error: #e74c3c;
+  --surface: #ffffff;
+  --app-bg: #f5f7f9;
+  --text: #252a31;
+  --muted: #6f7a86;
+  --line: #dfe5eb;
 }
 
 * {
@@ -21,28 +26,46 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background: #f8f9fa;
-  color: #2c3e50;
+  background: var(--app-bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(0, 180, 216, 0.22);
+}
+
+.login-visual {
+  background: #0d2137;
+}
+
+.login-visual::before {
+  display: none;
+}
+
+.login-visual::after {
+  display: none;
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-700 transition-colors;
+    @apply bg-primary-600 text-white px-4 py-2 rounded-md font-semibold hover:bg-primary-700 transition-colors shadow-sm shadow-primary-900/10;
   }
   
   .btn-secondary {
-    @apply border border-primary-600 text-primary-600 px-4 py-2 rounded-lg font-medium hover:bg-primary-50 transition-colors;
+    @apply border border-primary-200 bg-white text-primary-600 px-4 py-2 rounded-md font-semibold hover:bg-primary-50 transition-colors;
   }
   
   .btn-danger {
-    @apply bg-error text-white px-4 py-2 rounded-lg font-medium hover:bg-red-600 transition-colors;
+    @apply bg-error text-white px-4 py-2 rounded-md font-semibold hover:bg-red-600 transition-colors;
   }
   
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    @apply w-full px-4 py-2.5 border border-gray-200 rounded-md bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-white rounded-lg shadow-sm shadow-gray-900/5 border border-gray-200 p-5;
   }
 }

@@ -50,7 +50,7 @@ export default function ConfirmModal({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white rounded-lg border border-gray-200 shadow-2xl shadow-gray-900/20 w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -60,7 +60,7 @@ export default function ConfirmModal({
         </button>
 
         {/* Icon */}
-        <div className={cn('w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4', iconBg)}>
+        <div className={cn('w-14 h-14 rounded-lg flex items-center justify-center mx-auto mb-4', iconBg)}>
           <AlertTriangle className={cn('w-7 h-7', iconColor)} />
         </div>
 
@@ -72,14 +72,14 @@ export default function ConfirmModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+            className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 font-semibold text-sm transition-colors"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
             className={cn(
-              'flex-1 px-4 py-2.5 text-white rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+              'flex-1 px-4 py-2.5 text-white rounded-md font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
               confirmBtn
             )}
           >

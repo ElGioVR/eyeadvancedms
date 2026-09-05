@@ -16,6 +16,7 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -51,19 +52,19 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <>
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-gradient-to-b from-primary-600 to-primary-800 text-white transition-all duration-300 z-50 flex flex-col',
+          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col shadow-xl shadow-primary-900/10',
           collapsed ? 'w-[72px]' : 'w-[260px]'
         )}
       >
         {/* Logo */}
-        <div className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+        <div className={cn('flex items-center gap-3 px-4 py-8', collapsed && 'justify-center px-3')}>
+          <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center shadow-lg shadow-cyan-950/20">
             <Eye className="w-6 h-6" />
           </div>
           {!collapsed && (
             <div>
-              <div className="font-bold text-sm">EyeAdvanced</div>
-              <div className="text-xs text-white/60">MEDICAL SOLUTIONS</div>
+              <div className="font-extrabold text-base leading-5">EyeAdvanced</div>
+              <div className="text-[10px] font-semibold tracking-wide text-accent">MEDICAL SOLUTIONS</div>
             </div>
           )}
         </div>
@@ -71,13 +72,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Toggle button */}
         <button
           onClick={onToggle}
-          className="absolute -right-3 top-20 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center text-primary-600 hover:bg-gray-100"
+          className="absolute -right-3 top-24 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center text-primary-600 hover:bg-gray-50"
+          aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
 
         {/* Menu */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-4 py-2 space-y-1">
           {menuItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
@@ -85,38 +87,48 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                  'relative flex items-center gap-3 px-4 py-3 rounded-md transition-colors',
                   isActive
-                    ? 'bg-white/20 text-white'
-                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    ? 'bg-white/14 text-white shadow-inner shadow-white/5'
+                    : 'text-white/72 hover:bg-white/8 hover:text-white',
+                  collapsed && 'justify-center px-0'
                 )}
+                title={collapsed ? item.label : undefined}
               >
-                <item.icon className="w-5 h-5" />
-                {!collapsed && <span className="font-medium">{item.label}</span>}
+                {isActive && !collapsed && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
+                <item.icon className={cn('w-5 h-5', isActive ? 'text-accent' : 'text-white/72')} />
+                {!collapsed && <span className="font-semibold text-sm">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
         {/* User & Logout */}
-        <div className="p-3 border-t border-white/20">
+        <div className="p-4 border-t border-white/12">
           {!collapsed && (
-            <div className="flex items-center gap-3 px-3 py-2 mb-2">
-              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-sm font-semibold">
+            <div className="flex items-center gap-3 px-1 py-3 mb-2">
+              <div className="w-10 h-10 bg-white text-primary-700 rounded-full flex items-center justify-center text-sm font-bold">
                 DA
               </div>
-              <div>
-                <div className="text-sm font-medium">Dra. Admin</div>
-                <div className="text-xs text-white/60">Administrador</div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold leading-5">Dra. Irina</div>
+                <div className="flex items-center gap-1 text-xs text-white/62">
+                  <ShieldCheck className="h-3 w-3" />
+                  Oftalmóloga Pediatra
+                </div>
               </div>
             </div>
           )}
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 w-full text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
+            className={cn(
+              'flex items-center gap-3 px-4 py-2.5 w-full text-white/78 hover:bg-white/10 hover:text-white rounded-md border border-white/14 transition-colors',
+              collapsed && 'justify-center px-0'
+            )}
+            title={collapsed ? 'Cerrar Sesión' : undefined}
           >
             <LogOut className="w-5 h-5" />
-            {!collapsed && <span className="font-medium">Cerrar Sesión</span>}
+            {!collapsed && <span className="font-semibold text-sm">Cerrar Sesión</span>}
           </button>
         </div>
       </aside>

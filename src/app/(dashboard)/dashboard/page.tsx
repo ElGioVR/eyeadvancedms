@@ -1,6 +1,7 @@
 'use client';
 
-import { Users, Calendar, CreditCard, Package, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { Users, Calendar, CreditCard, Package, AlertTriangle, ArrowRight } from 'lucide-react';
 
 const stats = [
   { label: 'Pacientes Totales', value: '156', icon: Users, color: 'text-primary-500', bgColor: 'bg-primary-50', trend: '+8%' },
@@ -23,104 +24,98 @@ const inventarioBajo = [
 ];
 
 const estadoColors: Record<string, string> = {
-  COMPLETADO: 'bg-emerald-100 text-emerald-700',
-  'EN CURSO': 'bg-blue-100 text-blue-700',
+  COMPLETADO: 'bg-emerald-50 text-emerald-700',
+  'EN CURSO': 'bg-sky-50 text-sky-700',
   PENDIENTE: 'bg-gray-100 text-gray-600',
-};
-
-const estadoIcons: Record<string, React.ReactNode> = {
-  COMPLETADO: <CheckCircle className="w-4 h-4 text-emerald-500" />,
-  'EN CURSO': <Clock className="w-4 h-4 text-blue-500" />,
-  PENDIENTE: <Clock className="w-4 h-4 text-gray-400" />,
 };
 
 export default function DashboardPage() {
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="mx-auto max-w-[1180px]">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">HOLA, Dra. Irina 👋</h1>
-        <p className="text-gray-500">Bienvenida de vuelta a tu panel clínico de hoy.</p>
+        <h1 className="text-2xl font-extrabold tracking-normal text-gray-900">HOLA, Dra. Irina</h1>
+        <p className="mt-1 text-sm text-gray-500">Bienvenida de vuelta a tu panel clínico de hoy.</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
+      <div className="mb-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-500">{stat.label}</span>
-              <div className={`w-10 h-10 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+          <div key={stat.label} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm shadow-gray-900/5">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <span className="text-sm font-semibold text-gray-500">{stat.label}</span>
+              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.bgColor}`}>
                 <stat.icon className={`w-5 h-5 ${stat.color}`} />
               </div>
             </div>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold text-gray-900">{stat.value}</span>
+            <div className="flex min-h-9 items-end gap-2">
+              <span className="text-3xl font-extrabold leading-none text-gray-900">{stat.value}</span>
               {stat.trend && (
-                <span className="text-sm font-medium text-emerald-500 mb-1">▲ {stat.trend}</span>
+                <span className="mb-0.5 rounded bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-600">▲ {stat.trend}</span>
               )}
               {stat.alert && (
-                <span className="text-xs font-medium text-warning bg-orange-50 px-2 py-0.5 rounded">Alert</span>
+                <span className="mb-0.5 rounded bg-orange-50 px-2 py-0.5 text-xs font-bold text-warning">Alert</span>
               )}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         {/* Citas de hoy */}
-        <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">CITAS DE HOY</h2>
-            <a href="/consultas" className="text-sm text-primary-500 hover:text-primary-600 font-medium">
-              Ver agenda completa →
-            </a>
+        <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-900/5">
+          <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+            <h2 className="text-base font-extrabold text-gray-900">CITAS DE HOY</h2>
+            <Link href="/consultas" className="inline-flex items-center gap-1 text-sm font-bold text-primary-500 hover:text-primary-700">
+              Ver agenda completa <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-100">
             {citas.map((cita, idx) => (
-              <div key={idx} className="p-4 hover:bg-gray-50 flex items-center gap-4">
-                <div className="text-sm font-medium text-gray-900 w-20">{cita.hora}</div>
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{cita.paciente}</div>
-                  <div className="text-sm text-gray-500">{cita.seguro}</div>
+              <div key={idx} className="grid gap-3 px-4 py-4 transition-colors hover:bg-gray-50 md:grid-cols-[68px_minmax(150px,1fr)_minmax(130px,0.9fr)_120px_106px] md:items-center">
+                <div className="text-sm font-extrabold leading-tight text-primary-700">{cita.hora}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-bold text-gray-900">{cita.paciente}</div>
+                  <div className="truncate text-sm text-gray-500">{cita.seguro}</div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-700">{cita.doctor}</div>
-                  <div className="text-xs text-gray-400">{cita.diagnostico}</div>
+                <div className="min-w-0 md:text-left">
+                  <div className="truncate text-sm font-medium text-gray-700">{cita.doctor}</div>
+                  <div className="truncate text-xs text-gray-400">{cita.diagnostico}</div>
                 </div>
-                <span className="text-xs text-gray-500 w-24 text-right">{cita.tipo}</span>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${estadoColors[cita.estado]}`}>
+                <span className="rounded-md bg-gray-50 px-3 py-1.5 text-center text-xs font-medium text-gray-600">{cita.tipo}</span>
+                <span className={`rounded-md px-3 py-1.5 text-center text-xs font-extrabold ${estadoColors[cita.estado]}`}>
                   {cita.estado}
                 </span>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
         {/* Inventario bajo */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">INVENTARIO BAJO</h2>
-            <a href="/inventario" className="text-sm text-primary-500 hover:text-primary-600 font-medium">
-              Ver inventario completo →
-            </a>
+        <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-900/5">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
+            <h2 className="text-base font-extrabold text-gray-900">INVENTARIO BAJO</h2>
+            <Link href="/inventario" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-bold text-primary-500 hover:text-primary-700">
+              Ver inventario <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="space-y-3 p-4">
             {inventarioBajo.map((item, idx) => (
-              <div key={idx} className="p-4 hover:bg-gray-50">
+              <div key={idx} className="rounded-lg bg-orange-50/80 p-4 transition-colors hover:bg-orange-50">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-warning mt-0.5" />
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900 text-sm">{item.nombre}</div>
+                    <div className="text-sm font-bold leading-snug text-gray-900">{item.nombre}</div>
                     <div className="text-xs text-gray-500">{item.detalle}</div>
                   </div>
-                  <span className="text-xs font-medium text-warning bg-orange-50 px-2 py-1 rounded">
+                  <span className="whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-xs font-extrabold text-warning">
                     {item.stock} unidades
                   </span>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

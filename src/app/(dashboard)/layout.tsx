@@ -12,11 +12,14 @@ export default function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen flex bg-[#f5f7f9]">
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className="flex-1 flex flex-col" style={{ marginLeft: sidebarCollapsed ? '72px' : '260px' }}>
+      <div
+        className="flex-1 flex flex-col transition-[margin] duration-300"
+        style={{ marginLeft: sidebarCollapsed ? '72px' : '260px' }}
+      >
         <TopBar />
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 overflow-auto px-6 py-8">
           {children}
         </main>
       </div>
