@@ -13,11 +13,10 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Eye,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
 } from 'lucide-react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -57,9 +56,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className={cn('flex items-center gap-3 px-4 py-8', collapsed && 'justify-center px-3')}>
-          <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center shadow-lg shadow-cyan-950/20">
-            <Eye className="w-6 h-6" />
+        <div className={cn('flex items-center gap-3 px-4 py-6', collapsed && 'justify-center px-3')}>
+          <div className="bg-white rounded-xl p-2 shadow-lg flex items-center justify-center">
+            <Image
+              src="/images/eyeadvanced-logo.png"
+              alt="EyeAdvanced"
+              width={collapsed ? 32 : 36}
+              height={collapsed ? 32 : 36}
+              priority
+            />
           </div>
           {!collapsed && (
             <div>
