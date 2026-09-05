@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Eye,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -57,16 +58,22 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className={cn('flex items-center px-4 py-6', collapsed ? 'justify-center px-3' : 'justify-center')}>
-          <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
-            <Image
-              src="/images/eyeadvanced-logo.png"
-              alt="EyeAdvanced"
-              width={collapsed ? 32 : 160}
-              height={collapsed ? 32 : 40}
-              priority
-            />
-          </div>
+        <div className="flex items-center px-4 py-6 justify-center">
+          {collapsed ? (
+            <div className="bg-white rounded-xl p-2.5 shadow-lg flex items-center justify-center">
+              <Eye className="w-6 h-6 text-[#174c78]" />
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
+              <Image
+                src="/images/eyeadvanced-logo.png"
+                alt="EyeAdvanced"
+                width={160}
+                height={40}
+                priority
+              />
+            </div>
+          )}
         </div>
 
         {/* Toggle button */}
