@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
