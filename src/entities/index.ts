@@ -1,0 +1,10 @@
+export { Usuario, RolUsuario } from './Usuario.entity';
+export { Doctor } from './Doctor.entity';
+export { Paciente, SexoPaciente } from './Paciente.entity';
+export { Consulta, TipoConsulta, TipoVisita } from './Consulta.entity';
+export { Cobro, MetodoPago, Moneda } from './Cobro.entity';
+export { Aseguranza } from './Aseguranza.entity';
+export { CategoriaLente } from './CategoriaLente.entity';
+export { Proveedor } from './Proveedor.entity';
+export { Lente, EstadoLente } from './Lente.entity';
+export { LenteXConsulta, OjoPaciente } from './LenteXConsulta.entity';
