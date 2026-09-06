@@ -62,9 +62,18 @@ export default function PacientesPage() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">PACIENTES</h1>
-        <p className="mt-1 text-sm text-gray-400">Listado general y altas del sistema.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">PACIENTES</h1>
+          <p className="mt-1 text-sm text-gray-400">Listado general y altas del sistema.</p>
+        </div>
+        <button
+          onClick={() => setShowNewPatient(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Nuevo Paciente
+        </button>
       </div>
 
       <div className="flex gap-6">
@@ -277,17 +286,6 @@ export default function PacientesPage() {
               </div>
             </div>
           </div>
-        )}
-
-        {/* Floating button to open sidebar */}
-        {!showNewPatient && (
-          <button
-            onClick={() => setShowNewPatient(true)}
-            className="fixed bottom-8 right-8 z-40 inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-primary-600/30 hover:bg-primary-700 transition-all hover:shadow-xl hover:-translate-y-0.5"
-          >
-            <Plus className="h-5 w-5" />
-            Nuevo Paciente
-          </button>
         )}
       </div>
     </div>
