@@ -26,6 +26,7 @@ import PageHeader from '@/components/ui/PageHeader';
 
 interface ConsultaAPI {
   id: string;
+  folio: string | null;
   paciente: string;
   iniciales: string;
   doctor: string;
@@ -66,7 +67,7 @@ export default function ConsultasPage() {
   const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
     return consultas.filter((c) => {
-      const matchesSearch = !term || c.paciente.toLowerCase().includes(term) || c.doctor.toLowerCase().includes(term) || c.id.toLowerCase().includes(term);
+      const matchesSearch = !term || c.paciente.toLowerCase().includes(term) || c.doctor.toLowerCase().includes(term) || (c.folio && c.folio.toLowerCase().includes(term));
       const matchesDoctor = filterDoctor === 'Todos' || c.doctor === filterDoctor;
       return matchesSearch && matchesDoctor;
     });
@@ -152,7 +153,7 @@ export default function ConsultasPage() {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
                   {[
-                    { label: 'ID', hide: '' },
+                    { label: 'Folio', hide: '' },
                     { label: 'Paciente', hide: '' },
                     { label: 'Doctor', hide: 'hidden md:table-cell' },
                     { label: 'Fecha / Hora', hide: 'hidden md:table-cell' },
@@ -172,7 +173,7 @@ export default function ConsultasPage() {
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((c) => (
                   <tr key={c.id} className="group transition-colors hover:bg-gray-50/60">
-                    <td className="px-5 py-4 text-xs font-bold text-primary-600">{c.id.slice(0, 8)}</td>
+                    <td className="px-5 py-4 text-xs font-bold text-primary-600">{c.folio || c.id.slice(0, 8)}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <Avatar initials={c.iniciales} className="bg-primary-500" size="sm" />
