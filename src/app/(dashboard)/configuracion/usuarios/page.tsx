@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
+import { useToast } from '@/components/ui/Toast';
 
 interface UsuarioAPI {
   id: string;
@@ -60,6 +61,7 @@ function formatDate(dateStr: string | null): string {
 
 export default function UsuariosPage() {
   const { data: usuarios, loading, error, refetch } = useFetch<UsuarioAPI>('/api/configuracion/usuarios');
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState<UsuarioAPI | null>(null);
@@ -137,11 +139,12 @@ export default function UsuariosPage() {
       }
       // Close sidebar immediately, then refresh data
       handleCloseSidebar();
+      toast('Usuario creado exitosamente');
       await refetch();
     } finally {
       setSaving(false);
     }
-  }, [formNombre, formEmail, formPassword, formRol, refetch, handleCloseSidebar]);
+  }, [formNombre, formEmail, formPassword, formRol, refetch, handleCloseSidebar, toast]);
 
   const handleUpdate = useCallback(async () => {
     if (!editingUser) return;
@@ -166,11 +169,12 @@ export default function UsuariosPage() {
         return;
       }
       handleCloseSidebar();
+      toast('Usuario actualizado exitosamente');
       await refetch();
     } finally {
       setSaving(false);
     }
-  }, [editingUser, formNombre, formEmail, formPassword, formRol, refetch, handleCloseSidebar]);
+  }, [editingUser, formNombre, formEmail, formPassword, formRol, refetch, handleCloseSidebar, toast]);
 
   const handleToggleActive = useCallback(async (user: UsuarioAPI) => {
     const res = await fetch('/api/configuracion/usuarios', {
@@ -178,19 +182,25 @@ export default function UsuariosPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: user.id, activo: !user.activo }),
     });
-    if (res.ok) await refetch();
-  }, [refetch]);
+    if (res.ok) {
+      toast(user.activo ? 'Usuario desactivado' : 'Usuario activado');
+      await refetch();
+    }
+  }, [refetch, toast]);
 
   const handleDelete = useCallback(async (userId: string) => {
     if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
     setDeleting(userId);
     try {
       const res = await fetch(`/api/configuracion/usuarios?id=${userId}`, { method: 'DELETE' });
-      if (res.ok) await refetch();
+      if (res.ok) {
+        toast('Usuario eliminado');
+        await refetch();
+      }
     } finally {
       setDeleting(null);
     }
-  }, [refetch]);
+  }, [refetch, toast]);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
