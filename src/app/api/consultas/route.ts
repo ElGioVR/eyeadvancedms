@@ -75,6 +75,7 @@ export async function GET() {
 
     return {
       id: c.id,
+      folio: c.folio || null,
       paciente_id: c.paciente_id,
       paciente: nombrePaciente,
       iniciales,
@@ -117,10 +118,19 @@ export async function POST(request: Request) {
   const tipoConsulta = tipoConsultaMap[body.tipo_consulta] || body.tipo_consulta || 'CONSULTA';
   const tipoVisita = tipoVisitaMap[body.tipo_visita] || body.tipo_visita || 'PRIMERA_VEZ';
 
+  // Generate folio: CON-YY-NNNNN
+  const year = new Date().getFullYear().toString().slice(-2);
+  const { count } = await supabase
+    .from('consultas')
+    .select('id', { count: 'exact', head: true });
+  const seq = ((count || 0) + 1).toString().padStart(5, '0');
+  const folio = `CON-${year}-${seq}`;
+
   // 1. Create consulta
   const { data: consultaData, error: consultaError } = await supabase
     .from('consultas')
     .insert({
+      folio,
       paciente_id: body.paciente_id,
       doctor_id: body.doctor_id,
       fecha: body.fecha,
