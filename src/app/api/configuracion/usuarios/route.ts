@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
+const errorTranslations: Record<string, string> = {
+  'Unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',
+  'A user with this email address has already been registered': 'Ya existe un usuario con este correo electrónico',
+  'Password should be at least 6 characters': 'La contraseña debe tener al menos 6 caracteres',
+  'New password should be different from the old password': 'La nueva contraseña debe ser diferente a la anterior',
+  'User not found': 'Usuario no encontrado',
+  'Missing user ID': 'Falta el ID del usuario',
+};
+
 export async function GET() {
   const supabase = getSupabaseAdmin();
 
@@ -53,7 +62,7 @@ export async function POST(request: Request) {
   });
 
   if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
   }
 
   // 2. Insert profile in usuarios table (best effort — auth user is already created)
@@ -95,7 +104,7 @@ export async function PATCH(request: Request) {
   if (Object.keys(authUpdates).length > 0) {
     const { error: authError } = await supabase.auth.admin.updateUserById(id, authUpdates);
     if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
     }
   }
 
@@ -112,7 +121,7 @@ export async function PATCH(request: Request) {
       .update(profileUpdates)
       .eq('id', id);
     if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[profileError.message] || profileError.message }, { status: 500 });
     }
   }
 
@@ -122,7 +131,7 @@ export async function PATCH(request: Request) {
       password: updates.password,
     });
     if (pwError) {
-      return NextResponse.json({ error: pwError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[pwError.message] || pwError.message }, { status: 500 });
     }
   }
 
@@ -145,13 +154,13 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[profileError.message] || profileError.message }, { status: 500 });
   }
 
   // 2. Delete auth user
   const { error: authError } = await supabase.auth.admin.deleteUser(id);
   if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
