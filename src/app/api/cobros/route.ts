@@ -8,7 +8,7 @@ export async function GET() {
     .select(`
       *,
       pacientes:paciente_id (nombre_completo),
-      doctores:doctor_id (nombre_completo),
+      consultas:consulta_id (doctor_id, diagnostico),
       aseguranzas:aseguranza_id (nombre)
     `)
     .order('created_at', { ascending: false });
@@ -17,22 +17,42 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const result = data.map((c) => ({
-    id: c.id,
-    paciente: (c.pacientes as any)?.nombre_completo || '',
-    doctor: (c.doctores as any)?.nombre_completo || '',
-    fecha: c.fecha_pago || c.created_at,
-    monto: c.monto,
-    metodo_pago: c.metodo_pago,
-    moneda: c.moneda,
-    pagado: c.pagado,
-    folio: c.folio,
-    notas: c.notas,
-    aseguradora: (c.aseguranzas as any)?.nombre || '',
-    consulta_id: c.consulta_id,
-    paciente_id: c.paciente_id,
-    created_at: c.created_at,
-  }));
+  // Resolve doctor names from consulta → doctor
+  const doctorIds = [...new Set(
+    (data || [])
+      .map((c) => (c.consultas as any)?.doctor_id)
+      .filter(Boolean)
+  )];
+  const doctorMap = new Map<string, string>();
+  if (doctorIds.length > 0) {
+    const { data: doctores } = await supabase
+      .from('doctores')
+      .select('id, nombre_completo')
+      .in('id', doctorIds);
+    (doctores || []).forEach((d) => doctorMap.set(d.id, d.nombre_completo));
+  }
+
+  const result = data.map((c) => {
+    const consulta = c.consultas as any;
+    const doctorId = consulta?.doctor_id;
+    return {
+      id: c.id,
+      paciente: (c.pacientes as any)?.nombre_completo || '',
+      doctor: doctorId ? doctorMap.get(doctorId) || '' : '',
+      diagnostico: consulta?.diagnostico || '',
+      fecha: c.fecha_pago || c.created_at,
+      monto: c.monto,
+      metodo_pago: c.metodo_pago,
+      moneda: c.moneda,
+      pagado: c.pagado,
+      folio: c.folio,
+      notas: c.notas,
+      aseguradora: (c.aseguranzas as any)?.nombre || '',
+      consulta_id: c.consulta_id,
+      paciente_id: c.paciente_id,
+      created_at: c.created_at,
+    };
+  });
 
   return NextResponse.json(result);
 }
