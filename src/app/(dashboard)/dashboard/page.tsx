@@ -99,7 +99,7 @@ const maxSeguroPacientes = Math.max(...aseguranzasData.map((s) => s.pacientes));
 export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="HOLA, Dra. Irina"
           subtitle="Bienvenida de vuelta a tu panel clínico de hoy."
@@ -125,7 +125,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -143,24 +143,29 @@ export default function DashboardPage() {
             {citas.map((cita) => (
               <div
                 key={`${cita.hora}-${cita.paciente}`}
-                className="group grid gap-3 px-6 py-4 transition-colors hover:bg-gray-50/60 md:grid-cols-[72px_minmax(160px,1fr)_minmax(140px,0.9fr)_110px_110px] md:items-center"
+                className="group flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-gray-50/60 md:grid md:grid-cols-[72px_minmax(160px,1fr)_minmax(140px,0.9fr)_110px_110px] md:items-center"
               >
-                <div className="flex items-center gap-2">
-                  <span className="hidden h-2 w-2 rounded-full bg-primary-400 md:block" />
-                  <span className="text-sm font-extrabold leading-tight text-primary-700">{cita.hora}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="hidden h-2 w-2 rounded-full bg-primary-400 md:block" />
+                    <span className="text-sm font-extrabold leading-tight text-primary-700">{cita.hora}</span>
+                  </div>
+                  <StatusBadge status={cita.estado} config={estadoConfig} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 md:order-none">
                   <div className="truncate font-bold text-gray-900 group-hover:text-primary-700 transition-colors">{cita.paciente}</div>
-                  <div className="truncate text-[13px] text-gray-400">{cita.seguro}</div>
+                  <div className="truncate text-[13px] text-gray-400 md:block">{cita.seguro}</div>
                 </div>
-                <div className="min-w-0 md:text-left">
+                <div className="hidden min-w-0 md:block md:text-left">
                   <div className="truncate text-[13px] font-medium text-gray-600">{cita.doctor}</div>
                   <div className="truncate text-xs text-gray-400">{cita.diagnostico}</div>
                 </div>
-                <span className="w-fit rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-center text-xs font-semibold text-gray-500">
+                <span className="hidden w-fit rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-center text-xs font-semibold text-gray-500 md:block">
                   {cita.tipo}
                 </span>
-                <StatusBadge status={cita.estado} config={estadoConfig} />
+                <div className="hidden md:block">
+                  <StatusBadge status={cita.estado} config={estadoConfig} />
+                </div>
               </div>
             ))}
           </div>
@@ -203,7 +208,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,1fr)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,1fr)]">
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
             <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Ingresos de la Semana</h2>

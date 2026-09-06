@@ -12,7 +12,7 @@ const perfilActividad: PerfilActividad[] = [
 
 export default function PerfilPage() {
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       {/* Main form */}
       <div className="space-y-6">
         {/* Photo */}

@@ -122,7 +122,7 @@ export default function HistorialMedicoPage() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <Link
           href="/pacientes"
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
@@ -142,7 +142,7 @@ export default function HistorialMedicoPage() {
 
       {/* Patient info card */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center gap-6 px-6 py-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-purple-500 text-xl font-bold text-white">
             MG
           </div>
@@ -191,7 +191,7 @@ export default function HistorialMedicoPage() {
         </nav>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Main content */}
         <div className="flex-1 min-w-0">
           {/* ========== RESUMEN ========== */}
@@ -203,14 +203,14 @@ export default function HistorialMedicoPage() {
               <div className="space-y-4">
                 {visitas.map((visita) => (
                   <div key={visita.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-extrabold text-primary-700">{visita.fecha}</span>
                         <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', visita.tipoColor)}>{visita.tipo}</span>
                       </div>
                       <button className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">Ver detalle <span className="text-xs">→</span></button>
                     </div>
-                    <div className="grid grid-cols-4 gap-4 px-6 py-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Médico Especialista</p>
                         <p className="text-sm font-bold text-gray-900">{visita.medico}</p>
@@ -246,7 +246,7 @@ export default function HistorialMedicoPage() {
               <div className="space-y-4">
                 {consultas.map((c) => (
                   <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-extrabold text-primary-700">{c.fecha}</span>
                         <span className="text-sm font-semibold text-gray-600">· {c.doctor}</span>
@@ -255,8 +255,8 @@ export default function HistorialMedicoPage() {
                         <CheckCircle className="h-3 w-3" />{c.estado}
                       </span>
                     </div>
-                    <div className="px-6 py-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-4">
+                    <div className="px-4 py-3 sm:px-6 sm:py-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Motivo</p>
                           <p className="text-sm font-bold text-gray-900">{c.motivo}</p>
@@ -266,7 +266,7 @@ export default function HistorialMedicoPage() {
                           <p className="text-sm font-bold text-gray-900">{c.diagnostico}</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Agudeza Visual</p>
                           <p className="text-sm text-gray-700">{c.agudezaVisual}</p>
@@ -299,28 +299,29 @@ export default function HistorialMedicoPage() {
                 <span className="text-sm text-gray-400">{procedimientos.length} procedimientos</span>
               </div>
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/50">
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fecha</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Procedimiento</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Doctor</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Ojo</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Resultado</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fecha</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Procedimiento</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Doctor</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Ojo</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Resultado</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {procedimientos.map((p) => (
                       <tr key={p.id} className="group hover:bg-gray-50/60 transition-colors">
-                        <td className="px-6 py-4 text-sm font-bold text-primary-700">{p.fecha}</td>
-                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{p.procedimiento}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{p.doctor}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700">{p.fecha}</td>
+                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900">{p.procedimiento}</td>
+                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600">{p.doctor}</td>
+                        <td className="px-4 py-3 sm:px-6 sm:py-4">
                           <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600">{p.ojo}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">{p.resultado}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 max-w-xs">{p.resultado}</td>
+                        <td className="px-4 py-3 sm:px-6 sm:py-4">
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
                             <CheckCircle className="h-3 w-3" />{p.estado}
                           </span>
@@ -329,6 +330,7 @@ export default function HistorialMedicoPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </>
           )}
@@ -343,7 +345,7 @@ export default function HistorialMedicoPage() {
               <div className="space-y-4">
                 {lentes.map((l) => (
                   <div key={l.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
                       <div className="flex items-center gap-3">
                         <Glasses className="h-4 w-4 text-primary-500" />
                         <span className="text-sm font-extrabold text-gray-900">{l.tipo}</span>
@@ -356,7 +358,7 @@ export default function HistorialMedicoPage() {
                         {l.estado}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 px-6 py-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 py-3 sm:px-6 sm:py-4">
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Esférico</p>
                         <p className="text-sm font-bold text-gray-900">{l.esferico}</p>
@@ -370,7 +372,7 @@ export default function HistorialMedicoPage() {
                         <p className="text-sm text-gray-700">{l.material}</p>
                       </div>
                     </div>
-                    <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-between">
+                    <div className="border-t border-gray-100 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="text-sm text-gray-500">
                         <span className="font-semibold">Proveedor:</span> {l.proveedor}
                       </div>
@@ -412,12 +414,14 @@ export default function HistorialMedicoPage() {
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
                         <CheckCircle className="h-3 w-3" />{e.estado}
                       </span>
-                      <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                      <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                        <Printer className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="hidden sm:flex items-center gap-2">
+                        <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                        <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                          <Printer className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -427,7 +431,7 @@ export default function HistorialMedicoPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-[360px] shrink-0 space-y-5">
+        <div className="w-full lg:w-[360px] shrink-0 space-y-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-5 py-3">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Diagnósticos Activos</h3>

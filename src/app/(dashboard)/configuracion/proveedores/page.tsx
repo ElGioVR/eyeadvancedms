@@ -45,7 +45,7 @@ export default function ProveedoresPage() {
             <div className={cn('h-1.5 w-full', p.color)} />
             <div className="p-5">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-center gap-3">
                   <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg text-white', p.color)}>
                     <Truck className="h-5 w-5" />
                   </div>

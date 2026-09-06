@@ -75,7 +75,7 @@ export default function InventarioPage() {
   }, [baseFiltered, filterStock]);
 
   const headerActions = (
-    <div className="flex gap-3">
+    <div className="flex flex-col sm:flex-row gap-3">
       <button onClick={() => setShowScanner(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
         <Camera className="h-4 w-4" /> ESCANEAR CÓDIGO DE BARRAS
       </button>
@@ -95,7 +95,7 @@ export default function InventarioPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por código, marca, modelo, grado refractivo..." />
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtrar:</span>
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categoriaOptions} />
           <FilterSelect value={filterMarca} onChange={setFilterMarca} options={marcaOptions} />
@@ -113,7 +113,7 @@ export default function InventarioPage() {
               'rounded-xl border bg-white shadow-sm overflow-hidden transition-all hover:shadow-md',
               sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-gray-200'
             )}>
-              <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
                 <div className="flex items-center gap-3">
                   <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold', estadoConfig[lente.estado]?.bg, estadoConfig[lente.estado]?.text)}>
                     {lente.id}
@@ -132,8 +132,8 @@ export default function InventarioPage() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 bg-gray-50/30 px-6 py-4">
-                <div className="grid grid-cols-6 gap-4">
+              <div className="border-t border-gray-100 bg-gray-50/30 px-4 py-3 sm:px-6 sm:py-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                   {[
                     { label: 'Esférico (SE)', value: lente.esferico },
                     { label: 'Cilíndrico (CYL)', value: lente.cilindrico },
@@ -150,28 +150,28 @@ export default function InventarioPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
-                <div className="flex items-center gap-4 text-xs text-gray-500">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 px-4 py-3 sm:px-6">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                   <span>Proveedor: <span className="font-bold text-gray-700">{lente.proveedor}</span></span>
                   <span>Caducidad: <span className="font-bold text-gray-700">{lente.caducidad}</span></span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {(stockBajo || sinStock) && (
                     <button className={cn(
                       'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white hover:transition-colors',
                       sinStock ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
                     )}>
-                      <RotateCcw className="h-3 w-3" /> Reordenar
+                      <RotateCcw className="h-3 w-3" /> <span className="hidden sm:inline">Reordenar</span>
                     </button>
                   )}
                   <button onClick={() => { setShowAdjustStock(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                    <SlidersHorizontal className="h-3 w-3" /> Ajustar Stock
+                    <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
                   </button>
                   <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                    <History className="h-3 w-3" /> Historial
+                    <History className="h-3 w-3" /> <span className="hidden sm:inline">Historial</span>
                   </button>
                   <button onClick={() => setShowNewLente(true)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                    <Pencil className="h-3 w-3" /> Editar
+                    <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
                   </button>
                 </div>
               </div>
@@ -245,7 +245,7 @@ export default function InventarioPage() {
                   <PlusIcon className="h-4 w-4" />
                 </button>
               </div>
-              <div className="flex gap-3">
+    <div className="flex flex-col sm:flex-row gap-3">
                 <button onClick={() => setShowAdjustStock(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
                 <button className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">CONFIRMAR</button>
               </div>

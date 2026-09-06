@@ -36,7 +36,7 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-1 -mb-px overflow-x-auto">
+        <nav className="flex gap-1 -mb-px overflow-x-auto px-2 sm:px-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.label;
             return (

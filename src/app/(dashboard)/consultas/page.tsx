@@ -83,53 +83,64 @@ export default function ConsultasPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <SearchInput
           value={search}
           onChange={setSearch}
           placeholder="Buscar por paciente, doctor o ID..."
-          className="flex-1 min-w-[280px]"
+          className="flex-1 sm:min-w-[280px]"
         />
-        <FilterSelect
-          value={filterEstado}
-          onChange={setFilterEstado}
-          options={['Todos', 'COMPLETADA', 'EN CURSO', 'PENDIENTE']}
-        />
-        <FilterSelect
-          value={filterTipo}
-          onChange={setFilterTipo}
-          options={['Todos', 'Primera Vez', 'Seguimiento', 'Graduación', 'Control']}
-        />
-        <FilterSelect
-          value={filterDoctor}
-          onChange={setFilterDoctor}
-          options={['Todos', 'Dra. Irina', 'Dr. Sánchez', 'Dra. Martha', 'Dr. Bayardo']}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <FilterSelect
+            value={filterEstado}
+            onChange={setFilterEstado}
+            options={['Todos', 'COMPLETADA', 'EN CURSO', 'PENDIENTE']}
+          />
+          <FilterSelect
+            value={filterTipo}
+            onChange={setFilterTipo}
+            options={['Todos', 'Primera Vez', 'Seguimiento', 'Graduación', 'Control']}
+          />
+          <FilterSelect
+            value={filterDoctor}
+            onChange={setFilterDoctor}
+            options={['Todos', 'Dra. Irina', 'Dr. Sánchez', 'Dra. Martha', 'Dr. Bayardo']}
+          />
+        </div>
       </div>
 
           {filtered.length === 0 ? (
             <EmptyState icon={Calendar} title="No se encontraron consultas" description="Intente ajustar los filtros de búsqueda." />
           ) : (
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
-                    {['ID', 'Paciente', 'Doctor', 'Fecha / Hora', 'Tipo', 'Diagnóstico', 'Estado', 'Cobro', 'Acciones'].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 ${h === 'Cobro' ? 'text-right' : 'text-left'}`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
+                    {[
+                      { label: 'ID', hide: '' },
+                      { label: 'Paciente', hide: '' },
+                      { label: 'Doctor', hide: 'hidden md:table-cell' },
+                      { label: 'Fecha / Hora', hide: 'hidden md:table-cell' },
+                      { label: 'Tipo', hide: 'hidden lg:table-cell' },
+                      { label: 'Diagnóstico', hide: 'hidden lg:table-cell' },
+                      { label: 'Estado', hide: '' },
+                      { label: 'Cobro', hide: '' },
+                      { label: 'Acciones', hide: 'hidden sm:table-cell' },
+                    ].map((h) => (
+                      <th
+                        key={h.label}
+                        className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 ${h.label === 'Cobro' ? 'text-right' : 'text-left'} ${h.hide}`}
+                      >
+                        {h.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -139,20 +150,26 @@ export default function ConsultasPage() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar initials={c.iniciales} className={c.color} size="sm" />
-                          <span className="text-sm font-bold text-gray-900">{c.paciente}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-bold text-gray-900 block truncate">{c.paciente}</span>
+                            <span className="sm:hidden text-xs text-gray-400">{c.cobro}</span>
+                          </div>
+                          <div className="sm:hidden flex items-center gap-1">
+                            <button onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-sm text-gray-600">{c.doctor}</td>
-                      <td className="px-5 py-4 text-sm text-gray-600">{c.fecha}</td>
-                      <td className="px-5 py-4">
+                      <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600">{c.doctor}</td>
+                      <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600">{c.fecha}</td>
+                      <td className="hidden lg:table-cell px-5 py-4">
                         <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">{c.tipo}</span>
                       </td>
-                      <td className="px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.diagnostico}</td>
+                      <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.diagnostico}</td>
                       <td className="px-5 py-4">
                         <StatusBadge status={c.estado} config={estadoConfig} />
                       </td>
                       <td className="px-5 py-4 text-right text-sm font-bold text-gray-900">{c.cobro}</td>
-                      <td className="px-5 py-4">
+                      <td className="hidden sm:table-cell px-5 py-4">
                         <div className="flex items-center gap-1">
                           <button onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
                           <button className="text-gray-400 hover:text-primary-600 transition-colors"><FileText className="h-4 w-4" /></button>
@@ -162,6 +179,7 @@ export default function ConsultasPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
               <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-6 py-3">
                 <span className="text-sm text-gray-400">Mostrando {filtered.length} de {consultasData.length} consultas</span>
               </div>

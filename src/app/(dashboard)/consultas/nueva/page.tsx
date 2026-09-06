@@ -117,7 +117,7 @@ export default function NuevaConsultaPage() {
               </div>
               <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancelar</button>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormInput label="Nombre completo" required value={newPatient.nombre} onChange={(v) => updateNewPatient('nombre', v)} placeholder="Nombre del paciente" />
               <FormInput label="Edad" required value={newPatient.edad} onChange={(v) => updateNewPatient('edad', v)} placeholder="Edad" type="number" />
               <FormSelect label="Sexo" required value={newPatient.sexo} onChange={(v) => updateNewPatient('sexo', v)} options={sexoOptions} />
@@ -203,11 +203,11 @@ export default function NuevaConsultaPage() {
               )}
             </div>
             {pacienteSeleccionado && !showDropdown && (
-              <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
+              <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
                 <Avatar initials={pacienteSeleccionado.iniciales} className={pacienteSeleccionado.color} size="sm" />
                 <span className="font-medium text-gray-900">{pacienteSeleccionado.nombre}</span>
-                <span>{pacienteSeleccionado.edad} años</span>
-                <span>{pacienteSeleccionado.sexo === 'H' ? 'Hombre' : 'Mujer'}</span>
+                <span className="hidden sm:inline">{pacienteSeleccionado.edad} años</span>
+                <span className="hidden sm:inline">{pacienteSeleccionado.sexo === 'H' ? 'Hombre' : 'Mujer'}</span>
                 <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>
                 <span className="rounded bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-600 ring-1 ring-sky-200">SX: {pacienteSeleccionado.sx}</span>
               </div>
@@ -216,7 +216,7 @@ export default function NuevaConsultaPage() {
         )}
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0 space-y-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4">
@@ -226,15 +226,15 @@ export default function NuevaConsultaPage() {
               <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900">Datos de Consulta</h2>
             </div>
             <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect label="Doctor" required value={consultationData.doctor} onChange={(v) => updateConsultation('doctor', v)} options={['', ...doctoresData.map((d) => d.nombre)]} />
                 <FormInput label="Fecha de Consulta" value={consultationData.fecha} onChange={(v) => updateConsultation('fecha', v)} type="date" />
               </div>
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormInput label="Hora Inicio" value={consultationData.horaInicio} onChange={(v) => updateConsultation('horaInicio', v)} type="time" />
                 <FormInput label="Hora Fin" value={consultationData.horaFin} onChange={(v) => updateConsultation('horaFin', v)} type="time" />
               </div>
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect label="Tipo de Consulta" value={consultationData.tipo} onChange={(v) => updateConsultation('tipo', v)} options={consultTypeOptions} />
                 <FormSelect label="Tipo de Visita" value={consultationData.tipoVisita} onChange={(v) => updateConsultation('tipoVisita', v)} options={visitTypeOptions} />
               </div>
@@ -258,23 +258,23 @@ export default function NuevaConsultaPage() {
               <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900">Datos de Cobro</h2>
             </div>
             <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect label="Aseguradora" value={consultationData.aseguradora} onChange={(v) => updateConsultation('aseguradora', v)} options={insuranceOptions} />
                 <FormSelect label="Método de Pago" value={consultationData.metodoPago} onChange={(v) => updateConsultation('metodoPago', v)} options={paymentMethodOptions} />
               </div>
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect label="Moneda" value={consultationData.moneda} onChange={(v) => updateConsultation('moneda', v)} options={['MXN - Peso Mexicano', 'USD - Dólar']} />
                 <FormInput label="Costo" value={consultationData.costo} onChange={(v) => updateConsultation('costo', v)} placeholder="0.00" />
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-gray-400" />
               <span className="text-xs text-gray-400">Los campos con <span className="text-red-500">*</span> son obligatorios.</span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <Link href="/consultas" className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</Link>
               <button className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">GUARDAR BORRADOR</button>
               <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
@@ -285,7 +285,7 @@ export default function NuevaConsultaPage() {
           </div>
         </div>
 
-        <div className="w-[300px] shrink-0 space-y-5">
+        <div className="w-full lg:w-[300px] lg:shrink-0 space-y-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="px-6 py-4">
               <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900">Historial Reciente</h2>
@@ -340,7 +340,7 @@ export default function NuevaConsultaPage() {
                 <p className="text-xs text-gray-500">{pacienteSeleccionado?.edad} años • {pacienteSeleccionado?.sexo === 'H' ? 'Hombre' : 'Mujer'}</p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200">
                 <span className="text-gray-400">Aseguradora</span>
                 <p className="font-bold text-gray-900">{pacienteSeleccionado?.aseguradora}</p>
@@ -360,7 +360,7 @@ export default function NuevaConsultaPage() {
             <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
               <ClipboardList className="h-4 w-4 text-primary-600" /> Datos de Consulta
             </h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <PreviewField label="Doctor" value={consultationData.doctor || '—'} />
               <PreviewField label="Fecha" value={consultationData.fecha || '—'} />
               <PreviewField label="Hora Inicio" value={consultationData.horaInicio || '—'} />
@@ -379,7 +379,7 @@ export default function NuevaConsultaPage() {
             <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
               <Banknote className="h-4 w-4 text-amber-600" /> Datos de Cobro
             </h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <PreviewField label="Aseguradora" value={consultationData.aseguradora || '—'} />
               <PreviewField label="Método de Pago" value={consultationData.metodoPago || 'No seleccionado'} />
               <PreviewField label="Moneda" value={consultationData.moneda || '—'} />

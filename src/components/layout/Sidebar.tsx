@@ -36,9 +36,11 @@ const menuItems = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -51,10 +53,28 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <>
+      {/* Backdrop for mobile */}
+      <div
+        className={cn(
+          'fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 lg:hidden',
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        )}
+        onClick={onClose}
+      />
+
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col shadow-xl shadow-primary-900/10',
-          collapsed ? 'w-[72px]' : 'w-[260px]'
+          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col flex-shrink-0 shadow-xl shadow-primary-900/10',
+          // Desktop (xl+): respects collapsed prop, always visible
+          'xl:relative xl:translate-x-0',
+          collapsed ? 'xl:w-[72px]' : 'xl:w-[260px]',
+          // Tablet (lg–xl): always collapsed 72px, visible
+          'lg:w-[72px] lg:relative lg:translate-x-0',
+          // Mobile (<lg): overlay, slides in/out
+          'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:h-full',
+          collapsed && !isOpen ? 'max-lg:w-[72px]' : 'max-lg:w-[260px]',
+          // Mobile visibility controlled by isOpen
+          isOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
         )}
       >
         {/* Logo */}
@@ -76,10 +96,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </div>
 
-        {/* Toggle button */}
+        {/* Toggle button – only visible on xl+ */}
         <button
           onClick={onToggle}
-          className="absolute -right-3 top-24 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center text-primary-600 hover:bg-gray-50"
+          className="hidden xl:flex absolute -right-3 top-24 w-6 h-6 bg-white rounded-full shadow-md items-center justify-center text-primary-600 hover:bg-gray-50"
           aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -101,6 +121,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   collapsed && 'justify-center px-0'
                 )}
                 title={collapsed ? item.label : undefined}
+                // Close mobile sidebar on navigation
+                onClick={() => { if (window.innerWidth < 1024) onClose(); }}
               >
                 {isActive && !collapsed && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
                 <item.icon className={cn('w-5 h-5', isActive ? 'text-accent' : 'text-white/72')} />

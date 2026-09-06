@@ -26,7 +26,7 @@ export default function SistemaPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         {/* Config */}
         <div className="space-y-6">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

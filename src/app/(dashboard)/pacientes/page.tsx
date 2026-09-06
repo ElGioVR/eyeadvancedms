@@ -69,7 +69,7 @@ export default function PacientesPage() {
               value={search}
               onChange={setSearch}
               placeholder="Buscar por nombre, teléfono, ID..."
-              className="flex-1 min-w-[280px]"
+              className="min-w-0 w-full sm:w-auto sm:min-w-[280px]"
             />
             <FilterSelect
               value={filterSexo}
@@ -82,7 +82,7 @@ export default function PacientesPage() {
             {filtered.map((paciente) => (
               <div
                 key={paciente.id}
-                className="group flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm transition-all hover:shadow-md hover:border-gray-300"
+                className="group flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md hover:border-gray-300 flex-wrap"
               >
                 <Avatar
                   initials={paciente.iniciales}
@@ -112,11 +112,11 @@ export default function PacientesPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
                   >
                     <FileText className="h-3.5 w-3.5" />
-                    Historial
+                    <span className="hidden sm:inline">Historial</span>
                   </Link>
                   <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
                     <Calendar className="h-3.5 w-3.5" />
-                    Agendar
+                    <span className="hidden sm:inline">Agendar</span>
                   </button>
                 </div>
               </div>

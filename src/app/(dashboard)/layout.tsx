@@ -10,16 +10,20 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex bg-[#f5f7f9]">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div
-        className="flex-1 flex flex-col transition-[margin] duration-300"
-        style={{ marginLeft: sidebarCollapsed ? '72px' : '260px' }}
-      >
-        <TopBar />
-        <main className="flex-1 overflow-auto px-6 py-8">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <main className="flex-1 overflow-auto px-4 sm:px-6 py-8">
           {children}
         </main>
       </div>

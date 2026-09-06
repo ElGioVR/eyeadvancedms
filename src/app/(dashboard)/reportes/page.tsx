@@ -174,7 +174,7 @@ export default function ReportesPage() {
         title="REPORTES CLÍNICOS Y FINANCIEROS"
         subtitle="Monitorea el rendimiento del equipo, diagnósticos comunes y flujos financieros."
         action={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
               <Download className="h-4 w-4" /> Exportar Excel
             </button>
@@ -187,10 +187,10 @@ export default function ReportesPage() {
 
       <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <span className="text-sm font-bold text-gray-500">Periodo:</span>
-        <div className="relative">
-          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+        <div className="relative w-full sm:w-auto">
+          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="w-full appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
             {periodoOptions.map((p) => <option key={p}>{p}</option>)}
           </select>
         </div>
@@ -201,7 +201,7 @@ export default function ReportesPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {resumenStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Actividad de Hoy</SectionTitle>
               <div className="space-y-3">
@@ -234,7 +234,7 @@ export default function ReportesPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {pacienteStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Distribución por Edad</SectionTitle>
               <BarChart data={pacientesPorEdad} height={200} />
@@ -256,7 +256,7 @@ export default function ReportesPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {consultaStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Consultas por Tipo</SectionTitle>
               <BarChart data={consultasPorTipo} height={200} />
@@ -286,18 +286,18 @@ export default function ReportesPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {financieroStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
           </div>
-          <div className="grid gap-6 xl:grid-cols-5">
-            <div className="xl:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Ingresos Mensuales (Últimos 6 Meses)</SectionTitle>
               <BarChart data={ingresosMensuales} height={220} />
             </div>
-            <div className="xl:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Métodos de Pago (%)</SectionTitle>
               <DonutChart data={metodosPago} centerValue="$345k" centerLabel="Total" />
             </div>
           </div>
-          <div className="grid gap-6 xl:grid-cols-5">
-            <div className="xl:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Consultas por Médico</SectionTitle>
               <div className="space-y-5">
                 {consultasPorDoctor.map((m) => (
@@ -305,7 +305,7 @@ export default function ReportesPage() {
                 ))}
               </div>
             </div>
-            <div className="xl:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Diagnósticos Más Frecuentes</SectionTitle>
               <div className="space-y-4">
                 {diagnosticos.map((d) => (
@@ -322,7 +322,7 @@ export default function ReportesPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {inventarioStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
               <SectionTitle>Lentes por Categoría</SectionTitle>
               <BarChart data={inventarioPorCategoria} height={200} />

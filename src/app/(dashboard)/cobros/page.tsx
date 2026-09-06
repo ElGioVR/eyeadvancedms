@@ -72,20 +72,20 @@ export default function CobrosPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <SearchInput
               value={search}
               onChange={setSearch}
               placeholder="Buscar por paciente, folio o ID..."
-              className="flex-1 min-w-[280px]"
+              className="flex-1 sm:min-w-[280px]"
             />
             <FilterSelect
               value={filterEstado}
@@ -98,19 +98,27 @@ export default function CobrosPage() {
             <EmptyState icon={DollarSign} title="No se encontraron cobros" description="Intente ajustar los filtros de búsqueda." />
           ) : (
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
-                    {['Folio', 'Paciente', 'Doctor', 'Concepto', 'Método', 'Total', 'Estado', 'Acciones'].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 ${h === 'Total' ? 'text-right' : 'text-left'}`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
+                    {[
+                      { label: 'Folio', hide: '' },
+                      { label: 'Paciente', hide: '' },
+                      { label: 'Doctor', hide: 'hidden md:table-cell' },
+                      { label: 'Concepto', hide: 'hidden lg:table-cell' },
+                      { label: 'Método', hide: 'hidden md:table-cell' },
+                      { label: 'Total', hide: '' },
+                      { label: 'Estado', hide: '' },
+                      { label: 'Acciones', hide: 'hidden sm:table-cell' },
+                    ].map((h) => (
+                      <th
+                        key={h.label}
+                        className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 ${h.label === 'Total' ? 'text-right' : 'text-left'} ${h.hide}`}
+                      >
+                        {h.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -125,9 +133,9 @@ export default function CobrosPage() {
                           <div className="text-sm font-bold text-gray-900">{cobro.paciente}</div>
                           <div className="text-xs text-gray-400">{cobro.fecha}</div>
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-600">{cobro.doctor}</td>
-                        <td className="px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{cobro.concepto}</td>
-                        <td className="px-5 py-4">
+                        <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600">{cobro.doctor}</td>
+                        <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{cobro.concepto}</td>
+                        <td className="hidden md:table-cell px-5 py-4">
                           <div className="flex items-center gap-1.5">
                             <MetodoIcon className="h-3.5 w-3.5 text-gray-400" />
                             <span className="text-sm text-gray-600">{cobro.metodo}</span>
@@ -142,7 +150,7 @@ export default function CobrosPage() {
                         <td className="px-5 py-4">
                           <StatusBadge status={cobro.estado} config={estadoConfig} />
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="hidden sm:table-cell px-5 py-4">
                           <div className="flex items-center gap-1">
                             <button className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
                             <button className="text-gray-400 hover:text-primary-600 transition-colors"><FileText className="h-4 w-4" /></button>
@@ -153,6 +161,7 @@ export default function CobrosPage() {
                   })}
                 </tbody>
               </table>
+              </div>
               <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-6 py-3">
                 <span className="text-sm text-gray-400">Mostrando {filtered.length} de {cobrosData.length} cobros</span>
               </div>
@@ -161,7 +170,7 @@ export default function CobrosPage() {
         </div>
 
         {showNewCobro && (
-          <div className="w-[400px] shrink-0">
+          <div className="w-full lg:w-[400px] lg:shrink-0">
             <div className="sticky top-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Nuevo Cobro</h3>
@@ -204,7 +213,7 @@ export default function CobrosPage() {
                     <option>Transferencia</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Monto <span className="text-red-500">*</span></label>
                     <input type="text" placeholder="$ 0.00" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
