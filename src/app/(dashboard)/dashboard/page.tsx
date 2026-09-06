@@ -143,18 +143,15 @@ export default function DashboardPage() {
             {citas.map((cita) => (
               <div
                 key={`${cita.hora}-${cita.paciente}`}
-                className="group flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-gray-50/60 md:grid md:grid-cols-[72px_minmax(160px,1fr)_minmax(140px,0.9fr)_110px_110px] md:items-center"
+                className="group flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-50/60 md:grid md:grid-cols-[72px_minmax(160px,1fr)_minmax(140px,0.9fr)_110px_110px] md:items-center md:gap-0"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="hidden h-2 w-2 rounded-full bg-primary-400 md:block" />
-                    <span className="text-sm font-extrabold leading-tight text-primary-700">{cita.hora}</span>
-                  </div>
-                  <StatusBadge status={cita.estado} config={estadoConfig} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="hidden h-2 w-2 rounded-full bg-primary-400 md:block" />
+                  <span className="text-sm font-extrabold leading-tight text-primary-700">{cita.hora}</span>
                 </div>
-                <div className="min-w-0 md:order-none">
+                <div className="flex-1 min-w-0 md:order-none">
                   <div className="truncate font-bold text-gray-900 group-hover:text-primary-700 transition-colors">{cita.paciente}</div>
-                  <div className="truncate text-[13px] text-gray-400 md:block">{cita.seguro}</div>
+                  <div className="truncate text-[13px] text-gray-400">{cita.seguro}</div>
                 </div>
                 <div className="hidden min-w-0 md:block md:text-left">
                   <div className="truncate text-[13px] font-medium text-gray-600">{cita.doctor}</div>
@@ -163,7 +160,7 @@ export default function DashboardPage() {
                 <span className="hidden w-fit rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-center text-xs font-semibold text-gray-500 md:block">
                   {cita.tipo}
                 </span>
-                <div className="hidden md:block">
+                <div className="shrink-0 md:block">
                   <StatusBadge status={cita.estado} config={estadoConfig} />
                 </div>
               </div>
