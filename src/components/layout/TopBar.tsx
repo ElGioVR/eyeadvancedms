@@ -15,7 +15,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           {onMenuToggle && (
             <button
               onClick={onMenuToggle}
-              className="xl:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
+              className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
               aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
