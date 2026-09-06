@@ -62,8 +62,11 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isDesktop = useIsDesktop();
 
-  // On tablet (lg–xl), always icon-only regardless of collapsed prop
-  const showLabels = isDesktop && !collapsed;
+  // Mobile (<lg): 260px when open → show labels
+  // Tablet (lg–xl): always 72px → icon-only
+  // Desktop (xl+): 260px or 72px depending on collapsed
+  const sidebarWide = isDesktop ? !collapsed : isOpen;
+  const showLabels = sidebarWide;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
