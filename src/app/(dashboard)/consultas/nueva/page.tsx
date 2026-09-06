@@ -78,6 +78,8 @@ export default function NuevaConsultaPage() {
 
   const [newPatient, setNewPatient] = useState({
     nombre_completo: '',
+    sexo: 'H',
+    fecha_nacimiento: '',
     telefono: '',
     email: '',
     direccion: '',
@@ -270,6 +272,8 @@ export default function NuevaConsultaPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
+                    <FormSelect label="Sexo" required value={newPatient.sexo} onChange={(v) => setNewPatient((p) => ({ ...p, sexo: v }))} options={['H', 'M']} displayOptions={['Hombre', 'Mujer']} />
+                    <FormInput label="Fecha de nacimiento" required value={newPatient.fecha_nacimiento} onChange={(v) => setNewPatient((p) => ({ ...p, fecha_nacimiento: v }))} type="date" />
                     <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
                     <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
                     <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
@@ -289,7 +293,7 @@ export default function NuevaConsultaPage() {
                             const created = await res.json();
                             setPacienteSeleccionado(created);
                             setShowNewPatientForm(false);
-                            setNewPatient({ nombre_completo: '', telefono: '', email: '', direccion: '' });
+                            setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '' });
                             toast('Paciente creado exitosamente');
                           }
                         } catch {}

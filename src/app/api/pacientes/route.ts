@@ -71,6 +71,8 @@ export async function POST(request: Request) {
 
   const insertData: Record<string, any> = {
     nombre_completo: body.nombre_completo || body.nombre,
+    sexo: 'MASCULINO',
+    fecha_nacimiento: '2000-01-01',
   };
 
   if (body.sexo) insertData.sexo = body.sexo === 'H' ? 'MASCULINO' : body.sexo === 'M' ? 'FEMENINO' : body.sexo;
