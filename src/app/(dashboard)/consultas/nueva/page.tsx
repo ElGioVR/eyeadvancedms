@@ -382,29 +382,6 @@ export default function NuevaConsultaPage() {
         </div>
       </div>
 
-      {/* Preview Modal */}
-      <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} maxWidth="max-w-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
-            <Eye className="h-5 w-5 text-primary-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900">Vista Previa de Consulta</h2>
-            <p className="text-xs text-gray-400">Revise la información antes de finalizar</p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {pacienteSeleccionado && (
-            <div className="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-100">
-              <div className="flex items-center gap-3 mb-3">
-                <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="lg" />
-                <div>
-                  <h3 className="text-base font-extrabold text-gray-900">{pacienteSeleccionado.nombre_completo}</h3>
-                  <p className="text-xs text-gray-500">{pacienteSeleccionado.edad ? `${pacienteSeleccionado.edad} años` : ''} {pacienteSeleccionado.sexo ? `• ${pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''}</p>
-        </div>
-      </div>
-
       {/* New Patient Form */}
       {showNewPatientForm && (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -456,6 +433,29 @@ export default function NuevaConsultaPage() {
           </div>
         </div>
       )}
+
+      {/* Preview Modal */}
+      <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} maxWidth="max-w-2xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
+            <Eye className="h-5 w-5 text-primary-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-900">Vista Previa de Consulta</h2>
+            <p className="text-xs text-gray-400">Revise la información antes de finalizar</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {pacienteSeleccionado && (
+            <div className="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-100">
+              <div className="flex items-center gap-3 mb-3">
+                <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="lg" />
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900">{pacienteSeleccionado.nombre_completo}</h3>
+                  <p className="text-xs text-gray-500">{pacienteSeleccionado.edad ? `${pacienteSeleccionado.edad} años` : ''} {pacienteSeleccionado.sexo ? `• ${pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''}</p>
+                </div>
+              </div>
             </div>
           )}
 
