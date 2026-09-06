@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   Search,
@@ -219,7 +220,7 @@ export default function ConsultasPage() {
       </div>
 
       {/* Detail Modal */}
-      {selectedConsulta && (
+      {selectedConsulta && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedConsulta(null)} />
           <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[calc(100vh-48px)] overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
@@ -297,7 +298,8 @@ export default function ConsultasPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
