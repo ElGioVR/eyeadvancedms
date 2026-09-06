@@ -64,17 +64,15 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col flex-shrink-0 shadow-xl shadow-primary-900/10',
-          // Desktop (xl+): respects collapsed prop, always visible
-          'xl:relative xl:translate-x-0',
-          collapsed ? 'xl:w-[72px]' : 'xl:w-[260px]',
-          // Tablet (lg–xl): always collapsed 72px, visible
-          'lg:w-[72px] lg:relative lg:translate-x-0',
+          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col shadow-xl shadow-primary-900/10',
           // Mobile (<lg): overlay, slides in/out
-          'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:h-full',
-          collapsed && !isOpen ? 'max-lg:w-[72px]' : 'max-lg:w-[260px]',
-          // Mobile visibility controlled by isOpen
-          isOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
+          'max-lg:w-[260px]',
+          isOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+          // Tablet (lg–xl): always collapsed 72px, always visible
+          'lg:w-[72px] lg:translate-x-0',
+          // Desktop (xl+): respects collapsed prop
+          'xl:translate-x-0',
+          collapsed ? 'xl:w-[72px]' : 'xl:w-[260px]'
         )}
       >
         {/* Logo */}
@@ -121,7 +119,6 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                   collapsed && 'justify-center px-0'
                 )}
                 title={collapsed ? item.label : undefined}
-                // Close mobile sidebar on navigation
                 onClick={() => { if (window.innerWidth < 1024) onClose(); }}
               >
                 {isActive && !collapsed && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
