@@ -252,6 +252,56 @@ export default function NuevaConsultaPage() {
                   {pacienteSeleccionado.aseguradora && <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>}
                 </div>
               )}
+
+              {/* New Patient Form — inline below search */}
+              {showNewPatientForm && (
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
+                        <User className="h-5 w-5 text-primary-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900">Nuevo Paciente</h2>
+                        <p className="text-xs text-gray-400">Complete los datos para registrar al paciente</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancelar</button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
+                    <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
+                    <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
+                    <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
+                  </div>
+                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200">
+                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+                    <button
+                      onClick={async () => {
+                        if (!newPatient.nombre_completo.trim()) return;
+                        try {
+                          const res = await fetch('/api/pacientes', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newPatient),
+                          });
+                          if (res.ok) {
+                            const created = await res.json();
+                            setPacienteSeleccionado(created);
+                            setShowNewPatientForm(false);
+                            setNewPatient({ nombre_completo: '', telefono: '', email: '', direccion: '' });
+                            toast('Paciente creado exitosamente');
+                          }
+                        } catch {}
+                      }}
+                      disabled={!newPatient.nombre_completo.trim()}
+                      className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+                    >
+                      GUARDAR Y SELECCIONAR
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -381,58 +431,6 @@ export default function NuevaConsultaPage() {
           </div>
         </div>
       </div>
-
-      {/* New Patient Form */}
-      {showNewPatientForm && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="px-6 py-5">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
-                  <User className="h-5 w-5 text-primary-600" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900">Nuevo Paciente</h2>
-                  <p className="text-xs text-gray-400">Complete los datos para registrar al paciente</p>
-                </div>
-              </div>
-              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancelar</button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
-              <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
-              <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
-              <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
-            </div>
-            <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
-              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
-              <button
-                onClick={async () => {
-                  if (!newPatient.nombre_completo.trim()) return;
-                  try {
-                    const res = await fetch('/api/pacientes', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(newPatient),
-                    });
-                    if (res.ok) {
-                      const created = await res.json();
-                      setPacienteSeleccionado(created);
-                      setShowNewPatientForm(false);
-                      setNewPatient({ nombre_completo: '', telefono: '', email: '', direccion: '' });
-                      toast('Paciente creado exitosamente');
-                    }
-                  } catch {}
-                }}
-                disabled={!newPatient.nombre_completo.trim()}
-                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
-              >
-                GUARDAR Y SELECCIONAR
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Preview Modal */}
       <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} maxWidth="max-w-2xl">
