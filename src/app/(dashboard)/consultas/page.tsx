@@ -44,6 +44,7 @@ export default function ConsultasPage() {
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [filterTipo, setFilterTipo] = useState('Todos');
+  const [filterDoctor, setFilterDoctor] = useState('Todos');
 
   const filtered = consultasData.filter((c) => {
     const matchSearch = c.paciente.toLowerCase().includes(search.toLowerCase()) ||
@@ -51,7 +52,8 @@ export default function ConsultasPage() {
       c.doctor.toLowerCase().includes(search.toLowerCase());
     const matchEstado = filterEstado === 'Todos' || c.estado === filterEstado;
     const matchTipo = filterTipo === 'Todos' || c.tipo === filterTipo;
-    return matchSearch && matchEstado && matchTipo;
+    const matchDoctor = filterDoctor === 'Todos' || c.doctor === filterDoctor;
+    return matchSearch && matchEstado && matchTipo && matchDoctor;
   });
 
   return (
@@ -124,6 +126,20 @@ export default function ConsultasPage() {
             <option>Seguimiento</option>
             <option>Graduación</option>
             <option>Control</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        </div>
+        <div className="relative">
+          <select
+            value={filterDoctor}
+            onChange={(e) => setFilterDoctor(e.target.value)}
+            className="appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          >
+            <option>Todos</option>
+            <option>Dra. Irina</option>
+            <option>Dr. Sánchez</option>
+            <option>Dra. Martha</option>
+            <option>Dr. Bayardo</option>
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
         </div>
