@@ -63,15 +63,17 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from('pacientes')
     .insert({
-      nombre_completo: body.nombre,
-      sexo: body.sexo === 'H' ? 'MASCULINO' : 'FEMENINO',
-      fecha_nacimiento: body.fecha_nacimiento,
-      edad: body.edad,
-      telefono: body.telefono,
-      email: body.email,
-      direccion: body.direccion,
-      contacto_emergencia: body.contacto_emergencia,
-      tel_emergencia: body.tel_emergencia,
+      nombre_completo: body.nombre_completo || body.nombre,
+      sexo: body.sexo === 'H' ? 'MASCULINO' : body.sexo === 'M' ? 'FEMENINO' : body.sexo || 'MASCULINO',
+      fecha_nacimiento: body.fecha_nacimiento || null,
+      edad: body.edad || null,
+      telefono: body.telefono || null,
+      email: body.email || null,
+      direccion: body.direccion || null,
+      contacto_emergencia: body.contacto_emergencia || null,
+      tel_emergencia: body.tel_emergencia || null,
+      aseguradora: body.aseguradora || null,
+      numero_seguro: body.numero_seguro || null,
     })
     .select()
     .single();

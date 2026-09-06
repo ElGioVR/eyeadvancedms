@@ -71,9 +71,17 @@ export default function NuevaConsultaPage() {
   const [searchPaciente, setSearchPaciente] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showNewPatientForm, setShowNewPatientForm] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [newPatient, setNewPatient] = useState({
+    nombre_completo: '',
+    telefono: '',
+    email: '',
+    direccion: '',
+  });
 
   const [consultationData, setConsultationData] = useState({
     doctorId: '',
@@ -198,7 +206,7 @@ export default function NuevaConsultaPage() {
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                 />
                 {showDropdown && (
-                  <div className="absolute z-50 mt-2 w-full max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
                     {filteredPacientes.length > 0 ? (
                       filteredPacientes.map((p) => {
                         const initials = getInitials(p.nombre_completo);
@@ -218,8 +226,20 @@ export default function NuevaConsultaPage() {
                         );
                       })
                     ) : (
-                      <EmptyState icon={User} title="No se encontraron pacientes" />
+                      <div className="px-4 py-3 text-sm text-gray-400">No se encontraron pacientes</div>
                     )}
+                    <button
+                      onClick={() => { setShowNewPatientForm(true); setShowDropdown(false); }}
+                      className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-left hover:bg-primary-50 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
+                        <User className="h-5 w-5 text-primary-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-primary-700">Crear nuevo paciente</div>
+                        <div className="text-xs text-primary-400">Agregar paciente no registrado al sistema</div>
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -382,8 +402,60 @@ export default function NuevaConsultaPage() {
                 <div>
                   <h3 className="text-base font-extrabold text-gray-900">{pacienteSeleccionado.nombre_completo}</h3>
                   <p className="text-xs text-gray-500">{pacienteSeleccionado.edad ? `${pacienteSeleccionado.edad} años` : ''} {pacienteSeleccionado.sexo ? `• ${pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''}</p>
+        </div>
+      </div>
+
+      {/* New Patient Form */}
+      {showNewPatientForm && (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
+                  <User className="h-5 w-5 text-primary-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900">Nuevo Paciente</h2>
+                  <p className="text-xs text-gray-400">Complete los datos para registrar al paciente</p>
                 </div>
               </div>
+              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancelar</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
+              <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
+              <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
+              <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
+            </div>
+            <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
+              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+              <button
+                onClick={async () => {
+                  if (!newPatient.nombre_completo.trim()) return;
+                  try {
+                    const res = await fetch('/api/pacientes', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(newPatient),
+                    });
+                    if (res.ok) {
+                      const created = await res.json();
+                      setPacienteSeleccionado(created);
+                      setShowNewPatientForm(false);
+                      setNewPatient({ nombre_completo: '', telefono: '', email: '', direccion: '' });
+                      toast('Paciente creado exitosamente');
+                    }
+                  } catch {}
+                }}
+                disabled={!newPatient.nombre_completo.trim()}
+                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+              >
+                GUARDAR Y SELECCIONAR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
             </div>
           )}
 
