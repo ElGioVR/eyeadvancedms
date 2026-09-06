@@ -64,6 +64,7 @@ interface FormSelectProps {
   value: string;
   onChange: (value: string) => void;
   options: string[];
+  displayOptions?: string[];
   required?: boolean;
   className?: string;
 }
@@ -73,6 +74,7 @@ export function FormSelect({
   value,
   onChange,
   options,
+  displayOptions,
   required,
   className,
 }: FormSelectProps) {
@@ -84,9 +86,9 @@ export function FormSelect({
         required={required}
         className="block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
       >
-        {options.map((option) => (
+        {options.map((option, i) => (
           <option key={option} value={option}>
-            {option}
+            {displayOptions ? displayOptions[i] || option : option}
           </option>
         ))}
       </select>
