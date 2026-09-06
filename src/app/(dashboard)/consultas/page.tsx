@@ -2,302 +2,196 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, ChevronDown, AlertTriangle, Clock } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Calendar,
+  ChevronDown,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  User,
+  FileText,
+  Eye,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const pacientesBusqueda = [
-  { id: 1, nombre: 'Mateo Rodríguez', telefono: '664-123-4567', edad: 8, sexo: 'M', seguro: 'Seguros Monterrey', diagnostico: 'Miopía progresiva', iniciales: 'MR', color: 'bg-primary-500' },
-  { id: 2, nombre: 'Sofía González', telefono: '664-987-6543', edad: 12, sexo: 'F', seguro: 'Particular', diagnostico: 'Estrabismo divergente', iniciales: 'SG', color: 'bg-purple-500' },
-  { id: 3, nombre: 'Carlos Mendoza', telefono: '664-456-7890', edad: 35, sexo: 'M', seguro: 'AXA', diagnostico: 'Astigmatismo', iniciales: 'CM', color: 'bg-emerald-500' },
-  { id: 4, nombre: 'Lucía Ortiz', telefono: '664-321-0987', edad: 42, sexo: 'F', seguro: 'MetLife', diagnostico: 'Glaucoma sospecha', iniciales: 'LO', color: 'bg-rose-500' },
-  { id: 5, nombre: 'María García', telefono: '664-555-0199', edad: 29, sexo: 'F', seguro: 'GNP', diagnostico: 'Queratocono', iniciales: 'MG', color: 'bg-amber-500' },
+const stats = [
+  { label: 'Consultas Hoy', value: '6', icon: Calendar, color: 'text-primary-600', bgColor: 'bg-primary-50', borderColor: 'border-primary-100' },
+  { label: 'Esta Semana', value: '28', icon: Clock, color: 'text-sky-600', bgColor: 'bg-sky-50', borderColor: 'border-sky-100' },
+  { label: 'Pendientes', value: '3', icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100' },
+  { label: 'Completadas', value: '25', icon: CheckCircle, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
 ];
 
-const historialReciente = [
-  { fecha: '28 Ago 2024', tipo: 'Seguimiento', doctor: 'Dra. Irina', nota: 'Miopía bajo control' },
-  { fecha: '15 May 2024', tipo: 'Graduación', doctor: 'Dr. Sánchez', nota: 'Cambio de micas' },
-  { fecha: '10 Ene 2024', tipo: 'Primera Vez', doctor: 'Dra. Irina', nota: 'Diagnóstico inicial' },
+const consultasData = [
+  { id: 'CON-2024-001', paciente: 'Mateo Rodríguez', iniciales: 'MR', color: 'bg-primary-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 09:00 AM', tipo: 'Seguimiento', diagnostico: 'Miopía progresiva controlada', estado: 'COMPLETADA', cobro: '$1,080' },
+  { id: 'CON-2024-002', paciente: 'Sofía González', iniciales: 'SG', color: 'bg-purple-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 10:15 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo divergente', estado: 'EN CURSO', cobro: '$1,800' },
+  { id: 'CON-2024-003', paciente: 'Carlos Mendoza', iniciales: 'CM', color: 'bg-emerald-500', doctor: 'Dr. Sánchez', fecha: '04 Sep 2026, 11:30 AM', tipo: 'Graduación', diagnostico: 'Astigmatismo miópico', estado: 'PENDIENTE', cobro: '$720' },
+  { id: 'CON-2024-004', paciente: 'Lucía Ortiz', iniciales: 'LO', color: 'bg-rose-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 12:00 PM', tipo: 'Seguimiento', diagnostico: 'Glaucoma de ángulo abierto', estado: 'PENDIENTE', cobro: '$1,350' },
+  { id: 'CON-2024-005', paciente: 'Roberto Vega', iniciales: 'RV', color: 'bg-sky-500', doctor: 'Dra. Martha', fecha: '03 Sep 2026, 02:30 PM', tipo: 'Primera Vez', diagnostico: 'Catarata senil bilateral', estado: 'COMPLETADA', cobro: '$0' },
+  { id: 'CON-2024-006', paciente: 'Ana Luisa Pérez', iniciales: 'AP', color: 'bg-amber-500', doctor: 'Dr. Bayardo', fecha: '03 Sep 2026, 10:00 AM', tipo: 'Seguimiento', diagnostico: 'Glaucoma primario', estado: 'COMPLETADA', cobro: '$1,440' },
+  { id: 'CON-2024-007', paciente: 'Diego Herrera', iniciales: 'DH', color: 'bg-cyan-500', doctor: 'Dra. Martha', fecha: '02 Sep 2026, 11:00 AM', tipo: 'Control', diagnostico: 'Catarata post-operatorio', estado: 'COMPLETADA', cobro: '$900' },
+  { id: 'CON-2024-008', paciente: 'Valentina Cruz', iniciales: 'VC', color: 'bg-violet-500', doctor: 'Dra. Irina', fecha: '01 Sep 2026, 09:30 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo convergente', estado: 'COMPLETADA', cobro: '$0' },
 ];
 
-const diagnosticosActivos = ['Miopía Progresiva OD/OI', 'Astigmatismo Miópico', 'Insuficiencia de Convergencia'];
+const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
+  COMPLETADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  'EN CURSO': { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
+  PENDIENTE: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400' },
+};
 
 export default function ConsultasPage() {
   const [search, setSearch] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedPaciente, setSelectedPaciente] = useState<typeof pacientesBusqueda[0] | null>(null);
+  const [filterEstado, setFilterEstado] = useState('Todos');
+  const [filterTipo, setFilterTipo] = useState('Todos');
 
-  const filtered = pacientesBusqueda.filter((p) =>
-    p.nombre.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleSelect = (paciente: typeof pacientesBusqueda[0]) => {
-    setSelectedPaciente(paciente);
-    setSearch(paciente.nombre);
-    setShowDropdown(false);
-  };
+  const filtered = consultasData.filter((c) => {
+    const matchSearch = c.paciente.toLowerCase().includes(search.toLowerCase()) ||
+      c.id.toLowerCase().includes(search.toLowerCase()) ||
+      c.doctor.toLowerCase().includes(search.toLowerCase());
+    const matchEstado = filterEstado === 'Todos' || c.estado === filterEstado;
+    const matchTipo = filterTipo === 'Todos' || c.tipo === filterTipo;
+    return matchSearch && matchEstado && matchTipo;
+  });
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">NUEVA CONSULTA</h1>
-        <p className="mt-0.5 text-sm text-gray-400">
-          Registra una nueva atención médica, prescripción de lentes y datos de cobro.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">CONSULTAS MÉDICAS</h1>
+          <p className="mt-0.5 text-sm text-gray-400">Registro y seguimiento de consultas oftalmológicas.</p>
+        </div>
+        <Link
+          href="/consultas/nueva"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Nueva Consulta
+        </Link>
       </div>
 
-      <div className="flex gap-6">
-        {/* Main form */}
-        <div className="flex-1 min-w-0 space-y-6">
-          {/* DATOS DEL PACIENTE */}
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="text-sm font-extrabold text-primary-600 uppercase tracking-wider">Datos del Paciente</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              {/* Search */}
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+            <div className="flex items-start justify-between">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5">Buscar Paciente</label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); setSelectedPaciente(null); }}
-                    onFocus={() => setShowDropdown(true)}
-                    placeholder="Buscar paciente..."
-                    className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                  />
-                  {showDropdown && !selectedPaciente && filtered.length > 0 && (
-                    <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-                      {filtered.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => handleSelect(p)}
-                          className="flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
-                        >
-                          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white', p.color)}>
-                            {p.iniciales}
-                          </div>
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="text-sm font-bold text-gray-900">{p.nombre}</div>
-                            <div className="text-xs text-gray-400">{p.telefono} · {p.edad} años</div>
-                          </div>
-                          <span className="text-xs text-gray-400">{p.diagnostico}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <p className="text-[13px] font-semibold text-gray-400 uppercase tracking-wide">{stat.label}</p>
+                <span className="mt-2 block text-[32px] font-extrabold leading-none text-gray-900">{stat.value}</span>
               </div>
-
-              {/* Selected patient info */}
-              {selectedPaciente && (
-                <div className="grid grid-cols-3 gap-4 rounded-lg bg-gray-50 p-4">
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Nombre</p>
-                    <p className="text-sm font-bold text-gray-900">{selectedPaciente.nombre}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Edad / Sexo</p>
-                    <p className="text-sm font-bold text-gray-900">{selectedPaciente.edad} años / {selectedPaciente.sexo === 'M' ? 'Masculino' : 'Femenino'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Aseguradora</p>
-                    <p className="text-sm font-bold text-gray-900">{selectedPaciente.seguro}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* DATOS DE LA CONSULTA */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="text-sm font-extrabold text-primary-600 uppercase tracking-wider">Datos de la Consulta</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Médico Especialista <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>Seleccionar médico</option>
-                      <option>Dra. Irina Rostova</option>
-                      <option>Dr. Héctor Sánchez</option>
-                      <option>Dra. Martha López</option>
-                      <option>Dra. Sadia Khan</option>
-                      <option>Dr. Luis Morales</option>
-                      <option>Dr. Piloto García</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Fecha <span className="text-red-500">*</span></label>
-                  <input type="date" defaultValue="2026-01-13" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Hora Inicio <span className="text-red-500">*</span></label>
-                  <input type="time" defaultValue="09:00" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Hora Fin <span className="text-red-500">*</span></label>
-                  <input type="time" defaultValue="09:45" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Tipo de Consulta <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>Seleccionar especialidad</option>
-                      <option>Oftalmología Pediátrica</option>
-                      <option>Oftalmología General</option>
-                      <option>Cataratas y Cirugía Refractiva</option>
-                      <option>Glaucoma y Retina</option>
-                      <option>Estrabismo</option>
-                      <option>Córnea y Superficie Ocular</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Tipo de Visita <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>Seleccionar tipo</option>
-                      <option>Primera Vez</option>
-                      <option>Seguimiento Clínico</option>
-                      <option>Graduación</option>
-                      <option>Control</option>
-                      <option>Urgencia</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Diagnóstico Clínico <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Ej. Miopía progresiva bilateral" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Estudios Solicitados</label>
-                  <input type="text" placeholder="Ej. Topografía Corneal, Retinografía" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5">Procedimiento Realizado</label>
-                <input type="text" placeholder="Ej. Evaluación refractiva ciclopléjica completa" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+              <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl', stat.bgColor, 'ring-1', stat.borderColor)}>
+                <stat.icon className={cn('h-5 w-5', stat.color)} />
               </div>
             </div>
           </div>
+        ))}
+      </div>
 
-          {/* DATOS DE COBRO Y FACTURACIÓN */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="text-sm font-extrabold text-primary-600 uppercase tracking-wider">Datos de Cobro y Facturación</h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Aseguradora Aplicable</label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>Seleccionar aseguradora</option>
-                      <option>ISSSTECALI</option>
-                      <option>JORNADA</option>
-                      <option>GNP</option>
-                      <option>Seguros Monterrey (Coaseguro 10%)</option>
-                      <option>AXA</option>
-                      <option>MetLife</option>
-                      <option>Particular</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Método de Pago <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>Seleccionar método</option>
-                      <option>Efectivo</option>
-                      <option>Tarjeta de Crédito</option>
-                      <option>Tarjeta de Débito</option>
-                      <option>Transferencia Bancaria</option>
-                      <option>Cheque</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Moneda <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
-                      <option>MXN ($)</option>
-                      <option>USD ($)</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">Costo de Consulta <span className="text-red-500">*</span></label>
-                  <input type="text" defaultValue="$ 1,200.00" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-center gap-3 pb-4">
-            <Link href="/consultas" className="rounded-lg border border-gray-200 bg-white px-8 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-              CANCELAR
-            </Link>
-            <button className="rounded-lg border border-gray-200 bg-white px-8 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-              GUARDAR BORRADOR
-            </button>
-            <button className="rounded-lg bg-primary-600 px-8 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-              FINALIZAR CONSULTA
-            </button>
-          </div>
+      {/* Search & Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[280px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por paciente, doctor o ID..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          />
         </div>
+        <div className="relative">
+          <select
+            value={filterEstado}
+            onChange={(e) => setFilterEstado(e.target.value)}
+            className="appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          >
+            <option>Todos</option>
+            <option>COMPLETADA</option>
+            <option>EN CURSO</option>
+            <option>PENDIENTE</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        </div>
+        <div className="relative">
+          <select
+            value={filterTipo}
+            onChange={(e) => setFilterTipo(e.target.value)}
+            className="appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          >
+            <option>Todos</option>
+            <option>Primera Vez</option>
+            <option>Seguimiento</option>
+            <option>Graduación</option>
+            <option>Control</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        </div>
+        <input type="date" className="bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+      </div>
 
-        {/* Sidebar */}
-        <div className="w-[340px] shrink-0 space-y-5">
-          {/* Historial reciente */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Historial Reciente</h3>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {historialReciente.map((h, idx) => (
-                <div key={idx} className="px-5 py-3 hover:bg-gray-50/60 transition-colors">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-extrabold text-primary-700">{h.fecha}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">{h.tipo}</span>
-                  </div>
-                  <p className="text-xs text-gray-500">{h.doctor} · {h.nota}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Diagnósticos activos */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Diagnósticos Activos</h3>
-            </div>
-            <div className="p-4 space-y-2">
-              {diagnosticosActivos.map((d, idx) => (
-                <div key={idx} className="rounded-lg bg-red-50 p-3 ring-1 ring-red-200">
-                  <p className="text-sm font-bold text-red-700">{d}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Table */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/50">
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">ID</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Paciente</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Doctor</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fecha / Hora</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Tipo</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Diagnóstico</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
+              <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">Cobro</th>
+              <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filtered.map((c) => {
+              const estado = estadoConfig[c.estado];
+              return (
+                <tr key={c.id} className="group transition-colors hover:bg-gray-50/60">
+                  <td className="px-5 py-4 text-xs font-bold text-primary-600">{c.id}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white', c.color)}>
+                        {c.iniciales}
+                      </div>
+                      <span className="text-sm font-bold text-gray-900">{c.paciente}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-gray-600">{c.doctor}</td>
+                  <td className="px-5 py-4 text-sm text-gray-600">{c.fecha}</td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">{c.tipo}</span>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.diagnostico}</td>
+                  <td className="px-5 py-4">
+                    <span className={cn('inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-extrabold', estado.bg, estado.text)}>
+                      <span className={cn('h-1.5 w-1.5 rounded-full', estado.dot)} />
+                      {c.estado}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-right text-sm font-bold text-gray-900">{c.cobro}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-1">
+                      <button className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
+                      <button className="text-gray-400 hover:text-primary-600 transition-colors"><FileText className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr><td colSpan={9} className="px-6 py-12 text-center">
+                <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm font-medium text-gray-500">No se encontraron consultas</p>
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-6 py-3">
+          <span className="text-sm text-gray-400">Mostrando {filtered.length} de {consultasData.length} consultas</span>
         </div>
       </div>
     </div>
