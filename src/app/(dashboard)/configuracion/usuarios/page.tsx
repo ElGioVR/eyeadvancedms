@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
 import { useToast } from '@/components/ui/Toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface UsuarioAPI {
   id: string;
@@ -69,6 +70,8 @@ export default function UsuariosPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
 
   // Form state
   const [formNombre, setFormNombre] = useState('');
@@ -134,7 +137,7 @@ export default function UsuariosPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Error al crear usuario');
+        setErrorModal(err.error || 'Error al crear usuario');
         return;
       }
       // Close sidebar immediately, then refresh data
@@ -165,7 +168,7 @@ export default function UsuariosPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Error al actualizar usuario');
+        setErrorModal(err.error || 'Error al actualizar usuario');
         return;
       }
       handleCloseSidebar();
@@ -189,7 +192,6 @@ export default function UsuariosPage() {
   }, [refetch, toast]);
 
   const handleDelete = useCallback(async (userId: string) => {
-    if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
     setDeleting(userId);
     try {
       const res = await fetch(`/api/configuracion/usuarios?id=${userId}`, { method: 'DELETE' });
@@ -199,6 +201,7 @@ export default function UsuariosPage() {
       }
     } finally {
       setDeleting(null);
+      setDeleteTarget(null);
     }
   }, [refetch, toast]);
 
@@ -289,7 +292,7 @@ export default function UsuariosPage() {
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEditUser(user)} className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">Editar</button>
                           <button
-                            onClick={() => handleDelete(user.id)}
+                            onClick={() => setDeleteTarget(user.id)}
                             disabled={deleting === user.id}
                             className="text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
                           >
@@ -409,6 +412,29 @@ export default function UsuariosPage() {
           </div>
         </>
       )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title="Eliminar Usuario"
+        message="¿Eliminar este usuario? Esta acción no se puede deshacer."
+        confirmLabel="ELIMINAR"
+        variant="danger"
+        loading={!!deleting}
+      />
+
+      {/* Error modal */}
+      <ConfirmModal
+        isOpen={!!errorModal}
+        onClose={() => setErrorModal(null)}
+        onConfirm={() => setErrorModal(null)}
+        title="Error"
+        message={errorModal || ''}
+        confirmLabel="ENTENDIDO"
+        variant="warning"
+      />
     </div>
   );
 }

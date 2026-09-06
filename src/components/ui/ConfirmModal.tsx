@@ -1,89 +1,84 @@
 'use client';
 
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ConfirmModalProps {
-  open: boolean;
+  isOpen?: boolean;
+  open?: boolean;
   onClose: () => void;
   onConfirm: () => void;
   title: string;
   message: string;
+  confirmLabel?: string;
   confirmText?: string;
+  cancelLabel?: string;
   cancelText?: string;
-  variant?: 'danger' | 'warning' | 'info';
+  variant?: 'danger' | 'warning';
+  loading?: boolean;
 }
 
 export default function ConfirmModal({
+  isOpen,
   open,
   onClose,
   onConfirm,
   title,
   message,
-  confirmText = 'Confirmar',
-  cancelText = 'Cancelar',
+  confirmLabel,
+  confirmText,
+  cancelLabel,
+  cancelText,
   variant = 'danger',
+  loading = false,
 }: ConfirmModalProps) {
-  if (!open) return null;
+  const visible = isOpen ?? open ?? false;
+  if (!visible) return null;
 
-  const iconBg = {
-    danger: 'bg-red-100',
-    warning: 'bg-yellow-100',
-    info: 'bg-blue-100',
-  }[variant];
+  const confirmBtn = confirmLabel || confirmText || 'CONFIRMAR';
+  const cancelBtn = cancelLabel || cancelText || 'CANCELAR';
 
-  const iconColor = {
-    danger: 'text-red-600',
-    warning: 'text-yellow-600',
-    info: 'text-blue-600',
-  }[variant];
-
-  const confirmBtn = {
-    danger: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
-    warning: 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500',
-    info: 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500',
-  }[variant];
+  const confirmColor = variant === 'danger'
+    ? 'bg-red-600 hover:bg-red-700'
+    : 'bg-amber-600 hover:bg-amber-700';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg border border-gray-200 shadow-2xl shadow-gray-900/20 w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in-95 duration-200">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Icon */}
-        <div className={cn('w-14 h-14 rounded-lg flex items-center justify-center mx-auto mb-4', iconBg)}>
-          <AlertTriangle className={cn('w-7 h-7', iconColor)} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white shadow-xl animate-[slideIn_0.2s_ease-out]">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full',
+              variant === 'danger' ? 'bg-red-100' : 'bg-amber-100'
+            )}>
+              <AlertTriangle className={cn('h-5 w-5', variant === 'danger' ? 'text-red-600' : 'text-amber-600')} />
+            </div>
+            <h3 className="text-sm font-extrabold text-gray-900">{title}</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-
-        {/* Content */}
-        <h3 className="text-lg font-bold text-center text-gray-900 mb-2">{title}</h3>
-        <p className="text-gray-500 text-center text-sm mb-6">{message}</p>
-
-        {/* Actions */}
-        <div className="flex gap-3">
+        <div className="px-6 py-5">
+          <p className="text-sm text-gray-600">{message}</p>
+        </div>
+        <div className="flex gap-3 border-t border-gray-100 px-6 py-4">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 font-semibold text-sm transition-colors"
+            disabled={loading}
+            className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {cancelText}
+            {cancelBtn}
           </button>
           <button
             onClick={onConfirm}
+            disabled={loading}
             className={cn(
-              'flex-1 px-4 py-2.5 text-white rounded-md font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-              confirmBtn
+              'flex-1 rounded-lg px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2',
+              confirmColor
             )}
           >
-            {confirmText}
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Procesando...</> : confirmBtn}
           </button>
         </div>
       </div>
