@@ -50,7 +50,7 @@ export default function ConsultasPage() {
         {/* Main form */}
         <div className="flex-1 min-w-0 space-y-6">
           {/* DATOS DEL PACIENTE */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-6 py-4">
               <h3 className="text-sm font-extrabold text-primary-600 uppercase tracking-wider">Datos del Paciente</h3>
             </div>
