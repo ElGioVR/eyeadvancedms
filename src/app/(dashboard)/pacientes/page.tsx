@@ -161,10 +161,10 @@ export default function PacientesPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <button className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                  <Link href={`/pacientes/${paciente.id}/historial`} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                     <FileText className="h-3.5 w-3.5" />
                     Historial
-                  </button>
+                  </Link>
                   <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
                     <Calendar className="h-3.5 w-3.5" />
                     Agendar
