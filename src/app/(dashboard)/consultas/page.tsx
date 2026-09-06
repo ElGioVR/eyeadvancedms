@@ -13,6 +13,10 @@ import {
   User,
   FileText,
   Eye,
+  X,
+  Banknote,
+  Activity,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,14 +28,14 @@ const stats = [
 ];
 
 const consultasData = [
-  { id: 'CON-2024-001', paciente: 'Mateo Rodríguez', iniciales: 'MR', color: 'bg-primary-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 09:00 AM', tipo: 'Seguimiento', diagnostico: 'Miopía progresiva controlada', estado: 'COMPLETADA', cobro: '$1,080' },
-  { id: 'CON-2024-002', paciente: 'Sofía González', iniciales: 'SG', color: 'bg-purple-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 10:15 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo divergente', estado: 'EN CURSO', cobro: '$1,800' },
-  { id: 'CON-2024-003', paciente: 'Carlos Mendoza', iniciales: 'CM', color: 'bg-emerald-500', doctor: 'Dr. Sánchez', fecha: '04 Sep 2026, 11:30 AM', tipo: 'Graduación', diagnostico: 'Astigmatismo miópico', estado: 'PENDIENTE', cobro: '$720' },
-  { id: 'CON-2024-004', paciente: 'Lucía Ortiz', iniciales: 'LO', color: 'bg-rose-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 12:00 PM', tipo: 'Seguimiento', diagnostico: 'Glaucoma de ángulo abierto', estado: 'PENDIENTE', cobro: '$1,350' },
-  { id: 'CON-2024-005', paciente: 'Roberto Vega', iniciales: 'RV', color: 'bg-sky-500', doctor: 'Dra. Martha', fecha: '03 Sep 2026, 02:30 PM', tipo: 'Primera Vez', diagnostico: 'Catarata senil bilateral', estado: 'COMPLETADA', cobro: '$0' },
-  { id: 'CON-2024-006', paciente: 'Ana Luisa Pérez', iniciales: 'AP', color: 'bg-amber-500', doctor: 'Dr. Bayardo', fecha: '03 Sep 2026, 10:00 AM', tipo: 'Seguimiento', diagnostico: 'Glaucoma primario', estado: 'COMPLETADA', cobro: '$1,440' },
-  { id: 'CON-2024-007', paciente: 'Diego Herrera', iniciales: 'DH', color: 'bg-cyan-500', doctor: 'Dra. Martha', fecha: '02 Sep 2026, 11:00 AM', tipo: 'Control', diagnostico: 'Catarata post-operatorio', estado: 'COMPLETADA', cobro: '$900' },
-  { id: 'CON-2024-008', paciente: 'Valentina Cruz', iniciales: 'VC', color: 'bg-violet-500', doctor: 'Dra. Irina', fecha: '01 Sep 2026, 09:30 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo convergente', estado: 'COMPLETADA', cobro: '$0' },
+  { id: 'CON-2024-001', paciente: 'Mateo Rodríguez', iniciales: 'MR', color: 'bg-primary-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 09:00 AM', tipo: 'Seguimiento', diagnostico: 'Miopía progresiva controlada', estado: 'COMPLETADA', cobro: '$1,080', horaFin: '09:45 AM', tipoVisita: 'Retorno', aseguradora: 'Seguros Monterrey', metodoPago: 'Tarjeta de Crédito', estudios: 'Agudeza visual, tonometría, fondo de ojo', procedimientos: 'Graduación ocular, adaptación de lentes', notas: 'Paciente refiere mejoría. Se ajusta graduación.' },
+  { id: 'CON-2024-002', paciente: 'Sofía González', iniciales: 'SG', color: 'bg-purple-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 10:15 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo divergente', estado: 'EN CURSO', cobro: '$1,800', horaFin: '—', tipoVisita: 'Nueva Visita', aseguradora: 'Particular', metodoPago: 'Efectivo', estudios: 'Queratometría, campimetría, biometría', procedimientos: 'Examen completo de estrabismo', notas: 'Paciente de 35 años con estrabismo desde infancia.' },
+  { id: 'CON-2024-003', paciente: 'Carlos Mendoza', iniciales: 'CM', color: 'bg-emerald-500', doctor: 'Dr. Sánchez', fecha: '04 Sep 2026, 11:30 AM', tipo: 'Graduación', diagnostico: 'Astigmatismo miópico', estado: 'PENDIENTE', cobro: '$720', horaFin: '—', tipoVisita: 'Nueva Visita', aseguradora: 'AXA', metodoPago: 'Transferencia', estudios: 'Topografía corneal, agudeza visual', procedimientos: 'Graduación y toma de medidas', notas: 'Paciente solicita cambio de lentes progresivas.' },
+  { id: 'CON-2024-004', paciente: 'Lucía Ortiz', iniciales: 'LO', color: 'bg-rose-500', doctor: 'Dra. Irina', fecha: '04 Sep 2026, 12:00 PM', tipo: 'Seguimiento', diagnostico: 'Glaucoma de ángulo abierto', estado: 'PENDIENTE', cobro: '$1,350', horaFin: '—', tipoVisita: 'Retorno', aseguradora: 'MetLife', metodoPago: 'Seguro', estudios: 'Tonometría, campimetría, OCT nervio óptico', procedimientos: 'Control de presión intraocular', notas: ' PIO estable. Continuar tratamiento con latanoprost.' },
+  { id: 'CON-2024-005', paciente: 'Roberto Vega', iniciales: 'RV', color: 'bg-sky-500', doctor: 'Dra. Martha', fecha: '03 Sep 2026, 02:30 PM', tipo: 'Primera Vez', diagnostico: 'Catarata senil bilateral', estado: 'COMPLETADA', cobro: '$0', horaFin: '03:15 PM', tipoVisita: 'Nueva Visita', aseguradora: 'ISSSTECALI', metodoPago: 'Seguro', estudios: 'Biometría, topografía, OCT, agudeza visual', procedimientos: 'Exploración completa de catarata', notas: 'Catarata nuclear grade II. Se recomienda cirugía.' },
+  { id: 'CON-2024-006', paciente: 'Ana Luisa Pérez', iniciales: 'AP', color: 'bg-amber-500', doctor: 'Dr. Bayardo', fecha: '03 Sep 2026, 10:00 AM', tipo: 'Seguimiento', diagnostico: 'Glaucoma primario', estado: 'COMPLETADA', cobro: '$1,440', horaFin: '10:40 AM', tipoVisita: 'Retorno', aseguradora: 'GNP', metodoPago: 'Tarjeta de Crédito', estudios: 'Tonometría, campimetría, OCT', procedimientos: 'Ajuste de medicación', notas: ' PIO controlada. Se ajusta dosis de timolol.' },
+  { id: 'CON-2024-007', paciente: 'Diego Herrera', iniciales: 'DH', color: 'bg-cyan-500', doctor: 'Dra. Martha', fecha: '02 Sep 2026, 11:00 AM', tipo: 'Control', diagnostico: 'Catarata post-operatorio', estado: 'COMPLETADA', cobro: '$900', horaFin: '11:25 AM', tipoVisita: 'Retorno', aseguradora: 'JORNADA', metodoPago: 'Efectivo', estudios: 'Agudeza visual, tonometría, biomicroscopía', procedimientos: 'Control post-operatorio día 7', notas: 'Evolución favorable. Sin complicaciones.' },
+  { id: 'CON-2024-008', paciente: 'Valentina Cruz', iniciales: 'VC', color: 'bg-violet-500', doctor: 'Dra. Irina', fecha: '01 Sep 2026, 09:30 AM', tipo: 'Primera Vez', diagnostico: 'Estrabismo convergente', estado: 'COMPLETADA', cobro: '$0', horaFin: '10:10 AM', tipoVisita: 'Nueva Visita', aseguradora: 'ISSSTECALI', metodoPago: 'Seguro', estudios: 'Queratometría, campimetría, cover test', procedimientos: 'Examen de estrabismo convergente', notas: 'Estrabismo convergente intermitente. Se inicia terapia visual.' },
 ];
 
 const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -40,11 +44,14 @@ const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = 
   PENDIENTE: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400' },
 };
 
+type Consulta = typeof consultasData[number];
+
 export default function ConsultasPage() {
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [filterTipo, setFilterTipo] = useState('Todos');
   const [filterDoctor, setFilterDoctor] = useState('Todos');
+  const [selectedConsulta, setSelectedConsulta] = useState<Consulta | null>(null);
 
   const filtered = consultasData.filter((c) => {
     const matchSearch = c.paciente.toLowerCase().includes(search.toLowerCase()) ||
@@ -191,7 +198,7 @@ export default function ConsultasPage() {
                   <td className="px-5 py-4 text-right text-sm font-bold text-gray-900">{c.cobro}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1">
-                      <button className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
+                      <button onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
                       <button className="text-gray-400 hover:text-primary-600 transition-colors"><FileText className="h-4 w-4" /></button>
                     </div>
                   </td>
@@ -210,6 +217,96 @@ export default function ConsultasPage() {
           <span className="text-sm text-gray-400">Mostrando {filtered.length} de {consultasData.length} consultas</span>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {selectedConsulta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 px-8 py-5">
+              <div className="flex items-center gap-3">
+                <div className={cn('flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white', selectedConsulta.color)}>
+                  {selectedConsulta.iniciales}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-extrabold text-gray-900">{selectedConsulta.paciente}</h2>
+                    <span className={cn('inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-extrabold', estadoConfig[selectedConsulta.estado].bg, estadoConfig[selectedConsulta.estado].text)}>
+                      <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[selectedConsulta.estado].dot)} />
+                      {selectedConsulta.estado}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400">{selectedConsulta.id} • {selectedConsulta.fecha}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedConsulta(null)} className="rounded-lg border border-gray-200 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {/* Consultation details */}
+              <div>
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
+                  <ClipboardList className="h-4 w-4 text-primary-600" /> Datos de Consulta
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <Field label="Doctor" value={selectedConsulta.doctor} />
+                  <Field label="Tipo" value={selectedConsulta.tipo} />
+                  <Field label="Fecha y Hora" value={selectedConsulta.fecha} />
+                  <Field label="Hora Fin" value={selectedConsulta.horaFin} />
+                  <Field label="Tipo de Visita" value={selectedConsulta.tipoVisita} />
+                  <Field label="Diagnóstico" value={selectedConsulta.diagnostico} />
+                </div>
+              </div>
+
+              {/* Clinical details */}
+              <div>
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
+                  <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
+                </h4>
+                <div className="space-y-3 text-sm">
+                  <Field label="Estudios" value={selectedConsulta.estudios} full />
+                  <Field label="Procedimientos" value={selectedConsulta.procedimientos} full />
+                  <Field label="Notas" value={selectedConsulta.notas} full />
+                </div>
+              </div>
+
+              {/* Billing */}
+              <div>
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
+                  <Banknote className="h-4 w-4 text-amber-600" /> Datos de Cobro
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <Field label="Aseguradora" value={selectedConsulta.aseguradora} />
+                  <Field label="Método de Pago" value={selectedConsulta.metodoPago} />
+                  <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 col-span-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Costo</span>
+                    <p className="mt-1 text-lg font-extrabold text-primary-700">{selectedConsulta.cobro}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-8 py-5">
+              <button onClick={() => setSelectedConsulta(null)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CERRAR</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                <FileText className="h-4 w-4" /> GENERAR RECIBO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
+  return (
+    <div className={cn('rounded-lg border border-gray-200 bg-white px-4 py-3', full && 'col-span-2')}>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</span>
+      <p className={cn('mt-1 text-sm font-medium text-gray-900', full && 'break-words')}>{value}</p>
     </div>
   );
 }
