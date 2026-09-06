@@ -71,7 +71,7 @@ export default function UsuariosPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [errorModal, setErrorModal] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Form state
   const [formNombre, setFormNombre] = useState('');
@@ -104,6 +104,7 @@ export default function UsuariosPage() {
 
   const handleNewUser = useCallback(() => {
     resetForm();
+    setFormError(null);
     setShowNewUser(true);
   }, [resetForm]);
 
@@ -112,6 +113,7 @@ export default function UsuariosPage() {
     setFormEmail(user.email);
     setFormPassword('');
     setFormRol(user.rol);
+    setFormError(null);
     setEditingUser(user);
   }, []);
 
@@ -124,6 +126,7 @@ export default function UsuariosPage() {
   const handleCreate = useCallback(async () => {
     if (!formNombre || !formEmail || !formPassword) return;
     setSaving(true);
+    setFormError(null);
     try {
       const res = await fetch('/api/configuracion/usuarios', {
         method: 'POST',
@@ -137,10 +140,9 @@ export default function UsuariosPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        setErrorModal(err.error || 'Error al crear usuario');
+        setFormError(err.error || 'Error al crear usuario');
         return;
       }
-      // Close sidebar immediately, then refresh data
       handleCloseSidebar();
       toast('Usuario creado exitosamente');
       await refetch();
@@ -152,6 +154,7 @@ export default function UsuariosPage() {
   const handleUpdate = useCallback(async () => {
     if (!editingUser) return;
     setSaving(true);
+    setFormError(null);
     try {
       const updates: Record<string, any> = {
         id: editingUser.id,
@@ -168,7 +171,7 @@ export default function UsuariosPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        setErrorModal(err.error || 'Error al actualizar usuario');
+        setFormError(err.error || 'Error al actualizar usuario');
         return;
       }
       handleCloseSidebar();
@@ -397,6 +400,11 @@ export default function UsuariosPage() {
                     <option value="recepcionista">Recepcionista</option>
                   </select>
                 </div>
+                {formError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    {formError}
+                  </div>
+                )}
                 <div className="flex gap-3 pt-2">
                   <button onClick={handleCloseSidebar} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
                   <button
@@ -423,17 +431,6 @@ export default function UsuariosPage() {
         confirmLabel="ELIMINAR"
         variant="danger"
         loading={!!deleting}
-      />
-
-      {/* Error modal */}
-      <ConfirmModal
-        isOpen={!!errorModal}
-        onClose={() => setErrorModal(null)}
-        onConfirm={() => setErrorModal(null)}
-        title="Error"
-        message={errorModal || ''}
-        confirmLabel="ENTENDIDO"
-        variant="warning"
       />
     </div>
   );
