@@ -43,6 +43,17 @@ export default function NuevaConsultaPage() {
   const [searchPaciente, setSearchPaciente] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState(pacientes[0]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showNewPatientForm, setShowNewPatientForm] = useState(false);
+  const [newPatient, setNewPatient] = useState({
+    nombre: '',
+    edad: '',
+    sexo: 'H',
+    telefono: '',
+    email: '',
+    aseguradora: 'Particular',
+    direccion: '',
+    seguro_medico: '',
+  });
   const [activeTab, setActiveTab] = useState('historial');
   const [consultationData, setConsultationData] = useState({
     doctor: '',
@@ -84,48 +95,203 @@ export default function NuevaConsultaPage() {
 
       {/* Patient selector */}
       <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="px-6 py-5">
-          <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Paciente</label>
-          <div className="relative">
-            <input
-              type="text"
-              value={searchPaciente}
-              onChange={(e) => { setSearchPaciente(e.target.value); setShowDropdown(true); }}
-              onFocus={() => setShowDropdown(true)}
-              placeholder="Buscar por nombre o ID..."
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-            />
-            {showDropdown && filteredPacientes.length > 0 && (
-              <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-                {filteredPacientes.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => { setPacienteSeleccionado(p); setSearchPaciente(''); setShowDropdown(false); }}
-                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+        {showNewPatientForm ? (
+          <div className="px-6 py-5">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
+                  <User className="h-5 w-5 text-primary-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900">Nuevo Paciente</h2>
+                  <p className="text-xs text-gray-400">Complete los datos para registrar al paciente</p>
+                </div>
+              </div>
+              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancelar</button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Nombre completo <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newPatient.nombre}
+                  onChange={(e) => setNewPatient({ ...newPatient, nombre: e.target.value })}
+                  placeholder="Nombre del paciente"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Edad <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  value={newPatient.edad}
+                  onChange={(e) => setNewPatient({ ...newPatient, edad: e.target.value })}
+                  placeholder="Edad"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Sexo <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <select
+                    value={newPatient.sexo}
+                    onChange={(e) => setNewPatient({ ...newPatient, sexo: e.target.value })}
+                    className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   >
-                    <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white', p.color)}>
-                      {p.iniciales}
+                    <option value="H">Hombre</option>
+                    <option value="M">Mujer</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Teléfono</label>
+                <input
+                  type="tel"
+                  value={newPatient.telefono}
+                  onChange={(e) => setNewPatient({ ...newPatient, telefono: e.target.value })}
+                  placeholder="Número de teléfono"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Email</label>
+                <input
+                  type="email"
+                  value={newPatient.email}
+                  onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                  placeholder="correo@ejemplo.com"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Aseguradora</label>
+                <div className="relative">
+                  <select
+                    value={newPatient.aseguradora}
+                    onChange={(e) => setNewPatient({ ...newPatient, aseguradora: e.target.value })}
+                    className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
+                    <option>Particular</option>
+                    <option>ISSSTECALI</option>
+                    <option>JORNADA</option>
+                    <option>GNP</option>
+                    <option>Seguros Monterrey</option>
+                    <option>AXA</option>
+                    <option>MetLife</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Dirección</label>
+                <input
+                  type="text"
+                  value={newPatient.direccion}
+                  onChange={(e) => setNewPatient({ ...newPatient, direccion: e.target.value })}
+                  placeholder="Dirección del paciente"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-gray-400">No. Seguro Médico</label>
+                <input
+                  type="text"
+                  value={newPatient.seguro_medico}
+                  onChange={(e) => setNewPatient({ ...newPatient, seguro_medico: e.target.value })}
+                  placeholder="Número de póliza o afiliación"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
+              <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+              <button
+                onClick={() => {
+                  const initials = newPatient.nombre.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+                  const colors = ['bg-primary-500', 'bg-purple-500', 'bg-emerald-500', 'bg-rose-500', 'bg-sky-500', 'bg-amber-500'];
+                  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                  const created = {
+                    id: Date.now(),
+                    nombre: newPatient.nombre,
+                    iniciales: initials || 'NP',
+                    color: randomColor,
+                    edad: parseInt(newPatient.edad) || 0,
+                    sexo: newPatient.sexo as 'H' | 'M',
+                    aseguradora: newPatient.aseguradora,
+                    sx: '—',
+                    tipografia: 'Lion',
+                  };
+                  setPacienteSeleccionado(created);
+                  setShowNewPatientForm(false);
+                  setNewPatient({ nombre: '', edad: '', sexo: 'H', telefono: '', email: '', aseguradora: 'Particular', direccion: '', seguro_medico: '' });
+                }}
+                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+              >
+                GUARDAR Y SELECCIONAR
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-6 py-5">
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Paciente</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchPaciente}
+                onChange={(e) => { setSearchPaciente(e.target.value); setShowDropdown(true); }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Buscar por nombre o ID..."
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+              />
+              {showDropdown && (
+                <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {filteredPacientes.length > 0 ? (
+                    filteredPacientes.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setPacienteSeleccionado(p); setSearchPaciente(''); setShowDropdown(false); }}
+                        className="flex w-full items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white', p.color)}>
+                          {p.iniciales}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-gray-900">{p.nombre}</div>
+                          <div className="text-xs text-gray-500">{p.edad} años • {p.sexo} • {p.aseguradora}</div>
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 rounded-md px-2 py-0.5">SX: {p.sx}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-gray-400">No se encontraron pacientes</div>
+                  )}
+                  <button
+                    onClick={() => { setShowNewPatientForm(true); setShowDropdown(false); }}
+                    className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-left hover:bg-primary-50 transition-colors"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
+                      <User className="h-5 w-5 text-primary-600" />
                     </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-bold text-gray-900">{p.nombre}</div>
-                      <div className="text-xs text-gray-500">{p.edad} años • {p.sexo} • {p.aseguradora}</div>
+                    <div>
+                      <div className="text-sm font-bold text-primary-700">Crear nuevo paciente</div>
+                      <div className="text-xs text-primary-400">Agregar paciente no registrado al sistema</div>
                     </div>
-                    <span className="text-[10px] font-bold text-gray-400 bg-gray-100 rounded-md px-2 py-0.5">SX: {p.sx}</span>
                   </button>
-                ))}
+                </div>
+              )}
+            </div>
+            {pacienteSeleccionado && !showDropdown && (
+              <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
+                <span className="font-medium text-gray-900">{pacienteSeleccionado.nombre}</span>
+                <span>{pacienteSeleccionado.edad} años</span>
+                <span>{pacienteSeleccionado.sexo === 'H' ? 'Hombre' : 'Mujer'}</span>
+                <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>
+                <span className="rounded bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-600 ring-1 ring-sky-200">SX: {pacienteSeleccionado.sx}</span>
               </div>
             )}
           </div>
-          {pacienteSeleccionado && !showDropdown && (
-            <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
-              <span className="font-medium text-gray-900">{pacienteSeleccionado.nombre}</span>
-              <span>{pacienteSeleccionado.edad} años</span>
-              <span>{pacienteSeleccionado.sexo === 'H' ? 'Hombre' : 'Mujer'}</span>
-              <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>
-              <span className="rounded bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-600 ring-1 ring-sky-200">SX: {pacienteSeleccionado.sx}</span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="flex gap-6">
