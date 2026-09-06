@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -58,9 +59,10 @@ function useIsDesktop() {
 export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
+  const { user } = useUser();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isDesktop = useIsDesktop();
+  const supabase = createClient();
 
   // Mobile (<lg): 260px when open → show labels
   // Tablet (lg–xl): always 72px → icon-only
@@ -157,16 +159,16 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
         {/* User & Logout */}
         <div className="p-4 border-t border-white/12">
-          {showLabels && (
+          {showLabels && user && (
             <div className="flex items-center gap-3 px-1 py-3 mb-2">
               <div className="w-10 h-10 bg-white text-primary-700 rounded-full flex items-center justify-center text-sm font-bold">
-                DA
+                {user.iniciales}
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-bold leading-5">Dra. Irina</div>
+                <div className="text-sm font-bold leading-5 truncate">{user.nombre || user.email}</div>
                 <div className="flex items-center gap-1 text-xs text-white/62">
                   <ShieldCheck className="h-3 w-3" />
-                  Oftalmóloga Pediatra
+                  <span className="capitalize">{user.rol}</span>
                 </div>
               </div>
             </div>
