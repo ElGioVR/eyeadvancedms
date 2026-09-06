@@ -41,7 +41,10 @@ interface SidebarProps {
 }
 
 function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.matchMedia('(min-width: 1280px)').matches;
+  });
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)');
     setIsDesktop(mq.matches);
