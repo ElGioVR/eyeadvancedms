@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -40,11 +40,27 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isDesktop;
+}
+
 export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const isDesktop = useIsDesktop();
+
+  // On tablet (lg–xl), always icon-only regardless of collapsed prop
+  const showLabels = isDesktop && !collapsed;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -77,11 +93,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
       >
         {/* Logo */}
         <div className="flex items-center px-4 py-6 justify-center">
-          {collapsed ? (
-            <div className="bg-white rounded-xl p-2.5 shadow-lg flex items-center justify-center">
-              <Eye className="w-6 h-6 text-[#174c78]" />
-            </div>
-          ) : (
+          {showLabels ? (
             <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
               <Image
                 src="/images/eyeadvanced-logo.png"
@@ -90,6 +102,10 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                 height={40}
                 priority
               />
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl p-2.5 shadow-lg flex items-center justify-center">
+              <Eye className="w-6 h-6 text-[#174c78]" />
             </div>
           )}
         </div>
@@ -116,14 +132,14 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                   isActive
                     ? 'bg-white/14 text-white shadow-inner shadow-white/5'
                     : 'text-white/72 hover:bg-white/8 hover:text-white',
-                  collapsed && 'justify-center px-0'
+                  !showLabels && 'justify-center px-0'
                 )}
-                title={collapsed ? item.label : undefined}
+                title={!showLabels ? item.label : undefined}
                 onClick={() => { if (window.innerWidth < 1024) onClose(); }}
               >
-                {isActive && !collapsed && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
+                {isActive && showLabels && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
                 <item.icon className={cn('w-5 h-5', isActive ? 'text-accent' : 'text-white/72')} />
-                {!collapsed && <span className="font-semibold text-sm">{item.label}</span>}
+                {showLabels && <span className="font-semibold text-sm">{item.label}</span>}
               </Link>
             );
           })}
@@ -131,7 +147,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
         {/* User & Logout */}
         <div className="p-4 border-t border-white/12">
-          {!collapsed && (
+          {showLabels && (
             <div className="flex items-center gap-3 px-1 py-3 mb-2">
               <div className="w-10 h-10 bg-white text-primary-700 rounded-full flex items-center justify-center text-sm font-bold">
                 DA
@@ -149,12 +165,12 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
             onClick={() => setShowLogoutModal(true)}
             className={cn(
               'flex items-center gap-3 px-4 py-2.5 w-full text-white/78 hover:bg-white/10 hover:text-white rounded-md border border-white/14 transition-colors',
-              collapsed && 'justify-center px-0'
+              !showLabels && 'justify-center px-0'
             )}
-            title={collapsed ? 'Cerrar Sesión' : undefined}
+            title={!showLabels ? 'Cerrar Sesión' : undefined}
           >
             <LogOut className="w-5 h-5" />
-            {!collapsed && <span className="font-semibold text-sm">Cerrar Sesión</span>}
+            {showLabels && <span className="font-semibold text-sm">Cerrar Sesión</span>}
           </button>
         </div>
       </aside>
