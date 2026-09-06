@@ -1,24 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, FileText, Calendar, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { pacientesData } from '@/data/pacientes';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useFetch } from '@/hooks/useFetch';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import EmptyState from '@/components/ui/EmptyState';
 import SidebarPanel from '@/components/ui/SidebarPanel';
 
-const sexoOptions = ['Todos', 'Masculino', 'Femenino'] as const;
-const edadOptions = ['Todos', '0-18', '19-35', '36-50', '51+'] as const;
-const visitaOptions = ['Todos', 'Hoy', 'Esta semana', 'Este mes', 'Anterior'] as const;
+interface PacienteAPI {
+  id: string;
+  nombre: string;
+  iniciales: string;
+  sexo: string;
+  edad: number;
+  telefono: string;
+  email: string;
+  aseguradora: string;
+  consultas_count: number;
+  ultima_visita: string | null;
+}
 
-const sexoFilterMap: Record<string, string> = {
-  Masculino: 'H',
-  Femenino: 'M',
-};
+const sexoFilterOptions = ['Todos', 'Masculino', 'Femenino'] as const;
+const edadOptions = ['Todos', '0-18', '19-35', '36-50', '51+'] as const;
 
 function filterByEdad(edad: number, filter: string): boolean {
   if (filter === 'Todos') return true;
@@ -29,24 +36,30 @@ function filterByEdad(edad: number, filter: string): boolean {
   return true;
 }
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export default function PacientesPage() {
+  const { data: pacientes, loading, error } = useFetch<PacienteAPI>('/api/pacientes');
   const [search, setSearch] = useState('');
   const [filterSexo, setFilterSexo] = useState('Todos');
   const [filterEdad, setFilterEdad] = useState('Todos');
-  const [filterVisita, setFilterVisita] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
 
   const debouncedSearch = useDebounce(search);
 
-  const mappedSexo = filterSexo === 'Todos' ? 'Todos' : sexoFilterMap[filterSexo] || filterSexo;
-
-  const filtered = pacientesData.filter((p) => {
+  const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
-    const matchesSearch = !term || p.nombre.toLowerCase().includes(term) || p.telefono?.toLowerCase().includes(term) || p.id.toString().includes(term);
-    const matchesSexo = mappedSexo === 'Todos' || p.sexo === mappedSexo;
-    const matchesEdad = filterByEdad(p.edad, filterEdad);
-    return matchesSearch && matchesSexo && matchesEdad;
-  });
+    return pacientes.filter((p) => {
+      const matchesSearch = !term || p.nombre.toLowerCase().includes(term) || p.telefono?.toLowerCase().includes(term);
+      const matchesSexo = filterSexo === 'Todos' || (filterSexo === 'Masculino' && p.sexo === 'H') || (filterSexo === 'Femenino' && p.sexo === 'M');
+      const matchesEdad = filterByEdad(p.edad, filterEdad);
+      return matchesSearch && matchesSexo && matchesEdad;
+    });
+  }, [pacientes, debouncedSearch, filterSexo, filterEdad]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -88,9 +101,9 @@ export default function PacientesPage() {
               onChange={(e) => setFilterSexo(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
             >
-              <option value="Todos">Todos</option>
-              <option value="Masculino">Masculino</option>
-              <option value="Femenino">Femenino</option>
+              {sexoFilterOptions.map((o) => (
+                <option key={o} value={o}>{o === 'Todos' ? 'Todos' : o}</option>
+              ))}
             </select>
 
             <select
@@ -102,79 +115,84 @@ export default function PacientesPage() {
                 <option key={o} value={o}>{o === 'Todos' ? 'Edad' : o}</option>
               ))}
             </select>
-
-            <select
-              value={filterVisita}
-              onChange={(e) => setFilterVisita(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-            >
-              {visitaOptions.map((o) => (
-                <option key={o} value={o}>{o === 'Todos' ? 'Última visita' : o}</option>
-              ))}
-            </select>
           </div>
 
           {/* Patient list */}
-          <div className="space-y-2">
-            {filtered.map((paciente) => (
-              <div
-                key={paciente.id}
-                className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all hover:shadow-md hover:border-primary-200"
-              >
-                <Avatar
-                  initials={paciente.iniciales}
-                  className={paciente.color}
-                  size="lg"
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-5 sm:py-3.5">
+                  <div className="h-11 w-11 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/3" />
+                    <div className="h-3 bg-gray-200 rounded w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((paciente) => (
+                <div
+                  key={paciente.id}
+                  className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all hover:shadow-md hover:border-primary-200"
+                >
+                  <Avatar
+                    initials={paciente.iniciales}
+                    className="bg-primary-500"
+                    size="lg"
+                  />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-bold text-gray-900 truncate">{paciente.nombre}</h3>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+                      <span>{paciente.telefono || '—'}</span>
+                      <span className="text-gray-300">|</span>
+                      <span>{paciente.sexo === 'H' ? 'M' : 'F'} · {paciente.edad} años</span>
+                    </div>
+                  </div>
+
+                  <div className="hidden sm:block text-right min-w-[120px]">
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Última visita</p>
+                    <p className="text-xs font-bold text-gray-900 mt-0.5">{formatDate(paciente.ultima_visita)}</p>
+                  </div>
+
+                  <div className="hidden sm:block text-right min-w-[100px]">
+                    <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Consultas</p>
+                    <p className="text-xs font-bold text-gray-900 mt-0.5">{paciente.consultas_count} registros</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      href={`/pacientes/${paciente.id}/historial`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      Historial
+                    </Link>
+                    <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Agendar
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {filtered.length === 0 && (
+                <EmptyState
+                  icon={User}
+                  title="No se encontraron pacientes"
+                  description="Intenta con otros términos de búsqueda"
                 />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-bold text-gray-900 truncate">{paciente.nombre}</h3>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-                    <span>{paciente.telefono}</span>
-                    <span className="text-gray-300">|</span>
-                    <span>{paciente.sexo === 'H' ? 'M' : 'F'} · {paciente.edad} años</span>
-                  </div>
-                </div>
-
-                <div className="hidden sm:block text-right min-w-[120px]">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Última visita</p>
-                  <p className="text-xs font-bold text-gray-900 mt-0.5">{paciente.ultimaVisita || '—'}</p>
-                </div>
-
-                <div className="hidden sm:block text-right min-w-[100px]">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Consultas</p>
-                  <p className="text-xs font-bold text-gray-900 mt-0.5">{paciente.consultas || 0} registros</p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link
-                    href={`/pacientes/${paciente.id}/historial`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    Historial
-                  </Link>
-                  <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Agendar
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {filtered.length === 0 && (
-              <EmptyState
-                icon={User}
-                title="No se encontraron pacientes"
-                description="Intenta con otros términos de búsqueda"
-              />
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Sidebar — visible on lg+ when no sidebar panel is open, or when panel is open */}
         <SidebarPanel
           isOpen={showNewPatient}
           onClose={() => setShowNewPatient(false)}
@@ -211,7 +229,7 @@ export default function PacientesPage() {
                   <input type="email" placeholder="correo@ejemplo.com" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Aseguranza</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Aseguradora</label>
                   <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
                     <option value="">Seleccionar</option>
                     <option>ISSSTECALI</option>
