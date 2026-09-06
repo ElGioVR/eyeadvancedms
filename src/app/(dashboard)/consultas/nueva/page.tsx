@@ -83,7 +83,7 @@ export default function NuevaConsultaPage() {
       </div>
 
       {/* Patient selector */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="px-6 py-5">
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Paciente</label>
           <div className="relative">
