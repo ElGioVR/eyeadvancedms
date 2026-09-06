@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
+const errorTranslations: Record<string, string> = {
+  'null value in column "nombre_completo" violates not-null constraint': 'El nombre del paciente es obligatorio',
+  'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
+};
+
 export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -60,26 +65,31 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
+  if (!body.nombre_completo && !body.nombre) {
+    return NextResponse.json({ error: 'El nombre del paciente es obligatorio' }, { status: 400 });
+  }
+
+  const insertData: Record<string, any> = {
+    nombre_completo: body.nombre_completo || body.nombre,
+  };
+
+  if (body.sexo) insertData.sexo = body.sexo === 'H' ? 'MASCULINO' : body.sexo === 'M' ? 'FEMENINO' : body.sexo;
+  if (body.fecha_nacimiento) insertData.fecha_nacimiento = body.fecha_nacimiento;
+  if (body.edad) insertData.edad = body.edad;
+  if (body.telefono) insertData.telefono = body.telefono;
+  if (body.email) insertData.email = body.email;
+  if (body.direccion) insertData.direccion = body.direccion;
+  if (body.contacto_emergencia) insertData.contacto_emergencia = body.contacto_emergencia;
+  if (body.tel_emergencia) insertData.tel_emergencia = body.tel_emergencia;
+
   const { data, error } = await supabase
     .from('pacientes')
-    .insert({
-      nombre_completo: body.nombre_completo || body.nombre,
-      sexo: body.sexo === 'H' ? 'MASCULINO' : body.sexo === 'M' ? 'FEMENINO' : body.sexo || 'MASCULINO',
-      fecha_nacimiento: body.fecha_nacimiento || null,
-      edad: body.edad || null,
-      telefono: body.telefono || null,
-      email: body.email || null,
-      direccion: body.direccion || null,
-      contacto_emergencia: body.contacto_emergencia || null,
-      tel_emergencia: body.tel_emergencia || null,
-      aseguradora: body.aseguradora || null,
-      numero_seguro: body.numero_seguro || null,
-    })
+    .insert(insertData)
     .select()
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
   }
 
   return NextResponse.json(data, { status: 201 });
