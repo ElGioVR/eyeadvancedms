@@ -16,6 +16,7 @@ import {
   User,
   ChevronRight,
   Printer,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +56,7 @@ export default function NuevaConsultaPage() {
     seguro_medico: '',
   });
   const [activeTab, setActiveTab] = useState('historial');
+  const [showPreview, setShowPreview] = useState(false);
   const [consultationData, setConsultationData] = useState({
     doctor: '',
     fecha: '2026-09-05',
@@ -65,7 +67,7 @@ export default function NuevaConsultaPage() {
     diagnostico: '',
     estudios: '',
     procedimiento: '',
-    aseguradora: 'Seguros Monterrey',
+    aseguradora: 'Particular',
     metodoPago: '',
     moneda: 'MXN',
     costo: '',
@@ -310,7 +312,11 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Doctor <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
+                    <select
+                      value={consultationData.doctor}
+                      onChange={(e) => setConsultationData({ ...consultationData, doctor: e.target.value })}
+                      className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                    >
                       <option value="">Seleccionar doctor</option>
                       {doctores.map((d) => <option key={d.id}>{d.nombre}</option>)}
                     </select>
@@ -321,7 +327,7 @@ export default function NuevaConsultaPage() {
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Fecha de Consulta</label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input type="date" defaultValue={consultationData.fecha} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                    <input type="date" value={consultationData.fecha} onChange={(e) => setConsultationData({ ...consultationData, fecha: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
                   </div>
                 </div>
               </div>
@@ -330,14 +336,14 @@ export default function NuevaConsultaPage() {
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Hora Inicio</label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input type="time" defaultValue={consultationData.horaInicio} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                    <input type="time" value={consultationData.horaInicio} onChange={(e) => setConsultationData({ ...consultationData, horaInicio: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
                   </div>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Hora Fin</label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input type="time" defaultValue={consultationData.horaFin} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                    <input type="time" value={consultationData.horaFin} onChange={(e) => setConsultationData({ ...consultationData, horaFin: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
                   </div>
                 </div>
               </div>
@@ -345,8 +351,7 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Tipo de Consulta</label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                      <option>Consulta de Seguimiento</option>
+                    <select value={consultationData.tipo} onChange={(e) => setConsultationData({ ...consultationData, tipo: e.target.value })} className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
                       <option>Primera Consulta</option>
                       <option>Consulta de Urgencia</option>
                       <option>Revisión Pre-Operatoria</option>
@@ -358,8 +363,7 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Tipo de Visita</label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                      <option>Nueva Visita</option>
+                    <select value={consultationData.tipoVisita} onChange={(e) => setConsultationData({ ...consultationData, tipoVisita: e.target.value })} className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
                       <option>Visita de Retorno</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -368,15 +372,15 @@ export default function NuevaConsultaPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Diagnóstico</label>
-                <input type="text" placeholder="Escriba el diagnóstico del paciente..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                <input type="text" value={consultationData.diagnostico} onChange={(e) => setConsultationData({ ...consultationData, diagnostico: e.target.value })} placeholder="Escriba el diagnóstico del paciente..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Estudios Sugeridos</label>
-                <textarea rows={3} placeholder="Agregue estudios o tratamientos sugeridos..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none transition-all" />
+                <textarea rows={3} value={consultationData.estudios} onChange={(e) => setConsultationData({ ...consultationData, estudios: e.target.value })} placeholder="Agregue estudios o tratamientos sugeridos..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none transition-all" />
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Procedimientos Aplicados</label>
-                <textarea rows={3} placeholder="Describa procedimientos realizados..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none transition-all" />
+                <textarea rows={3} value={consultationData.procedimiento} onChange={(e) => setConsultationData({ ...consultationData, procedimiento: e.target.value })} placeholder="Describa procedimientos realizados..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none transition-all" />
               </div>
             </div>
           </div>
@@ -394,9 +398,7 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Aseguradora</label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                      <option>Particular</option>
-                      <option>ISSSTECALI</option>
+                    <select value={consultationData.aseguradora} onChange={(e) => setConsultationData({ ...consultationData, aseguradora: e.target.value })} className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
                       <option>JORNADA</option>
                       <option>GNP</option>
                       <option>Seguros Monterrey</option>
@@ -409,8 +411,7 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Método de Pago</label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                      <option>Seleccionar método</option>
+                    <select value={consultationData.metodoPago} onChange={(e) => setConsultationData({ ...consultationData, metodoPago: e.target.value })} className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
                       <option>Efectivo</option>
                       <option>Tarjeta de Crédito</option>
                       <option>Tarjeta de Débito</option>
@@ -424,8 +425,7 @@ export default function NuevaConsultaPage() {
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Moneda</label>
                   <div className="relative">
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
-                      <option>MXN - Peso Mexicano</option>
+                    <select value={consultationData.moneda} onChange={(e) => setConsultationData({ ...consultationData, moneda: e.target.value })} className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
                       <option>USD - Dólar</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -435,7 +435,7 @@ export default function NuevaConsultaPage() {
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400">Costo</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">$</span>
-                    <input type="text" placeholder="0.00" className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-4 py-2.5 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+                    <input type="text" value={consultationData.costo} onChange={(e) => setConsultationData({ ...consultationData, costo: e.target.value })} placeholder="0.00" className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-4 py-2.5 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
                   </div>
                 </div>
               </div>
@@ -451,6 +451,9 @@ export default function NuevaConsultaPage() {
             <div className="flex gap-3">
               <Link href="/consultas" className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</Link>
               <button className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">GUARDAR BORRADOR</button>
+              <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
+                <Eye className="h-4 w-4" /> PREVISUALIZAR
+              </button>
               <button className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">FINALIZAR CONSULTA</button>
             </div>
           </div>
@@ -493,6 +496,112 @@ export default function NuevaConsultaPage() {
           </div>
         </div>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 px-8 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
+                  <Eye className="h-5 w-5 text-primary-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-gray-900">Vista Previa de Consulta</h2>
+                  <p className="text-xs text-gray-400">Revise la información antes de finalizar</p>
+                </div>
+              </div>
+              <button onClick={() => setShowPreview(false)} className="rounded-lg border border-gray-200 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {/* Patient info */}
+              <div className="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={cn('flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white', pacienteSeleccionado?.color)}>
+                    {pacienteSeleccionado?.iniciales}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-gray-900">{pacienteSeleccionado?.nombre}</h3>
+                    <p className="text-xs text-gray-500">{pacienteSeleccionado?.edad} años • {pacienteSeleccionado?.sexo === 'H' ? 'Hombre' : 'Mujer'}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200">
+                    <span className="text-gray-400">Aseguradora</span>
+                    <p className="font-bold text-gray-900">{pacienteSeleccionado?.aseguradora}</p>
+                  </div>
+                  <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200">
+                    <span className="text-gray-400">Agudeza Visual</span>
+                    <p className="font-bold text-gray-900">{pacienteSeleccionado?.sx}</p>
+                  </div>
+                  <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200">
+                    <span className="text-gray-400">Tipografía</span>
+                    <p className="font-bold text-gray-900">{pacienteSeleccionado?.tipografia}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Consultation details */}
+              <div>
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
+                  <ClipboardList className="h-4 w-4 text-primary-600" /> Datos de Consulta
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <PreviewField label="Doctor" value={consultationData.doctor || '—'} />
+                  <PreviewField label="Fecha" value={consultationData.fecha || '—'} />
+                  <PreviewField label="Hora Inicio" value={consultationData.horaInicio || '—'} />
+                  <PreviewField label="Hora Fin" value={consultationData.horaFin || '—'} />
+                  <PreviewField label="Tipo de Consulta" value={consultationData.tipo || '—'} />
+                  <PreviewField label="Tipo de Visita" value={consultationData.tipoVisita || '—'} />
+                </div>
+                <div className="mt-3 space-y-3">
+                  <PreviewField label="Diagnóstico" value={consultationData.diagnostico || 'No especificado'} full />
+                  <PreviewField label="Estudios Sugeridos" value={consultationData.estudios || 'Ninguno'} full />
+                  <PreviewField label="Procedimientos" value={consultationData.procedimiento || 'Ninguno'} full />
+                </div>
+              </div>
+
+              {/* Billing details */}
+              <div>
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
+                  <Banknote className="h-4 w-4 text-amber-600" /> Datos de Cobro
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <PreviewField label="Aseguradora" value={consultationData.aseguradora || '—'} />
+                  <PreviewField label="Método de Pago" value={consultationData.metodoPago || 'No seleccionado'} />
+                  <PreviewField label="Moneda" value={consultationData.moneda || '—'} />
+                  <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Costo</span>
+                    <p className="mt-1 text-lg font-extrabold text-primary-700">${consultationData.costo || '0.00'} <span className="text-xs font-bold text-gray-400">{consultationData.moneda === 'USD' ? 'USD' : 'MXN'}</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-8 py-5">
+              <button onClick={() => setShowPreview(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CERRAR</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                <Printer className="h-4 w-4" /> IMPRIMIR
+              </button>
+              <button className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">FINALIZAR CONSULTA</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewField({ label, value, full }: { label: string; value: string; full?: boolean }) {
+  return (
+    <div className={cn('rounded-lg border border-gray-200 bg-white px-4 py-3', full && 'col-span-2')}>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</span>
+      <p className={cn('mt-1 text-sm font-medium text-gray-900', full && 'break-words')}>{value}</p>
     </div>
   );
 }
