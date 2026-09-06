@@ -34,7 +34,8 @@ export async function GET() {
 
   const result = data.map((p) => {
     const c = consultasMap.get(p.id);
-    const iniciales = p.nombre_completo
+    const nombre = p.nombre_completo || '';
+    const iniciales = nombre
       .split(' ')
       .map((n: string) => n[0])
       .slice(0, 2)
@@ -43,6 +44,7 @@ export async function GET() {
     return {
       id: p.id,
       nombre: p.nombre_completo,
+      nombre_completo: p.nombre_completo,
       iniciales,
       sexo: p.sexo === 'MASCULINO' ? 'H' : 'M',
       fecha_nacimiento: p.fecha_nacimiento,
@@ -94,5 +96,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({
+    id: data.id,
+    nombre: data.nombre_completo,
+    nombre_completo: data.nombre_completo,
+    sexo: data.sexo === 'MASCULINO' ? 'H' : 'M',
+    fecha_nacimiento: data.fecha_nacimiento,
+    edad: data.edad,
+    telefono: data.telefono,
+    email: data.email,
+    direccion: data.direccion,
+    created_at: data.created_at,
+  }, { status: 201 });
 }

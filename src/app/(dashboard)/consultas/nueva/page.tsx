@@ -24,7 +24,8 @@ import { FormInput, FormSelect } from '@/components/ui/FormField';
 
 interface PacienteAPI {
   id: string;
-  nombre_completo: string;
+  nombre: string;
+  nombre_completo?: string;
   edad: number | null;
   sexo: string | null;
   aseguradora: string | null;
@@ -43,8 +44,9 @@ const visitTypeOptions = ['Primera Vez', 'Visita de Retorno'];
 const insuranceOptions = ['Particular', 'ISSSTECALI', 'JORNADA', 'GNP', 'Seguros Monterrey', 'AXA', 'MetLife'];
 const paymentMethodOptions = ['Efectivo', 'Tarjeta de Crédito', 'Tarjeta de Débito', 'Transferencia'];
 
-function getInitials(name: string): string {
-  return name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+function getInitials(name: string | null | undefined): string {
+  if (!name) return '??';
+  return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
 
 function getAvatarColor(id: string): string {
@@ -106,7 +108,7 @@ export default function NuevaConsultaPage() {
     const term = searchPaciente.toLowerCase();
     return pacientes.filter(
       (p) =>
-        p.nombre_completo.toLowerCase().includes(term) ||
+        (p.nombre || '').toLowerCase().includes(term) ||
         (p.email && p.email.toLowerCase().includes(term))
     );
   }, [pacientes, searchPaciente]);
