@@ -69,8 +69,12 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
   const showLabels = sidebarWide;
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Logout error:', error);
+    }
+    // Force full page reload to clear all client state
+    window.location.href = '/login';
   };
 
   return (

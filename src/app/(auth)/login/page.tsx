@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Building2, Chrome } from 'lucide-react';
-import Link from 'next/link';
+import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const loginSlides = [
@@ -33,6 +32,9 @@ const loginSlides = [
   },
 ];
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 30_000;
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -42,35 +44,76 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace('/dashboard');
+      }
+    });
+  }, [supabase, router]);
+
+  // Slide timer
   useEffect(() => {
     const timer = window.setInterval(() => {
       setActiveSlide((current) => (current + 1) % loginSlides.length);
     }, 5000);
-
     return () => window.clearInterval(timer);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const isLocked = lockedUntil !== null && Date.now() < lockedUntil;
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isLocked) {
+      const remaining = Math.ceil((lockedUntil! - Date.now()) / 1000);
+      setError(`Demasiados intentos. Espera ${remaining} segundos.`);
+      return;
+    }
+
+    if (!email.trim() || !password) {
+      setError('Ingresa tu correo y contraseña.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim().toLowerCase(),
       password,
     });
 
     if (authError) {
-      console.log('Auth error:', authError);
-      setError(authError.message || 'Credenciales incorrectas.');
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+
+      if (newAttempts >= MAX_ATTEMPTS) {
+        setLockedUntil(Date.now() + LOCKOUT_MS);
+        setAttempts(0);
+        setError(`Demasiados intentos fallidos. Bloqueado por 30 segundos.`);
+      } else {
+        // Generic error message — don't leak Supabase details
+        const remaining = MAX_ATTEMPTS - newAttempts;
+        setError(
+          authError.message.includes('Invalid login credentials')
+            ? `Correo o contraseña incorrectos. (${remaining} intentos restantes)`
+            : 'Error al iniciar sesión. Intenta de nuevo.'
+        );
+      }
+
       setLoading(false);
       return;
     }
 
+    // Success
     router.push('/dashboard');
     router.refresh();
-  };
+  }, [email, password, isLocked, lockedUntil, attempts, supabase, router]);
 
   return (
     <>
@@ -133,101 +176,85 @@ export default function LoginPage() {
               Ingresa tus credenciales clínicas para continuar
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Correo Electrónico
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input
+                    id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="usuario@clinica.com"
                     className="input-field pl-11"
+                    autoComplete="email"
                     required
+                    disabled={loading || isLocked}
                   />
                 </div>
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input
+                    id="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
+                    placeholder="••••••••"
                     className="input-field pl-11 pr-11"
+                    autoComplete="current-password"
                     required
+                    disabled={loading || isLocked}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                     aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
 
-              {/* Remember & Forgot */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500/20" />
-                  <span className="text-sm text-gray-600">Recordar sesión</span>
-                </label>
-                <Link href="/forgot-password" className="text-sm text-primary-500 hover:text-primary-600">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
-
               {/* Error */}
               {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                  {error}
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" role="alert">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
               {/* Submit */}
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full btn-primary py-3 text-base font-semibold disabled:opacity-50"
+                disabled={loading || isLocked}
+                className="w-full btn-primary py-3 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Iniciando sesión...' : 'INICIAR SESIÓN'}
+                {loading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Iniciando sesión...
+                  </span>
+                ) : (
+                  'INICIAR SESIÓN'
+                )}
               </button>
             </form>
-
-            {/* Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">o continuar con</span>
-              </div>
-            </div>
-
-            {/* Social buttons */}
-            <div className="grid grid-cols-2 gap-4">
-              <button className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
-                <Chrome className="h-4 w-4 text-gray-700" />
-                <span className="text-sm font-medium text-gray-700">Google</span>
-              </button>
-              <button className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
-                <Building2 className="h-4 w-4 text-gray-700" />
-                <span className="text-sm font-medium text-gray-700">Microsoft</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
