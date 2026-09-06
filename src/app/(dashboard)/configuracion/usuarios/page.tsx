@@ -135,8 +135,9 @@ export default function UsuariosPage() {
         alert(err.error || 'Error al crear usuario');
         return;
       }
-      await refetch();
+      // Close sidebar immediately, then refresh data
       handleCloseSidebar();
+      await refetch();
     } finally {
       setSaving(false);
     }
@@ -164,8 +165,8 @@ export default function UsuariosPage() {
         alert(err.error || 'Error al actualizar usuario');
         return;
       }
-      await refetch();
       handleCloseSidebar();
+      await refetch();
     } finally {
       setSaving(false);
     }

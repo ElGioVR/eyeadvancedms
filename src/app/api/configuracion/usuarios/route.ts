@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: authError.message }, { status: 500 });
   }
 
-  // 2. Insert profile in usuarios table
+  // 2. Insert profile in usuarios table (best effort — auth user is already created)
   const { error: profileError } = await supabase
     .from('usuarios')
     .insert({
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     });
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+    console.error('Profile insert error (auth user still created):', profileError.message);
   }
 
   return NextResponse.json({
