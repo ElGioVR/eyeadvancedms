@@ -21,11 +21,6 @@ const sexoFilterMap: Record<string, string> = {
   Femenino: 'M',
 };
 
-const sexoColors: Record<string, string> = {
-  H: 'text-primary-600',
-  M: 'text-rose-500',
-};
-
 const sexoLabel: Record<string, string> = {
   H: 'H',
   M: 'M',
@@ -78,11 +73,11 @@ export default function PacientesPage() {
             />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {filtered.map((paciente) => (
               <div
                 key={paciente.id}
-                className="group flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md hover:border-gray-300 flex-wrap"
+                className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all hover:shadow-md hover:border-primary-200"
               >
                 <Avatar
                   initials={paciente.iniciales}
@@ -91,32 +86,30 @@ export default function PacientesPage() {
                 />
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-bold text-gray-900">{paciente.nombre}</h3>
-                    <span className="text-xs text-gray-400">|</span>
-                    <span className={cn('text-xs font-semibold', sexoColors[paciente.sexo])}>
-                      {sexoLabel[paciente.sexo]} · {paciente.edad} años
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-900 truncate">{paciente.nombre}</h3>
+                    <span className={cn('shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', paciente.sexo === 'H' ? 'bg-primary-50 text-primary-700' : 'bg-rose-50 text-rose-600')}>
+                      {sexoLabel[paciente.sexo]}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{paciente.aseguradora}</p>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+                    <span>{paciente.edad} años</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="truncate">{paciente.aseguradora}</span>
+                  </div>
                 </div>
 
-                <div className="hidden sm:block text-right min-w-[140px]">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Aseguradora</p>
-                  <p className="text-sm font-bold text-gray-900 mt-0.5">{paciente.aseguradora}</p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="hidden md:flex items-center gap-2 shrink-0">
                   <Link
                     href={`/pacientes/${paciente.id}/historial`}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
                   >
                     <FileText className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Historial</span>
+                    Historial
                   </Link>
                   <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
                     <Calendar className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Agendar</span>
+                    Agendar
                   </button>
                 </div>
               </div>
