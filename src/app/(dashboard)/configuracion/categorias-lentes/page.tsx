@@ -1,23 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Plus, Search, Edit3, Trash2, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const categorias = [
-  { id: 1, nombre: 'Lente Monofocal', descripcion: 'Corrige un solo punto visual (miopía o hipermetropía)', stock: 156, color: 'bg-sky-500', estado: 'ACTIVO' },
-  { id: 2, nombre: 'Lente Bifocal', descripcion: 'Corrige visión de cerca y lejos con dos zonas', stock: 89, color: 'bg-primary-500', estado: 'ACTIVO' },
-  { id: 3, nombre: 'Lente Progresivo', descripcion: 'Transición gradual sin líneas visibles', stock: 67, color: 'bg-purple-500', estado: 'ACTIVO' },
-  { id: 4, nombre: 'Lente de Contacto', descripcion: 'Lente tórica y esférica de contacto', stock: 234, color: 'bg-emerald-500', estado: 'ACTIVO' },
-  { id: 5, nombre: 'Mica Policarbonato', descripcion: 'Material resistente a impactos, ideal para niños', stock: 312, color: 'bg-amber-500', estado: 'ACTIVO' },
-  { id: 6, nombre: 'Mica Trivex', descripcion: 'Ligera y resistente, mejor óptica que policarbonato', stock: 45, color: 'bg-rose-500', estado: 'ACTIVO' },
-  { id: 7, nombre: 'Lente Fotocromático', descripcion: 'Se oscurece con la luz solar', stock: 78, color: 'bg-cyan-500', estado: 'ACTIVO' },
-  { id: 8, nombre: 'Antirreflejante', descripcion: 'Tratamiento para reducir reflejos', stock: 0, color: 'bg-gray-400', estado: 'SIN STOCK' },
-];
+import { categoriasLentesConfigData } from '@/data/config';
 
 export default function CategoriasLentesPage() {
   const [search, setSearch] = useState('');
-  const filtered = categorias.filter((c) => c.nombre.toLowerCase().includes(search.toLowerCase()));
+
+  const filtered = useMemo(
+    () =>
+      categoriasLentesConfigData.filter((c) =>
+        c.nombre.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -27,7 +28,7 @@ export default function CategoriasLentesPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar categoría..."
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
           />

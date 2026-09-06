@@ -1,6 +1,14 @@
 'use client';
 
 import { Camera, Save } from 'lucide-react';
+import type { PerfilActividad } from '@/types';
+
+const perfilActividad: PerfilActividad[] = [
+  { accion: 'Consulta #1245 completada', tiempo: 'Hoy, 10:15 AM' },
+  { accion: 'Paciente Mateo Rodríguez registrado', tiempo: 'Hoy, 09:30 AM' },
+  { accion: 'Receta #892 emitida', tiempo: 'Ayer, 04:20 PM' },
+  { accion: 'Consulta #1240 completada', tiempo: 'Ayer, 02:10 PM' },
+];
 
 export default function PerfilPage() {
   return (
@@ -135,13 +143,8 @@ export default function PerfilPage() {
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Actividad Reciente</h3>
           </div>
           <div className="p-4 space-y-3">
-            {[
-              { accion: 'Consulta #1245 completada', tiempo: 'Hoy, 10:15 AM' },
-              { accion: 'Paciente Mateo Rodríguez registrado', tiempo: 'Hoy, 09:30 AM' },
-              { accion: 'Receta #892 emitida', tiempo: 'Ayer, 04:20 PM' },
-              { accion: 'Consulta #1240 completada', tiempo: 'Ayer, 02:10 PM' },
-            ].map((item, idx) => (
-              <div key={idx} className="flex items-start gap-3 rounded-lg p-2 hover:bg-gray-50">
+            {perfilActividad.map((item) => (
+              <div key={item.accion} className="flex items-start gap-3 rounded-lg p-2 hover:bg-gray-50">
                 <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary-400" />
                 <div>
                   <p className="text-sm font-medium text-gray-700">{item.accion}</p>

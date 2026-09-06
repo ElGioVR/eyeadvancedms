@@ -1,21 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Plus, Search, Edit3, Trash2, Truck, Mail, Phone, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const proveedores = [
-  { id: 1, nombre: 'Essilor', especialidad: 'Lentes oftálmicos y tratamientos', contactos: 12, email: 'ventas.mx@essilor.com', telefono: '800-123-4567', web: 'www.essilor.com', color: 'bg-blue-500', estado: 'ACTIVO' },
-  { id: 2, nombre: 'Zeiss', especialidad: 'Lentes premium y progresivos', contactos: 8, email: 'proveedores@zeiss.com.mx', telefono: '800-234-5678', web: 'www.zeiss.com.mx', color: 'bg-sky-500', estado: 'ACTIVO' },
-  { id: 3, nombre: 'Hoya', especialidad: 'Lentes y tratamientos antirreflejantes', contactos: 15, email: 'ventas@hoya.com.mx', telefono: '800-345-6789', web: 'www.hoya.com.mx', color: 'bg-emerald-500', estado: 'ACTIVO' },
-  { id: 4, nombre: 'Rodenstock', especialidad: 'Lentes de alta precisión', contactos: 5, email: 'info@rodenstock.com.mx', telefono: '800-456-7890', web: 'www.rodenstock.com', color: 'bg-purple-500', estado: 'ACTIVO' },
-  { id: 5, nombre: 'Johnson & Johnson', especialidad: 'Lentes de contacto Acuvue', contactos: 22, email: 'visión@jj.com', telefono: '800-567-8901', web: 'www.acuvue.com', color: 'bg-rose-500', estado: 'ACTIVO' },
-  { id: 6, nombre: 'CooperVision', especialidad: 'Lentes de contacto', contactos: 10, email: 'ventas@coopervision.mx', telefono: '800-678-9012', web: 'www.coopervision.com', color: 'bg-amber-500', estado: 'ACTIVO' },
-];
+import { proveedoresConfigData } from '@/data/config';
 
 export default function ProveedoresPage() {
   const [search, setSearch] = useState('');
-  const filtered = proveedores.filter((p) => p.nombre.toLowerCase().includes(search.toLowerCase()));
+
+  const filtered = useMemo(
+    () =>
+      proveedoresConfigData.filter((p) =>
+        p.nombre.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -25,7 +28,7 @@ export default function ProveedoresPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar proveedor..."
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
           />

@@ -1,23 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Plus, Search, ShieldCheck, Phone, Mail, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const aseguranzas = [
-  { id: 1, nombre: 'ISSSTECALI', pacientes: 42, color: 'bg-blue-500', contacto: 'Lic. María Torres', telefono: '664-200-1000', email: 'contacto@issstecali.gob.mx', estado: 'ACTIVO' },
-  { id: 2, nombre: 'JORNADA', pacientes: 18, color: 'bg-emerald-500', contacto: 'Lic. Roberto Díaz', telefono: '664-200-2000', email: 'atencion@jornada.com.mx', estado: 'ACTIVO' },
-  { id: 3, nombre: 'GNP', pacientes: 28, color: 'bg-sky-500', contacto: 'Ana García', telefono: '664-200-3000', email: 'servicios@gnp.com.mx', estado: 'ACTIVO' },
-  { id: 4, nombre: 'Seguros Monterrey', pacientes: 11, color: 'bg-rose-500', contacto: 'Pedro López', telefono: '664-200-4000', email: 'clinica@segurosmty.com', estado: 'ACTIVO' },
-  { id: 5, nombre: 'AXA', pacientes: 22, color: 'bg-amber-500', contacto: 'Laura Sánchez', telefono: '664-200-5000', email: 'red.medica@axa.mx', estado: 'ACTIVO' },
-  { id: 6, nombre: 'MetLife', pacientes: 18, color: 'bg-purple-500', contacto: 'Carlos Hernández', telefono: '664-200-6000', email: 'proveedores@metlife.com.mx', estado: 'ACTIVO' },
-  { id: 7, nombre: 'Particular', pacientes: 35, color: 'bg-gray-500', contacto: '—', telefono: '—', email: '—', estado: 'ACTIVO' },
-];
+import { aseguranzasConfigData } from '@/data/config';
 
 export default function AseguranzasPage() {
   const [search, setSearch] = useState('');
 
-  const filtered = aseguranzas.filter((a) => a.nombre.toLowerCase().includes(search.toLowerCase()));
+  const filtered = useMemo(
+    () =>
+      aseguranzasConfigData.filter((a) =>
+        a.nombre.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -27,7 +28,7 @@ export default function AseguranzasPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar aseguranza..."
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
           />

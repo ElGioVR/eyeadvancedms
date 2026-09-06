@@ -14,7 +14,7 @@ import {
   Eye,
   X,
 } from 'lucide-react';
-import { cobrosData } from '@/data';
+import { cobrosData } from '@/data/cobros';
 import { useDebounce, useFilteredData } from '@/hooks';
 import StatCard from '@/components/ui/StatCard';
 import SearchInput from '@/components/ui/SearchInput';

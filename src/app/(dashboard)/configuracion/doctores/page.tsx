@@ -1,21 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Plus, Search, Edit3, Eye, Phone, Mail, Stethoscope } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const doctores = [
-  { id: 1, nombre: 'Dra. Irina Rostova', especialidad: 'Oftalmología Pediátrica', cedula: '12345678', email: 'irina.rostova@eyeadvanced.com', telefono: '664-111-2222', consultas: 342, color: 'bg-primary-500', iniciales: 'IR', estado: 'ACTIVO', aseguranzas: ['ISSSTECALI', 'GNP', 'Particular'] },
-  { id: 2, nombre: 'Dr. Héctor Sánchez', especialidad: 'Oftalmología General', cedula: '23456789', email: 'h.sanchez@eyeadvanced.com', telefono: '664-222-3333', consultas: 289, color: 'bg-sky-500', iniciales: 'HS', estado: 'ACTIVO', aseguranzas: ['AXA', 'MetLife', 'Particular'] },
-  { id: 3, nombre: 'Dra. Martha López', especialidad: 'Cataratas y Cirugía Refractiva', cedula: '34567890', email: 'martha.lopez@eyeadvanced.com', telefono: '664-333-4444', consultas: 198, color: 'bg-emerald-500', iniciales: 'ML', estado: 'ACTIVO', aseguranzas: ['JORNADA', 'Seguros Monterrey'] },
-  { id: 4, nombre: 'Dra. Sadia Khan', especialidad: 'Glaucoma y Retina', cedula: '45678901', email: 'sadia.khan@eyeadvanced.com', telefono: '664-444-5555', consultas: 156, color: 'bg-amber-500', iniciales: 'SK', estado: 'ACTIVO', aseguranzas: ['GNP', 'AXA', 'ISSSTECALI'] },
-  { id: 5, nombre: 'Dr. Luis Morales', especialidad: 'Estrabismo', cedula: '56789012', email: 'luis.morales@eyeadvanced.com', telefono: '664-555-6666', consultas: 87, color: 'bg-purple-500', iniciales: 'LM', estado: 'ACTIVO', aseguranzas: ['Particular'] },
-  { id: 6, nombre: 'Dr. Piloto García', especialidad: 'Cornea y Superficie Ocular', cedula: '67890123', email: 'piloto.garcia@eyeadvanced.com', telefono: '664-666-7777', consultas: 64, color: 'bg-rose-500', iniciales: 'PG', estado: 'ACTIVO', aseguranzas: ['MetLife', 'JORNADA'] },
-];
+import { doctoresConfigData } from '@/data/doctores';
 
 export default function DoctoresPage() {
   const [search, setSearch] = useState('');
-  const filtered = doctores.filter((d) => d.nombre.toLowerCase().includes(search.toLowerCase()) || d.especialidad.toLowerCase().includes(search.toLowerCase()));
+
+  const filtered = useMemo(
+    () =>
+      doctoresConfigData.filter(
+        (d) =>
+          d.nombre.toLowerCase().includes(search.toLowerCase()) ||
+          d.especialidad.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -25,7 +30,7 @@ export default function DoctoresPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar doctor por nombre o especialidad..."
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
           />

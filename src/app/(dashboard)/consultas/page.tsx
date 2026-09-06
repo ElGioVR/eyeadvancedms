@@ -14,7 +14,7 @@ import {
   Activity,
   ClipboardList,
 } from 'lucide-react';
-import { consultasData } from '@/data';
+import { consultasData } from '@/data/consultas';
 import { useDebounce, useFilteredData } from '@/hooks';
 import StatCard from '@/components/ui/StatCard';
 import SearchInput from '@/components/ui/SearchInput';

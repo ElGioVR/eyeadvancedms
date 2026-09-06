@@ -15,7 +15,8 @@ import {
   Printer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { pacientesData, doctoresData } from '@/data';
+import { pacientesData } from '@/data/pacientes';
+import { doctoresData } from '@/data/doctores';
 import { useDebounce, useFilteredData } from '@/hooks';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';

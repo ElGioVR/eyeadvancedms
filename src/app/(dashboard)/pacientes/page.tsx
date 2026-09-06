@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Plus, Calendar, FileText, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { pacientesData } from '@/data';
+import { pacientesData } from '@/data/pacientes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useFilteredData } from '@/hooks/useFilteredData';
 import PageHeader from '@/components/ui/PageHeader';

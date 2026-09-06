@@ -12,7 +12,8 @@ import {
   TrendingUp,
   ShieldCheck,
 } from 'lucide-react';
-import { doctoresData, aseguranzasData } from '@/data';
+import { doctoresData } from '@/data/doctores';
+import { aseguranzasData } from '@/data/config';
 import PageHeader from '@/components/ui/PageHeader';
 import StatCard from '@/components/ui/StatCard';
 import Avatar from '@/components/ui/Avatar';

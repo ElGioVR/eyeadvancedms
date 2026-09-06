@@ -117,3 +117,89 @@ export interface StatItem {
   bgColor: string;
   borderColor?: string;
 }
+
+export interface Colaborador {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  rolColor: string;
+  estado: string;
+  ultimoAcceso: string;
+  iniciales: string;
+  avatarColor: string;
+}
+
+export interface ConfiguracionDoctor {
+  id: number;
+  nombre: string;
+  especialidad: string;
+  cedula: string;
+  email: string;
+  telefono: string;
+  consultas: number;
+  color: string;
+  iniciales: string;
+  estado: string;
+  aseguranzas: string[];
+}
+
+export interface ConfiguracionAseguranza {
+  id: number;
+  nombre: string;
+  pacientes: number;
+  color: string;
+  contacto: string;
+  telefono: string;
+  email: string;
+  estado: string;
+}
+
+export interface ConfiguracionProveedor {
+  id: number;
+  nombre: string;
+  especialidad: string;
+  contactos: number;
+  email: string;
+  telefono: string;
+  web: string;
+  color: string;
+  estado: string;
+}
+
+export interface ConfiguracionCategoriaLente {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  stock: number;
+  color: string;
+  estado: string;
+}
+
+export interface SystemStat {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+  status: string;
+}
+
+export interface RecentLog {
+  timestamp: string;
+  user: string;
+  accion: string;
+  tipo: string;
+}
+
+export interface BackupEntry {
+  fecha: string;
+  tipo: string;
+  size: string;
+  estado: string;
+}
+
+export interface PerfilActividad {
+  accion: string;
+  tiempo: string;
+}

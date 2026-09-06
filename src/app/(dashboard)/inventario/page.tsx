@@ -22,7 +22,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import { FormInput, FormSelect } from '@/components/ui/FormField';
-import { lentesData } from '@/data';
+import { lentesData } from '@/data/lentes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useFilteredData } from '@/hooks/useFilteredData';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Plus,
   Eye,
@@ -11,27 +11,8 @@ import {
   User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface Colaborador {
-  id: number;
-  nombre: string;
-  email: string;
-  rol: string;
-  rolColor: string;
-  estado: string;
-  ultimoAcceso: string;
-  iniciales: string;
-  avatarColor: string;
-}
-
-const colaboradoresData: Colaborador[] = [
-  { id: 1, nombre: 'Dra. Irina Rostova', email: 'irina.rostova@eyeadvanced.com', rol: 'DOCTOR', rolColor: 'bg-primary-50 text-primary-700 ring-primary-200', estado: 'ACTIVO', ultimoAcceso: 'Hoy, 10:15 AM', iniciales: 'IR', avatarColor: 'bg-primary-500' },
-  { id: 2, nombre: 'Dr. Héctor Sánchez', email: 'h.sanchez@eyeadvanced.com', rol: 'DOCTOR', rolColor: 'bg-primary-50 text-primary-700 ring-primary-200', estado: 'ACTIVO', ultimoAcceso: 'Ayer, 04:30 PM', iniciales: 'HS', avatarColor: 'bg-sky-500' },
-  { id: 3, nombre: 'Admin Carlos Mendoza', email: 'admin.carlos@eyeadvanced.com', rol: 'ADMIN', rolColor: 'bg-red-50 text-red-700 ring-red-200', estado: 'ACTIVO', ultimoAcceso: 'Hace 5 minutos', iniciales: 'CM', avatarColor: 'bg-emerald-500' },
-  { id: 4, nombre: 'Sofía González', email: 'sofia.recepcion@eyeadvanced.com', rol: 'RECEPCIONISTA', rolColor: 'bg-amber-50 text-amber-700 ring-amber-200', estado: 'ACTIVO', ultimoAcceso: 'Hoy, 08:02 AM', iniciales: 'SG', avatarColor: 'bg-purple-500' },
-  { id: 5, nombre: 'Dra. Lucía Ortiz', email: 'lucia.ortiz@eyeadvanced.com', rol: 'DOCTOR', rolColor: 'bg-primary-50 text-primary-700 ring-primary-200', estado: 'INACTIVO', ultimoAcceso: '15 Ago 2024', iniciales: 'LO', avatarColor: 'bg-rose-500' },
-  { id: 6, nombre: 'Mateo Rodríguez', email: 'mateo.mj@eyeadvanced.com', rol: 'RECEPCIONISTA', rolColor: 'bg-amber-50 text-amber-700 ring-amber-200', estado: 'ACTIVO', ultimoAcceso: '01 Sep 2024', iniciales: 'MR', avatarColor: 'bg-cyan-500' },
-];
+import { colaboradoresData } from '@/data/usuarios';
+import type { Colaborador } from '@/types';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -41,11 +22,50 @@ export default function UsuariosPage() {
   const [editingUser, setEditingUser] = useState<Colaborador | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  const filtered = colaboradoresData.filter(
-    (c) => c.nombre.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      colaboradoresData.filter(
+        (c) =>
+          c.nombre.toLowerCase().includes(search.toLowerCase()) ||
+          c.email.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
   );
+
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, []);
+
+  const handlePageChange = useCallback((p: number) => {
+    setPage(p);
+  }, []);
+
+  const handlePrevPage = useCallback(() => {
+    setPage((prev) => Math.max(1, prev - 1));
+  }, []);
+
+  const handleNextPage = useCallback(() => {
+    setPage((prev) => Math.min(totalPages, prev + 1));
+  }, [totalPages]);
+
+  const handleEditUser = useCallback((user: Colaborador) => {
+    setEditingUser(user);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setEditingUser(null);
+  }, []);
+
+  const togglePassword = useCallback(() => {
+    setShowPassword((prev) => !prev);
+  }, []);
 
   return (
     <div className="flex gap-6">
@@ -57,7 +77,7 @@ export default function UsuariosPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Buscar usuario por nombre o email..."
               className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
             />
@@ -103,7 +123,7 @@ export default function UsuariosPage() {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{user.ultimoAcceso}</td>
                   <td className="px-6 py-4">
-                    <button onClick={() => setEditingUser(user)} className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">Editar</button>
+                    <button onClick={() => handleEditUser(user)} className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">Editar</button>
                   </td>
                 </tr>
               ))}
@@ -120,13 +140,13 @@ export default function UsuariosPage() {
           <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-6 py-3">
             <span className="text-sm text-gray-400">Mostrando {paginated.length} de {filtered.length} usuarios clínicos</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+              <button onClick={handlePrevPage} disabled={page === 1} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                 <ChevronLeft className="h-4 w-4" />Anterior
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button key={p} onClick={() => setPage(p)} className={cn('h-8 w-8 rounded-md text-sm font-bold transition-colors', p === page ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
+                <button key={p} onClick={() => handlePageChange(p)} className={cn('h-8 w-8 rounded-md text-sm font-bold transition-colors', p === page ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
               ))}
-              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+              <button onClick={handleNextPage} disabled={page === totalPages} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                 Siguiente<ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -140,7 +160,7 @@ export default function UsuariosPage() {
           <div className="sticky top-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Editar Colaborador</h3>
-              <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+              <button onClick={handleCloseSidebar} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-6 space-y-5">
               <div className="flex justify-center">
@@ -166,7 +186,7 @@ export default function UsuariosPage() {
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Contraseña Temporal</label>
                 <div className="relative">
                   <input type={showPassword ? 'text' : 'password'} defaultValue="••••••••••••" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 pr-10 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <button type="button" onClick={togglePassword} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
@@ -183,7 +203,7 @@ export default function UsuariosPage() {
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setEditingUser(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+                <button onClick={handleCloseSidebar} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
                 <button className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">GUARDAR CAMBIOS</button>
               </div>
             </div>
