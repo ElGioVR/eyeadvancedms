@@ -13,6 +13,9 @@ export interface Paciente {
   telefono?: string;
   email?: string;
   direccion?: string;
+  telefonoFijo?: string;
+  ultimaVisita?: string;
+  consultas?: number;
 }
 
 export interface Doctor {
