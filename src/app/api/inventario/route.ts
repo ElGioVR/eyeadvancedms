@@ -1,22 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
-export async function GET() {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('lentes')
-    .select(`
-      *,
-      categorias_lentes:categoria_id (nombre),
-      proveedores:proveedor_id (nombre)
-    `)
-    .order('created_at', { ascending: false });
+const errorTranslations: Record<string, string> = {
+  'duplicate key value violates unique constraint': 'Ya existe un registro con esos datos',
+  'new row violates row-level security policy': 'No tiene permisos para realizar esta accion',
+  'insert or update on table "lentes" violates foreign key constraint': 'La categoria o proveedor seleccionado no existe',
+  'invalid input syntax for type uuid': 'ID no valido',
+  'null value in column': 'Faltan campos obligatorios',
+};
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+function translateError(msg: string): string {
+  for (const [key, val] of Object.entries(errorTranslations)) {
+    if (msg.includes(key)) return val;
   }
+  return msg;
+}
 
-  const result = data.map((l) => ({
+function mapLente(l: any) {
+  return {
     id: l.id,
     marca: l.marca,
     modelo: l.modelo,
@@ -39,45 +40,81 @@ export async function GET() {
     categoria_id: l.categoria_id,
     proveedor_id: l.proveedor_id,
     created_at: l.created_at,
-  }));
+  };
+}
 
-  return NextResponse.json(result);
+const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedor_id (nombre)';
+
+export async function GET(request: Request) {
+  const supabase = getSupabaseAdmin();
+  const { searchParams } = new URL(request.url);
+  const barcode = searchParams.get('barcode');
+
+  if (barcode) {
+    const { data, error } = await supabase
+      .from('lentes')
+      .select(SELECT)
+      .eq('codigo_barras', barcode)
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: 'No se encontro lente con ese codigo de barras' }, { status: 404 });
+    }
+    return NextResponse.json(mapLente(data));
+  }
+
+  const { data, error } = await supabase
+    .from('lentes')
+    .select(SELECT)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+  }
+
+  return NextResponse.json(data.map(mapLente));
 }
 
 export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
+  if (!body.marca || !body.modelo) {
+    return NextResponse.json({ error: 'Marca y modelo son obligatorios' }, { status: 400 });
+  }
+
+  const insert: Record<string, any> = {
+    marca: body.marca,
+    modelo: body.modelo,
+    codigo_barras: body.codigo_barras || null,
+    grado_esferico: body.grado_esferico ?? null,
+    grado_cilindrico: body.grado_cilindrico ?? null,
+    eje: body.eje ?? null,
+    color: body.color || null,
+    material: body.material || null,
+    stock: body.stock ?? 0,
+    stock_minimo: body.stock_minimo ?? 5,
+    precio_compra: body.precio_compra ?? null,
+    precio_venta: body.precio_venta ?? null,
+    lote: body.lote || null,
+    fecha_caducidad: body.fecha_caducidad || null,
+    estado: body.estado || 'DISPONIBLE',
+    notas: body.notas || null,
+    categoria_id: body.categoria_id || null,
+    proveedor_id: body.proveedor_id || null,
+  };
+
   const { data, error } = await supabase
     .from('lentes')
-    .insert({
-      marca: body.marca,
-      modelo: body.modelo,
-      codigo_barras: body.codigo_barras,
-      grado_esferico: body.grado_esferico,
-      grado_cilindrico: body.grado_cilindrico,
-      eje: body.eje,
-      color: body.color,
-      material: body.material,
-      stock: body.stock || 0,
-      stock_minimo: body.stock_minimo || 5,
-      precio_compra: body.precio_compra,
-      precio_venta: body.precio_venta,
-      lote: body.lote,
-      fecha_caducidad: body.fecha_caducidad,
-      estado: body.estado || 'DISPONIBLE',
-      notas: body.notas,
-      categoria_id: body.categoria_id,
-      proveedor_id: body.proveedor_id,
-    })
-    .select()
+    .insert(insert)
+    .select(SELECT)
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(mapLente(data), { status: 201 });
 }
 
 export async function PATCH(request: Request) {
@@ -85,16 +122,53 @@ export async function PATCH(request: Request) {
   const body = await request.json();
   const { id, ...updates } = body;
 
+  if (!id) {
+    return NextResponse.json({ error: 'ID es obligatorio' }, { status: 400 });
+  }
+
+  const cleanUpdates: Record<string, any> = {};
+  const allowed = [
+    'marca', 'modelo', 'codigo_barras', 'grado_esferico', 'grado_cilindrico',
+    'eje', 'color', 'material', 'stock', 'stock_minimo', 'precio_compra',
+    'precio_venta', 'lote', 'fecha_caducidad', 'estado', 'notas',
+    'categoria_id', 'proveedor_id',
+  ];
+  for (const key of allowed) {
+    if (updates[key] !== undefined) cleanUpdates[key] = updates[key];
+  }
+
+  if (Object.keys(cleanUpdates).length === 0) {
+    return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from('lentes')
-    .update(updates)
+    .update(cleanUpdates)
     .eq('id', id)
-    .select()
+    .select(SELECT)
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(mapLente(data));
+}
+
+export async function DELETE(request: Request) {
+  const supabase = getSupabaseAdmin();
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (!id) {
+    return NextResponse.json({ error: 'ID es obligatorio' }, { status: 400 });
+  }
+
+  const { error } = await supabase.from('lentes').delete().eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -15,6 +16,7 @@ import {
   CheckCircle,
   Download,
   Printer,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,98 +28,122 @@ const historialTabs = [
   { label: 'Estudios', icon: Eye },
 ];
 
-const visitas = [
-  {
-    id: 1,
-    fecha: '12 Sep 2024',
-    tipo: 'SUBSECUENTE',
-    tipoColor: 'bg-sky-50 text-sky-700 ring-sky-200',
-    medico: 'Dra. Irina',
-    especialidad: 'Oftalmología Pediátrica',
-    diagnostico: 'Glaucoma de ángulo abierto controlado',
-    tratamiento: 'Presión intraocular estable 14mmHg. Gotas Latano.',
-    costo: '$1,200 MXN',
-    cobertura: 'Particular',
-  },
-  {
-    id: 2,
-    fecha: '14 Ago 2024',
-    tipo: 'PRIMERA VEZ',
-    tipoColor: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    medico: 'Dra. Irina',
-    especialidad: 'Oftalmología Pediátrica',
-    diagnostico: 'Sospecha de Glaucoma / Presbipopia inicial',
-    tratamiento: 'Campimetría de Humphrey programada.',
-    costo: '$1,800 MXN',
-    cobertura: 'Seguros Monterrey',
-  },
-  {
-    id: 3,
-    fecha: '05 Jul 2024',
-    tipo: 'SEGUIMIENTO',
-    tipoColor: 'bg-amber-50 text-amber-700 ring-amber-200',
-    medico: 'Dr. Sánchez',
-    especialidad: 'Oftalmología General',
-    diagnostico: 'Miopía estable',
-    tratamiento: 'Graduación sin cambios. Se mantiene tratamiento actual.',
-    costo: '$800 MXN',
-    cobertura: 'GNP',
-  },
-  {
-    id: 4,
-    fecha: '20 Mar 2024',
-    tipo: 'SEGUIMIENTO',
-    tipoColor: 'bg-amber-50 text-amber-700 ring-amber-200',
-    medico: 'Dra. Martha',
-    especialidad: 'Cataratas y Cirugía',
-    diagnostico: 'Catarata incipiente bilateral',
-    tratamiento: 'Observación. Control en 6 meses.',
-    costo: '$600 MXN',
-    cobertura: 'AXA',
-  },
-];
+interface PacienteData {
+  id: string;
+  nombre_completo: string;
+  iniciales: string;
+  sexo: string;
+  fecha_nacimiento: string;
+  edad: number;
+  telefono: string;
+  email: string;
+  direccion: string;
+  created_at: string;
+  consultas: ConsultaData[];
+  total_consultas: number;
+}
 
-const consultas = [
-  { id: 1, fecha: '12 Sep 2024', doctor: 'Dra. Irina', motivo: 'Control de Glaucoma', diagnostico: 'Glaucoma de ángulo abierto controlado', agudezaVisual: 'OD: 20/25 · OI: 20/20', presionIntraocular: 'OD: 14 mmHg · OI: 13 mmHg', fondoOjo: 'Nervio óptico estable, excavación 0.4', notas: 'Paciente estable. Mantener tratamiento actual. Control en 3 meses.', estado: 'Completada' },
-  { id: 2, fecha: '14 Ago 2024', doctor: 'Dra. Irina', motivo: 'Consulta inicial - Dolor ocular', diagnostico: 'Sospecha de Glaucoma / Presbipopia inicial', agudezaVisual: 'OD: 20/30 · OI: 20/25', presionIntraocular: 'OD: 18 mmHg · OI: 17 mmHg', fondoOjo: 'Papila con relación esc/corona 0.5 OD', notas: 'Programar campimetría de Humphrey. Suspender gotas anteriores. Iniciar Latanoprost OD.', estado: 'Completada' },
-  { id: 3, fecha: '05 Jul 2024', doctor: 'Dr. Sánchez', motivo: 'Actualización de graduación', diagnostico: 'Miopía estable', agudezaVisual: 'OD: 20/25 (c/c) · OI: 20/20 (c/c)', presionIntraocular: 'OD: 12 mmHg · OI: 12 mmHg', fondoOjo: 'Normal', notas: 'Graduación sin cambios. Paciente satisfecho con lentes actuales.', estado: 'Completada' },
-  { id: 4, fecha: '20 Mar 2024', doctor: 'Dra. Martha', motivo: 'Seguimiento catarata', diagnostico: 'Catarata incipiente bilateral', agudezaVisual: 'OD: 20/30 · OI: 20/25', presionIntraocular: 'OD: 14 mmHg · OI: 13 mmHg', fondoOjo: 'Normal. Cristalino con opacidad cortical leve OD.', notas: 'Catarata incipiente. No requiere cirugía aún. Control anual.', estado: 'Completada' },
-];
+interface ConsultaData {
+  id: string;
+  folio: string | null;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  tipo_consulta: string;
+  tipo_visita: string;
+  diagnostico: string;
+  estudios: string[];
+  procedimiento: string;
+  notas: string;
+  doctor: string;
+  especialidad: string;
+  monto: number;
+  moneda: string;
+  metodo_pago: string;
+  pagado: boolean;
+}
 
-const procedimientos = [
-  { id: 1, fecha: '14 Ago 2024', procedimiento: 'Campimetría de Humphrey', doctor: 'Dra. Irina', ojo: 'OD', resultado: 'Escotoma nasal superior compatible con glaucoma incipiente', notas: 'Patrón bitemporal inferior leve. Correlacionar con PIO.', estado: 'Completado' },
-  { id: 2, fecha: '14 Ago 2024', procedimiento: 'Tonometría de aplastamiento', doctor: 'Dra. Irina', ojo: 'OD / OI', resultado: 'OD: 18 mmHg · OI: 17 mmHg', notas: 'Valores dentro de rango normal-alto.', estado: 'Completado' },
-  { id: 3, fecha: '20 Mar 2024', procedimiento: 'Lampara de hendidura', doctor: 'Dra. Martha', ojo: 'OD / OI', resultado: 'Catarata cortical incipiente OD. OI sin cambios.', notas: 'Observación. No cirugía indicada.', estado: 'Completado' },
-  { id: 4, fecha: '05 Jul 2024', procedimiento: 'Queratometría', doctor: 'Dr. Sánchez', ojo: 'OD / OI', resultado: 'OD: 43.50 / 44.25 · OI: 43.00 / 43.75', notas: 'Curvaturas normales. Sin astigmatismo significativo.', estado: 'Completado' },
-];
+const tipoConsultaColors: Record<string, string> = {
+  'CONSULTA': 'bg-sky-50 text-sky-700 ring-sky-200',
+  'ESTUDIO': 'bg-purple-50 text-purple-700 ring-purple-200',
+  'REVISION': 'bg-amber-50 text-amber-700 ring-amber-200',
+  'PROCEDIMIENTO': 'bg-rose-50 text-rose-700 ring-rose-200',
+};
 
-const lentes = [
-  { id: 1, fecha: '05 Jul 2024', tipo: 'Lente de Contacto', descripcion: 'Acuvue Oasys 1-Day con HydraLuxe', esferico: 'OD: -3.50 · OI: -2.75', cilindrico: 'OD: -0.75 eje 180° · OI: -0.50 eje 170°', material: 'Senofilcon A', proveedor: 'Johnson & Johnson', estado: 'Activo', proximoRenovacion: '05 Jul 2025' },
-  { id: 2, fecha: '20 Mar 2024', tipo: 'Lente Oftálmico', descripcion: 'Zeiss SmartLife Progressive Individual 2', esferico: 'OD: -3.25 · OI: -2.50', cilindrico: 'OD: -0.75 eje 180° · OI: -0.50 eje 170°', material: 'Policarbonato con tratamiento Crizal Sapphire UV', proveedor: 'Zeiss', estado: 'Activo', proximoRenovacion: '20 Mar 2026' },
-  { id: 3, fecha: '15 Ene 2024', tipo: 'Lente Oftálmico', descripcion: 'Essilor Varilux X Design', esferico: 'OD: -3.00 · OI: -2.25', cilindrico: 'OD: -0.50 eje 180° · OI: -0.50 eje 170°', material: 'Trivex con antirreflejante', proveedor: 'Essilor', estado: 'Reemplazado', proximoRenovacion: '—' },
-];
+function formatDate(dateStr: string) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-const estudios = [
-  { id: 1, fecha: '14 Ago 2024', estudio: 'Campimetría computarizada (Humphrey)', doctor: 'Dra. Irina', ojo: 'OD', resultado: 'Escotoma nasal superior compatible con daño glaucomatoso incipiente', archivo: 'campimetria_humphrey_OD.pdf', estado: 'Disponible' },
-  { id: 2, fecha: '14 Ago 2024', estudio: 'Tomografía de coherencia óptica (OCT)', doctor: 'Dra. Irina', ojo: 'OD / OI', resultado: 'Espesor de capa de fibras nerviosas: OD 78μm (límite inferior) · OI 92μm (normal)', archivo: 'oct_nervio_optico.pdf', estado: 'Disponible' },
-  { id: 3, fecha: '20 Mar 2024', estudio: 'Biometría ultrasónica', doctor: 'Dra. Martha', ojo: 'OD', resultado: 'Longitud axial: 23.8mm. Potencia cristalino: 21.5D. Catarata cortical incipiente.', archivo: 'biometria_OD.pdf', estado: 'Disponible' },
-  { id: 4, fecha: '05 Jul 2024', estudio: 'Topografía corneal', doctor: 'Dr. Sánchez', ojo: 'OD / OI', resultado: 'Corneas regulares sin queratocono. SimK: OD 43.5/44.2 · OI 43.0/43.7', archivo: 'topografia_corneal.pdf', estado: 'Disponible' },
-];
-
-const diagnosticos = [
-  { nombre: 'Glaucoma primario de ángulo abierto', detalle: 'Ojo Derecho · Tratamiento con gotas diarias', color: 'bg-red-100 text-red-700 ring-red-200' },
-  { nombre: 'Catarata bilateral senil incipiente', detalle: 'Ambos Ojos · En observación anual', color: 'bg-red-100 text-red-700 ring-red-200' },
-];
-
-const alergias = ['Sulfas', 'Preservativos (Cloruro de benzalconio)', 'Polen'];
-
-const medicamentos = [
-  { nombre: 'Latanoprost 0.005% gotas', instruccion: '1 gota en Ojo Derecho antes de dormir' },
-  { nombre: 'Lágrimas artificiales sin preservante', instruccion: 'Cada 4 horas o en caso de resequedad severa' },
-];
+function formatMoney(amount: number, currency: string) {
+  if (!amount) return '—';
+  return currency === 'DOLARES' ? `$${amount.toLocaleString('en-US')} USD` : `$${amount.toLocaleString('es-MX')} MXN`;
+}
 
 export default function HistorialMedicoPage() {
+  const params = useParams();
+  const id = params.id as string;
   const [activeTab, setActiveTab] = useState('Resumen');
+  const [paciente, setPaciente] = useState<PacienteData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function fetchPaciente() {
+      try {
+        const res = await fetch(`/api/pacientes/${id}`);
+        if (!res.ok) throw new Error('No se encontró el paciente');
+        const data = await res.json();
+        setPaciente(data);
+      } catch (err: any) {
+        setError(err.message || 'Error al cargar paciente');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPaciente();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-500 mx-auto" />
+          <p className="text-sm text-gray-400">Cargando historial...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !paciente) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <p className="text-sm font-bold text-red-600">{error || 'Paciente no encontrado'}</p>
+          <Link href="/pacientes" className="inline-flex items-center gap-2 text-sm font-bold text-primary-600 hover:text-primary-800">
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const consultas = paciente.consultas || [];
+  const consultasConProcedimiento = consultas.filter((c) => c.procedimiento);
+  const estudiosFromConsultas = consultas.flatMap((c, i) =>
+    c.estudios.map((est, j) => ({
+      id: `${c.id}-${j}`,
+      fecha: c.fecha,
+      estudio: est,
+      doctor: c.doctor,
+      ojo: 'OD / OI',
+      resultado: c.diagnostico,
+    }))
+  );
+
+  // Unique diagnoses from consultations
+  const diagnosticos = Array.from(new Set(consultas.map((c) => c.diagnostico).filter(Boolean)));
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -132,7 +158,7 @@ export default function HistorialMedicoPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">
-            HISTORIAL MÉDICO - María García López
+            HISTORIAL MÉDICO - {paciente.nombre_completo}
           </h1>
           <p className="mt-0.5 text-sm text-gray-400">
             Consulta, diagnósticos y tratamientos detallados del paciente.
@@ -144,24 +170,28 @@ export default function HistorialMedicoPage() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-purple-500 text-xl font-bold text-white">
-            MG
+            {paciente.iniciales || '??'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-extrabold text-gray-900">María García López</h2>
-            <p className="text-sm text-gray-400 mt-0.5">Femenino · 45 años · ID: #PA-30492</p>
+            <h2 className="text-lg font-extrabold text-gray-900">{paciente.nombre_completo}</h2>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {paciente.sexo === 'FEMENINO' ? 'Femenino' : paciente.sexo === 'MASCULINO' ? 'Masculino' : paciente.sexo || '—'}
+              {paciente.edad ? ` · ${paciente.edad} años` : ''}
+              {` · ID: #${paciente.id.slice(0, 8).toUpperCase()}`}
+            </p>
           </div>
           <div className="hidden md:flex items-center gap-8">
             <div className="text-right">
               <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Teléfono</p>
-              <p className="text-sm font-bold text-gray-900 mt-0.5">664-987-1234</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">{paciente.telefono || '—'}</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Correo Electrónico</p>
-              <p className="text-sm font-bold text-gray-900 mt-0.5">maria.garcia@gmail.com</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">{paciente.email || '—'}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Visitas Totales</p>
-              <p className="text-sm font-bold text-primary-600 mt-0.5">12 visitas</p>
+              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Consultas Totales</p>
+              <p className="text-sm font-bold text-primary-600 mt-0.5">{paciente.total_consultas} consulta{paciente.total_consultas !== 1 ? 's' : ''}</p>
             </div>
           </div>
         </div>
@@ -198,41 +228,56 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Resumen' && (
             <>
               <div className="mb-4">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Línea de Tiempo - Visitas</h2>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Línea de Tiempo - Consultas</h2>
               </div>
-              <div className="space-y-4">
-                {visitas.map((visita) => (
-                  <div key={visita.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-extrabold text-primary-700">{visita.fecha}</span>
-                        <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', visita.tipoColor)}>{visita.tipo}</span>
+              {consultas.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                  <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-gray-400">No hay consultas registradas</p>
+                  <Link href="/consultas/nueva" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800">
+                    Crear consulta →
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {consultas.map((c) => (
+                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md">
+                      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-extrabold text-primary-700">{formatDate(c.fecha)}</span>
+                          <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', tipoConsultaColors[c.tipo_consulta] || 'bg-gray-50 text-gray-700 ring-gray-200')}>
+                            {c.tipo_consulta || 'CONSULTA'}
+                          </span>
+                          {c.folio && <span className="text-xs font-mono text-gray-400">{c.folio}</span>}
+                        </div>
+                        <Link href={`/consultas/${c.id}`} className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">
+                          Ver detalle <span className="text-xs">→</span>
+                        </Link>
                       </div>
-                      <button className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">Ver detalle <span className="text-xs">→</span></button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Médico</p>
+                          <p className="text-sm font-bold text-gray-900">{c.doctor || '—'}</p>
+                          {c.especialidad && <p className="text-xs text-gray-400">({c.especialidad})</p>}
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
+                          <p className="text-sm font-bold text-gray-900 leading-snug">{c.diagnostico || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Tratamiento</p>
+                          <p className="text-sm text-gray-600 leading-snug">{c.notas || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Cobro</p>
+                          <p className="text-sm font-bold text-gray-900">{formatMoney(c.monto, c.moneda)}</p>
+                          <p className="text-xs text-gray-400">· {c.pagado ? 'Pagado' : 'Pendiente'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Médico Especialista</p>
-                        <p className="text-sm font-bold text-gray-900">{visita.medico}</p>
-                        <p className="text-xs text-gray-400">({visita.especialidad})</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
-                        <p className="text-sm font-bold text-gray-900 leading-snug">{visita.diagnostico}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Tratamiento / Estudios</p>
-                        <p className="text-sm text-gray-600 leading-snug">{visita.tratamiento}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Costo y Cobertura</p>
-                        <p className="text-sm font-bold text-gray-900">{visita.costo}</p>
-                        <p className="text-xs text-gray-400">· {visita.cobertura}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -241,53 +286,56 @@ export default function HistorialMedicoPage() {
             <>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Historial de Consultas</h2>
-                <span className="text-sm text-gray-400">{consultas.length} consultas</span>
+                <span className="text-sm text-gray-400">{consultas.length} consulta{consultas.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="space-y-4">
-                {consultas.map((c) => (
-                  <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-extrabold text-primary-700">{c.fecha}</span>
-                        <span className="text-sm font-semibold text-gray-600">· {c.doctor}</span>
+              {consultas.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                  <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-gray-400">No hay consultas registradas</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {consultas.map((c) => (
+                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-extrabold text-primary-700">{formatDate(c.fecha)}</span>
+                          <span className="text-sm font-semibold text-gray-600">· {c.doctor}</span>
+                          {c.folio && <span className="text-xs font-mono text-gray-400">{c.folio}</span>}
+                        </div>
+                        <span className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
+                          c.pagado ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'
+                        )}>
+                          {c.pagado ? <><CheckCircle className="h-3 w-3" />Pagado</> : 'Pendiente'}
+                        </span>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        <CheckCircle className="h-3 w-3" />{c.estado}
-                      </span>
+                      <div className="px-4 py-3 sm:px-6 sm:py-4 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Tipo de Consulta</p>
+                            <p className="text-sm font-bold text-gray-900">{c.tipo_consulta || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
+                            <p className="text-sm font-bold text-gray-900">{c.diagnostico || '—'}</p>
+                          </div>
+                        </div>
+                        {c.procedimiento && (
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Procedimiento</p>
+                            <p className="text-sm text-gray-700">{c.procedimiento}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Notas Clínicas</p>
+                          <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3">{c.notas || 'Sin notas'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="px-4 py-3 sm:px-6 sm:py-4 space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Motivo</p>
-                          <p className="text-sm font-bold text-gray-900">{c.motivo}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
-                          <p className="text-sm font-bold text-gray-900">{c.diagnostico}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Agudeza Visual</p>
-                          <p className="text-sm text-gray-700">{c.agudezaVisual}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Presión Intraocular</p>
-                          <p className="text-sm text-gray-700">{c.presionIntraocular}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Fondo de Ojo</p>
-                          <p className="text-sm text-gray-700">{c.fondoOjo}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Notas Clínicas</p>
-                        <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3">{c.notas}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -296,42 +344,45 @@ export default function HistorialMedicoPage() {
             <>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Procedimientos Realizados</h2>
-                <span className="text-sm text-gray-400">{procedimientos.length} procedimientos</span>
+                <span className="text-sm text-gray-400">{consultasConProcedimiento.length} procedimiento{consultasConProcedimiento.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50/50">
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fecha</th>
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Procedimiento</th>
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Doctor</th>
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Ojo</th>
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Resultado</th>
-                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {procedimientos.map((p) => (
-                      <tr key={p.id} className="group hover:bg-gray-50/60 transition-colors">
-                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700">{p.fecha}</td>
-                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900">{p.procedimiento}</td>
-                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600">{p.doctor}</td>
-                        <td className="px-4 py-3 sm:px-6 sm:py-4">
-                          <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600">{p.ojo}</span>
-                        </td>
-                        <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 max-w-xs">{p.resultado}</td>
-                        <td className="px-4 py-3 sm:px-6 sm:py-4">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                            <CheckCircle className="h-3 w-3" />{p.estado}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {consultasConProcedimiento.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                  <FlaskConical className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-gray-400">No hay procedimientos registrados</p>
                 </div>
-              </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50/50">
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fecha</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Procedimiento</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Doctor</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Diagnóstico</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {consultasConProcedimiento.map((c) => (
+                          <tr key={c.id} className="group hover:bg-gray-50/60 transition-colors">
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700">{formatDate(c.fecha)}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900">{c.procedimiento}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600">{c.doctor}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 max-w-xs">{c.diagnostico}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                                <CheckCircle className="h-3 w-3" />Completado
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -340,48 +391,11 @@ export default function HistorialMedicoPage() {
             <>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Historial de Lentes</h2>
-                <span className="text-sm text-gray-400">{lentes.length} lentes</span>
               </div>
-              <div className="space-y-4">
-                {lentes.map((l) => (
-                  <div key={l.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-6">
-                      <div className="flex items-center gap-3">
-                        <Glasses className="h-4 w-4 text-primary-500" />
-                        <span className="text-sm font-extrabold text-gray-900">{l.tipo}</span>
-                        <span className="text-sm text-gray-400">· {l.descripcion}</span>
-                      </div>
-                      <span className={cn(
-                        'inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset',
-                        l.estado === 'Activo' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-gray-100 text-gray-500 ring-gray-200'
-                      )}>
-                        {l.estado}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 py-3 sm:px-6 sm:py-4">
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Esférico</p>
-                        <p className="text-sm font-bold text-gray-900">{l.esferico}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Cilíndrico / Eje</p>
-                        <p className="text-sm font-bold text-gray-900">{l.cilindrico}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Material / Tratamiento</p>
-                        <p className="text-sm text-gray-700">{l.material}</p>
-                      </div>
-                    </div>
-                    <div className="border-t border-gray-100 px-4 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="text-sm text-gray-500">
-                        <span className="font-semibold">Proveedor:</span> {l.proveedor}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        <span className="font-semibold">Próxima renovación:</span> {l.proximoRenovacion}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                <Glasses className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm font-bold text-gray-400">Módulo de lentes en desarrollo</p>
+                <p className="text-xs text-gray-400 mt-1">Próximamente se conectarán los lentes del inventario al historial del paciente</p>
               </div>
             </>
           )}
@@ -391,41 +405,33 @@ export default function HistorialMedicoPage() {
             <>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">Estudios Diagnósticos</h2>
-                <span className="text-sm text-gray-400">{estudios.length} estudios</span>
+                <span className="text-sm text-gray-400">{estudiosFromConsultas.length} estudio{estudiosFromConsultas.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="space-y-3">
-                {estudios.map((e) => (
-                  <div key={e.id} className="flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm transition-all hover:shadow-md">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100">
-                      <Eye className="h-5 w-5 text-sky-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-sm font-bold text-gray-900">{e.estudio}</h3>
-                        <span className="text-xs text-gray-400">·</span>
-                        <span className="text-xs text-gray-400">{e.doctor}</span>
-                        <span className="text-xs text-gray-400">·</span>
-                        <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">{e.ojo}</span>
+              {estudiosFromConsultas.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                  <Eye className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-gray-400">No hay estudios registrados</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {estudiosFromConsultas.map((e) => (
+                    <div key={e.id} className="flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm transition-all hover:shadow-md">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100">
+                        <Eye className="h-5 w-5 text-sky-600" />
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">{e.resultado}</p>
-                      <p className="text-xs text-gray-400 mt-1">{e.fecha}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                        <CheckCircle className="h-3 w-3" />{e.estado}
-                      </span>
-                      <div className="hidden sm:flex items-center gap-2">
-                        <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                          <Download className="h-3.5 w-3.5" />
-                        </button>
-                        <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                          <Printer className="h-3.5 w-3.5" />
-                        </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-sm font-bold text-gray-900">{e.estudio}</h3>
+                          <span className="text-xs text-gray-400">·</span>
+                          <span className="text-xs text-gray-400">{e.doctor}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{e.resultado}</p>
+                        <p className="text-xs text-gray-400 mt-1">{formatDate(e.fecha)}</p>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -434,47 +440,38 @@ export default function HistorialMedicoPage() {
         <div className="w-full lg:w-[360px] shrink-0 space-y-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Diagnósticos Activos</h3>
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Diagnósticos</h3>
             </div>
             <div className="p-4 space-y-2">
-              {diagnosticos.map((d, idx) => (
-                <div key={idx} className={cn('rounded-lg p-3 ring-1 ring-inset', d.color)}>
-                  <p className="text-sm font-bold leading-snug">{d.nombre}</p>
-                  <p className="text-xs opacity-75 mt-0.5">{d.detalle}</p>
-                </div>
-              ))}
+              {diagnosticos.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin diagnósticos registrados</p>
+              ) : (
+                diagnosticos.map((d, idx) => (
+                  <div key={idx} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200">
+                    <p className="text-sm font-bold leading-snug">{d}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Alergias</h3>
-            </div>
-            <div className="p-4 flex flex-wrap gap-2">
-              {alergias.map((a, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 ring-1 ring-orange-200">
-                  <AlertTriangle className="h-3 w-3" />{a}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Medicamentos Actuales</h3>
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900">Información del Paciente</h3>
             </div>
             <div className="divide-y divide-gray-50">
-              {medicamentos.map((m, idx) => (
-                <div key={idx} className="px-5 py-3">
-                  <div className="flex items-start gap-2">
-                    <Pill className="h-4 w-4 text-primary-500 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">{m.nombre}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{m.instruccion}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="px-5 py-3">
+                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Dirección</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{paciente.direccion || '—'}</p>
+              </div>
+              <div className="px-5 py-3">
+                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Fecha de Nacimiento</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{formatDate(paciente.fecha_nacimiento)}</p>
+              </div>
+              <div className="px-5 py-3">
+                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Paciente desde</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{formatDate(paciente.created_at)}</p>
+              </div>
             </div>
           </div>
         </div>

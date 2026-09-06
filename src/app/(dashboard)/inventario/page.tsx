@@ -1,28 +1,34 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import {
   Camera,
   Package,
   CheckCircle,
-  AlertTriangle,
   XCircle,
-  RotateCcw,
   SlidersHorizontal,
-  History,
   Pencil,
+  Trash2,
   Minus,
   Plus as PlusIcon,
+  Loader2,
+  Keyboard,
+  ScanLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch, useDebounce } from '@/hooks';
+import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchInput from '@/components/ui/SearchInput';
 import FilterSelect from '@/components/ui/FilterSelect';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
-import { FormInput, FormSelect } from '@/components/ui/FormField';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+
+const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
 interface LenteAPI {
   id: string;
@@ -60,20 +66,26 @@ function getEstadoLente(stock: number, minimo: number): string {
 }
 
 export default function InventarioPage() {
-  const { data: lentes, loading, error } = useFetch<LenteAPI>('/api/inventario');
+  const { data: lentes, loading, error, refetch } = useFetch<LenteAPI>('/api/inventario');
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('Todos');
   const [filterProveedor, setFilterProveedor] = useState('Todos');
   const [filterStock, setFilterStock] = useState('Todos');
-  const [showScanner, setShowScanner] = useState(false);
-  const [showNewLente, setShowNewLente] = useState(false);
-  const [showAdjustStock, setShowAdjustStock] = useState<string | null>(null);
+
+  const [showAdjust, setShowAdjust] = useState<string | null>(null);
   const [adjustQty, setAdjustQty] = useState(0);
-  const [newLente, setNewLente] = useState({
-    marca: '', modelo: '', categoria: '', proveedor: '',
-    esferico: '', cilindrico: '', eje: '', material: '',
-    stockInicial: '', stockMinimo: '', precioVenta: '', caducidad: '',
-  });
+  const [adjusting, setAdjusting] = useState(false);
+
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'camera' | 'manual'>('camera');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<LenteAPI | null>(null);
+  const [scanError, setScanError] = useState('');
 
   const debouncedSearch = useDebounce(search);
 
@@ -109,27 +121,117 @@ export default function InventarioPage() {
     return { total, conStock, bajo, sinStock };
   }, [lentes]);
 
+  async function handleAdjustStock() {
+    if (!showAdjust) return;
+    const lente = lentes.find((l) => l.id === showAdjust);
+    if (!lente) return;
+    const newStock = lente.stock + adjustQty;
+    if (newStock < 0) return;
+
+    setAdjusting(true);
+    try {
+      const res = await fetch('/api/inventario', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: showAdjust, stock: newStock }),
+      });
+      if (!res.ok) throw new Error('Error');
+      toast(`Stock actualizado: ${lente.stock} → ${newStock}`);
+      setShowAdjust(null);
+      refetch();
+    } catch {
+      toast('Error al ajustar stock', 'error');
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/inventario?id=${deleteId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      toast('Lente eliminado correctamente');
+      setDeleteId(null);
+      refetch();
+    } catch {
+      toast('Error al eliminar lente', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleBarcodeSearch() {
+    if (!barcodeInput.trim()) return;
+    setScanning(true);
+    setScanError('');
+    setScanResult(null);
+    try {
+      const res = await fetch(`/api/inventario?barcode=${encodeURIComponent(barcodeInput.trim())}`);
+      if (!res.ok) {
+        const data = await res.json();
+        setScanError(data.error || 'No encontrado');
+        return;
+      }
+      setScanResult(await res.json());
+    } catch {
+      setScanError('Error de conexion');
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function handleBarcodeSearchWithCode(code: string) {
+    setScanning(true);
+    setScanError('');
+    setScanResult(null);
+    try {
+      const res = await fetch(`/api/inventario?barcode=${encodeURIComponent(code)}`);
+      if (!res.ok) {
+        const data = await res.json();
+        setScanError(data.error || 'No encontrado');
+        return;
+      }
+      setScanResult(await res.json());
+    } catch {
+      setScanError('Error de conexion');
+    } finally {
+      setScanning(false);
+    }
+  }
+
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-3">
       <button onClick={() => setShowScanner(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
-        <Camera className="h-4 w-4" /> ESCANEAR CÓDIGO DE BARRAS
+        <Camera className="h-4 w-4" /> ESCANEAR
       </button>
-      <button onClick={() => setShowNewLente(true)} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
+      <Link href="/inventario/nueva" className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
         <PlusIcon className="h-4 w-4" /> Nuevo Lente
-      </button>
+      </Link>
     </div>
   );
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
-      <PageHeader
-        title="INVENTARIO DE LENTES"
-        subtitle="Catálogo general, especificaciones refractivas y stock clínico."
-        action={headerActions}
-      />
+      <PageHeader title="INVENTARIO DE LENTES" subtitle="Catalogo general, especificaciones refractivas y stock clinico." action={headerActions} />
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: stats.total, color: 'text-gray-900' },
+          { label: 'Con Stock', value: stats.conStock, color: 'text-emerald-600' },
+          { label: 'Stock Bajo', value: stats.bajo, color: 'text-amber-600' },
+          { label: 'Sin Stock', value: stats.sinStock, color: 'text-red-600' },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{s.label}</span>
+            <p className={cn('text-2xl font-extrabold mt-1', s.color)}>{s.value}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por código, marca, modelo, grado refractivo..." />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por codigo, marca, modelo, grado refractivo..." />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtrar:</span>
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
@@ -140,7 +242,7 @@ export default function InventarioPage() {
 
       {loading ? (
         <div className="space-y-4">
-          {[1, 2].map((i) => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-6">
               <div className="flex gap-4">
                 <div className="h-12 w-12 rounded bg-gray-200" />
@@ -175,13 +277,13 @@ export default function InventarioPage() {
                     </span>
                     <div>
                       <h3 className="text-base font-extrabold text-gray-900">{lente.marca} {lente.modelo}</h3>
-                      <p className="text-xs text-gray-400">{lente.categoria} · {lente.color || 'Sin color'}</p>
+                      <p className="text-xs text-gray-400">{lente.categoria || 'Sin categoria'} {lente.color ? `\u00b7 ${lente.color}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Precio Venta</span>
-                      <p className="text-lg font-extrabold text-gray-900">${lente.precio_venta?.toLocaleString() || '—'}</p>
+                      <p className="text-lg font-extrabold text-gray-900">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
                     </div>
                     <StatusBadge status={estadoLente} config={estadoConfig} />
                   </div>
@@ -190,12 +292,12 @@ export default function InventarioPage() {
                 <div className="border-t border-gray-100 bg-gray-50/30 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                     {[
-                      { label: 'Esférico (SE)', value: lente.grado_esferico?.toString() || '—' },
-                      { label: 'Cilíndrico (CYL)', value: lente.grado_cilindrico?.toString() || '—' },
-                      { label: 'Eje', value: lente.eje ? `${lente.eje}°` : '—' },
-                      { label: 'Material', value: lente.material || '—' },
+                      { label: 'Esf\u00e9rico (SE)', value: lente.grado_esferico?.toString() || '\u2014' },
+                      { label: 'Cil\u00edndrico (CYL)', value: lente.grado_cilindrico?.toString() || '\u2014' },
+                      { label: 'Eje', value: lente.eje ? `${lente.eje}\u00b0` : '\u2014' },
+                      { label: 'Material', value: lente.material || '\u2014' },
                       { label: 'Stock Actual', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900' },
-                      { label: 'Mínimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500' },
+                      { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500' },
                     ].map((item) => (
                       <div key={item.label} className="rounded-lg bg-white border border-gray-200 px-4 py-3">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{item.label}</span>
@@ -207,23 +309,18 @@ export default function InventarioPage() {
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 px-4 py-3 sm:px-6">
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                    <span>Proveedor: <span className="font-bold text-gray-700">{lente.proveedor || '—'}</span></span>
-                    <span>Caducidad: <span className="font-bold text-gray-700">{lente.fecha_caducidad || '—'}</span></span>
+                    <span>Proveedor: <span className="font-bold text-gray-700">{lente.proveedor || '\u2014'}</span></span>
+                    <span>Caducidad: <span className="font-bold text-gray-700">{lente.fecha_caducidad || '\u2014'}</span></span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {(stockBajo || sinStock) && (
-                      <button className={cn(
-                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white hover:transition-colors',
-                        sinStock ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
-                      )}>
-                        <RotateCcw className="h-3 w-3" /> <span className="hidden sm:inline">Reordenar</span>
-                      </button>
-                    )}
-                    <button onClick={() => { setShowAdjustStock(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                       <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
                     </button>
-                    <button className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                       <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
+                    </Link>
+                    <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors">
+                      <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">Eliminar</span>
                     </button>
                   </div>
                 </div>
@@ -231,51 +328,109 @@ export default function InventarioPage() {
             );
           })}
           {filtered.length === 0 && (
-            <EmptyState icon={Package} title="No se encontraron lentes" description="Intenta ajustar los filtros de búsqueda" />
+            <EmptyState icon={Package} title="No se encontraron lentes" description="Intenta ajustar los filtros de busqueda o agrega un nuevo lente" />
           )}
         </div>
       )}
 
       {/* Scanner Modal */}
-      <Modal isOpen={showScanner} onClose={() => setShowScanner(false)}>
+      <Modal isOpen={showScanner} onClose={() => { setShowScanner(false); setScanResult(null); setScanError(''); setBarcodeInput(''); setScannerMode('camera'); }} maxWidth="max-w-md">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
             <Camera className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-gray-900">Escanear Código de Barras</h3>
-            <p className="text-xs text-gray-400">Acerque el código de barras a la cámara</p>
+            <h3 className="text-base font-extrabold text-gray-900">Escanear Codigo de Barras</h3>
+            <p className="text-xs text-gray-400">Usa la camara o escribe el codigo manualmente</p>
           </div>
         </div>
-        <div className="relative aspect-video rounded-xl bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-3/4 h-1/2 border-2 border-dashed border-primary-400 rounded-lg relative">
-              <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary-500 rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary-500 rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary-500 rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary-500 rounded-br-lg" />
-              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-primary-500/60 animate-pulse" />
-            </div>
-          </div>
-          <div className="absolute bottom-3 left-0 right-0 text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
-              <Camera className="h-3 w-3" /> Cámara activa
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 space-y-3">
-          <input type="text" placeholder="O escriba el código manualmente..." className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
-          <button className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-            BUSCAR LENTE
+
+        {/* Mode tabs */}
+        <div className="flex rounded-lg bg-gray-100 p-1 mb-4">
+          <button
+            onClick={() => setScannerMode('camera')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
+              scannerMode === 'camera' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <ScanLine className="h-4 w-4" /> Camara
+          </button>
+          <button
+            onClick={() => setScannerMode('manual')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
+              scannerMode === 'manual' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Keyboard className="h-4 w-4" /> Manual
           </button>
         </div>
+
+        {scannerMode === 'camera' ? (
+          <BarcodeScanner
+            onScan={(code) => {
+              setBarcodeInput(code);
+              // Auto-search after scan
+              setTimeout(() => {
+                handleBarcodeSearchWithCode(code);
+              }, 100);
+            }}
+            onClose={() => setShowScanner(false)}
+          />
+        ) : (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={barcodeInput}
+              onChange={(e) => setBarcodeInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
+              placeholder="Escriba el codigo de barras..."
+              className="block w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              autoFocus
+            />
+            <button onClick={handleBarcodeSearch} disabled={scanning || !barcodeInput.trim()} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
+              {scanning ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</> : 'BUSCAR LENTE'}
+            </button>
+          </div>
+        )}
+        {scanError && (
+          <div className="mt-3 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 flex items-center gap-2">
+            <XCircle className="h-4 w-4 shrink-0" /> {scanError}
+          </div>
+        )}
+        {scanResult && (
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/50 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-primary-600" />
+              <span className="text-sm font-extrabold text-primary-700">Lente encontrado</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-400">Marca:</span> <span className="font-bold">{scanResult.marca}</span></div>
+              <div><span className="text-gray-400">Modelo:</span> <span className="font-bold">{scanResult.modelo}</span></div>
+              <div><span className="text-gray-400">SE:</span> <span className="font-bold">{scanResult.grado_esferico || '\u2014'}</span></div>
+              <div><span className="text-gray-400">CYL:</span> <span className="font-bold">{scanResult.grado_cilindrico || '\u2014'}</span></div>
+              <div><span className="text-gray-400">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900')}>{scanResult.stock} pzas</span></div>
+              <div><span className="text-gray-400">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Link href={`/inventario/${scanResult.id}/editar`} onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); }} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors text-center">
+                Editar
+              </Link>
+              <button onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); setShowAdjust(scanResult.id); setAdjustQty(0); }} className="flex-1 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 transition-colors">
+                Ajustar Stock
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Adjust Stock Modal */}
-      <Modal isOpen={!!showAdjustStock} onClose={() => setShowAdjustStock(null)} maxWidth="max-w-sm">
-        {showAdjustStock && (() => {
-          const lente = lentes.find((l) => l.id === showAdjustStock);
+      <Modal isOpen={!!showAdjust} onClose={() => setShowAdjust(null)} maxWidth="max-w-sm">
+        {showAdjust && (() => {
+          const lente = lentes.find((l) => l.id === showAdjust);
           if (!lente) return null;
+          const newStock = lente.stock + adjustQty;
           const stockClass = lente.stock === 0 ? 'text-red-600' : lente.stock < lente.stock_minimo ? 'text-amber-600' : 'text-primary-600';
           return (
             <div className="space-y-4">
@@ -293,64 +448,38 @@ export default function InventarioPage() {
                   <p className={cn('text-3xl font-extrabold', adjustQty >= 0 ? 'text-primary-600' : 'text-red-600')}>
                     {adjustQty > 0 ? '+' : ''}{adjustQty}
                   </p>
+                  {adjustQty !== 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Nuevo stock: <span className={cn('font-bold', newStock === 0 ? 'text-red-600' : 'text-gray-900')}>{newStock}</span>
+                    </p>
+                  )}
                 </div>
                 <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
                   <PlusIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={() => setShowAdjustStock(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
-                <button className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">CONFIRMAR</button>
+                <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+                <button onClick={handleAdjustStock} disabled={adjusting || adjustQty === 0} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                  {adjusting ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : 'CONFIRMAR'}
+                </button>
               </div>
             </div>
           );
         })()}
       </Modal>
 
-      {/* New/Edit Lente Modal */}
-      <Modal isOpen={showNewLente} onClose={() => setShowNewLente(false)} maxWidth="max-w-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
-            <Package className="h-5 w-5 text-primary-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-extrabold text-gray-900">Nuevo Lente</h3>
-            <p className="text-xs text-gray-400">Registre las especificaciones del lente</p>
-          </div>
-        </div>
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <FormInput label="Marca" placeholder="Ej. Alcon" value={newLente.marca} onChange={(v) => setNewLente((p) => ({ ...p, marca: v }))} required />
-            <FormInput label="Modelo" placeholder="Ej. SN60WF" value={newLente.modelo} onChange={(v) => setNewLente((p) => ({ ...p, modelo: v }))} required />
-            <FormSelect label="Categoría" options={categorias.filter((c) => c !== 'Todos')} value={newLente.categoria} onChange={(v) => setNewLente((p) => ({ ...p, categoria: v }))} required />
-            <FormSelect label="Proveedor" options={proveedores.filter((p) => p !== 'Todos')} value={newLente.proveedor} onChange={(v) => setNewLente((p) => ({ ...p, proveedor: v }))} required />
-          </div>
-          <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 mb-3">Especificaciones Refractivas</h4>
-            <div className="grid grid-cols-4 gap-4">
-              <FormInput label="Esférico (SE)" placeholder="+21.00" value={newLente.esferico} onChange={(v) => setNewLente((p) => ({ ...p, esferico: v }))} />
-              <FormInput label="Cilíndrico (CYL)" placeholder="-2.00" value={newLente.cilindrico} onChange={(v) => setNewLente((p) => ({ ...p, cilindrico: v }))} />
-              <FormInput label="Eje" placeholder="90°" value={newLente.eje} onChange={(v) => setNewLente((p) => ({ ...p, eje: v }))} />
-              <FormInput label="Material" placeholder="Acrílico hidrofóbico" value={newLente.material} onChange={(v) => setNewLente((p) => ({ ...p, material: v }))} />
-            </div>
-          </div>
-          <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 mb-3">Stock y Costo</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <FormInput label="Stock Inicial" placeholder="0" type="number" value={newLente.stockInicial} onChange={(v) => setNewLente((p) => ({ ...p, stockInicial: v }))} />
-              <FormInput label="Stock Mínimo" placeholder="5" type="number" value={newLente.stockMinimo} onChange={(v) => setNewLente((p) => ({ ...p, stockMinimo: v }))} />
-              <FormInput label="Precio Venta" placeholder="$0.00" value={newLente.precioVenta} onChange={(v) => setNewLente((p) => ({ ...p, precioVenta: v }))} />
-            </div>
-            <div className="mt-4">
-              <FormInput label="Caducidad" placeholder="MM/AAAA" value={newLente.caducidad} onChange={(v) => setNewLente((p) => ({ ...p, caducidad: v }))} />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 mt-5">
-          <button onClick={() => setShowNewLente(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
-          <button className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">GUARDAR LENTE</button>
-        </div>
-      </Modal>
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title="Eliminar Lente"
+        message="Esta accion eliminara el lente del inventario permanentemente. No se podra deshacer."
+        confirmText="ELIMINAR"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }

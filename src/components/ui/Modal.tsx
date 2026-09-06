@@ -47,7 +47,7 @@ export default function Modal({
       />
       <div
         className={cn(
-          'relative mx-4 w-full rounded-xl bg-white p-6 shadow-2xl',
+          'relative mx-4 w-full max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-2xl',
           maxWidth
         )}
       >

@@ -52,6 +52,9 @@ export class Consulta {
   @Column({ type: 'enum', enum: TipoVisita })
   tipo_visita: TipoVisita;
 
+  @Column({ type: 'varchar', length: 20, nullable: true, unique: true })
+  folio: string;
+
   @Column({ type: 'varchar', length: 500, nullable: true })
   diagnostico: string;
 
