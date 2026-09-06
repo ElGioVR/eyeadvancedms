@@ -298,7 +298,7 @@ export default function NuevaConsultaPage() {
               <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900">Historial Reciente</h2>
             </div>
             <div className="divide-y divide-gray-50 px-6 pb-4">
-              {historial.map((h) => (
+              {historico.map((h) => (
                 <div key={h.id} className="py-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-primary-600">{h.id}</span>
