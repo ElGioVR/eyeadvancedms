@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
 
 export async function GET(
   request: Request,
@@ -8,6 +8,8 @@ export async function GET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const { id } = await params;
   const supabase = getSupabaseAdmin();

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 const errorTranslations: Record<string, string> = {
@@ -29,6 +29,8 @@ const pacienteCreateSchema = z
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -89,6 +91,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const body = await request.json();
