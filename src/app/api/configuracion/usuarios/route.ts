@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
+
+const usuarioCreateSchema = z.object({
+  email: z.string().email().max(255),
+  password: z.string().min(6),
+  nombre: z.string().min(1).max(255),
+  rol: z.enum(['admin', 'doctor', 'recepcionista']),
+});
+
+const usuarioUpdateSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email().max(255).optional(),
+  password: z.string().min(6).optional(),
+  nombre: z.string().min(1).max(255).optional(),
+  rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
+  activo: z.boolean().optional(),
+});
 
 const errorTranslations: Record<string, string> = {
   'Unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',
@@ -11,10 +28,10 @@ const errorTranslations: Record<string, string> = {
   'Missing user ID': 'Falta el ID del usuario',
 };
 
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
 
   // List auth users
@@ -57,14 +74,22 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
+  const validation = usuarioCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
+  }
+
+  const data = validation.data;
+
   // 1. Create auth user
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email: body.email,
-    password: body.password,
+    email: data.email,
+    password: data.password,
     email_confirm: true,
     user_metadata: {
-      nombre: body.nombre,
-      rol: body.rol,
+      nombre: data.nombre,
+      rol: data.rol,
     },
   });
 
@@ -77,10 +102,10 @@ export async function POST(request: Request) {
     .from('usuarios')
     .insert({
       id: authData.user.id,
-      email: body.email,
+      email: data.email,
       password_hash: 'managed_by_supabase_auth',
-      nombre: body.nombre,
-      rol: body.rol,
+      nombre: data.nombre,
+      rol: data.rol,
       activo: true,
     });
 
@@ -90,9 +115,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     id: authData.user.id,
-    email: body.email,
-    nombre: body.nombre,
-    rol: body.rol,
+    email: data.email,
+    nombre: data.nombre,
+    rol: data.rol,
     activo: true,
   }, { status: 201 });
 }
@@ -103,7 +128,15 @@ export async function PATCH(request: Request) {
 
   const supabase = getSupabaseAdmin();
   const body = await request.json();
-  const { id, ...updates } = body;
+
+  const validation = usuarioUpdateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
+  }
+
+  const data = validation.data;
+  const { id, ...updates } = data;
 
   // 1. Update auth user metadata
   const authUpdates: Record<string, any> = {};

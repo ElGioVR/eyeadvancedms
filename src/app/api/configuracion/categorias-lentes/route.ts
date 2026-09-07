@@ -1,15 +1,27 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
+
+const categoriaCreateSchema = z.object({
+  nombre: z.string().min(1).max(255),
+  descripcion: z.string().optional(),
+});
+
+const categoriaUpdateSchema = z.object({
+  id: z.string().uuid(),
+  nombre: z.string().min(1).max(255).optional(),
+  descripcion: z.string().optional().nullable(),
+});
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "categorias_lentes_nombre_key"': 'Ya existe una categoría con este nombre',
 };
 
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('categorias_lentes')
@@ -23,22 +35,26 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  if (!body.nombre || !body.nombre.trim()) {
-    return NextResponse.json({ error: 'El nombre de la categoría es obligatorio' }, { status: 400 });
+  const validation = categoriaCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const data = validation.data;
+
+  const { data: categoria, error } = await supabase
     .from('categorias_lentes')
     .insert({
-      nombre: body.nombre.trim(),
-      descripcion: body.descripcion?.trim() || null,
+      nombre: data.nombre.trim(),
+      descripcion: data.descripcion?.trim() || null,
     })
     .select()
     .single();
@@ -47,20 +63,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(categoria, { status: 201 });
 }
 
+export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function PATCH(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
-  const { id, ...updates } = body;
 
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID de la categoría' }, { status: 400 });
+  const validation = categoriaUpdateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
+
+  const data = validation.data;
+  const { id, ...updates } = data;
 
   const profileUpdates: Record<string, any> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre.trim();
@@ -82,10 +102,10 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
+export async function DELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function DELETE(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');

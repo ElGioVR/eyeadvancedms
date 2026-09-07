@@ -1,16 +1,35 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
 
 const errorTranslations: Record<string, string> = {
   'null value in column "nombre_completo" violates not-null constraint': 'El nombre del paciente es obligatorio',
   'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
 };
 
+const pacienteCreateSchema = z
+  .object({
+    nombre_completo: z.string().min(1).max(255).optional(),
+    nombre: z.string().min(1).max(255).optional(),
+    sexo: z.enum(['H', 'M', 'MASCULINO', 'FEMENINO', 'OTRO']).optional(),
+    fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    edad: z.number().int().min(0).max(150).optional(),
+    telefono: z.string().max(20).optional(),
+    email: z.string().email().max(255).optional(),
+    direccion: z.string().max(1000).optional(),
+    contacto_emergencia: z.string().max(255).optional(),
+    tel_emergencia: z.string().max(20).optional(),
+  })
+  .strict()
+  .refine((data) => data.nombre_completo || data.nombre, {
+    message: 'El nombre del paciente es obligatorio',
+  });
+
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('pacientes')
@@ -67,33 +86,39 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  if (!body.nombre_completo && !body.nombre) {
-    return NextResponse.json({ error: 'El nombre del paciente es obligatorio' }, { status: 400 });
+  const validation = pacienteCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
 
+  const data = validation.data;
+
   const insertData: Record<string, any> = {
-    nombre_completo: body.nombre_completo || body.nombre,
+    nombre_completo: data.nombre_completo || data.nombre,
     sexo: 'MASCULINO',
     fecha_nacimiento: '2000-01-01',
   };
 
-  if (body.sexo) insertData.sexo = body.sexo === 'H' ? 'MASCULINO' : body.sexo === 'M' ? 'FEMENINO' : body.sexo;
-  if (body.fecha_nacimiento) insertData.fecha_nacimiento = body.fecha_nacimiento;
-  if (body.edad) insertData.edad = body.edad;
-  if (body.telefono) insertData.telefono = body.telefono;
-  if (body.email) insertData.email = body.email;
-  if (body.direccion) insertData.direccion = body.direccion;
-  if (body.contacto_emergencia) insertData.contacto_emergencia = body.contacto_emergencia;
-  if (body.tel_emergencia) insertData.tel_emergencia = body.tel_emergencia;
+  if (data.sexo) {
+    insertData.sexo = data.sexo === 'H' ? 'MASCULINO' : data.sexo === 'M' ? 'FEMENINO' : data.sexo;
+  }
+  if (data.fecha_nacimiento) insertData.fecha_nacimiento = data.fecha_nacimiento;
+  if (data.edad !== undefined) insertData.edad = data.edad;
+  if (data.telefono) insertData.telefono = data.telefono;
+  if (data.email) insertData.email = data.email;
+  if (data.direccion) insertData.direccion = data.direccion;
+  if (data.contacto_emergencia) insertData.contacto_emergencia = data.contacto_emergencia;
+  if (data.tel_emergencia) insertData.tel_emergencia = data.tel_emergencia;
 
-  const { data, error } = await supabase
+  const { data: paciente, error } = await supabase
     .from('pacientes')
     .insert(insertData)
     .select()
@@ -104,15 +129,15 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    id: data.id,
-    nombre: data.nombre_completo,
-    nombre_completo: data.nombre_completo,
-    sexo: data.sexo === 'MASCULINO' ? 'H' : 'M',
-    fecha_nacimiento: data.fecha_nacimiento,
-    edad: data.edad,
-    telefono: data.telefono,
-    email: data.email,
-    direccion: data.direccion,
-    created_at: data.created_at,
+    id: paciente.id,
+    nombre: paciente.nombre_completo,
+    nombre_completo: paciente.nombre_completo,
+    sexo: paciente.sexo === 'MASCULINO' ? 'H' : 'M',
+    fecha_nacimiento: paciente.fecha_nacimiento,
+    edad: paciente.edad,
+    telefono: paciente.telefono,
+    email: paciente.email,
+    direccion: paciente.direccion,
+    created_at: paciente.created_at,
   }, { status: 201 });
 }

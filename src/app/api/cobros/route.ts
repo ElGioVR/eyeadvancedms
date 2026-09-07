@@ -1,11 +1,32 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
 
+const cobroCreateSchema = z.object({
+  consulta_id: z.string().uuid(),
+  paciente_id: z.string().uuid(),
+  aseguranza_id: z.string().uuid().optional().nullable(),
+  metodo_pago: z.enum(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'NO_APLICA']).optional(),
+  monto: z.union([z.string(), z.number()]).pipe(
+    z.preprocess((val) => {
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? undefined : parsed;
+      }
+      return val;
+    }, z.number().min(0).max(99999999.99))
+  ),
+  moneda: z.enum(['PESOS', 'DOLARES']).optional(),
+  pagado: z.boolean().optional(),
+  folio: z.string().max(50).optional().nullable(),
+  notas: z.string().optional().nullable(),
+});
+
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('cobros')
@@ -61,26 +82,36 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  const { data, error } = await supabase
+  const validation = cobroCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
+  }
+
+  const data = validation.data;
+
+  const insertData = {
+    consulta_id: data.consulta_id,
+    paciente_id: data.paciente_id,
+    aseguranza_id: data.aseguranza_id ?? null,
+    metodo_pago: data.metodo_pago ?? 'NO_APLICA',
+    monto: data.monto,
+    moneda: data.moneda ?? 'PESOS',
+    pagado: data.pagado ?? false,
+    folio: data.folio ?? null,
+    notas: data.notas ?? null,
+  };
+
+  const { data: cobro, error } = await supabase
     .from('cobros')
-    .insert({
-      consulta_id: body.consulta_id,
-      paciente_id: body.paciente_id,
-      aseguranza_id: body.aseguranza_id,
-      metodo_pago: body.metodo_pago || 'NO_APLICA',
-      monto: body.monto,
-      moneda: body.moneda || 'PESOS',
-      pagado: body.pagado || false,
-      folio: body.folio,
-      notas: body.notas,
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -88,5 +119,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(cobro, { status: 201 });
 }

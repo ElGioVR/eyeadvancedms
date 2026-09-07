@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
 
 const errorTranslations: Record<string, string> = {
   'null value in column "paciente_id" violates not-null constraint': 'El paciente es obligatorio',
@@ -49,10 +50,30 @@ const monedaMap: Record<string, string> = {
   'DOLARES': 'DOLARES',
 };
 
+const consultaCreateSchema = z
+  .object({
+    paciente_id: z.string().uuid(),
+    doctor_id: z.string().uuid(),
+    fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hora_inicio: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+    hora_fin: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
+    tipo_consulta: z.string().optional(),
+    tipo_visita: z.string().optional(),
+    diagnostico: z.string().max(500).optional(),
+    estudios: z.array(z.string().max(255)).max(3).optional(),
+    procedimiento: z.string().optional(),
+    notas: z.string().optional(),
+    costo: z.union([z.string(), z.number()]).optional(),
+    metodo_pago: z.string().optional(),
+    aseguradora: z.string().optional(),
+    moneda: z.string().optional(),
+  })
+  .strict();
+
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('consultas')
@@ -101,29 +122,23 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  // Validation
-  if (!body.paciente_id) {
-    return NextResponse.json({ error: 'El paciente es obligatorio' }, { status: 400 });
-  }
-  if (!body.doctor_id) {
-    return NextResponse.json({ error: 'El doctor es obligatorio' }, { status: 400 });
-  }
-  if (!body.fecha) {
-    return NextResponse.json({ error: 'La fecha es obligatoria' }, { status: 400 });
-  }
-  if (!body.hora_inicio) {
-    return NextResponse.json({ error: 'La hora de inicio es obligatoria' }, { status: 400 });
+  const validation = consultaCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
 
-  const tipoConsulta = tipoConsultaMap[body.tipo_consulta] || body.tipo_consulta || 'CONSULTA';
-  const tipoVisita = tipoVisitaMap[body.tipo_visita] || body.tipo_visita || 'PRIMERA_VEZ';
+  const data = validation.data;
+
+  const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';
+  const tipoVisita = tipoVisitaMap[data.tipo_visita || ''] || data.tipo_visita || 'PRIMERA_VEZ';
 
   // Generate folio: CON-YY-NNNNN
   const year = new Date().getFullYear().toString().slice(-2);
@@ -138,19 +153,19 @@ export async function POST(request: Request) {
     .from('consultas')
     .insert({
       folio,
-      paciente_id: body.paciente_id,
-      doctor_id: body.doctor_id,
-      fecha: body.fecha,
-      hora_inicio: body.hora_inicio,
-      hora_fin: body.hora_fin || null,
+      paciente_id: data.paciente_id,
+      doctor_id: data.doctor_id,
+      fecha: data.fecha,
+      hora_inicio: data.hora_inicio,
+      hora_fin: data.hora_fin || null,
       tipo_consulta: tipoConsulta,
       tipo_visita: tipoVisita,
-      diagnostico: body.diagnostico?.trim() || null,
-      estudio_1: body.estudios?.[0] || null,
-      estudio_2: body.estudios?.[1] || null,
-      estudio_3: body.estudios?.[2] || null,
-      procedimiento: body.procedimiento?.trim() || null,
-      notas: body.notas?.trim() || null,
+      diagnostico: data.diagnostico?.trim() || null,
+      estudio_1: data.estudios?.[0] || null,
+      estudio_2: data.estudios?.[1] || null,
+      estudio_3: data.estudios?.[2] || null,
+      procedimiento: data.procedimiento?.trim() || null,
+      notas: data.notas?.trim() || null,
     })
     .select()
     .single();
@@ -163,18 +178,18 @@ export async function POST(request: Request) {
   }
 
   // 2. Create cobro if payment data provided
-  if (body.costo || body.metodo_pago || body.aseguradora) {
-    const metodoPago = metodoPagoMap[body.metodo_pago] || 'NO_APLICA';
-    const moneda = monedaMap[body.moneda] || 'PESOS';
-    const monto = parseFloat(body.costo) || 0;
+  if (data.costo !== undefined || data.metodo_pago || data.aseguradora) {
+    const metodoPago = metodoPagoMap[data.metodo_pago || ''] || 'NO_APLICA';
+    const moneda = monedaMap[data.moneda || ''] || 'PESOS';
+    const monto = typeof data.costo === 'string' ? parseFloat(data.costo) || 0 : (data.costo || 0);
 
     // Lookup aseguranza_id by name if provided
     let aseguranzaId = null;
-    if (body.aseguradora && body.aseguradora !== 'Particular') {
+    if (data.aseguradora && data.aseguradora !== 'Particular') {
       const { data: aseguranza } = await supabase
         .from('aseguranzas')
         .select('id')
-        .ilike('nombre', body.aseguradora)
+        .ilike('nombre', data.aseguradora)
         .single();
       if (aseguranza) aseguranzaId = aseguranza.id;
     }
@@ -183,7 +198,7 @@ export async function POST(request: Request) {
       .from('cobros')
       .insert({
         consulta_id: consultaData.id,
-        paciente_id: body.paciente_id,
+        paciente_id: data.paciente_id,
         aseguranza_id: aseguranzaId,
         metodo_pago: metodoPago,
         monto,

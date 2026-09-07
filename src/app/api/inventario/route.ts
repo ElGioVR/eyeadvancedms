@@ -1,6 +1,34 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
+
+const lenteBaseSchema = z.object({
+  marca: z.string().min(1).max(255),
+  modelo: z.string().min(1).max(255),
+  codigo_barras: z.string().max(100).optional().nullable(),
+  grado_esferico: z.number().min(-999.99).max(999.99).optional().nullable(),
+  grado_cilindrico: z.number().min(-999.99).max(999.99).optional().nullable(),
+  eje: z.number().int().min(0).max(180).optional().nullable(),
+  color: z.string().max(100).optional().nullable(),
+  material: z.string().max(100).optional().nullable(),
+  stock: z.number().int().min(0).optional(),
+  stock_minimo: z.number().int().min(0).optional(),
+  precio_compra: z.number().min(0).max(99999999.99).optional().nullable(),
+  precio_venta: z.number().min(0).max(99999999.99).optional().nullable(),
+  lote: z.string().max(100).optional().nullable(),
+  fecha_caducidad: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  estado: z.enum(['DISPONIBLE', 'OCUPADO', 'DANADO', 'VENCIDO']).optional(),
+  notas: z.string().optional().nullable(),
+  categoria_id: z.string().uuid().optional().nullable(),
+  proveedor_id: z.string().uuid().optional().nullable(),
+});
+
+const lenteCreateSchema = lenteBaseSchema;
+
+const lenteUpdateSchema = z.object({
+  id: z.string().uuid(),
+}).merge(lenteBaseSchema.partial());
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint': 'Ya existe un registro con esos datos',
@@ -46,10 +74,10 @@ function mapLente(l: any) {
 
 const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedor_id (nombre)';
 
+export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const barcode = searchParams.get('barcode');
@@ -79,39 +107,43 @@ export async function GET(request: Request) {
   return NextResponse.json(data.map(mapLente));
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  if (!body.marca || !body.modelo) {
-    return NextResponse.json({ error: 'Marca y modelo son obligatorios' }, { status: 400 });
+  const validation = lenteCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
 
+  const data = validation.data;
+
   const insert: Record<string, any> = {
-    marca: body.marca,
-    modelo: body.modelo,
-    codigo_barras: body.codigo_barras || null,
-    grado_esferico: body.grado_esferico ?? null,
-    grado_cilindrico: body.grado_cilindrico ?? null,
-    eje: body.eje ?? null,
-    color: body.color || null,
-    material: body.material || null,
-    stock: body.stock ?? 0,
-    stock_minimo: body.stock_minimo ?? 5,
-    precio_compra: body.precio_compra ?? null,
-    precio_venta: body.precio_venta ?? null,
-    lote: body.lote || null,
-    fecha_caducidad: body.fecha_caducidad || null,
-    estado: body.estado || 'DISPONIBLE',
-    notas: body.notas || null,
-    categoria_id: body.categoria_id || null,
-    proveedor_id: body.proveedor_id || null,
+    marca: data.marca,
+    modelo: data.modelo,
+    codigo_barras: data.codigo_barras ?? null,
+    grado_esferico: data.grado_esferico ?? null,
+    grado_cilindrico: data.grado_cilindrico ?? null,
+    eje: data.eje ?? null,
+    color: data.color ?? null,
+    material: data.material ?? null,
+    stock: data.stock ?? 0,
+    stock_minimo: data.stock_minimo ?? 5,
+    precio_compra: data.precio_compra ?? null,
+    precio_venta: data.precio_venta ?? null,
+    lote: data.lote ?? null,
+    fecha_caducidad: data.fecha_caducidad ?? null,
+    estado: data.estado ?? 'DISPONIBLE',
+    notas: data.notas ?? null,
+    categoria_id: data.categoria_id ?? null,
+    proveedor_id: data.proveedor_id ?? null,
   };
 
-  const { data, error } = await supabase
+  const { data: lente, error } = await supabase
     .from('lentes')
     .insert(insert)
     .select(SELECT)
@@ -121,20 +153,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(mapLente(data), { status: 201 });
+  return NextResponse.json(mapLente(lente), { status: 201 });
 }
 
+export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function PATCH(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
-  const { id, ...updates } = body;
 
-  if (!id) {
-    return NextResponse.json({ error: 'ID es obligatorio' }, { status: 400 });
+  const validation = lenteUpdateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
+
+  const data = validation.data;
+  const { id, ...updates } = data;
 
   const cleanUpdates: Record<string, any> = {};
   const allowed = [
@@ -144,14 +180,16 @@ export async function PATCH(request: Request) {
     'categoria_id', 'proveedor_id',
   ];
   for (const key of allowed) {
-    if (updates[key] !== undefined) cleanUpdates[key] = updates[key];
+    if (updates[key as keyof typeof updates] !== undefined) {
+      cleanUpdates[key] = updates[key as keyof typeof updates];
+    }
   }
 
   if (Object.keys(cleanUpdates).length === 0) {
     return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data: lente, error } = await supabase
     .from('lentes')
     .update(cleanUpdates)
     .eq('id', id)
@@ -162,13 +200,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(mapLente(data));
+  return NextResponse.json(mapLente(lente));
 }
 
+export async function DELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function DELETE(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');

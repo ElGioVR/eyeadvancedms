@@ -1,15 +1,32 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
+import { z } from 'zod';
+
+const aseguranzaCreateSchema = z.object({
+  nombre: z.string().min(1).max(255),
+  telefono: z.string().max(20).optional(),
+  direccion: z.string().optional(),
+  contacto: z.string().max(255).optional(),
+});
+
+const aseguranzaUpdateSchema = z.object({
+  id: z.string().uuid(),
+  nombre: z.string().min(1).max(255).optional(),
+  telefono: z.string().max(20).optional().nullable(),
+  direccion: z.string().optional().nullable(),
+  contacto: z.string().max(255).optional().nullable(),
+  activo: z.boolean().optional(),
+});
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "aseguranzas_nombre_key"': 'Ya existe una aseguranza con este nombre',
 };
 
+export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('aseguranzas')
@@ -23,24 +40,28 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
+export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
-  if (!body.nombre || !body.nombre.trim()) {
-    return NextResponse.json({ error: 'El nombre de la aseguranza es obligatorio' }, { status: 400 });
+  const validation = aseguranzaCreateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const data = validation.data;
+
+  const { data: aseguranza, error } = await supabase
     .from('aseguranzas')
     .insert({
-      nombre: body.nombre.trim(),
-      telefono: body.telefono?.trim() || null,
-      direccion: body.direccion?.trim() || null,
-      contacto: body.contacto?.trim() || null,
+      nombre: data.nombre.trim(),
+      telefono: data.telefono?.trim() || null,
+      direccion: data.direccion?.trim() || null,
+      contacto: data.contacto?.trim() || null,
     })
     .select()
     .single();
@@ -49,20 +70,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(aseguranza, { status: 201 });
 }
 
+export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function PATCH(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
-  const { id, ...updates } = body;
 
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID de la aseguranza' }, { status: 400 });
+  const validation = aseguranzaUpdateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
   }
+
+  const data = validation.data;
+  const { id, ...updates } = data;
 
   const profileUpdates: Record<string, any> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre.trim();
@@ -87,10 +112,10 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
+export async function DELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-export async function DELETE(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
