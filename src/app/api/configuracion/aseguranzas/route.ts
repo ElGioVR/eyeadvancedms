@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 const aseguranzaCreateSchema = z.object({
@@ -43,6 +43,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const body = await request.json();
@@ -76,6 +78,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const body = await request.json();
@@ -115,6 +119,8 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);

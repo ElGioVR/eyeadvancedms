@@ -3,6 +3,8 @@ import { type User } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+export type UserRole = 'admin' | 'doctor' | 'recepcionista';
+
 export function createClient() {
   const cookieStore = cookies();
 
@@ -59,4 +61,27 @@ export async function requireAuth(): Promise<{ user: User } | NextResponse> {
   }
 
   return { user };
+}
+
+export async function requireRole(
+  user: User,
+  allowedRoles: readonly UserRole[]
+): Promise<NextResponse | null> {
+  const supabase = createClient();
+  const { data: profile, error } = await supabase
+    .from('usuarios')
+    .select('rol, activo')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (
+    error ||
+    !profile ||
+    profile.activo !== true ||
+    !allowedRoles.includes(profile.rol as UserRole)
+  ) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
+  return null;
 }
