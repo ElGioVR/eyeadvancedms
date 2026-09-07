@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/server';
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "categorias_lentes_nombre_key"': 'Ya existe una categoría con este nombre',
 };
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function GET() {
   const supabase = getSupabaseAdmin();
@@ -18,6 +22,9 @@ export async function GET() {
 
   return NextResponse.json(data);
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
@@ -42,6 +49,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json(data, { status: 201 });
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function PATCH(request: Request) {
   const supabase = getSupabaseAdmin();
@@ -71,6 +81,9 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function DELETE(request: Request) {
   const supabase = getSupabaseAdmin();

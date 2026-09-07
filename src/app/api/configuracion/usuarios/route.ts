@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/server';
 
 const errorTranslations: Record<string, string> = {
   'Unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',
@@ -9,6 +10,9 @@ const errorTranslations: Record<string, string> = {
   'User not found': 'Usuario no encontrado',
   'Missing user ID': 'Falta el ID del usuario',
 };
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function GET() {
   const supabase = getSupabaseAdmin();
@@ -47,6 +51,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const supabase = getSupabaseAdmin();
   const body = await request.json();
 
@@ -91,6 +98,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const supabase = getSupabaseAdmin();
   const body = await request.json();
   const { id, ...updates } = body;
@@ -139,6 +149,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');

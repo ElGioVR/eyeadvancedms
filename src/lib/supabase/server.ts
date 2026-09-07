@@ -1,4 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { type User } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 export function createClient() {
@@ -46,4 +48,15 @@ export function createClient() {
       },
     }
   );
+}
+
+export async function requireAuth(): Promise<{ user: User } | NextResponse> {
+  const supabase = createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  return { user };
 }

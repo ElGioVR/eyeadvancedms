@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/server';
 
 const errorTranslations: Record<string, string> = {
   'null value in column "nombre_completo" violates not-null constraint': 'El nombre del paciente es obligatorio',
   'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
 };
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function GET() {
   const supabase = getSupabaseAdmin();
@@ -62,6 +66,9 @@ export async function GET() {
 
   return NextResponse.json(result);
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();

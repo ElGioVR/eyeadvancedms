@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/server';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
 ) {
   const { id } = await params;
   const supabase = getSupabaseAdmin();

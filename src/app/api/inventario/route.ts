@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/server';
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint': 'Ya existe un registro con esos datos',
@@ -45,6 +46,9 @@ function mapLente(l: any) {
 
 const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedor_id (nombre)';
 
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
 export async function GET(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
@@ -74,6 +78,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json(data.map(mapLente));
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
@@ -117,6 +124,9 @@ export async function POST(request: Request) {
   return NextResponse.json(mapLente(data), { status: 201 });
 }
 
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
 export async function PATCH(request: Request) {
   const supabase = getSupabaseAdmin();
   const body = await request.json();
@@ -154,6 +164,9 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json(mapLente(data));
 }
+
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
 
 export async function DELETE(request: Request) {
   const supabase = getSupabaseAdmin();
