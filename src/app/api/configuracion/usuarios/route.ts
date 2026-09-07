@@ -45,7 +45,7 @@ export async function GET() {
   // Get local user profiles
   const { data: profiles, error: profileError } = await supabase
     .from('usuarios')
-    .select('*');
+    .select('id, email, nombre, rol, activo, created_at, updated_at');
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
@@ -129,8 +129,6 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
-  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const body = await request.json();
@@ -143,6 +141,50 @@ export async function PATCH(request: Request) {
 
   const data = validation.data;
   const { id, ...updates } = data;
+  const isSelfService = id === auth.user.id;
+  const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in body);
+
+  if (isSelfService && !hasAdministrativeFields) {
+    const invalidFields = Object.keys(body).filter((field) => !['id', 'nombre', 'password'].includes(field));
+    if (invalidFields.length > 0) {
+      return NextResponse.json({ error: 'Solo puedes actualizar nombre y password' }, { status: 400 });
+    }
+  } else {
+    const roleError = await requireRole(auth.user, ['admin']);
+    if (roleError) return roleError;
+
+    if (isSelfService && updates.rol) {
+      return NextResponse.json({ error: 'No puedes cambiar tu propio rol' }, { status: 409 });
+    }
+  }
+
+  if (updates.activo === false) {
+    const { data: target, error: targetError } = await supabase
+      .from('usuarios')
+      .select('rol, activo')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (targetError) {
+      return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+    }
+
+    if (target?.rol === 'admin' && target.activo === true) {
+      const { count, error: countError } = await supabase
+        .from('usuarios')
+        .select('id', { count: 'exact', head: true })
+        .eq('rol', 'admin')
+        .eq('activo', true);
+
+      if (countError || count === null) {
+        return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+      }
+
+      if (count === 1) {
+        return NextResponse.json({ error: 'No puedes desactivar al último administrador' }, { status: 409 });
+      }
+    }
+  }
 
   // 1. Update auth user metadata
   const authUpdates: Record<string, any> = {};
@@ -199,6 +241,32 @@ export async function DELETE(request: Request) {
 
   if (!id) {
     return NextResponse.json({ error: 'Missing user ID' }, { status: 400 });
+  }
+
+  const { data: target, error: targetError } = await supabase
+    .from('usuarios')
+    .select('rol, activo')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (targetError) {
+    return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+  }
+
+  if (target?.rol === 'admin' && target.activo === true) {
+    const { count, error: countError } = await supabase
+      .from('usuarios')
+      .select('id', { count: 'exact', head: true })
+      .eq('rol', 'admin')
+      .eq('activo', true);
+
+    if (countError || count === null) {
+      return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+    }
+
+    if (count === 1) {
+      return NextResponse.json({ error: 'No puedes eliminar al último administrador' }, { status: 409 });
+    }
   }
 
   // 1. Delete from usuarios table
