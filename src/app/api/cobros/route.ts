@@ -21,7 +21,7 @@ const cobroCreateSchema = z.object({
   pagado: z.boolean().optional(),
   folio: z.string().max(50).optional().nullable(),
   notas: z.string().optional().nullable(),
-});
+}).strict();
 
 export async function GET() {
   const auth = await requireAuth();

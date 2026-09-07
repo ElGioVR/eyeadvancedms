@@ -8,7 +8,7 @@ const usuarioCreateSchema = z.object({
   password: z.string().min(6),
   nombre: z.string().min(1).max(255),
   rol: z.enum(['admin', 'doctor', 'recepcionista']),
-});
+}).strict();
 
 const usuarioUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -17,7 +17,7 @@ const usuarioUpdateSchema = z.object({
   nombre: z.string().min(1).max(255).optional(),
   rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
   activo: z.boolean().optional(),
-});
+}).strict();
 
 const errorTranslations: Record<string, string> = {
   'Unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',

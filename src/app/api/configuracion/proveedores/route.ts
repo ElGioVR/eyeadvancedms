@@ -9,7 +9,7 @@ const proveedorCreateSchema = z.object({
   email: z.string().email().max(255).optional(),
   direccion: z.string().optional(),
   contacto: z.string().max(255).optional(),
-});
+}).strict();
 
 const proveedorUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -19,7 +19,7 @@ const proveedorUpdateSchema = z.object({
   direccion: z.string().optional().nullable(),
   contacto: z.string().max(255).optional().nullable(),
   activo: z.boolean().optional(),
-});
+}).strict();
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "proveedores_nombre_key"': 'Ya existe un proveedor con este nombre',

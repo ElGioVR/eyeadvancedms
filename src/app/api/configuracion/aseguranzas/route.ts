@@ -8,7 +8,7 @@ const aseguranzaCreateSchema = z.object({
   telefono: z.string().max(20).optional(),
   direccion: z.string().optional(),
   contacto: z.string().max(255).optional(),
-});
+}).strict();
 
 const aseguranzaUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -17,7 +17,7 @@ const aseguranzaUpdateSchema = z.object({
   direccion: z.string().optional().nullable(),
   contacto: z.string().max(255).optional().nullable(),
   activo: z.boolean().optional(),
-});
+}).strict();
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "aseguranzas_nombre_key"': 'Ya existe una aseguranza con este nombre',

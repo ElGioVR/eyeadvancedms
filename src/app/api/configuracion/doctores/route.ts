@@ -9,7 +9,7 @@ const doctorCreateSchema = z.object({
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional(),
   email: z.string().email().max(255).optional(),
-});
+}).strict();
 
 const doctorUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -19,7 +19,7 @@ const doctorUpdateSchema = z.object({
   telefono: z.string().max(20).optional().nullable(),
   email: z.string().email().max(255).optional().nullable(),
   activo: z.boolean().optional(),
-});
+}).strict();
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "doctores_cedula_profesional_key"': 'Ya existe un doctor con esta cédula profesional',

@@ -6,13 +6,13 @@ import { z } from 'zod';
 const categoriaCreateSchema = z.object({
   nombre: z.string().min(1).max(255),
   descripcion: z.string().optional(),
-});
+}).strict();
 
 const categoriaUpdateSchema = z.object({
   id: z.string().uuid(),
   nombre: z.string().min(1).max(255).optional(),
   descripcion: z.string().optional().nullable(),
-});
+}).strict();
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "categorias_lentes_nombre_key"': 'Ya existe una categoría con este nombre',

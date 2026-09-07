@@ -22,13 +22,13 @@ const lenteBaseSchema = z.object({
   notas: z.string().optional().nullable(),
   categoria_id: z.string().uuid().optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
-});
+}).strict();
 
 const lenteCreateSchema = lenteBaseSchema;
 
 const lenteUpdateSchema = z.object({
   id: z.string().uuid(),
-}).merge(lenteBaseSchema.partial());
+}).merge(lenteBaseSchema.partial()).strict();
 
 const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint': 'Ya existe un registro con esos datos',
