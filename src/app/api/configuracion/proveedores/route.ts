@@ -33,6 +33,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('proveedores')
     .select('*')
+    .eq('activo', true)
     .order('nombre');
 
   if (error) {
@@ -136,7 +137,7 @@ export async function DELETE(request: Request) {
 
   const { error } = await supabase
     .from('proveedores')
-    .delete()
+    .update({ activo: false })
     .eq('id', id);
 
   if (error) {
