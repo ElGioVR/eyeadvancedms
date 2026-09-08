@@ -28,6 +28,39 @@ const errorTranslations: Record<string, string> = {
   'Missing user ID': 'Falta el ID del usuario',
 };
 
+async function checkLastAdmin(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+): Promise<NextResponse | null> {
+  const { data: target, error: targetError } = await supabase
+    .from('usuarios')
+    .select('rol, activo')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (targetError) {
+    return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+  }
+
+  if (target?.rol === 'admin' && target.activo === true) {
+    const { count, error: countError } = await supabase
+      .from('usuarios')
+      .select('id', { count: 'exact', head: true })
+      .eq('rol', 'admin')
+      .eq('activo', true);
+
+    if (countError || count === null) {
+      return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
+    }
+
+    if (count === 1) {
+      return NextResponse.json({ error: 'No puedes desactivar al último administrador' }, { status: 409 });
+    }
+  }
+
+  return null;
+}
+
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -42,29 +75,32 @@ export async function GET() {
     return NextResponse.json({ error: authError.message }, { status: 500 });
   }
 
-  // Get local user profiles
+  // Get active local user profiles
   const { data: profiles, error: profileError } = await supabase
     .from('usuarios')
-    .select('id, email, nombre, rol, activo, created_at, updated_at');
+    .select('id, email, nombre, rol, activo, created_at, updated_at')
+    .eq('activo', true);
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  // Merge auth users with profiles
+  // Merge auth users with active profiles only
   const profilesMap = new Map((profiles || []).map((p) => [p.id, p]));
-  const result = authUsers.users.map((u) => {
-    const profile = profilesMap.get(u.id);
-    return {
-      id: u.id,
-      email: u.email || '',
-      nombre: profile?.nombre || u.user_metadata?.nombre || '',
-      rol: profile?.rol || u.user_metadata?.rol || 'recepcionista',
-      activo: profile?.activo ?? true,
-      created_at: u.created_at,
-      last_sign_in_at: u.last_sign_in_at,
-      email_confirmed_at: u.email_confirmed_at,
-    };
-  });
+  const result = authUsers.users
+    .filter((u) => profilesMap.has(u.id))
+    .map((u) => {
+      const profile = profilesMap.get(u.id)!;
+      return {
+        id: u.id,
+        email: u.email || '',
+        nombre: profile.nombre,
+        rol: profile.rol,
+        activo: profile.activo,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at,
+        email_confirmed_at: u.email_confirmed_at,
+      };
+    });
 
   return NextResponse.json(result);
 }
@@ -159,31 +195,8 @@ export async function PATCH(request: Request) {
   }
 
   if (updates.activo === false) {
-    const { data: target, error: targetError } = await supabase
-      .from('usuarios')
-      .select('rol, activo')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (targetError) {
-      return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
-    }
-
-    if (target?.rol === 'admin' && target.activo === true) {
-      const { count, error: countError } = await supabase
-        .from('usuarios')
-        .select('id', { count: 'exact', head: true })
-        .eq('rol', 'admin')
-        .eq('activo', true);
-
-      if (countError || count === null) {
-        return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
-      }
-
-      if (count === 1) {
-        return NextResponse.json({ error: 'No puedes desactivar al último administrador' }, { status: 409 });
-      }
-    }
+    const lastAdminError = await checkLastAdmin(supabase, id);
+    if (lastAdminError) return lastAdminError;
   }
 
   // 1. Update auth user metadata
@@ -243,46 +256,18 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Missing user ID' }, { status: 400 });
   }
 
-  const { data: target, error: targetError } = await supabase
+  // Reuse last-admin protection (same as PATCH with activo=false)
+  const lastAdminError = await checkLastAdmin(supabase, id);
+  if (lastAdminError) return lastAdminError;
+
+  // Soft-delete: deactivate instead of removing the row or Auth user
+  const { error: updateError } = await supabase
     .from('usuarios')
-    .select('rol, activo')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (targetError) {
-    return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
-  }
-
-  if (target?.rol === 'admin' && target.activo === true) {
-    const { count, error: countError } = await supabase
-      .from('usuarios')
-      .select('id', { count: 'exact', head: true })
-      .eq('rol', 'admin')
-      .eq('activo', true);
-
-    if (countError || count === null) {
-      return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
-    }
-
-    if (count === 1) {
-      return NextResponse.json({ error: 'No puedes eliminar al último administrador' }, { status: 409 });
-    }
-  }
-
-  // 1. Delete from usuarios table
-  const { error: profileError } = await supabase
-    .from('usuarios')
-    .delete()
+    .update({ activo: false })
     .eq('id', id);
 
-  if (profileError) {
-    return NextResponse.json({ error: errorTranslations[profileError.message] || profileError.message }, { status: 500 });
-  }
-
-  // 2. Delete auth user
-  const { error: authError } = await supabase.auth.admin.deleteUser(id);
-  if (authError) {
-    return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
+  if (updateError) {
+    return NextResponse.json({ error: errorTranslations[updateError.message] || updateError.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

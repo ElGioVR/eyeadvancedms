@@ -512,3 +512,45 @@ Consecuencias:
 Fecha:
 
 2026-09-07
+
+DEC-023 — Auto-desactivación de admin por DELETE
+
+Estado:
+
+APROBADA — sin acción de código requerida
+
+Contexto:
+
+La auditoría S8 de soft-delete de Usuarios identificó un caso sin
+decisión explícita: ¿puede un admin desactivarse a sí mismo vía DELETE
+(soft-delete → `activo=false`)? DEC-021 cubre autorremoción de rol y
+protección de último admin, pero no menciona explícitamente la
+auto-desactivación.
+
+Regla:
+
+- Un usuario con `rol='admin'` PUEDE desactivar su propia cuenta
+  (`DELETE`/soft-delete → `activo=false`), siempre que no sea el último
+  admin activo.
+- Esta operación queda sujeta a la misma protección `checkLastAdmin()`
+  ya usada para PATCH y DELETE sobre cualquier usuario — no requiere
+  ninguna verificación adicional.
+- Esto es distinto de la autorremoción de ROL (DEC-021), que sigue
+  prohibida sin excepción: un admin no puede cambiarse a sí mismo el
+  `rol` a un valor distinto de `admin`, pero SÍ puede desactivarse
+  (`activo=false`) a sí mismo si no es el último admin.
+
+Relación con DEC-021:
+
+Esta decisión AMPLÍA DEC-021 (que cubre autorremoción de rol) agregando
+el caso de auto-desactivación; no reemplaza ninguna regla existente de
+DEC-021. La protección de autorremoción de rol permanece intacta.
+
+Estado de implementación:
+
+El código YA cumple esta regla sin cambios necesarios. Verificado en
+S8 USUARIOS AUDIT.
+
+Fecha:
+
+2026-09-07
