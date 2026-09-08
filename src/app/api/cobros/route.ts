@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     supabase.from('consultas').select('id, paciente_id').eq('id', data.consulta_id).maybeSingle(),
     supabase.from('pacientes').select('id').eq('id', data.paciente_id).maybeSingle(),
     data.aseguranza_id
-      ? supabase.from('aseguranzas').select('id').eq('id', data.aseguranza_id).maybeSingle()
+      ? supabase.from('aseguranzas').select('id, activo').eq('id', data.aseguranza_id).maybeSingle()
       : Promise.resolve({ data: true }),
   ]);
 
@@ -118,6 +118,9 @@ export async function POST(request: Request) {
   }
   if (data.aseguranza_id && !aseguranzaCheck.data) {
     return NextResponse.json({ error: 'La aseguranza referenciada no existe' }, { status: 404 });
+  }
+  if (data.aseguranza_id && aseguranzaCheck.data && typeof aseguranzaCheck.data === 'object' && !aseguranzaCheck.data.activo) {
+    return NextResponse.json({ error: 'La aseguranza seleccionada no está activa' }, { status: 400 });
   }
 
   // Relational consistency: paciente_id must match the patient of the referenced consulta

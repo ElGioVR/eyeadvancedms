@@ -210,6 +210,7 @@ export async function POST(request: Request) {
         .from('aseguranzas')
         .select('id')
         .ilike('nombre', data.aseguradora)
+        .eq('activo', true)
         .single();
       if (aseguranza) aseguranzaId = aseguranza.id;
     }
