@@ -144,7 +144,7 @@ export async function POST(request: Request) {
   // IDOR-10: Verify referenced entities exist before insert
   const [pacienteCheck, doctorCheck] = await Promise.all([
     supabase.from('pacientes').select('id').eq('id', data.paciente_id).maybeSingle(),
-    supabase.from('doctores').select('id').eq('id', data.doctor_id).maybeSingle(),
+    supabase.from('doctores').select('id, activo').eq('id', data.doctor_id).maybeSingle(),
   ]);
 
   if (!pacienteCheck.data) {
@@ -152,6 +152,9 @@ export async function POST(request: Request) {
   }
   if (!doctorCheck.data) {
     return NextResponse.json({ error: 'El doctor referenciado no existe' }, { status: 404 });
+  }
+  if (doctorCheck.data && !doctorCheck.data.activo) {
+    return NextResponse.json({ error: 'El doctor seleccionado no está activo' }, { status: 400 });
   }
 
   const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';

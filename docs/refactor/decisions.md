@@ -513,6 +513,52 @@ Fecha:
 
 2026-09-07
 
+DEC-024 — Estados independientes doctor.activo / usuario.activo
+
+Estado:
+
+APROBADA — sin acción de código requerida
+
+Contexto:
+
+La auditoría S8 de soft-delete de Doctores identificó que
+`doctores.activo` y `usuarios.activo` son estados desacoplados sin
+decisión documentada. Si un doctor se desactiva (`activo=false`), su
+cuenta de usuario asociada (`usuario_id`) puede seguir activa, y
+viceversa. Se requiere una decisión explícita sobre si son independientes
+o si la desactivación de uno debe propagarse al otro.
+
+Regla:
+
+- `doctores.activo` y `usuarios.activo` son estados INDEPENDIENTES por
+  diseño. No existe sincronización automática entre ellos.
+- Desactivar a un doctor (soft-delete, `DELETE
+  /api/configuracion/doctores`) NO desactiva automáticamente la cuenta
+  de usuario asociada (`usuario_id`), y viceversa.
+- Si se requiere desactivar ambos, un admin debe hacerlo explícitamente
+  en dos operaciones separadas (PATCH/DELETE de doctores, y PATCH/DELETE
+  de usuarios).
+- La desactivación de un doctor sin desactivar su usuario es válida
+  cuando un doctor deja de ejercer (pierde su estado "activo" como
+  doctor en el catálogo clínico) sin que eso implique revocar su acceso
+  al sistema.
+
+Justificación:
+
+Un doctor puede dejar de ejercer sin que eso implique necesariamente
+revocar su acceso al sistema, o un admin puede querer gestionar ambos
+estados por separado según el caso (ej. licencia temporal vs baja
+definitiva).
+
+Estado de implementación:
+
+El código YA se comporta así (sin sincronización) y no requiere cambios.
+Verificado en S8 DOCTORES AUDIT.
+
+Fecha:
+
+2026-09-07
+
 DEC-023 — Auto-desactivación de admin por DELETE
 
 Estado:

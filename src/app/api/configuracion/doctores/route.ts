@@ -34,6 +34,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('doctores')
     .select('*')
+    .eq('activo', true)
     .order('nombre_completo');
 
   if (error) {
@@ -148,7 +149,7 @@ export async function DELETE(request: Request) {
 
   const { error } = await supabase
     .from('doctores')
-    .delete()
+    .update({ activo: false })
     .eq('id', id);
 
   if (error) {
