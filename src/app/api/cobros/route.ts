@@ -23,6 +23,10 @@ const cobroCreateSchema = z.object({
   notas: z.string().optional().nullable(),
 }).strict();
 
+const errorTranslations: Record<string, string> = {
+  'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
+};
+
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -39,7 +43,7 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   // Resolve doctor names from consulta → doctor
@@ -89,7 +93,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = cobroCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -150,7 +160,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json(cobro, { status: 201 });

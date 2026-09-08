@@ -39,7 +39,7 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   // Get consultation counts and last visit for each patient
@@ -95,7 +95,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = pacienteCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -129,7 +135,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({

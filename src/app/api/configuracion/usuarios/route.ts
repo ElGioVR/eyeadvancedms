@@ -72,7 +72,7 @@ export async function GET() {
   // List auth users
   const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
   if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 
   // Get active local user profiles
@@ -81,7 +81,7 @@ export async function GET() {
     .select('id, email, nombre, rol, activo, created_at, updated_at')
     .eq('activo', true);
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 
   // Merge auth users with active profiles only
@@ -112,7 +112,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = usuarioCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -134,7 +140,7 @@ export async function POST(request: Request) {
   });
 
   if (authError) {
-    return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[authError.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   // 2. Insert profile in usuarios table (best effort — auth user is already created)
@@ -150,7 +156,7 @@ export async function POST(request: Request) {
     });
 
   if (profileError) {
-    console.error('Profile insert error (auth user still created):', profileError.message);
+    console.error('Error al insertar perfil de usuario');
   }
 
   return NextResponse.json({
@@ -167,7 +173,13 @@ export async function PATCH(request: Request) {
   if (auth instanceof NextResponse) return auth;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = usuarioUpdateSchema.safeParse(body);
   if (!validation.success) {
@@ -208,7 +220,7 @@ export async function PATCH(request: Request) {
   if (Object.keys(authUpdates).length > 0) {
     const { error: authError } = await supabase.auth.admin.updateUserById(id, authUpdates);
     if (authError) {
-      return NextResponse.json({ error: errorTranslations[authError.message] || authError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[authError.message] || 'Error interno del servidor' }, { status: 500 });
     }
   }
 
@@ -225,7 +237,7 @@ export async function PATCH(request: Request) {
       .update(profileUpdates)
       .eq('id', id);
     if (profileError) {
-      return NextResponse.json({ error: errorTranslations[profileError.message] || profileError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[profileError.message] || 'Error interno del servidor' }, { status: 500 });
     }
   }
 
@@ -235,7 +247,7 @@ export async function PATCH(request: Request) {
       password: updates.password,
     });
     if (pwError) {
-      return NextResponse.json({ error: errorTranslations[pwError.message] || pwError.message }, { status: 500 });
+      return NextResponse.json({ error: errorTranslations[pwError.message] || 'Error interno del servidor' }, { status: 500 });
     }
   }
 
@@ -267,7 +279,7 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (updateError) {
-    return NextResponse.json({ error: errorTranslations[updateError.message] || updateError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[updateError.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

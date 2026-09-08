@@ -42,7 +42,7 @@ function translateError(msg: string): string {
   for (const [key, val] of Object.entries(errorTranslations)) {
     if (msg.includes(key)) return val;
   }
-  return msg;
+  return 'Error interno del servidor';
 }
 
 function mapLente(l: any) {
@@ -114,7 +114,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = lenteCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -165,7 +171,13 @@ export async function PATCH(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = lenteUpdateSchema.safeParse(body);
   if (!validation.success) {

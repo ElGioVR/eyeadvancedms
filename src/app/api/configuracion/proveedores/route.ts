@@ -37,7 +37,7 @@ export async function GET() {
     .order('nombre');
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json(data);
@@ -50,7 +50,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = proveedorCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -73,7 +79,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json(proveedor, { status: 201 });
@@ -86,7 +92,13 @@ export async function PATCH(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = proveedorUpdateSchema.safeParse(body);
   if (!validation.success) {
@@ -115,7 +127,7 @@ export async function PATCH(request: Request) {
     .eq('id', id);
 
   if (profileError) {
-    return NextResponse.json({ error: errorTranslations[profileError.message] || profileError.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[profileError.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
@@ -141,7 +153,7 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

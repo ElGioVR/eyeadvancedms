@@ -87,7 +87,7 @@ export async function GET() {
     .order('fecha', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   const result = data.map((c) => {
@@ -131,7 +131,13 @@ export async function POST(request: Request) {
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
-  const body = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
 
   const validation = consultaCreateSchema.safeParse(body);
   if (!validation.success) {
@@ -192,7 +198,7 @@ export async function POST(request: Request) {
 
   if (consultaError) {
     return NextResponse.json(
-      { error: errorTranslations[consultaError.message] || consultaError.message },
+      { error: errorTranslations[consultaError.message] || 'Error interno del servidor' },
       { status: 500 }
     );
   }
@@ -228,7 +234,7 @@ export async function POST(request: Request) {
       });
 
     if (cobroError) {
-      console.error('Cobro insert error (consulta still created):', cobroError.message);
+      console.error('Error al insertar cobro asociado a consulta');
     }
   }
 
