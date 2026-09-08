@@ -13,6 +13,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   const [selectedCamera, setSelectedCamera] = useState('');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [scannerActive, setScannerActive] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<any>(null);
   const startedRef = useRef(false);
@@ -96,6 +97,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       const scanner = new Html5Qrcode('barcode-viewport');
       scannerRef.current = scanner;
       startedRef.current = true;
+      setScannerActive(true);
 
       await scanner.start(
         cameraId,
@@ -108,6 +110,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       );
     } catch (err: any) {
       startedRef.current = false;
+      setScannerActive(false);
       if (err?.name === 'NotAllowedError') {
         setError('Permiso de camara denegado.');
       } else {
@@ -124,12 +127,14 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       }
     } catch {}
     startedRef.current = false;
+    setScannerActive(false);
     scannerRef.current = null;
   }
 
   async function handleCameraChange(cameraId: string) {
     await stopScanner();
     startedRef.current = false;
+    setScannerActive(false);
     setSelectedCamera(cameraId);
   }
 
@@ -166,7 +171,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
       <div className="relative rounded-xl overflow-hidden bg-gray-900" style={{ minHeight: 220 }}>
         <div id="barcode-viewport" ref={containerRef} style={{ width: '100%', minHeight: 200 }} />
-        {!startedRef.current && !error && (
+        {!scannerActive && !error && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 10 }}>
             <div className="text-center space-y-2">
               <Camera className="h-10 w-10 text-gray-500 mx-auto animate-pulse" />
@@ -184,7 +189,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         )}
       </div>
 
-      {startedRef.current && !error && (
+      {scannerActive && !error && (
         <div className="flex items-center justify-center gap-2 text-sm text-primary-600">
           <div className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
           Apunta la camara al codigo de barras...
