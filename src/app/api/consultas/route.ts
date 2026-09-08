@@ -141,6 +141,19 @@ export async function POST(request: Request) {
 
   const data = validation.data;
 
+  // IDOR-10: Verify referenced entities exist before insert
+  const [pacienteCheck, doctorCheck] = await Promise.all([
+    supabase.from('pacientes').select('id').eq('id', data.paciente_id).maybeSingle(),
+    supabase.from('doctores').select('id').eq('id', data.doctor_id).maybeSingle(),
+  ]);
+
+  if (!pacienteCheck.data) {
+    return NextResponse.json({ error: 'El paciente referenciado no existe' }, { status: 404 });
+  }
+  if (!doctorCheck.data) {
+    return NextResponse.json({ error: 'El doctor referenciado no existe' }, { status: 404 });
+  }
+
   const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';
   const tipoVisita = tipoVisitaMap[data.tipo_visita || ''] || data.tipo_visita || 'PRIMERA_VEZ';
 
@@ -202,7 +215,7 @@ export async function POST(request: Request) {
       .from('cobros')
       .insert({
         consulta_id: consultaData.id,
-        paciente_id: data.paciente_id,
+        paciente_id: consultaData.paciente_id,
         aseguranza_id: aseguranzaId,
         metodo_pago: metodoPago,
         monto,

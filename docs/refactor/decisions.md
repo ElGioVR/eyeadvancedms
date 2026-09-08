@@ -369,3 +369,146 @@ Consecuencias:
 Fecha:
 
 2026-09-07
+
+DEC-022 — Cierre de IDOR de recursos compartidos e integridad referencial
+
+Estado:
+
+APROBADA — IDOR-3 a IDOR-9 cerrados; IDOR-10/11/12 listos para implementación como validación referencial
+
+Contexto:
+
+La auditoría S6 documentó 12 hallazgos IDOR. Tras revisión de negocio se
+determinó que el sistema es single-tenant y pertenece a una sola clínica
+óptica, sin fronteras de ownership entre admin, doctor y recepcionista.
+
+Hallazgos cerrados por decisión de negocio:
+
+- IDOR-3 (GET de paciente por UUID): cerrado. Cualquier rol autenticado puede
+  consultar cualquier paciente; es el comportamiento operativo deseado.
+- IDOR-4 e IDOR-5 (PATCH/DELETE de inventario por ID): cerrados. `admin` y
+  `recepcionista` pueden editar o eliminar cualquier lente.
+- IDOR-6 (doctores), IDOR-7 (aseguranzas), IDOR-8 (categorías) e IDOR-9
+  (proveedores): cerrados. Son recursos compartidos de catálogo sin ownership
+  individual.
+
+Estos hallazgos quedan registrados como evaluados y cerrados por decisión de
+negocio, sin cambio de código.
+
+Hallazgos redefinidos como integridad referencial:
+
+- IDOR-10 (POST consultas): antes de crear la consulta, verificar server-side
+  que `paciente_id` y `doctor_id` existan en sus tablas respectivas. Si alguno
+  no existe, rechazar con `400` o `404`.
+- IDOR-11 (creación de cobro dentro de POST consultas): verificar que el
+  `paciente_id` usado para el cobro coincida con el `paciente_id` de la consulta
+  recién creada, sin aceptar un valor arbitrario del body.
+- IDOR-12 (POST cobros): verificar server-side que `consulta_id`,
+  `paciente_id` y `aseguranza_id` si se envía existan en sus tablas respectivas,
+  y que `paciente_id` corresponda al paciente de la `consulta_id` referenciada.
+
+Estas reglas son de existencia y consistencia relacional, no de ownership.
+
+Fecha:
+
+2026-09-07
+
+DEC-021 — Protecciones S4 para usuarios y administradores
+
+Estado:
+
+APROBADA — lista para implementación en S4
+
+Contexto:
+
+S4, documentado en `docs/refactor/01-security.md`, exige self-service y
+protecciones para usuarios administradores que DEC-019 no contemplaba de
+forma explícita. Esta decisión define la excepción y las protecciones
+adicionales para el endpoint de usuarios.
+
+Self-service:
+
+- Cualquier usuario autenticado con rol `admin`, `doctor` o
+  `recepcionista` puede ejecutar `PATCH /api/configuracion/usuarios` sobre
+  su propio ID (`auth.user.id`).
+- En self-service solo puede modificar `nombre` y `password`.
+- `rol`, `activo` y cualquier otro campo no pueden modificarse mediante
+  self-service. Si se envían, el servidor debe ignorarlos o rechazar la
+  request.
+- Un `id` enviado por el cliente no sustituye la identidad de la sesión.
+- El `PATCH` administrativo sobre cualquier ID y cualquier campo aprobado,
+  incluyendo `rol` y `activo`, permanece restringido a `admin`.
+
+Protección de último admin:
+
+- Un `DELETE` o un `PATCH` que establezca `activo = false` sobre el último
+  usuario activo con `rol = 'admin'` debe rechazarse con `409 Conflict`.
+- La comprobación debe ejecutarse server-side contando los usuarios activos
+  con rol `admin` en el momento de la operación.
+- Esta protección aplica incluso cuando la operación la realiza otro admin.
+
+Protección de autorremoción de rol admin:
+
+- Un usuario con rol `admin` no puede cambiar su propio rol a un valor
+  distinto de `admin`, incluso mediante el PATCH administrativo.
+- La restricción solo aplica a la auto-modificación del propio rol.
+- Un admin puede cambiar el rol de otros usuarios, incluida la degradación
+  de otro admin, sujeto a la protección de último admin.
+
+Relación con DEC-019:
+
+Esta decisión AMPLÍA DEC-019 en lo relativo a PATCH de usuarios; el resto de
+DEC-019 permanece vigente sin cambios. La regla de solo `admin` para GET
+general, POST y DELETE de usuarios se mantiene.
+
+Fecha:
+
+2026-09-07
+
+DEC-020 — Matriz S3 para Pacientes y Consultas
+
+Estado:
+
+APROBADA — lista para implementación
+
+Contexto:
+
+DEC-019 cubrió Usuarios, Configuración, Cobros e Inventario, pero dejó
+explícitamente fuera a Pacientes y Consultas, según la auditoría de S3.
+Esta decisión completa la matriz de autorización para esas rutas.
+
+Roles aplicables:
+
+- `admin`
+- `doctor`
+- `recepcionista`
+
+Matriz:
+
+| Área | GET | POST | PATCH | DELETE |
+|---|---|---|---|---|
+| Pacientes (`src/app/api/pacientes/**`) | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` |
+| Consultas (`src/app/api/consultas/**`) | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` | `admin`, `doctor`, `recepcionista` |
+
+Reglas adicionales:
+
+- Los tres roles tienen el mismo nivel de acceso en Pacientes y Consultas.
+- La autorización debe aplicar explícitamente `requireRole(user,
+  ['admin', 'doctor', 'recepcionista'])` en cada handler existente.
+- `requireRole` se usa aunque los tres roles estén permitidos para garantizar
+  fail-closed.
+- Un usuario con `activo = false`, sin perfil o con un rol fuera de los tres
+  valores válidos recibe `403`.
+- `requireAuth()` continúa siendo responsable de validar la sesión y devolver
+  `401` cuando no existe.
+- La autorización no depende de roles enviados por el cliente.
+
+Consecuencias:
+
+- S3 queda definido para las rutas de Pacientes y Consultas sin añadir un
+  cuarto rol ni restricciones adicionales por rol.
+- Ownership e IDOR permanecen fuera de esta decisión y corresponden a S6.
+
+Fecha:
+
+2026-09-07

@@ -99,6 +99,35 @@ export async function POST(request: Request) {
 
   const data = validation.data;
 
+  // IDOR-12: Verify referenced entities exist and relational consistency
+  const checks = await Promise.all([
+    supabase.from('consultas').select('id, paciente_id').eq('id', data.consulta_id).maybeSingle(),
+    supabase.from('pacientes').select('id').eq('id', data.paciente_id).maybeSingle(),
+    data.aseguranza_id
+      ? supabase.from('aseguranzas').select('id').eq('id', data.aseguranza_id).maybeSingle()
+      : Promise.resolve({ data: true }),
+  ]);
+
+  const [consultaCheck, pacienteCheck, aseguranzaCheck] = checks;
+
+  if (!consultaCheck.data) {
+    return NextResponse.json({ error: 'La consulta referenciada no existe' }, { status: 404 });
+  }
+  if (!pacienteCheck.data) {
+    return NextResponse.json({ error: 'El paciente referenciado no existe' }, { status: 404 });
+  }
+  if (data.aseguranza_id && !aseguranzaCheck.data) {
+    return NextResponse.json({ error: 'La aseguranza referenciada no existe' }, { status: 404 });
+  }
+
+  // Relational consistency: paciente_id must match the patient of the referenced consulta
+  if (consultaCheck.data.paciente_id !== data.paciente_id) {
+    return NextResponse.json(
+      { error: 'El paciente no corresponde a la consulta referenciada' },
+      { status: 409 }
+    );
+  }
+
   const insertData = {
     consulta_id: data.consulta_id,
     paciente_id: data.paciente_id,
