@@ -37,7 +37,7 @@ export function useUser() {
       // Get profile from usuarios table
       const { data: profile } = await supabase
         .from('usuarios')
-        .select('*')
+        .select('id,nombre,rol,activo')
         .eq('id', authUser.id)
         .single();
 
