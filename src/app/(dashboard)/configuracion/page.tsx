@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Camera, Save, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase/client';
@@ -33,6 +34,7 @@ function formatTime(dateStr: string | null): string {
 export default function PerfilPage() {
   const { user, loading } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -66,7 +68,7 @@ export default function PerfilPage() {
       });
 
       toast('Perfil actualizado');
-      window.location.reload();
+      router.refresh();
     } catch (err: any) {
       toast(err.message || 'Error al guardar', 'error');
     } finally {

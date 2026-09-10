@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
 const categoriaCreateSchema = z.object({
@@ -14,18 +15,16 @@ const categoriaUpdateSchema = z.object({
   descripcion: z.string().optional().nullable(),
 }).strict();
 
-const errorTranslations: Record<string, string> = {
-  'duplicate key value violates unique constraint "categorias_lentes_nombre_key"': 'Ya existe una categoría con este nombre',
-};
-
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('categorias_lentes')
-    .select('*')
+    .select('id, nombre, descripcion, created_at')
     .order('nombre');
 
   if (error) {

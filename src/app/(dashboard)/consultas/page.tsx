@@ -23,6 +23,7 @@ import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import PageHeader from '@/components/ui/PageHeader';
+import Pagination from '@/components/ui/Pagination';
 
 interface ConsultaAPI {
   id: string;
@@ -57,10 +58,12 @@ function Field({ label, value, full }: { label: string; value: string; full?: bo
 }
 
 export default function ConsultasPage() {
-  const { data: consultas, loading, error } = useFetch<ConsultaAPI>('/api/consultas');
+  const [page, setPage] = useState(1);
+  const { data: consultas, loading, error, total, page: currentPage } = useFetch<ConsultaAPI>('/api/consultas', { page: String(page), pageSize: '15' });
   const [search, setSearch] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('Todos');
   const [selectedConsulta, setSelectedConsulta] = useState<ConsultaAPI | null>(null);
+  const [today] = useState(() => new Date().toISOString().split('T')[0]);
 
   const debouncedSearch = useDebounce(search);
 
@@ -79,16 +82,14 @@ export default function ConsultasPage() {
   }, [consultas]);
 
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
     const hoy = consultas.filter((c) => c.fecha === today).length;
-    const total = consultas.length;
     return [
       { label: 'Total Consultas', value: String(total), icon: Calendar, color: 'text-primary-600', bgColor: 'bg-primary-50', borderColor: 'border-primary-100' },
       { label: 'Consultas Hoy', value: String(hoy), icon: Clock, color: 'text-sky-600', bgColor: 'bg-sky-50', borderColor: 'border-sky-100' },
       { label: 'Este Mes', value: String(total), icon: CheckCircle, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
       { label: 'Doctores', value: String(new Set(consultas.map((c) => c.doctor).filter(Boolean)).size), icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100' },
     ];
-  }, [consultas]);
+  }, [consultas, total]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -117,10 +118,13 @@ export default function ConsultasPage() {
           value={search}
           onChange={setSearch}
           placeholder="Buscar por paciente, doctor o ID..."
+          aria-label="Buscar consultas"
           className="flex-1 sm:min-w-[280px]"
         />
         <div className="flex flex-wrap items-center gap-3">
           <FilterSelect
+            id="filter-doctor"
+            label="Doctor"
             value={filterDoctor}
             onChange={setFilterDoctor}
             options={doctors}
@@ -163,6 +167,7 @@ export default function ConsultasPage() {
                   ].map((h) => (
                     <th
                       key={h.label}
+                      scope="col"
                       className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 text-left ${h.hide}`}
                     >
                       {h.label}
@@ -187,16 +192,21 @@ export default function ConsultasPage() {
                     </td>
                     <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.diagnostico || '—'}</td>
                     <td className="hidden sm:table-cell px-5 py-4">
-                      <button onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
+                      <button aria-label={`Ver consulta de ${c.paciente}`} onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-6 py-3">
-            <span className="text-sm text-gray-400">Mostrando {filtered.length} de {consultas.length} consultas</span>
-          </div>
+          <Pagination
+            page={currentPage}
+            total={total}
+            pageSize={15}
+            totalItems={filtered.length}
+            onPageChange={(p) => setPage(p)}
+            label="consultas"
+          />
         </div>
       )}
 
@@ -239,7 +249,7 @@ export default function ConsultasPage() {
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-8 py-5 -mx-6 -mb-6 mt-0">
-              <button onClick={() => setSelectedConsulta(null)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CERRAR</button>
+              <button type="button" onClick={() => setSelectedConsulta(null)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CERRAR</button>
             </div>
           </>
         )}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
 const doctorCreateSchema = z.object({
@@ -21,19 +22,16 @@ const doctorUpdateSchema = z.object({
   activo: z.boolean().optional(),
 }).strict();
 
-const errorTranslations: Record<string, string> = {
-  'duplicate key value violates unique constraint "doctores_cedula_profesional_key"': 'Ya existe un doctor con esta cédula profesional',
-  'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
-};
-
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('doctores')
-    .select('*')
+    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, activo, created_at')
     .eq('activo', true)
     .order('nombre_completo');
 

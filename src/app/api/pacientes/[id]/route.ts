@@ -17,7 +17,7 @@ export async function GET(
   // Get patient
   const { data: patient, error: patientError } = await supabase
     .from('pacientes')
-    .select('*')
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, created_at')
     .eq('id', id)
     .single();
 
@@ -29,7 +29,8 @@ export async function GET(
   const { data: consultas } = await supabase
     .from('consultas')
     .select(`
-      *,
+      id, folio, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita,
+      diagnostico, estudio_1, estudio_2, estudio_3, procedimiento, notas,
       doctores:doctor_id (nombre_completo, especialidad)
     `)
     .eq('paciente_id', id)
@@ -39,7 +40,7 @@ export async function GET(
   const consultaIds = (consultas || []).map((c) => c.id);
   const { data: cobros } = await supabase
     .from('cobros')
-    .select('*')
+    .select('id, consulta_id, monto, moneda, metodo_pago, pagado')
     .in('consulta_id', consultaIds);
 
   const cobrosMap = new Map((cobros || []).map((cobro) => [cobro.consulta_id, cobro]));

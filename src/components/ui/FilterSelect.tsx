@@ -9,6 +9,7 @@ interface FilterSelectProps {
   options: string[];
   label?: string;
   activeColor?: string;
+  id?: string;
 }
 
 export default function FilterSelect({
@@ -17,16 +18,18 @@ export default function FilterSelect({
   options,
   label,
   activeColor = 'bg-primary-50 text-primary-700 border-primary-200',
+  id,
 }: FilterSelectProps) {
   const isActive = value !== options[0];
 
   return (
     <div className="relative">
       {label && (
-        <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
+        <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
       )}
       <div className="relative">
         <select
+          id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(

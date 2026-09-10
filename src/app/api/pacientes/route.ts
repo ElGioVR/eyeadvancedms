@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
-
-const errorTranslations: Record<string, string> = {
-  'null value in column "nombre_completo" violates not-null constraint': 'El nombre del paciente es obligatorio',
-  'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
-};
 
 const pacienteCreateSchema = z
   .object({
@@ -26,17 +22,24 @@ const pacienteCreateSchema = z
     message: 'El nombre del paciente es obligatorio',
   });
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '15', 10)));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('pacientes')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
@@ -85,7 +88,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({ data: result, total: count || 0, page, pageSize });
 }
 
 export async function POST(request: Request) {
