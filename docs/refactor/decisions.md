@@ -600,3 +600,126 @@ S8 USUARIOS AUDIT.
 Fecha:
 
 2026-09-07
+
+DEC-025 — Login migrado a Route Handler
+
+Estado:
+
+IMPLEMENTADA
+
+El login fue migrado de Server Action a Route Handler en
+`/api/auth/login/route.ts` para mejorar la trazabilidad HTTP y
+la separación de responsabilidades.
+
+Fecha:
+
+post-S13
+
+DEC-026 — Logout como Server Action
+
+Estado:
+
+IMPLEMENTADA
+
+El logout se implementó como Server Action en
+`src/app/actions/auth.ts` para simplificar el flujo de cierre
+de sesión desde el cliente.
+
+Fecha:
+
+post-S13
+
+DEC-027 — RLS policies configuradas en Supabase
+
+Estado:
+
+IMPLEMENTADA
+
+Las Row-Level Security policies fueron configuradas en Supabase
+como capa adicional de protección de datos a nivel de base de datos.
+
+Fecha:
+
+post-S13
+
+DEC-028 — Fix de BarcodeScanner
+
+Estado:
+
+IMPLEMENTADA
+
+Se corrigió el componente BarcodeScanner para resolver problemas
+de funcionamiento en el escaneo de códigos de barras.
+
+Fecha:
+
+post-S13
+
+DEC-029 — Incidente de tabla usuarios vacía
+
+Estado:
+
+IMPLEMENTADA
+
+Se documentó y resolvió un incidente donde la tabla `usuarios`
+quedó vacía, impidiendo el acceso al sistema. Se implementaron
+medidas de prevención y recuperación.
+
+Fecha:
+
+post-S13
+
+DEC-030 — Sistema de matriz de costos
+
+Estado:
+
+IMPLEMENTADA
+
+Se implementó el sistema de matriz de costos con 4 tablas nuevas
+para soportar la configuración de precios y costos del sistema
+oftalmológico.
+
+Fecha:
+
+post-S13
+
+DEC-031 — Sistema de notificaciones
+
+Estado:
+
+IMPLEMENTADA
+
+Se implementó un sistema de notificaciones in-app para alertar
+a los usuarios sobre eventos relevantes del sistema.
+
+Fecha:
+
+post-S13
+
+DEC-032 — Welcome screen
+
+Estado:
+
+IMPLEMENTADA
+
+Se agregó una pantalla de bienvenida (`/bienvenida`) que se
+muestra al usuario después del login antes de redirigir al
+dashboard principal.
+
+Fecha:
+
+post-S13
+
+DEC-033 — Sistema de skeleton loaders
+
+Estado:
+
+IMPLEMENTADA
+
+Se implementó un sistema completo de skeleton loaders para
+mejorar la experiencia percibida de carga en todas las páginas
+del dashboard.
+
+Fecha:
+
+post-S13

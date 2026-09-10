@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
 const proveedorCreateSchema = z.object({
@@ -21,18 +22,16 @@ const proveedorUpdateSchema = z.object({
   activo: z.boolean().optional(),
 }).strict();
 
-const errorTranslations: Record<string, string> = {
-  'duplicate key value violates unique constraint "proveedores_nombre_key"': 'Ya existe un proveedor con este nombre',
-};
-
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('proveedores')
-    .select('*')
+    .select('id, nombre, contacto, email, telefono, direccion, activo')
     .eq('activo', true)
     .order('nombre');
 

@@ -16,9 +16,9 @@ import {
   CheckCircle,
   Download,
   Printer,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Skeleton from '@/components/ui/Skeleton';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
@@ -107,10 +107,52 @@ export default function HistorialMedicoPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-500 mx-auto" />
-          <p className="text-sm text-gray-400">Cargando historial...</p>
+      <div className="mx-auto max-w-[1440px] space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-24 rounded-lg" />
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-80" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center gap-6">
+            <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-3 w-64" />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-1 border-b border-gray-200">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10 w-24 rounded-t-lg" />
+          ))}
+        </div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex-1 space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-gray-200 bg-white">
+                <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-3">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <div className="grid grid-cols-4 gap-4 px-6 py-4">
+                  {[1, 2, 3, 4].map((j) => (
+                    <div key={j} className="space-y-1">
+                      <Skeleton className="h-2.5 w-16" />
+                      <Skeleton className="h-3.5 w-28" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="w-full lg:w-[360px] space-y-5">
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+          </div>
         </div>
       </div>
     );

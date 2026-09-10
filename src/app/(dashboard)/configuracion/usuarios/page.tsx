@@ -6,8 +6,6 @@ import {
   Eye,
   EyeOff,
   X,
-  ChevronLeft,
-  ChevronRight,
   User,
   Trash2,
   Loader2,
@@ -16,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
 import { useToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import Pagination from '@/components/ui/Pagination';
 
 interface UsuarioAPI {
   id: string;
@@ -89,7 +88,6 @@ export default function UsuariosPage() {
     [usuarios, search]
   );
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE
@@ -316,24 +314,14 @@ export default function UsuariosPage() {
             </table>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/30 px-4 sm:px-6 py-3">
-              <span className="hidden sm:inline text-sm text-gray-400">Mostrando {paginated.length} de {filtered.length} usuarios</span>
-              <span className="sm:hidden text-sm text-gray-400">{paginated.length}/{filtered.length}</span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-                  <ChevronLeft className="h-4 w-4" /><span className="hidden sm:inline">Anterior</span>
-                </button>
-                <div className="hidden sm:flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button key={p} onClick={() => setPage(p)} className={cn('h-8 w-8 rounded-md text-sm font-bold transition-colors', p === page ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>{p}</button>
-                  ))}
-                </div>
-                <span className="sm:hidden text-sm font-medium text-gray-600 px-2">{page}/{totalPages}</span>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-                  <span className="hidden sm:inline">Siguiente</span><ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <Pagination
+              page={page}
+              total={filtered.length}
+              pageSize={5}
+              totalItems={filtered.length}
+              onPageChange={(p) => setPage(p)}
+              label="usuarios"
+            />
           </div>
         )}
       </div>

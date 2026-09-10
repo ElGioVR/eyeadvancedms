@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
 const usuarioCreateSchema = z.object({
@@ -18,15 +19,6 @@ const usuarioUpdateSchema = z.object({
   rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
   activo: z.boolean().optional(),
 }).strict();
-
-const errorTranslations: Record<string, string> = {
-  'Unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',
-  'A user with this email address has already been registered': 'Ya existe un usuario con este correo electrónico',
-  'Password should be at least 6 characters': 'La contraseña debe tener al menos 6 caracteres',
-  'New password should be different from the old password': 'La nueva contraseña debe ser diferente a la anterior',
-  'User not found': 'Usuario no encontrado',
-  'Missing user ID': 'Falta el ID del usuario',
-};
 
 async function checkLastAdmin(
   supabase: ReturnType<typeof getSupabaseAdmin>,

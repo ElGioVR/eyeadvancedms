@@ -8,6 +8,8 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  id?: string;
+  'aria-label'?: string;
 }
 
 export default function SearchInput({
@@ -15,6 +17,8 @@ export default function SearchInput({
   onChange,
   placeholder = 'Buscar...',
   className,
+  id,
+  'aria-label': ariaLabel,
 }: SearchInputProps) {
   return (
     <div className={cn('relative', className)}>
@@ -22,10 +26,12 @@ export default function SearchInput({
         <Search className="h-4 w-4 text-gray-400" />
       </div>
       <input
+        id={id}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         className="block w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
       />
     </div>

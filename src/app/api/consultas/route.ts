@@ -1,21 +1,27 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
-const errorTranslations: Record<string, string> = {
-  'null value in column "paciente_id" violates not-null constraint': 'El paciente es obligatorio',
-  'null value in column "doctor_id" violates not-null constraint': 'El doctor es obligatorio',
-  'null value in column "fecha" violates not-null constraint': 'La fecha es obligatoria',
-  'null value in column "hora_inicio" violates not-null constraint': 'La hora de inicio es obligatoria',
-  'null value in column "tipo_consulta" violates not-null constraint': 'El tipo de consulta es obligatorio',
-  'null value in column "tipo_visita" violates not-null constraint': 'El tipo de visita es obligatorio',
-  'invalid input value for enum tipo_consulta': 'Tipo de consulta no válido',
-  'invalid input value for enum tipo_visita': 'Tipo de visita no válido',
-  'insert or update on table "consultas" violates foreign key constraint "consultas_paciente_id_fkey"': 'El paciente seleccionado no existe',
-  'insert or update on table "consultas" violates foreign key constraint "consultas_doctor_id_fkey"': 'El doctor seleccionado no existe',
-  'new row violates row-level security policy': 'No tienes permisos para realizar esta acción',
-};
+async function crearNotificacion(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  tipo: 'info' | 'warning' | 'error',
+  titulo: string,
+  mensaje: string,
+  entidadTipo?: string,
+  entidadId?: string,
+) {
+  await supabase.from('notificaciones').insert({
+    user_id: userId,
+    tipo,
+    titulo,
+    mensaje,
+    entidad_tipo: entidadTipo ?? null,
+    entidad_id: entidadId ?? null,
+  });
+}
 
 const tipoConsultaMap: Record<string, string> = {
   'Primera Consulta': 'CONSULTA',
@@ -70,21 +76,28 @@ const consultaCreateSchema = z
   })
   .strict();
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '15', 10)));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('consultas')
     .select(`
       *,
       pacientes:paciente_id (nombre_completo),
       doctores:doctor_id (nombre_completo)
-    `)
-    .order('fecha', { ascending: false });
+    `, { count: 'exact' })
+    .order('fecha', { ascending: false })
+    .range(from, to);
 
   if (error) {
     return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
@@ -121,7 +134,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({ data: result, total: count || 0, page, pageSize });
 }
 
 export async function POST(request: Request) {
@@ -236,6 +249,23 @@ export async function POST(request: Request) {
     if (cobroError) {
       console.error('Error al insertar cobro asociado a consulta');
     }
+  }
+
+  // 3. Generate notification for the doctor
+  if (consultaData.doctor_id) {
+    const nombrePaciente = pacienteCheck.data
+      ? (await supabase.from('pacientes').select('nombre_completo').eq('id', data.paciente_id).maybeSingle())?.data?.nombre_completo ?? 'un paciente'
+      : 'un paciente';
+
+    await crearNotificacion(
+      supabase,
+      consultaData.doctor_id,
+      'info',
+      'Nueva consulta asignada',
+      `Consulta ${folio} registrada para ${nombrePaciente} el ${data.fecha}`,
+      'consulta',
+      consultaData.id,
+    );
   }
 
   return NextResponse.json(consultaData, { status: 201 });

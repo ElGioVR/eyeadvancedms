@@ -9,6 +9,7 @@ import { useFetch } from '@/hooks/useFetch';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/ui/Pagination';
 import SidebarPanel from '@/components/ui/SidebarPanel';
 
 interface PacienteAPI {
@@ -43,7 +44,8 @@ function formatDate(dateStr: string | null): string {
 }
 
 export default function PacientesPage() {
-  const { data: pacientes, loading, error } = useFetch<PacienteAPI>('/api/pacientes');
+  const [page, setPage] = useState(1);
+  const { data: pacientes, loading, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
   const [search, setSearch] = useState('');
   const [filterSexo, setFilterSexo] = useState('Todos');
   const [filterEdad, setFilterEdad] = useState('Todos');
@@ -191,6 +193,15 @@ export default function PacientesPage() {
               )}
             </div>
           )}
+
+          <Pagination
+            page={currentPage}
+            total={total}
+            pageSize={15}
+            totalItems={filtered.length}
+            onPageChange={(p) => setPage(p)}
+            label="pacientes"
+          />
         </div>
 
         <SidebarPanel
@@ -203,34 +214,34 @@ export default function PacientesPage() {
               <h4 className="text-xs font-extrabold text-primary-600 uppercase tracking-wider mb-3">Datos Personales</h4>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Nombre completo <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Ej. Juan Pérez González" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <label htmlFor="nombre-completo" className="block text-xs font-bold text-gray-500 mb-1">Nombre completo <span className="text-red-500">*</span></label>
+                  <input id="nombre-completo" type="text" placeholder="Ej. Juan Pérez González" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Sexo <span className="text-red-500">*</span></label>
-                    <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                    <label htmlFor="sexo" className="block text-xs font-bold text-gray-500 mb-1">Sexo <span className="text-red-500">*</span></label>
+                    <select id="sexo" className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
                       <option value="">Seleccionar</option>
                       <option value="H">Masculino</option>
                       <option value="M">Femenino</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Fecha de Nacimiento <span className="text-red-500">*</span></label>
-                    <input type="date" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                    <label htmlFor="fecha-nacimiento" className="block text-xs font-bold text-gray-500 mb-1">Fecha de Nacimiento <span className="text-red-500">*</span></label>
+                    <input id="fecha-nacimiento" type="date" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Teléfono <span className="text-red-500">*</span></label>
-                  <input type="tel" placeholder="Ej. 664 123 4567" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <label htmlFor="telefono" className="block text-xs font-bold text-gray-500 mb-1">Teléfono <span className="text-red-500">*</span></label>
+                  <input id="telefono" type="tel" placeholder="Ej. 664 123 4567" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
-                  <input type="email" placeholder="correo@ejemplo.com" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <label htmlFor="email" className="block text-xs font-bold text-gray-500 mb-1">Email</label>
+                  <input id="email" type="email" placeholder="correo@ejemplo.com" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Aseguradora</label>
-                  <select className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                  <label htmlFor="aseguradora" className="block text-xs font-bold text-gray-500 mb-1">Aseguradora</label>
+                  <select id="aseguradora" className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
                     <option value="">Seleccionar</option>
                     <option>ISSSTECALI</option>
                     <option>JORNADA</option>
@@ -248,12 +259,12 @@ export default function PacientesPage() {
               <h4 className="text-xs font-extrabold text-primary-600 uppercase tracking-wider mb-3">Contacto de Emergencia</h4>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Nombre del contacto</label>
-                  <input type="text" placeholder="Ej. María Pérez" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <label htmlFor="contacto-nombre" className="block text-xs font-bold text-gray-500 mb-1">Nombre del contacto</label>
+                  <input id="contacto-nombre" type="text" placeholder="Ej. María Pérez" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Teléfono de emergencia</label>
-                  <input type="tel" placeholder="Ej. 664 987 6543" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <label htmlFor="contacto-telefono" className="block text-xs font-bold text-gray-500 mb-1">Teléfono de emergencia</label>
+                  <input id="contacto-telefono" type="tel" placeholder="Ej. 664 987 6543" className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
                 </div>
               </div>
             </div>

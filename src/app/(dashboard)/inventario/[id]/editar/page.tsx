@@ -18,8 +18,9 @@ export default function EditarLentePage() {
     async function fetchLente() {
       try {
         const res = await fetch('/api/inventario');
-        const data = await res.json();
-        const found = data.find((l: any) => l.id === id);
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : json.data || [];
+        const found = items.find((l: any) => l.id === id);
         if (!found) throw new Error('Lente no encontrado');
         setLente({
           id: found.id,

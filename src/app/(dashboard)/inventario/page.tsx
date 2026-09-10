@@ -26,12 +26,14 @@ import FilterSelect from '@/components/ui/FilterSelect';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/ui/Pagination';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
 interface LenteAPI {
   id: string;
+  folio: string;
   marca: string;
   modelo: string;
   codigo_barras: string;
@@ -66,7 +68,8 @@ function getEstadoLente(stock: number, minimo: number): string {
 }
 
 export default function InventarioPage() {
-  const { data: lentes, loading, error, refetch } = useFetch<LenteAPI>('/api/inventario');
+  const [page, setPage] = useState(1);
+  const { data: lentes, loading, error, refetch, total, page: currentPage } = useFetch<LenteAPI>('/api/inventario', { page: String(page), pageSize: '15' });
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('Todos');
@@ -102,7 +105,7 @@ export default function InventarioPage() {
   const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
     return lentes.filter((l) => {
-      const matchesSearch = !term || l.marca.toLowerCase().includes(term) || l.modelo.toLowerCase().includes(term) || l.codigo_barras?.toLowerCase().includes(term);
+      const matchesSearch = !term || l.folio?.toLowerCase().includes(term) || l.marca.toLowerCase().includes(term) || l.modelo.toLowerCase().includes(term) || l.codigo_barras?.toLowerCase().includes(term);
       const matchesCategoria = filterCategoria === 'Todos' || l.categoria === filterCategoria;
       const matchesProveedor = filterProveedor === 'Todos' || l.proveedor === filterProveedor;
       let matchesStock = true;
@@ -114,12 +117,11 @@ export default function InventarioPage() {
   }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock]);
 
   const stats = useMemo(() => {
-    const total = lentes.length;
     const conStock = lentes.filter((l) => l.stock > 0).length;
     const bajo = lentes.filter((l) => l.stock > 0 && l.stock < l.stock_minimo).length;
     const sinStock = lentes.filter((l) => l.stock === 0).length;
     return { total, conStock, bajo, sinStock };
-  }, [lentes]);
+  }, [lentes, total]);
 
   async function handleAdjustStock() {
     if (!showAdjust) return;
@@ -231,7 +233,7 @@ export default function InventarioPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por codigo, marca, modelo, grado refractivo..." />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, codigo, marca, modelo, grado refractivo..." />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtrar:</span>
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
@@ -273,7 +275,7 @@ export default function InventarioPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="flex items-center gap-3">
                     <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold', sinStock ? 'bg-red-50 text-red-600' : stockBajo ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700')}>
-                      {lente.id.slice(0, 8)}
+                      {lente.folio || lente.id.slice(0, 8)}
                     </span>
                     <div>
                       <h3 className="text-base font-extrabold text-gray-900">{lente.marca} {lente.modelo}</h3>
@@ -332,6 +334,15 @@ export default function InventarioPage() {
           )}
         </div>
       )}
+
+      <Pagination
+        page={currentPage}
+        total={total}
+        pageSize={15}
+        totalItems={filtered.length}
+        onPageChange={(p) => setPage(p)}
+        label="lentes"
+      />
 
       {/* Scanner Modal */}
       <Modal isOpen={showScanner} onClose={() => { setShowScanner(false); setScanResult(null); setScanError(''); setBarcodeInput(''); setScannerMode('camera'); }} maxWidth="max-w-md">

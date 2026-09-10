@@ -1,7 +1,27 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { translateError } from '@/lib/supabase/errors';
 import { z } from 'zod';
+
+async function crearNotificacion(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  tipo: 'info' | 'warning' | 'error',
+  titulo: string,
+  mensaje: string,
+  entidadTipo?: string,
+  entidadId?: string,
+) {
+  await supabase.from('notificaciones').insert({
+    user_id: userId,
+    tipo,
+    titulo,
+    mensaje,
+    entidad_tipo: entidadTipo ?? null,
+    entidad_id: entidadId ?? null,
+  });
+}
 
 const lenteBaseSchema = z.object({
   marca: z.string().min(1).max(255),
@@ -30,24 +50,10 @@ const lenteUpdateSchema = z.object({
   id: z.string().uuid(),
 }).merge(lenteBaseSchema.partial()).strict();
 
-const errorTranslations: Record<string, string> = {
-  'duplicate key value violates unique constraint': 'Ya existe un registro con esos datos',
-  'new row violates row-level security policy': 'No tiene permisos para realizar esta accion',
-  'insert or update on table "lentes" violates foreign key constraint': 'La categoria o proveedor seleccionado no existe',
-  'invalid input syntax for type uuid': 'ID no valido',
-  'null value in column': 'Faltan campos obligatorios',
-};
-
-function translateError(msg: string): string {
-  for (const [key, val] of Object.entries(errorTranslations)) {
-    if (msg.includes(key)) return val;
-  }
-  return 'Error interno del servidor';
-}
-
 function mapLente(l: any) {
   return {
     id: l.id,
+    folio: l.folio || '',
     marca: l.marca,
     modelo: l.modelo,
     codigo_barras: l.codigo_barras,
@@ -77,6 +83,8 @@ const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedo
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
@@ -95,16 +103,22 @@ export async function GET(request: Request) {
     return NextResponse.json(mapLente(data));
   }
 
-  const { data, error } = await supabase
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '15', 10)));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await supabase
     .from('lentes')
-    .select(SELECT)
-    .order('created_at', { ascending: false });
+    .select(SELECT, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(data.map(mapLente));
+  return NextResponse.json({ data: data.map(mapLente), total: count || 0, page, pageSize });
 }
 
 export async function POST(request: Request) {
@@ -130,7 +144,15 @@ export async function POST(request: Request) {
 
   const data = validation.data;
 
+  const year = new Date().getFullYear().toString().slice(-2);
+  const { count } = await supabase
+    .from('lentes')
+    .select('id', { count: 'exact', head: true });
+  const seq = ((count || 0) + 1).toString().padStart(5, '0');
+  const folio = `LEN-${year}-${seq}`;
+
   const insert: Record<string, any> = {
+    folio,
     marca: data.marca,
     modelo: data.modelo,
     codigo_barras: data.codigo_barras ?? null,
@@ -214,6 +236,28 @@ export async function PATCH(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+  }
+
+  // Notify if stock is at or below minimum
+  if (cleanUpdates.stock !== undefined && lente.stock_minimo && lente.stock <= lente.stock_minimo) {
+    const { data: admins } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('rol', 'admin')
+      .eq('activo', true);
+
+    if (admins && admins.length > 0) {
+      await supabase.from('notificaciones').insert(
+        admins.map((admin) => ({
+          user_id: admin.id,
+          tipo: 'warning',
+          titulo: 'Stock bajo',
+          mensaje: `Stock mínimo alcanzado — ${lente.marca} ${lente.modelo} (Stock: ${lente.stock})`,
+          entidad_tipo: 'lente',
+          entidad_id: lente.id,
+        }))
+      );
+    }
   }
 
   return NextResponse.json(mapLente(lente));

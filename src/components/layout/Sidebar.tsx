@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { logout } from '@/app/actions/auth';
 import {
   LayoutDashboard,
   Users,
@@ -21,8 +21,7 @@ import {
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
-import { createClient } from '@/lib/supabase/client';
-import ConfirmModal from '@/components/ui/ConfirmModal';
+import Modal from '@/components/ui/Modal';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
@@ -58,26 +57,15 @@ function useIsDesktop() {
 
 export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useUser();
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isDesktop = useIsDesktop();
-  const supabase = createClient();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Mobile (<lg): 260px when open → show labels
   // Tablet (lg–xl): always 72px → icon-only
   // Desktop (xl+): 260px or 72px depending on collapsed
   const sidebarWide = isDesktop ? !collapsed : isOpen;
   const showLabels = sidebarWide;
-
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Logout error:', error);
-    }
-    // Force full page reload to clear all client state
-    window.location.href = '/login';
-  };
 
   return (
     <>
@@ -174,6 +162,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
             </div>
           )}
           <button
+            type="button"
             onClick={() => setShowLogoutModal(true)}
             className={cn(
               'flex items-center gap-3 px-4 py-2.5 w-full text-white/78 hover:bg-white/10 hover:text-white rounded-md border border-white/14 transition-colors',
@@ -187,16 +176,28 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
         </div>
       </aside>
 
-      <ConfirmModal
-        open={showLogoutModal}
-        onClose={() => setShowLogoutModal(false)}
-        onConfirm={handleLogout}
-        title="Cerrar Sesión"
-        message="¿Estás seguro que deseas cerrar sesión?"
-        confirmText="Cerrar Sesión"
-        cancelText="Cancelar"
-        variant="warning"
-      />
+      <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold text-gray-900">Cerrar Sesión</h3>
+          <p className="text-sm text-gray-600">¿Estás seguro que deseas cerrar sesión?</p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowLogoutModal(false)}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition-colors"
+              >
+                Cerrar Sesión
+              </button>
+            </form>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

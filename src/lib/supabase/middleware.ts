@@ -18,7 +18,7 @@ export async function updateSession(request: NextRequest) {
             name,
             value,
             ...options,
-            httpOnly: true,
+            httpOnly: false,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
             name,
             value: '',
             ...options,
-            httpOnly: true,
+            httpOnly: false,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
@@ -49,6 +49,7 @@ export async function updateSession(request: NextRequest) {
   if (
     !user &&
     !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/bienvenida') &&
     !request.nextUrl.pathname.startsWith('/api')
   ) {
     const url = request.nextUrl.clone();

@@ -28,32 +28,44 @@ export function useUser() {
     const supabase = createClient();
 
     async function getUser() {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
+      try {
+        const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
+
+        let finalAuthUser = authUser;
+
+        if (!finalAuthUser) {
+          const { data: { session } } = await supabase.auth.getSession();
+          finalAuthUser = session?.user ?? null;
+        }
+
+        if (!finalAuthUser) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('usuarios')
+          .select('id,nombre,rol,activo')
+          .eq('id', finalAuthUser.id)
+          .single();
+
+        const nombre = profile?.nombre || finalAuthUser.user_metadata?.nombre || '';
+        const rol = profile?.rol || finalAuthUser.user_metadata?.rol || 'recepcionista';
+
+        setUser({
+          id: finalAuthUser.id,
+          email: finalAuthUser.email || '',
+          nombre,
+          rol,
+          iniciales: getInitials(nombre, finalAuthUser.email || ''),
+          last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
+          created_at: finalAuthUser.created_at,
+        });
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      // Get profile from usuarios table
-      const { data: profile } = await supabase
-        .from('usuarios')
-        .select('id,nombre,rol,activo')
-        .eq('id', authUser.id)
-        .single();
-
-      const nombre = profile?.nombre || authUser.user_metadata?.nombre || '';
-      const rol = profile?.rol || authUser.user_metadata?.rol || 'recepcionista';
-
-      setUser({
-        id: authUser.id,
-        email: authUser.email || '',
-        nombre,
-        rol,
-        iniciales: getInitials(nombre, authUser.email || ''),
-        last_sign_in_at: authUser.last_sign_in_at ?? null,
-        created_at: authUser.created_at,
-      });
-      setLoading(false);
     }
 
     getUser();
