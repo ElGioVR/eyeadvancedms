@@ -25,6 +25,7 @@ CATEGORIAS_LENTES 1:N ─────── LENTES
 | nombre | VARCHAR(255) | NOT NULL |
 | rol | ENUM | admin, doctor, recepcionista |
 | activo | BOOLEAN | DEFAULT true |
+| avatar_url | TEXT | DEFAULT NULL |
 | created_at | TIMESTAMP | DEFAULT NOW() |
 | updated_at | TIMESTAMP | DEFAULT NOW() |
 

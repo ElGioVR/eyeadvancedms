@@ -16,7 +16,7 @@ export default function ReportesLoading() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-[#2F3336]">
         {[1, 2, 3, 4, 5].map((i) => (
           <Skeleton key={i} className="h-10 w-28 rounded-t-lg" />
         ))}
@@ -31,7 +31,7 @@ export default function ReportesLoading() {
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-5">
+          <div key={i} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <Skeleton className="h-3 w-24" />
@@ -45,11 +45,11 @@ export default function ReportesLoading() {
 
       {/* Two-column: Actividad + Diagnosticos */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-sm">
           <Skeleton className="mb-4 h-4 w-40" />
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3">
+              <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 dark:border-[#2F3336] px-4 py-3">
                 <Skeleton className="h-3 w-12" />
                 <div className="flex-1 space-y-1">
                   <Skeleton className="h-3.5 w-36" />
@@ -60,7 +60,7 @@ export default function ReportesLoading() {
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-sm">
           <Skeleton className="mb-4 h-4 w-48" />
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (

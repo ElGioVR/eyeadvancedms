@@ -10,6 +10,9 @@ const doctorCreateSchema = z.object({
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional(),
   email: z.string().email().max(255).optional(),
+  honorario_consulta: z.number().min(0).optional(),
+  honorario_estudio: z.number().min(0).optional(),
+  honorario_procedimiento: z.number().min(0).optional(),
 }).strict();
 
 const doctorUpdateSchema = z.object({
@@ -20,6 +23,9 @@ const doctorUpdateSchema = z.object({
   telefono: z.string().max(20).optional().nullable(),
   email: z.string().email().max(255).optional().nullable(),
   activo: z.boolean().optional(),
+  honorario_consulta: z.number().min(0).optional(),
+  honorario_estudio: z.number().min(0).optional(),
+  honorario_procedimiento: z.number().min(0).optional(),
 }).strict();
 
 export async function GET() {
@@ -31,7 +37,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('doctores')
-    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, activo, created_at')
+    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, activo, honorario_consulta, honorario_estudio, honorario_procedimiento, created_at')
     .eq('activo', true)
     .order('nombre_completo');
 
@@ -47,6 +53,9 @@ export async function GET() {
     telefono: d.telefono,
     email: d.email,
     activo: d.activo,
+    honorario_consulta: d.honorario_consulta || 0,
+    honorario_estudio: d.honorario_estudio || 0,
+    honorario_procedimiento: d.honorario_procedimiento || 0,
     created_at: d.created_at,
   }));
 
@@ -84,6 +93,9 @@ export async function POST(request: Request) {
       especialidad: data.especialidad?.trim() || 'Oftalmología',
       telefono: data.telefono?.trim() || null,
       email: data.email?.trim() || null,
+      honorario_consulta: data.honorario_consulta || 0,
+      honorario_estudio: data.honorario_estudio || 0,
+      honorario_procedimiento: data.honorario_procedimiento || 0,
     })
     .select()
     .single();
@@ -126,6 +138,9 @@ export async function PATCH(request: Request) {
   if (updates.telefono !== undefined) profileUpdates.telefono = updates.telefono?.trim() || null;
   if (updates.email !== undefined) profileUpdates.email = updates.email?.trim() || null;
   if (updates.activo !== undefined) profileUpdates.activo = updates.activo;
+  if (updates.honorario_consulta !== undefined) profileUpdates.honorario_consulta = updates.honorario_consulta;
+  if (updates.honorario_estudio !== undefined) profileUpdates.honorario_estudio = updates.honorario_estudio;
+  if (updates.honorario_procedimiento !== undefined) profileUpdates.honorario_procedimiento = updates.honorario_procedimiento;
 
   if (Object.keys(profileUpdates).length === 0) {
     return NextResponse.json({ error: 'No hay datos para actualizar' }, { status: 400 });

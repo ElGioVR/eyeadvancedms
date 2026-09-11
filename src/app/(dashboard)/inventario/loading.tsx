@@ -18,7 +18,7 @@ export default function InventarioLoading() {
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
+          <div key={i} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <Skeleton className="h-2.5 w-20" />
@@ -31,7 +31,7 @@ export default function InventarioLoading() {
       </div>
 
       {/* Search + Filters */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <Skeleton className="h-10 flex-1 rounded-lg" />
           <Skeleton className="h-10 w-36 rounded-lg" />
@@ -43,7 +43,7 @@ export default function InventarioLoading() {
       {/* Lente cards */}
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-6">
+          <div key={i} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export default function InventarioLoading() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between border-t border-gray-100 dark:border-[#2F3336] pt-4">
               <div className="flex gap-6">
                 <div className="space-y-1"><Skeleton className="h-2.5 w-16" /><Skeleton className="h-3 w-24" /></div>
                 <div className="space-y-1"><Skeleton className="h-2.5 w-20" /><Skeleton className="h-3 w-20" /></div>

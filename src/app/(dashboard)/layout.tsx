@@ -5,6 +5,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
+import 'react-image-crop/dist/ReactCrop.css';
 
 export default function DashboardLayout({
   children,
@@ -16,7 +17,7 @@ export default function DashboardLayout({
 
   return (
     <ToastProvider>
-      <div className="min-h-screen flex bg-[#f5f7f9]">
+      <div className="min-h-screen flex bg-[#f5f7f9] dark:bg-black">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}

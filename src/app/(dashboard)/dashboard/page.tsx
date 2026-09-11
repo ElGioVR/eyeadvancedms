@@ -15,7 +15,7 @@ async function fetchDashboardData() {
 
   const { data: profile } = await supabase
     .from('usuarios')
-    .select('nombre, iniciales')
+    .select('nombre, iniciales, avatar_url')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -26,18 +26,19 @@ async function fetchDashboardData() {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+  const avatar_url = profile?.avatar_url ?? null;
 
   const data = await getDashboardData();
 
-  return { data, nombre, iniciales };
+  return { data, nombre, iniciales, avatar_url };
 }
 
 export default async function DashboardPage() {
-  const { data, nombre, iniciales } = await fetchDashboardData();
+  const { data, nombre, iniciales, avatar_url } = await fetchDashboardData();
 
   return (
     <Suspense fallback={<DashboardLoading />}>
-      <DashboardContent data={data} userNombre={nombre} userIniciales={iniciales} />
+      <DashboardContent data={data} userNombre={nombre} userIniciales={iniciales} userAvatarUrl={avatar_url} />
     </Suspense>
   );
 }

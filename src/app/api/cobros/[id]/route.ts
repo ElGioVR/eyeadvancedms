@@ -7,6 +7,7 @@ const cobroUpdateSchema = z.object({
   pagado: z.boolean().optional(),
   notas: z.string().optional().nullable(),
   metodo_pago: z.enum(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'NO_APLICA']).optional(),
+  estado: z.enum(['PENDIENTE', 'PAGADO', 'CANCELADO']).optional(),
 }).strict();
 
 export async function PATCH(
@@ -38,7 +39,7 @@ export async function PATCH(
 
   const { data: existing, error: checkError } = await supabase
     .from('cobros')
-    .select('id, pagado')
+    .select('id, pagado, consulta_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -47,12 +48,64 @@ export async function PATCH(
   }
 
   const updateData: Record<string, unknown> = {};
-  if (data.pagado !== undefined) {
-    updateData.pagado = data.pagado;
-    if (data.pagado && !existing.pagado) {
+
+  // Handle estado field
+  if (data.estado !== undefined) {
+    updateData.estado = data.estado;
+    if (data.estado === 'PAGADO') {
+      updateData.pagado = true;
       updateData.fecha_pago = new Date().toISOString();
+    } else if (data.estado === 'CANCELADO') {
+      updateData.pagado = false;
+      updateData.fecha_pago = null;
+
+      // Restore lens stock on cancelation
+      if (existing.consulta_id) {
+        const { data: lentesAsignados } = await supabase
+          .from('lentes_x_consulta')
+          .select('lente_id, cantidad')
+          .eq('consulta_id', existing.consulta_id);
+
+        if (lentesAsignados && lentesAsignados.length > 0) {
+          for (const lx of lentesAsignados) {
+            const { data: lente } = await supabase
+              .from('lentes')
+              .select('stock')
+              .eq('id', lx.lente_id)
+              .maybeSingle();
+
+            if (lente) {
+              await supabase
+                .from('lentes')
+                .update({
+                  stock: lente.stock + lx.cantidad,
+                  estado: 'DISPONIBLE',
+                })
+                .eq('id', lx.lente_id);
+            }
+          }
+
+          // Remove lens assignments
+          await supabase
+            .from('lentes_x_consulta')
+            .delete()
+            .eq('consulta_id', existing.consulta_id);
+        }
+      }
+    } else if (data.estado === 'PENDIENTE') {
+      updateData.pagado = false;
+      updateData.fecha_pago = null;
+    }
+  } else {
+    // Legacy pagado field support
+    if (data.pagado !== undefined) {
+      updateData.pagado = data.pagado;
+      if (data.pagado && !existing.pagado) {
+        updateData.fecha_pago = new Date().toISOString();
+      }
     }
   }
+
   if (data.notas !== undefined) updateData.notas = data.notas;
   if (data.metodo_pago !== undefined) updateData.metodo_pago = data.metodo_pago;
 
@@ -88,12 +141,46 @@ export async function DELETE(
 
   const { data: existing, error: checkError } = await supabase
     .from('cobros')
-    .select('id')
+    .select('id, consulta_id')
     .eq('id', id)
     .maybeSingle();
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'El cobro no existe' }, { status: 404 });
+  }
+
+  // Restore lens stock on deletion
+  if (existing.consulta_id) {
+    const { data: lentesAsignados } = await supabase
+      .from('lentes_x_consulta')
+      .select('lente_id, cantidad')
+      .eq('consulta_id', existing.consulta_id);
+
+    if (lentesAsignados && lentesAsignados.length > 0) {
+      for (const lx of lentesAsignados) {
+        const { data: lente } = await supabase
+          .from('lentes')
+          .select('stock')
+          .eq('id', lx.lente_id)
+          .maybeSingle();
+
+        if (lente) {
+          await supabase
+            .from('lentes')
+            .update({
+              stock: lente.stock + lx.cantidad,
+              estado: 'DISPONIBLE',
+            })
+            .eq('id', lx.lente_id);
+        }
+      }
+
+      // Remove lens assignments
+      await supabase
+        .from('lentes_x_consulta')
+        .delete()
+        .eq('consulta_id', existing.consulta_id);
+    }
   }
 
   const { error: deleteError } = await supabase

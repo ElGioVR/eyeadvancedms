@@ -22,7 +22,7 @@ export default function PacientesLoading() {
       {/* Patient cards */}
       <div className="space-y-3">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-5 sm:py-3.5">
+          <div key={i} className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 sm:px-5 sm:py-3.5">
             <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
             <div className="flex-1 min-w-0 space-y-1.5">
               <Skeleton className="h-3.5 w-40" />

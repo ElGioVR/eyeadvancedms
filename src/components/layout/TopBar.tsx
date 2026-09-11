@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -198,14 +198,14 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   }, {});
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
+    <header className="sticky top-0 z-30 bg-white dark:bg-black border-b border-gray-200 dark:border-[#2F3336] px-4 sm:px-6 py-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
           {onMenuToggle && (
             <button
               onClick={onMenuToggle}
-              className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
-              aria-label="Abrir menú"
+              className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+              aria-label="Abrir menÃº"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -213,7 +213,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
           <div ref={searchRef} className="relative hidden sm:flex flex-1 max-w-xl">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#71767B]" />
               <input
                 ref={inputRef}
                 type="text"
@@ -222,12 +222,12 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                 onFocus={() => { if (searchResults.length > 0) setSearchOpen(true); }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Buscar paciente, lente, consulta..."
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#202327] border border-gray-200 dark:border-[#2F3336] rounded-full text-sm text-gray-900 dark:text-[#E7E9EA] placeholder-gray-400 dark:placeholder-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-[#1D9BF0]/30 focus:border-primary-500 dark:focus:border-[#1D9BF0]"
               />
               {searchQuery && (
                 <button
                   onClick={() => { setSearchQuery(''); setSearchOpen(false); setSearchResults([]); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -235,30 +235,30 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             </div>
 
             {searchOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto z-50">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg max-h-80 overflow-y-auto z-50">
                 {searchLoading && (
-                  <div className="px-4 py-3 text-sm text-gray-500">Buscando...</div>
+                  <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Buscando...</div>
                 )}
                 {!searchLoading && searchResults.length === 0 && searchQuery.length >= 2 && (
-                  <div className="px-4 py-3 text-sm text-gray-500">Sin resultados para &quot;{searchQuery}&quot;</div>
+                  <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Sin resultados para &quot;{searchQuery}&quot;</div>
                 )}
                 {!searchLoading && Object.entries(groupedResults).map(([tipo, items]) => {
                   const Icon = tipoIcons[tipo] ?? User;
                   return (
                     <div key={tipo}>
-                      <div className="px-3 py-1.5 text-xs font-bold text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                      <div className="px-3 py-1.5 text-xs font-bold text-gray-400 dark:text-[#71767B] uppercase bg-gray-50 dark:bg-[#16181C] border-b border-gray-100 dark:border-[#2F3336]">
                         {tipoLabels[tipo] ?? tipo}
                       </div>
                       {items.map((r) => (
                         <button
                           key={`${r.tipo}-${r.id}`}
                           onClick={() => handleResultClick(r.href)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left transition-colors"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] text-left transition-colors"
                         >
-                          <Icon className="h-4 w-4 text-gray-400 shrink-0" />
+                          <Icon className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-900 truncate">{r.titulo}</div>
-                            <div className="text-xs text-gray-500 truncate">{r.subtitulo}</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.titulo}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.subtitulo}</div>
                           </div>
                         </button>
                       ))}
@@ -271,7 +271,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden md:flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600">
+          <div className="hidden md:flex items-center gap-2 rounded-full border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
             <CalendarDays className="h-4 w-4 text-primary-500" />
             {new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -279,7 +279,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           <div ref={notifRef} className="relative">
             <button
               onClick={toggleNotifPanel}
-              className="relative p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
+              className="relative p-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
               aria-label="Notificaciones"
             >
               <Bell className="w-5 h-5" />
@@ -291,41 +291,41 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-bold text-gray-900">Notificaciones</span>
+              <div className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-black border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Notificaciones</span>
                   {unreadCount > 0 && (
                     <button
                       onClick={() => markAsRead(notifications.filter((n) => !n.leido).map((n) => n.id))}
                       className="text-xs font-semibold text-primary-600 hover:text-primary-700"
                     >
-                      Marcar todo leído
+                      Marcar todo leÃ­do
                     </button>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifLoading && (
-                    <div className="px-4 py-6 text-sm text-gray-500 text-center">Cargando...</div>
+                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">Cargando...</div>
                   )}
                   {!notifLoading && notifications.length === 0 && (
-                    <div className="px-4 py-6 text-sm text-gray-500 text-center">Sin notificaciones</div>
+                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">Sin notificaciones</div>
                   )}
                   {!notifLoading && notifications.map((n) => (
                     <button
                       key={n.id}
                       onClick={() => handleNotifClick(n)}
-                      className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.leido ? 'bg-primary-50/30' : ''}`}
+                      className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 ${!n.leido ? 'bg-primary-50/30' : ''}`}
                     >
                       <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${notifColors[n.tipo] ?? notifColors.info}`}>
-                        {n.tipo === 'info' ? 'i' : n.tipo === 'warning' ? '!' : '✕'}
+                        {n.tipo === 'info' ? 'i' : n.tipo === 'warning' ? '!' : 'âœ•'}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-900 truncate">{n.titulo}</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{n.titulo}</span>
                           {!n.leido && <span className="h-1.5 w-1.5 rounded-full bg-primary-500 shrink-0" />}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.mensaje}</p>
-                        <span className="text-[10px] text-gray-400 mt-1 block">{formatNotifTime(n.created_at)}</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{n.mensaje}</p>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">{formatNotifTime(n.created_at)}</span>
                       </div>
                     </button>
                   ))}
@@ -335,7 +335,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Avatar initials={user?.iniciales ?? '?'} size="md" className="bg-primary-50 text-primary-700 border border-primary-100" />
+            <Avatar initials={user?.iniciales ?? '?'} src={user?.avatar_url} size="md" className="bg-primary-50 text-primary-700 border border-primary-100" />
           </div>
         </div>
       </div>

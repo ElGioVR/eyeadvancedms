@@ -150,7 +150,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
       {cameras.length > 1 && (
         <div>
-          <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Seleccionar camara</label>
+          <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">Seleccionar camara</label>
           <div className="flex gap-2">
             {cameras.map((cam) => (
               <button
@@ -159,7 +159,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
                 className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
                   selectedCamera === cam.id
                     ? 'bg-primary-600 text-white'
-                    : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    : 'border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
                 }`}
               >
                 {cam.label.length > 25 ? cam.label.slice(0, 25) + '...' : cam.label}
@@ -174,8 +174,8 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         {!scannerActive && !error && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 10 }}>
             <div className="text-center space-y-2">
-              <Camera className="h-10 w-10 text-gray-500 mx-auto animate-pulse" />
-              <p className="text-sm text-gray-400">Preparando camara...</p>
+              <Camera className="h-10 w-10 text-gray-500 dark:text-[#71767B] mx-auto animate-pulse" />
+              <p className="text-sm text-gray-400 dark:text-[#71767B]">Preparando camara...</p>
             </div>
           </div>
         )}

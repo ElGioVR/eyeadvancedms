@@ -16,6 +16,16 @@
   --line: #dfe5eb;
 }
 
+.dark {
+  --surface: #000000;
+  --app-bg: #000000;
+  --text: #e7e9ea;
+  --muted: #71767b;
+  --line: #2f3336;
+  --primary: #1d9bf0;
+  --primary-light: #1d9bf0;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -32,6 +42,10 @@ body {
 
 ::selection {
   background: rgba(0, 180, 216, 0.22);
+}
+
+.dark ::selection {
+  background: rgba(29, 155, 240, 0.3);
 }
 
 @layer components {
@@ -56,6 +70,18 @@ body {
   }
 }
 
+.dark .btn-secondary {
+  @apply border-[#536471] bg-transparent text-[#E7E9EA] hover:bg-[#1D1F23];
+}
+
+.dark .input-field {
+  @apply border-[#2F3336] bg-[#202327] text-[#E7E9EA] placeholder-[#71767B] focus:ring-[#1D9BF0]/30 focus:border-[#1D9BF0] focus:bg-[#202327];
+}
+
+.dark .card {
+  @apply bg-[#16181C] border-[#2F3336] shadow-none;
+}
+
 .modal-content::-webkit-scrollbar {
   width: 6px;
 }
@@ -66,8 +92,14 @@ body {
   background: #d1d5db;
   border-radius: 3px;
 }
+.dark .modal-content::-webkit-scrollbar-thumb {
+  background: #374151;
+}
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+.dark .modal-content::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 
 @keyframes slideIn {

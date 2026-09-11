@@ -36,7 +36,7 @@ const cobroCreateSchema = z.object({
   doctor_id: z.string().uuid().optional().nullable(),
   fecha_consulta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   hora_inicio: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-  lentes: lenteAsignadoSchema.array().min(1).optional().nullable(),
+  lentes: lenteAsignadoSchema.array().optional().nullable(),
   monto: z.union([z.string(), z.number()]).pipe(
     z.preprocess((val) => {
       if (typeof val === 'string') {
@@ -75,6 +75,7 @@ export async function GET(request: Request) {
       aseguranzas:aseguranza_id (nombre)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
+    .order('fecha_pago', { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (error) {
@@ -108,6 +109,7 @@ export async function GET(request: Request) {
       metodo_pago: c.metodo_pago,
       moneda: c.moneda,
       pagado: c.pagado,
+      estado: (c as any).estado || (c.pagado ? 'PAGADO' : 'PENDIENTE'),
       folio: c.folio,
       notas: c.notas,
       aseguradora: (c.aseguranzas as any)?.nombre || '',

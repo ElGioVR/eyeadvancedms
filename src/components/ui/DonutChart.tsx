@@ -65,10 +65,10 @@ export default function DonutChart({
         {(centerLabel || centerValue) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {centerValue && (
-              <span className="text-lg font-bold text-gray-900">{centerValue}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-[#E7E9EA]">{centerValue}</span>
             )}
             {centerLabel && (
-              <span className="text-xs text-gray-500">{centerLabel}</span>
+              <span className="text-xs text-gray-500 dark:text-[#71767B]">{centerLabel}</span>
             )}
           </div>
         )}
@@ -80,8 +80,8 @@ export default function DonutChart({
               className="h-3 w-3 rounded-full"
               style={{ backgroundColor: item.color }}
             />
-            <span className="text-sm text-gray-600">{item.name}</span>
-            <span className="text-sm font-medium text-gray-900">{item.value}</span>
+            <span className="text-sm text-gray-600 dark:text-[#E7E9EA]">{item.name}</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{item.value}</span>
           </div>
         ))}
       </div>
