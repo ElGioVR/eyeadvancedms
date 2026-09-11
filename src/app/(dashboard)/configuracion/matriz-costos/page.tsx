@@ -324,7 +324,7 @@ export default function MatrizCostosPage() {
                 setSeccion(s.key);
                 setSearch("");
               }}
-              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-bold transition-all ${activo ? "bg-primary-600 text-white shadow-sm" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-bold transition-all ${activo ? "bg-primary-600 text-white shadow-sm" : "bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] dark:bg-[#202327]"}`}
             >
               <Icon className="h-4 w-4" /> {s.label}
             </button>
@@ -337,7 +337,7 @@ export default function MatrizCostosPage() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-16 rounded-xl bg-gray-100 animate-pulse"
+              className="h-16 rounded-xl bg-gray-100 dark:bg-[#202327] animate-pulse"
             />
           ))}
         </div>
@@ -346,9 +346,9 @@ export default function MatrizCostosPage() {
       ) : (
         <>
           {seccion === "costos" && (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <p className="text-sm text-gray-500">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/50 dark:bg-[#202327]/50">
+                <p className="text-sm text-gray-500 dark:text-[#71767B]">
                   Costos base por tipo de consulta y tipo de visita. Haz clic en
                   el monto para editarlo.
                 </p>
@@ -389,7 +389,7 @@ export default function MatrizCostosPage() {
               }
               renderExtra={(e: CatalogoEstudio) => (
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${e.bilateral ? "bg-sky-50 text-sky-700" : "bg-gray-100 text-gray-500"}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${e.bilateral ? "bg-sky-50 text-sky-700" : "bg-gray-100 dark:bg-[#202327] text-gray-500 dark:text-[#71767B]"}`}
                 >
                   {e.bilateral ? "Bilateral" : "Unilateral"}
                 </span>
@@ -421,7 +421,7 @@ export default function MatrizCostosPage() {
               }
               renderExtra={(p: CatalogoProcedimiento) => (
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${p.por_ojo ? "bg-sky-50 text-sky-700" : "bg-gray-100 text-gray-500"}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${p.por_ojo ? "bg-sky-50 text-sky-700" : "bg-gray-100 dark:bg-[#202327] text-gray-500 dark:text-[#71767B]"}`}
                 >
                   {p.por_ojo ? "Por ojo" : "Único"}
                 </span>
@@ -469,7 +469,7 @@ export default function MatrizCostosPage() {
         onClose={() => setShowModal(false)}
         maxWidth="max-w-lg"
       >
-        <h3 className="text-lg font-extrabold uppercase tracking-wider text-gray-900 mb-4">
+        <h3 className="text-lg font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA] mb-4">
           {editando ? "Editar" : "Nuevo"}{" "}
           {modalTipo === "costo"
             ? "Costo Base"
@@ -487,9 +487,9 @@ export default function MatrizCostosPage() {
         <div className="space-y-4">
           {modalTipo === "costo" && (
             <>
-              <div className="rounded-lg bg-gray-50 p-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</p>
-                <p className="text-sm font-bold text-gray-900">
+              <div className="rounded-lg bg-gray-50 dark:bg-[#202327] p-3">
+                <p className="text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Tipo</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
                   {TIPO_CONSULTA[editando?.tipo_consulta]} - {TIPO_VISITA[editando?.tipo_visita]}
                 </p>
               </div>
@@ -552,13 +552,13 @@ export default function MatrizCostosPage() {
           {modalTipo === "cobertura" && (
             <>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">
                   Aseguranza *
                 </label>
                 <select
                   value={fAseguranzaId}
                   onChange={(e) => setFAseguranzaId(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  className="w-full appearance-none rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                 >
                   <option value="">Seleccionar</option>
                   {aseguranzas.map((a) => (
@@ -596,10 +596,10 @@ export default function MatrizCostosPage() {
             </>
           )}
         </div>
-        <div className="flex gap-3 pt-5 border-t border-gray-100 mt-6">
+        <div className="flex gap-3 pt-5 border-t border-gray-100 dark:border-[#2F3336] mt-6">
           <button
             onClick={() => setShowModal(false)}
-            className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+            className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] dark:bg-[#202327] transition-colors"
           >
             Cancelar
           </button>
@@ -627,21 +627,21 @@ function CostoCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 transition-all ${costo.activo ? "border-gray-200 bg-white hover:shadow-md" : "border-gray-100 bg-gray-50 opacity-60"}`}
+      className={`rounded-xl border p-4 transition-all ${costo.activo ? "border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] hover:shadow-md" : "border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] opacity-60"}`}
     >
       <div className="flex items-start justify-between mb-3">
         <div>
           <span className="inline-block rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-bold text-primary-700 mb-2">
             {TIPO_CONSULTA[costo.tipo_consulta]}
           </span>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-[#71767B]">
             {TIPO_VISITA[costo.tipo_visita]}
           </p>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => onToggle()}
-            className={`rounded-full p-1.5 transition-colors ${costo.activo ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-300 hover:bg-gray-100"}`}
+            className={`rounded-full p-1.5 transition-colors ${costo.activo ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-300 dark:text-[#71767B] hover:bg-gray-100 dark:bg-[#202327]"}`}
           >
             {costo.activo ? (
               <Eye className="h-4 w-4" />
@@ -651,7 +651,7 @@ function CostoCard({
           </button>
           <button
             onClick={() => onEditar(costo)}
-            className="rounded-full p-1.5 text-gray-300 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+            className="rounded-full p-1.5 text-gray-300 dark:text-[#71767B] hover:text-primary-600 hover:bg-primary-50 transition-colors"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 1 1-1.897-1.897l2.817-2.818Z" />
@@ -660,13 +660,13 @@ function CostoCard({
         </div>
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="text-lg font-extrabold text-gray-400">$</span>
-        <span className="text-2xl font-extrabold text-gray-900">
+        <span className="text-lg font-extrabold text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">$</span>
+        <span className="text-2xl font-extrabold text-gray-900 dark:text-[#E7E9EA]">
           {costo.costo.toLocaleString("es-MX", { minimumFractionDigits: 0 })}
         </span>
       </div>
       {costo.descripcion && (
-        <p className="mt-2 text-xs text-gray-400 truncate">
+        <p className="mt-2 text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] truncate">
           {costo.descripcion}
         </p>
       )}
@@ -707,13 +707,13 @@ function CatalogoSeccion({
     <>
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[#71767B] dark:text-[#71767B]" />
           <input
             type="text"
             placeholder={placeholder}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] dark:text-[#71767B] dark:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
           />
         </div>
         <button
@@ -730,51 +730,51 @@ function CatalogoSeccion({
           description={emptyDesc}
         />
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+              <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/50 dark:bg-[#202327]/50">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
                   Nombre
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
                   Costo
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
                   Tipo
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
                   Estado
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 w-24">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B] w-24">
                   Acciones
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
               {items.map((item: any) => (
                 <tr
                   key={item.id}
-                  className="hover:bg-gray-50/60 transition-colors"
+                  className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]/60 transition-colors"
                 >
                   <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-gray-900">
+                    <div className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
                       {item.nombre}
                     </div>
                     {item.descripcion && (
-                      <div className="text-xs text-gray-400 mt-0.5 truncate max-w-md">
+                      <div className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-0.5 truncate max-w-md">
                         {item.descripcion}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm font-extrabold text-gray-900">
+                  <td className="px-6 py-4 text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
                     ${item.costo.toLocaleString()}
                   </td>
                   <td className="px-6 py-4">{renderExtra(item)}</td>
                   <td className="px-6 py-4">
                     <button
                       onClick={() => onToggle(item.id, item.activo)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-colors ${item.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-colors ${item.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-gray-100 dark:bg-[#202327] text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:bg-gray-200 dark:bg-[#202327]"}`}
                     >
                       {item.activo ? (
                         <>
@@ -797,7 +797,7 @@ function CatalogoSeccion({
                       </button>
                       <button
                         onClick={() => onEliminar(item.id)}
-                        className="text-gray-300 hover:text-red-500 transition-colors"
+                        className="text-gray-300 dark:text-[#71767B] hover:text-red-500 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -831,7 +831,7 @@ function CoberturasSeccion({
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-[#71767B]">
           Define el porcentaje de cobertura que cada aseguranza aplica sobre
           estudios y procedimientos.
         </p>
@@ -853,14 +853,14 @@ function CoberturasSeccion({
           {coberturas.map((c) => (
             <div
               key={c.id}
-              className={`rounded-xl border p-5 transition-all ${c.activo ? "border-gray-200 bg-white hover:shadow-md" : "border-gray-100 bg-gray-50 opacity-60"}`}
+              className={`rounded-xl border p-5 transition-all ${c.activo ? "border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] hover:shadow-md" : "border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] opacity-60"}`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h4 className="text-sm font-extrabold text-gray-900">
+                  <h4 className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
                     {c.aseguranza_nombre}
                   </h4>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-0.5">
                     {c.aplica_estudios ? "Estudios" : ""}
                     {c.aplica_estudios && c.aplica_procedimientos ? " + " : ""}
                     {c.aplica_procedimientos ? "Procedimientos" : ""}
@@ -868,7 +868,7 @@ function CoberturasSeccion({
                 </div>
                 <button
                   onClick={() => onToggle(c.id, c.activo)}
-                  className={`rounded-full p-1.5 transition-colors ${c.activo ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-300 hover:bg-gray-100"}`}
+                  className={`rounded-full p-1.5 transition-colors ${c.activo ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-300 dark:text-[#71767B] hover:bg-gray-100 dark:bg-[#202327]"}`}
                 >
                   {c.activo ? (
                     <Eye className="h-4 w-4" />
@@ -881,12 +881,12 @@ function CoberturasSeccion({
                 <span className="text-3xl font-extrabold text-primary-600">
                   {c.porcentaje_cobertura}
                 </span>
-                <span className="text-lg font-bold text-gray-400">
+                <span className="text-lg font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
                   % cobertura
                 </span>
               </div>
               {c.monto_maximo && (
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-gray-500 dark:text-[#71767B] mb-3">
                   Máximo: ${c.monto_maximo.toLocaleString()}
                 </p>
               )}
@@ -899,7 +899,7 @@ function CoberturasSeccion({
                 </button>
                 <button
                   onClick={() => onEliminar(c.id)}
-                  className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors"
+                  className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-red-500 transition-colors"
                 >
                   Eliminar
                 </button>
@@ -933,12 +933,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
         {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">
             {prefix}
           </span>
         )}
@@ -948,7 +948,7 @@ function Field({
             onChange={(e) => onChange(e.target.value)}
             rows={2}
             placeholder={placeholder}
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
+            className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] dark:text-[#71767B] dark:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"
           />
         ) : (
           <input
@@ -956,7 +956,7 @@ function Field({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 ${prefix ? "pl-8 pr-4" : "px-4"} text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500`}
+            className={`w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] py-2.5 ${prefix ? "pl-8 pr-4" : "px-4"} text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] dark:text-[#71767B] dark:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500`}
           />
         )}
       </div>
@@ -976,11 +976,11 @@ function Check({
   return (
     <label className="flex items-center gap-3 cursor-pointer group">
       <div
-        className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${checked ? "border-primary-600 bg-primary-600" : "border-gray-300 group-hover:border-gray-400"}`}
+        className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${checked ? "border-primary-600 bg-primary-600" : "border-gray-300 dark:border-[#536471] group-hover:border-gray-400 dark:group-hover:border-[#536471]"}`}
       >
         {checked && <CheckIcon className="h-3 w-3 text-white" />}
       </div>
-      <span className="text-sm font-bold text-gray-700">{label}</span>
+      <span className="text-sm font-bold text-gray-700 dark:text-[#E7E9EA]">{label}</span>
     </label>
   );
 }

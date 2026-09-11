@@ -9,6 +9,7 @@ interface User {
   nombre: string;
   rol: string;
   iniciales: string;
+  avatar_url: string | null;
   last_sign_in_at: string | null;
   created_at: string;
 }
@@ -45,7 +46,7 @@ export function useUser() {
 
         const { data: profile } = await supabase
           .from('usuarios')
-          .select('id,nombre,rol,activo')
+          .select('id,nombre,rol,activo,avatar_url')
           .eq('id', finalAuthUser.id)
           .single();
 
@@ -58,6 +59,7 @@ export function useUser() {
           nombre,
           rol,
           iniciales: getInitials(nombre, finalAuthUser.email || ''),
+          avatar_url: profile?.avatar_url ?? null,
           last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
           created_at: finalAuthUser.created_at,
         });

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -47,13 +47,13 @@ export default function Modal({
       />
       <div
         className={cn(
-          'relative mx-4 w-full max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-2xl',
+          'relative mx-4 w-full max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-2xl',
           maxWidth
         )}
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+          className="absolute right-4 top-4 text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]"
         >
           <X className="h-5 w-5" />
         </button>

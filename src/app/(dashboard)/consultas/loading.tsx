@@ -15,7 +15,7 @@ export default function ConsultasLoading() {
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-5">
+          <div key={i} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <Skeleton className="h-3 w-24" />
@@ -34,9 +34,9 @@ export default function ConsultasLoading() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-gray-200 bg-white">
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C]">
         {/* Table header */}
-        <div className="grid grid-cols-12 gap-4 border-b border-gray-100 px-6 py-3">
+        <div className="grid grid-cols-12 gap-4 border-b border-gray-100 dark:border-[#2F3336] px-6 py-3">
           <Skeleton className="col-span-2 h-3 w-12" />
           <Skeleton className="col-span-2 h-3 w-20" />
           <Skeleton className="col-span-2 h-3 w-16" />
@@ -46,7 +46,7 @@ export default function ConsultasLoading() {
         </div>
         {/* Table rows */}
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="grid grid-cols-12 gap-4 items-center border-b border-gray-50 px-6 py-4">
+          <div key={i} className="grid grid-cols-12 gap-4 items-center border-b border-gray-50 dark:border-[#2F3336] px-6 py-4">
             <Skeleton className="col-span-2 h-3 w-16" />
             <Skeleton className="col-span-2 h-3 w-28" />
             <Skeleton className="col-span-2 h-3 w-24" />

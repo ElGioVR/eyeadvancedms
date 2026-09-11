@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -49,15 +49,15 @@ export default function SidebarPanel({
       />
       <div
         className={cn(
-          'absolute right-0 top-0 flex h-full w-full flex-col bg-white shadow-2xl transition-transform duration-300',
+          'absolute right-0 top-0 flex h-full w-full flex-col bg-white dark:bg-[#16181C] shadow-2xl transition-transform duration-300',
           maxWidth
         )}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#2F3336] px-6 py-4">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-[#E7E9EA]">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]"
           >
             <X className="h-5 w-5" />
           </button>

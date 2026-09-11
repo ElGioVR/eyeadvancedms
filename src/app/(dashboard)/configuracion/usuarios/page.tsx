@@ -218,7 +218,7 @@ export default function UsuariosPage() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Buscar usuario por nombre o email..."
-              className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
             />
           </div>
           <button
@@ -237,42 +237,42 @@ export default function UsuariosPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-3">
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-200" />
+                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-[#202327]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-1/3" />
-                  <div className="h-3 bg-gray-200 rounded w-1/4" />
+                  <div className="h-4 bg-gray-200 dark:bg-[#202327] rounded w-1/3" />
+                  <div className="h-3 bg-gray-200 dark:bg-[#202327] rounded w-1/4" />
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Colaborador</th>
-                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Rol Clínico</th>
-                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
-                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Último Acceso</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Acciones</th>
+                <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/50 dark:bg-[#202327]/50">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Colaborador</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Rol Clínico</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Estado</th>
+                  <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Último Acceso</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
                 {paginated.map((user) => {
                   const initials = getInitials(user.nombre || user.email);
                   const avatarColor = getAvatarColor(user.id);
                   const rol = rolConfig[user.rol] || rolConfig.recepcionista;
                   return (
-                    <tr key={user.id} className={cn('group transition-colors hover:bg-gray-50/60', editingUser?.id === user.id && 'bg-primary-50/40')}>
+                    <tr key={user.id} className={cn('group transition-colors hover:bg-gray-50 dark:bg-[#202327]/60 dark:hover:bg-[#1D1F23]/60', editingUser?.id === user.id && 'bg-primary-50/40')}>
                       <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white', avatarColor)}>{initials}</div>
                           <div className="min-w-0">
-                            <div className="text-sm font-bold text-gray-900">{user.nombre || 'Sin nombre'}</div>
-                            <div className="text-xs text-gray-400 truncate">{user.email}</div>
+                            <div className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{user.nombre || 'Sin nombre'}</div>
+                            <div className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] truncate">{user.email}</div>
                           </div>
                         </div>
                       </td>
@@ -282,20 +282,20 @@ export default function UsuariosPage() {
                       <td className="hidden sm:table-cell px-6 py-4">
                         <button
                           onClick={() => handleToggleActive(user)}
-                          className={cn('inline-flex items-center gap-1.5 text-xs font-bold', user.activo ? 'text-emerald-600' : 'text-gray-400')}
+                          className={cn('inline-flex items-center gap-1.5 text-xs font-bold', user.activo ? 'text-emerald-600' : 'text-gray-400 dark:text-[#71767B] dark:text-[#71767B]')}
                         >
                           <span className={cn('h-1.5 w-1.5 rounded-full', user.activo ? 'bg-emerald-500' : 'bg-gray-300')} />
                           {user.activo ? 'ACTIVO' : 'INACTIVO'}
                         </button>
                       </td>
-                      <td className="hidden md:table-cell px-6 py-4 text-sm text-gray-500">{formatDate(user.last_sign_in_at)}</td>
+                      <td className="hidden md:table-cell px-6 py-4 text-sm text-gray-500 dark:text-[#71767B]">{formatDate(user.last_sign_in_at)}</td>
                       <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEditUser(user)} className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">Editar</button>
                           <button
                             onClick={() => setDeleteTarget(user.id)}
                             disabled={deleting === user.id}
-                            className="text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                            className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-red-600 transition-colors disabled:opacity-50"
                           >
                             {deleting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </button>
@@ -306,8 +306,8 @@ export default function UsuariosPage() {
                 })}
                 {paginated.length === 0 && (
                   <tr><td colSpan={5} className="px-4 sm:px-6 py-12 text-center">
-                    <User className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-500">No se encontraron usuarios</p>
+                    <User className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-500 dark:text-[#71767B]">No se encontraron usuarios</p>
                   </td></tr>
                 )}
               </tbody>
@@ -331,36 +331,36 @@ export default function UsuariosPage() {
         <>
           <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={handleCloseSidebar} />
           <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-6">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">
+            <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm lg:sticky lg:top-6">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">
                   {editingUser ? 'Editar Colaborador' : 'Nuevo Colaborador'}
                 </h3>
-                <button onClick={handleCloseSidebar} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+                <button onClick={handleCloseSidebar} className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA] dark:text-[#71767B] dark:text-[#E7E9EA] dark:text-[#71767B] transition-colors"><X className="h-5 w-5" /></button>
               </div>
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Nombre Completo <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Nombre Completo <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={formNombre}
                     onChange={(e) => setFormNombre(e.target.value)}
                     placeholder="Ej. Juan Pérez"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Correo Electrónico <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Correo Electrónico <span className="text-red-500">*</span></label>
                   <input
                     type="email"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
                     placeholder="correo@eyeadvanced.com"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">
                     Contraseña {editingUser ? '(dejar vacío para no cambiar)' : <span className="text-red-500">*</span>}
                   </label>
                   <div className="relative">
@@ -369,19 +369,19 @@ export default function UsuariosPage() {
                       value={formPassword}
                       onChange={(e) => setFormPassword(e.target.value)}
                       placeholder={editingUser ? '••••••••••••' : 'Mínimo 6 caracteres'}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 pr-10 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                      className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 pr-10 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                     />
-                    <button type="button" onClick={() => setShowPassword((p) => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <button type="button" onClick={() => setShowPassword((p) => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA] dark:text-[#71767B] dark:text-[#E7E9EA] dark:text-[#71767B]">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Rol en el Sistema</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Rol en el Sistema</label>
                   <select
                     value={formRol}
                     onChange={(e) => setFormRol(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   >
                     <option value="doctor">Doctor (Médico Especialista)</option>
                     <option value="admin">Administrador</option>
@@ -394,7 +394,7 @@ export default function UsuariosPage() {
                   </div>
                 )}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={handleCloseSidebar} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+                  <button onClick={handleCloseSidebar} className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] dark:text-[#71767B] hover:bg-gray-50 dark:bg-[#202327] transition-colors">CANCELAR</button>
                   <button
                     onClick={editingUser ? handleUpdate : handleCreate}
                     disabled={saving || !formNombre || !formEmail || (!editingUser && !formPassword)}

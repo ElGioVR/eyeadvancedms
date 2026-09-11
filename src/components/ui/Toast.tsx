@@ -31,9 +31,9 @@ const icons: Record<ToastType, typeof CheckCircle> = {
 };
 
 const styles: Record<ToastType, string> = {
-  success: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-  error: 'bg-red-50 border-red-200 text-red-700',
-  warning: 'bg-amber-50 border-amber-200 text-amber-700',
+  success: 'bg-emerald-50 dark:bg-[#00BA7C]/10 border-emerald-200 dark:border-[#00BA7C]/30 text-emerald-700 dark:text-[#00BA7C]',
+  error: 'bg-red-50 dark:bg-[#F4212E]/10 border-red-200 dark:border-[#F4212E]/30 text-red-700 dark:text-[#F4212E]',
+  warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

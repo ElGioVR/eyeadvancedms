@@ -220,22 +220,22 @@ export default function InventarioPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: stats.total, color: 'text-gray-900' },
+          { label: 'Total', value: stats.total, color: 'text-gray-900 dark:text-[#E7E9EA]' },
           { label: 'Con Stock', value: stats.conStock, color: 'text-emerald-600' },
           { label: 'Stock Bajo', value: stats.bajo, color: 'text-amber-600' },
           { label: 'Sin Stock', value: stats.sinStock, color: 'text-red-600' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{s.label}</span>
+          <div key={s.label} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 shadow-sm">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{s.label}</span>
             <p className={cn('text-2xl font-extrabold mt-1', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+      <div className="bg-white dark:bg-[#16181C] rounded-xl border border-gray-200 dark:border-[#2F3336] shadow-sm p-4 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, codigo, marca, modelo, grado refractivo..." />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtrar:</span>
+          <span className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B] uppercase tracking-wider">Filtrar:</span>
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
           <FilterSelect value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
           <FilterSelect value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
@@ -245,14 +245,14 @@ export default function InventarioPage() {
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-6">
+            <div key={i} className="animate-pulse rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6">
               <div className="flex gap-4">
-                <div className="h-12 w-12 rounded bg-gray-200" />
+                <div className="h-12 w-12 rounded bg-gray-200 dark:bg-[#202327]" />
                 <div className="flex-1 space-y-3">
-                  <div className="h-5 bg-gray-200 rounded w-1/3" />
-                  <div className="h-4 bg-gray-200 rounded w-1/4" />
+                  <div className="h-5 bg-gray-200 dark:bg-[#202327] rounded w-1/3" />
+                  <div className="h-4 bg-gray-200 dark:bg-[#202327] rounded w-1/4" />
                   <div className="grid grid-cols-3 gap-4 mt-4">
-                    {[1, 2, 3].map((j) => <div key={j} className="h-16 bg-gray-100 rounded" />)}
+                    {[1, 2, 3].map((j) => <div key={j} className="h-16 bg-gray-100 dark:bg-[#202327] rounded" />)}
                   </div>
                 </div>
               </div>
@@ -269,8 +269,8 @@ export default function InventarioPage() {
             const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo);
             return (
               <div key={lente.id} className={cn(
-                'rounded-xl border bg-white shadow-sm overflow-hidden transition-all hover:shadow-md',
-                sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-gray-200'
+                'rounded-xl border bg-white dark:bg-[#16181C] shadow-sm overflow-hidden transition-all hover:shadow-md',
+                sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-gray-200 dark:border-[#2F3336]'
               )}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="flex items-center gap-3">
@@ -278,50 +278,50 @@ export default function InventarioPage() {
                       {lente.folio || lente.id.slice(0, 8)}
                     </span>
                     <div>
-                      <h3 className="text-base font-extrabold text-gray-900">{lente.marca} {lente.modelo}</h3>
-                      <p className="text-xs text-gray-400">{lente.categoria || 'Sin categoria'} {lente.color ? `\u00b7 ${lente.color}` : ''}</p>
+                      <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{lente.marca} {lente.modelo}</h3>
+                      <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{lente.categoria || 'Sin categoria'} {lente.color ? `\u00b7 ${lente.color}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Precio Venta</span>
-                      <p className="text-lg font-extrabold text-gray-900">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Precio Venta</span>
+                      <p className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
                     </div>
                     <StatusBadge status={estadoLente} config={estadoConfig} />
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 bg-gray-50/30 px-4 py-3 sm:px-6 sm:py-4">
+                <div className="border-t border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/30 dark:bg-[#202327]/30 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                     {[
                       { label: 'Esf\u00e9rico (SE)', value: lente.grado_esferico?.toString() || '\u2014' },
                       { label: 'Cil\u00edndrico (CYL)', value: lente.grado_cilindrico?.toString() || '\u2014' },
                       { label: 'Eje', value: lente.eje ? `${lente.eje}\u00b0` : '\u2014' },
                       { label: 'Material', value: lente.material || '\u2014' },
-                      { label: 'Stock Actual', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900' },
-                      { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500' },
+                      { label: 'Stock Actual', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900 dark:text-[#E7E9EA]' },
+                      { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500 dark:text-[#71767B]' },
                     ].map((item) => (
-                      <div key={item.label} className="rounded-lg bg-white border border-gray-200 px-4 py-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{item.label}</span>
-                        <p className={cn('mt-1 text-sm font-extrabold text-gray-900', item.className)}>{item.value}</p>
+                      <div key={item.label} className="rounded-lg bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] px-4 py-3">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{item.label}</span>
+                        <p className={cn('mt-1 text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]', item.className)}>{item.value}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 px-4 py-3 sm:px-6">
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                    <span>Proveedor: <span className="font-bold text-gray-700">{lente.proveedor || '\u2014'}</span></span>
-                    <span>Caducidad: <span className="font-bold text-gray-700">{lente.fecha_caducidad || '\u2014'}</span></span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-[#71767B]">
+                    <span>Proveedor: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.proveedor || '\u2014'}</span></span>
+                    <span>Caducidad: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.fecha_caducidad || '\u2014'}</span></span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                       <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
                     </button>
-                    <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                       <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
                     </Link>
-                    <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors">
+                    <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-[#1D1F23] transition-colors">
                       <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">Eliminar</span>
                     </button>
                   </div>
@@ -351,18 +351,18 @@ export default function InventarioPage() {
             <Camera className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-gray-900">Escanear Codigo de Barras</h3>
-            <p className="text-xs text-gray-400">Usa la camara o escribe el codigo manualmente</p>
+            <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">Escanear Codigo de Barras</h3>
+            <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Usa la camara o escribe el codigo manualmente</p>
           </div>
         </div>
 
         {/* Mode tabs */}
-        <div className="flex rounded-lg bg-gray-100 p-1 mb-4">
+        <div className="flex rounded-lg bg-gray-100 dark:bg-[#202327] p-1 mb-4">
           <button
             onClick={() => setScannerMode('camera')}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'camera' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              scannerMode === 'camera' ? 'bg-white dark:bg-[#16181C] text-primary-700 shadow-sm' : 'text-gray-500 dark:text-[#71767B] hover:text-gray-700 dark:hover:text-[#E7E9EA] dark:text-[#E7E9EA]'
             )}
           >
             <ScanLine className="h-4 w-4" /> Camara
@@ -371,7 +371,7 @@ export default function InventarioPage() {
             onClick={() => setScannerMode('manual')}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'manual' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              scannerMode === 'manual' ? 'bg-white dark:bg-[#16181C] text-primary-700 shadow-sm' : 'text-gray-500 dark:text-[#71767B] hover:text-gray-700 dark:hover:text-[#E7E9EA] dark:text-[#E7E9EA]'
             )}
           >
             <Keyboard className="h-4 w-4" /> Manual
@@ -397,7 +397,7 @@ export default function InventarioPage() {
               onChange={(e) => setBarcodeInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
               placeholder="Escriba el codigo de barras..."
-              className="block w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              className="block w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] dark:text-[#71767B] dark:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               autoFocus
             />
             <button onClick={handleBarcodeSearch} disabled={scanning || !barcodeInput.trim()} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
@@ -417,18 +417,18 @@ export default function InventarioPage() {
               <span className="text-sm font-extrabold text-primary-700">Lente encontrado</span>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-400">Marca:</span> <span className="font-bold">{scanResult.marca}</span></div>
-              <div><span className="text-gray-400">Modelo:</span> <span className="font-bold">{scanResult.modelo}</span></div>
-              <div><span className="text-gray-400">SE:</span> <span className="font-bold">{scanResult.grado_esferico || '\u2014'}</span></div>
-              <div><span className="text-gray-400">CYL:</span> <span className="font-bold">{scanResult.grado_cilindrico || '\u2014'}</span></div>
-              <div><span className="text-gray-400">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900')}>{scanResult.stock} pzas</span></div>
-              <div><span className="text-gray-400">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Marca:</span> <span className="font-bold">{scanResult.marca}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Modelo:</span> <span className="font-bold">{scanResult.modelo}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">SE:</span> <span className="font-bold">{scanResult.grado_esferico || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">CYL:</span> <span className="font-bold">{scanResult.grado_cilindrico || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{scanResult.stock} pzas</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
             </div>
             <div className="flex gap-2 pt-2">
               <Link href={`/inventario/${scanResult.id}/editar`} onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); }} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors text-center">
                 Editar
               </Link>
-              <button onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); setShowAdjust(scanResult.id); setAdjustQty(0); }} className="flex-1 rounded-lg border border-primary-200 bg-white px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 transition-colors">
+              <button onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); setShowAdjust(scanResult.id); setAdjustQty(0); }} className="flex-1 rounded-lg border border-primary-200 bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 transition-colors">
                 Ajustar Stock
               </button>
             </div>
@@ -445,32 +445,32 @@ export default function InventarioPage() {
           const stockClass = lente.stock === 0 ? 'text-red-600' : lente.stock < lente.stock_minimo ? 'text-amber-600' : 'text-primary-600';
           return (
             <div className="space-y-4">
-              <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 text-center">Ajustar Stock</h3>
-              <div className="rounded-lg bg-gray-50 p-3 text-center">
-                <span className="text-xs font-bold text-gray-400">{lente.marca} {lente.modelo}</span>
-                <p className="text-2xl font-extrabold text-gray-900 mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA] text-center">Ajustar Stock</h3>
+              <div className="rounded-lg bg-gray-50 dark:bg-[#202327] p-3 text-center">
+                <span className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{lente.marca} {lente.modelo}</span>
+                <p className="text-2xl font-extrabold text-gray-900 dark:text-[#E7E9EA] mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
               </div>
               <div className="flex items-center justify-center gap-4">
-                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
+                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                   <Minus className="h-4 w-4" />
                 </button>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Cantidad</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Cantidad</span>
                   <p className={cn('text-3xl font-extrabold', adjustQty >= 0 ? 'text-primary-600' : 'text-red-600')}>
                     {adjustQty > 0 ? '+' : ''}{adjustQty}
                   </p>
                   {adjustQty !== 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Nuevo stock: <span className={cn('font-bold', newStock === 0 ? 'text-red-600' : 'text-gray-900')}>{newStock}</span>
+                    <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-1">
+                      Nuevo stock: <span className={cn('font-bold', newStock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{newStock}</span>
                     </p>
                   )}
                 </div>
-                <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
+                <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                   <PlusIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CANCELAR</button>
+                <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
                 <button onClick={handleAdjustStock} disabled={adjusting || adjustQty === 0} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
                   {adjusting ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : 'CONFIRMAR'}
                 </button>

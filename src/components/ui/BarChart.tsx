@@ -28,7 +28,7 @@ export default function BarChart({
         return (
           <div key={index} className="flex flex-1 flex-col items-center gap-1">
             {item.displayValue && (
-              <span className="text-xs font-medium text-gray-600">{item.displayValue}</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-[#E7E9EA]">{item.displayValue}</span>
             )}
             <div
               className={cn(
@@ -37,7 +37,7 @@ export default function BarChart({
               )}
               style={{ height: `${barHeight}%` }}
             />
-            <span className="text-xs text-gray-500">{item.label}</span>
+            <span className="text-xs text-gray-500 dark:text-[#71767B]">{item.label}</span>
           </div>
         );
       })}

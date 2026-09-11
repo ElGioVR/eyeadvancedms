@@ -21,6 +21,7 @@ import {
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
+import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
 
 const menuItems = [
@@ -80,7 +81,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-[#174c78] text-white transition-all duration-300 z-50 flex flex-col shadow-xl shadow-primary-900/10',
+          'fixed left-0 top-0 h-screen bg-[#174c78] dark:bg-black text-white transition-all duration-300 z-50 flex flex-col shadow-xl shadow-primary-900/10',
           // Mobile (<lg): overlay, slides in/out
           'max-lg:w-[260px]',
           isOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
@@ -94,7 +95,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
         {/* Logo */}
         <div className="flex items-center px-4 py-6 justify-center">
           {showLabels ? (
-            <div className="bg-white rounded-xl p-3 shadow-lg flex items-center justify-center">
+            <div className="bg-white dark:bg-[#16181C] rounded-xl p-3 shadow-lg flex items-center justify-center">
               <Image
                 src="/images/eyeadvanced-logo.png"
                 alt="EyeAdvanced"
@@ -104,7 +105,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
               />
             </div>
           ) : (
-            <div className="bg-white rounded-xl p-2.5 shadow-lg flex items-center justify-center">
+            <div className="bg-white dark:bg-[#16181C] rounded-xl p-2.5 shadow-lg flex items-center justify-center">
               <Eye className="w-6 h-6 text-[#174c78]" />
             </div>
           )}
@@ -113,7 +114,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
         {/* Toggle button – only visible on xl+ */}
         <button
           onClick={onToggle}
-          className="hidden xl:flex absolute -right-3 top-24 w-6 h-6 bg-white rounded-full shadow-md items-center justify-center text-primary-600 hover:bg-gray-50"
+          className="hidden xl:flex absolute -right-3 top-24 w-6 h-6 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-full shadow-md items-center justify-center text-gray-500 dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] hover:text-gray-700 dark:hover:text-[#E7E9EA]"
           aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -130,14 +131,14 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                 className={cn(
                   'relative flex items-center gap-3 px-4 py-3 rounded-md transition-colors',
                   isActive
-                    ? 'bg-white/14 text-white shadow-inner shadow-white/5'
+                    ? 'bg-white/14 text-white'
                     : 'text-white/72 hover:bg-white/8 hover:text-white',
                   !showLabels && 'justify-center px-0'
                 )}
                 title={!showLabels ? item.label : undefined}
                 onClick={() => { if (window.innerWidth < 1024) onClose(); }}
               >
-                {isActive && showLabels && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-accent" />}
+                {isActive && showLabels && <span className="absolute left-0 top-2.5 h-7 w-1 rounded-r bg-[#1D9BF0]" />}
                 <item.icon className={cn('w-5 h-5', isActive ? 'text-accent' : 'text-white/72')} />
                 {showLabels && <span className="font-semibold text-sm">{item.label}</span>}
               </Link>
@@ -146,12 +147,10 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
         </nav>
 
         {/* User & Logout */}
-        <div className="p-4 border-t border-white/12">
+        <div className="p-4 border-t border-[#2F3336]">
           {showLabels && user && (
             <div className="flex items-center gap-3 px-1 py-3 mb-2">
-              <div className="w-10 h-10 bg-white text-primary-700 rounded-full flex items-center justify-center text-sm font-bold">
-                {user.iniciales}
-              </div>
+              <Avatar initials={user.iniciales} src={user.avatar_url} className="bg-white dark:bg-[#202327] text-primary-700 dark:text-[#E7E9EA]" />
               <div className="min-w-0">
                 <div className="text-sm font-bold leading-5 truncate">{user.nombre || user.email}</div>
                 <div className="flex items-center gap-1 text-xs text-white/62">
@@ -178,12 +177,12 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
       <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-gray-900">Cerrar Sesión</h3>
-          <p className="text-sm text-gray-600">¿Estás seguro que deseas cerrar sesión?</p>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Cerrar Sesión</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300">¿Estás seguro que deseas cerrar sesión?</p>
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowLogoutModal(false)}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Cancelar
             </button>

@@ -10,8 +10,8 @@ export default function UsuariosLoading() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="grid grid-cols-12 gap-4 border-b border-gray-100 px-6 py-3">
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C]">
+        <div className="grid grid-cols-12 gap-4 border-b border-gray-100 dark:border-[#2F3336] px-6 py-3">
           <Skeleton className="col-span-4 h-3 w-24" />
           <Skeleton className="col-span-2 h-3 w-16" />
           <Skeleton className="col-span-2 h-3 w-16" />
@@ -19,7 +19,7 @@ export default function UsuariosLoading() {
           <Skeleton className="col-span-2 h-3 w-16" />
         </div>
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="grid grid-cols-12 gap-4 items-center border-b border-gray-50 px-6 py-4">
+          <div key={i} className="grid grid-cols-12 gap-4 items-center border-b border-gray-50 dark:border-[#2F3336] px-6 py-4">
             <div className="col-span-4 flex items-center gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
               <div className="space-y-1">

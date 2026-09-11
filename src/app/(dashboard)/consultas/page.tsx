@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Plus,
   Calendar,
@@ -13,17 +13,22 @@ import {
   Banknote,
   Activity,
   ClipboardList,
-} from 'lucide-react';
-import { useFetch, useDebounce } from '@/hooks';
-import StatCard from '@/components/ui/StatCard';
-import SearchInput from '@/components/ui/SearchInput';
-import FilterSelect from '@/components/ui/FilterSelect';
-import StatusBadge from '@/components/ui/StatusBadge';
-import Avatar from '@/components/ui/Avatar';
-import Modal from '@/components/ui/Modal';
-import EmptyState from '@/components/ui/EmptyState';
-import PageHeader from '@/components/ui/PageHeader';
-import Pagination from '@/components/ui/Pagination';
+} from "lucide-react";
+import { useFetch, useDebounce } from "@/hooks";
+import StatCard from "@/components/ui/StatCard";
+import SearchInput from "@/components/ui/SearchInput";
+import FilterSelect from "@/components/ui/FilterSelect";
+import StatusBadge from "@/components/ui/StatusBadge";
+import Avatar from "@/components/ui/Avatar";
+import Modal from "@/components/ui/Modal";
+import EmptyState from "@/components/ui/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+
+interface EstudioDetalle {
+  nombre: string;
+  doctor: string | null;
+}
 
 interface ConsultaAPI {
   id: string;
@@ -31,6 +36,7 @@ interface ConsultaAPI {
   paciente: string;
   iniciales: string;
   doctor: string;
+  doctor_id: string;
   fecha: string;
   hora_inicio: string;
   hora_fin: string;
@@ -38,63 +44,142 @@ interface ConsultaAPI {
   tipo_visita: string;
   diagnostico: string;
   estudios: string;
+  estudios_detalle: EstudioDetalle[];
   procedimiento: string;
+  procedimiento_doctor: string | null;
   notas: string;
+  costo_total: number;
+  estado_pago: string;
 }
 
-const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
-  COMPLETADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  'EN CURSO': { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
-  PENDIENTE: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400' },
-};
+const estadoConfig: Record<string, { bg: string; text: string; dot: string }> =
+  {
+    PAGADO: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      dot: "bg-emerald-500",
+    },
+    PENDIENTE: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      dot: "bg-amber-500",
+    },
+    CANCELADO: {
+      bg: "bg-red-50",
+      text: "text-red-600",
+      dot: "bg-red-500",
+    },
+  };
 
-function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
+function Field({
+  label,
+  value,
+  full,
+}: {
+  label: string;
+  value: string;
+  full?: boolean;
+}) {
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white px-4 py-3${full ? ' col-span-2' : ''}`}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</span>
-      <p className={`mt-1 text-sm font-medium text-gray-900${full ? ' break-words' : ''}`}>{value || '—'}</p>
+    <div
+      className={`rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3${full ? " col-span-2" : ""}`}
+    >
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+        {label}
+      </span>
+      <p
+        className={`mt-1 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]${full ? " break-words" : ""}`}
+      >
+        {value || "—"}
+      </p>
     </div>
   );
 }
 
 export default function ConsultasPage() {
   const [page, setPage] = useState(1);
-  const { data: consultas, loading, error, total, page: currentPage } = useFetch<ConsultaAPI>('/api/consultas', { page: String(page), pageSize: '15' });
-  const [search, setSearch] = useState('');
-  const [filterDoctor, setFilterDoctor] = useState('Todos');
-  const [selectedConsulta, setSelectedConsulta] = useState<ConsultaAPI | null>(null);
-  const [today] = useState(() => new Date().toISOString().split('T')[0]);
+  const {
+    data: consultas,
+    loading,
+    error,
+    total,
+    page: currentPage,
+  } = useFetch<ConsultaAPI>("/api/consultas", {
+    page: String(page),
+    pageSize: "15",
+  });
+  const [search, setSearch] = useState("");
+  const [filterDoctor, setFilterDoctor] = useState("Todos");
+  const [selectedConsulta, setSelectedConsulta] = useState<ConsultaAPI | null>(
+    null,
+  );
+  const [today] = useState(() => new Date().toISOString().split("T")[0]);
 
   const debouncedSearch = useDebounce(search);
 
   const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
     return consultas.filter((c) => {
-      const matchesSearch = !term || c.paciente.toLowerCase().includes(term) || c.doctor.toLowerCase().includes(term) || (c.folio && c.folio.toLowerCase().includes(term));
-      const matchesDoctor = filterDoctor === 'Todos' || c.doctor === filterDoctor;
+      const matchesSearch =
+        !term ||
+        c.paciente.toLowerCase().includes(term) ||
+        c.doctor.toLowerCase().includes(term) ||
+        (c.folio && c.folio.toLowerCase().includes(term));
+      const matchesDoctor =
+        filterDoctor === "Todos" || c.doctor === filterDoctor;
       return matchesSearch && matchesDoctor;
     });
   }, [consultas, debouncedSearch, filterDoctor]);
 
   const doctors = useMemo(() => {
     const unique = [...new Set(consultas.map((c) => c.doctor).filter(Boolean))];
-    return ['Todos', ...unique];
+    return ["Todos", ...unique];
   }, [consultas]);
 
   const stats = useMemo(() => {
     const hoy = consultas.filter((c) => c.fecha === today).length;
     return [
-      { label: 'Total Consultas', value: String(total), icon: Calendar, color: 'text-primary-600', bgColor: 'bg-primary-50', borderColor: 'border-primary-100' },
-      { label: 'Consultas Hoy', value: String(hoy), icon: Clock, color: 'text-sky-600', bgColor: 'bg-sky-50', borderColor: 'border-sky-100' },
-      { label: 'Este Mes', value: String(total), icon: CheckCircle, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100' },
-      { label: 'Doctores', value: String(new Set(consultas.map((c) => c.doctor).filter(Boolean)).size), icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100' },
+      {
+        label: "Total Consultas",
+        value: String(total),
+        icon: Calendar,
+        color: "text-primary-600",
+        bgColor: "bg-primary-50",
+        borderColor: "border-primary-100",
+      },
+      {
+        label: "Consultas Hoy",
+        value: String(hoy),
+        icon: Clock,
+        color: "text-sky-600",
+        bgColor: "bg-sky-50",
+        borderColor: "border-sky-100",
+      },
+      {
+        label: "Este Mes",
+        value: String(total),
+        icon: CheckCircle,
+        color: "text-emerald-600",
+        bgColor: "bg-emerald-50",
+        borderColor: "border-emerald-100",
+      },
+      {
+        label: "Doctores",
+        value: String(
+          new Set(consultas.map((c) => c.doctor).filter(Boolean)).size,
+        ),
+        icon: AlertTriangle,
+        color: "text-amber-600",
+        bgColor: "bg-amber-50",
+        borderColor: "border-amber-100",
+      },
     ];
   }, [consultas, total]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       <PageHeader
-        title="CONSULTAS MÉDICAS"
+        title="CONSULTAS MEDICAS"
         subtitle="Registro y seguimiento de consultas oftalmológicas."
         action={
           <Link
@@ -135,64 +220,102 @@ export default function ConsultasPage() {
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5">
+            <div
+              key={i}
+              className="animate-pulse rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5"
+            >
               <div className="flex gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-200" />
+                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-[#202327]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-1/3" />
-                  <div className="h-3 bg-gray-200 rounded w-1/4" />
+                  <div className="h-4 bg-gray-200 dark:bg-[#202327] rounded w-1/3" />
+                  <div className="h-3 bg-gray-200 dark:bg-[#202327] rounded w-1/4" />
                 </div>
               </div>
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Calendar} title="No se encontraron consultas" description="Intente ajustar los filtros de búsqueda." />
+        <EmptyState
+          icon={Calendar}
+          title="No se encontraron consultas"
+          description="Intente ajustar los filtros de búsqueda."
+        />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
+                <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50">
                   {[
-                    { label: 'Folio', hide: '' },
-                    { label: 'Paciente', hide: '' },
-                    { label: 'Doctor', hide: 'hidden md:table-cell' },
-                    { label: 'Fecha / Hora', hide: 'hidden md:table-cell' },
-                    { label: 'Tipo', hide: 'hidden lg:table-cell' },
-                    { label: 'Diagnóstico', hide: 'hidden lg:table-cell' },
-                    { label: 'Acciones', hide: 'hidden sm:table-cell' },
+                    { label: "Folio", hide: "" },
+                    { label: "Paciente", hide: "" },
+                    { label: "Doctor", hide: "hidden md:table-cell" },
+                    { label: "Fecha / Hora", hide: "hidden md:table-cell" },
+                    { label: "Tipo", hide: "hidden lg:table-cell" },
+                    { label: "Diagnóstico", hide: "hidden lg:table-cell" },
+                    { label: "Estado", hide: "hidden sm:table-cell" },
+                    { label: "Acciones", hide: "hidden sm:table-cell" },
                   ].map((h) => (
                     <th
                       key={h.label}
                       scope="col"
-                      className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 text-left ${h.hide}`}
+                      className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] text-left ${h.hide}`}
                     >
                       {h.label}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
                 {filtered.map((c) => (
-                  <tr key={c.id} className="group transition-colors hover:bg-gray-50/60">
-                    <td className="px-5 py-4 text-xs font-bold text-primary-600">{c.folio || c.id.slice(0, 8)}</td>
+                  <tr
+                    key={c.id}
+                    className="group transition-colors hover:bg-gray-50/60 dark:hover:bg-[#1D1F23]/60"
+                  >
+                    <td className="px-5 py-4 text-xs font-bold text-primary-600">
+                      {c.folio || c.id.slice(0, 8)}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <Avatar initials={c.iniciales} className="bg-primary-500" size="sm" />
-                        <span className="text-sm font-bold text-gray-900 truncate">{c.paciente}</span>
+                        <Avatar
+                          initials={c.iniciales}
+                          className="bg-primary-500"
+                          size="sm"
+                        />
+                        <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">
+                          {c.paciente}
+                        </span>
                       </div>
                     </td>
-                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600">{c.doctor}</td>
-                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600">{c.fecha} {c.hora_inicio}</td>
-                    <td className="hidden lg:table-cell px-5 py-4">
-                      <span className="inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">{c.tipo_consulta}</span>
+                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">
+                      {c.doctor}
                     </td>
-                    <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.diagnostico || '—'}</td>
+                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">
+                      {c.fecha} {c.hora_inicio}
+                    </td>
+                    <td className="hidden lg:table-cell px-5 py-4">
+                      <span className="inline-flex rounded-md bg-gray-100 dark:bg-[#202327] px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:text-[#E7E9EA]">
+                        {c.tipo_consulta}
+                      </span>
+                    </td>
+                    <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA] max-w-[200px] truncate">
+                      {c.diagnostico || "—"}
+                    </td>
                     <td className="hidden sm:table-cell px-5 py-4">
-                      <button aria-label={`Ver consulta de ${c.paciente}`} onClick={() => setSelectedConsulta(c)} className="text-gray-400 hover:text-primary-600 transition-colors"><Eye className="h-4 w-4" /></button>
+                      <StatusBadge status={c.estado_pago || 'PENDIENTE'} config={estadoConfig} />
+                    </td>
+                    <td className="hidden sm:table-cell px-5 py-4">
+                      <button
+                        aria-label={`Ver consulta de ${c.paciente}`}
+                        onClick={() => setSelectedConsulta(c)}
+                        className="text-gray-400 dark:text-[#71767B] hover:text-primary-600 transition-colors"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -210,46 +333,106 @@ export default function ConsultasPage() {
         </div>
       )}
 
-      <Modal isOpen={!!selectedConsulta} onClose={() => setSelectedConsulta(null)} maxWidth="max-w-2xl">
+      <Modal
+        isOpen={!!selectedConsulta}
+        onClose={() => setSelectedConsulta(null)}
+        maxWidth="max-w-2xl"
+      >
         {selectedConsulta && (
           <>
-            <div className="flex items-center gap-3 border-b border-gray-100 px-8 py-5 -mx-6 -mt-6 mb-0">
-              <Avatar initials={selectedConsulta.iniciales} className="bg-primary-500" size="lg" />
+            <div className="flex items-center gap-3 border-b border-gray-100 dark:border-[#2F3336] px-8 py-5 -mx-6 -mt-6 mb-0">
+              <Avatar
+                initials={selectedConsulta.iniciales}
+                className="bg-primary-500"
+                size="lg"
+              />
               <div>
-                <h2 className="text-lg font-extrabold text-gray-900">{selectedConsulta.paciente}</h2>
-                <p className="text-xs text-gray-400">{selectedConsulta.id.slice(0, 8)} • {selectedConsulta.fecha}</p>
+                <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+                  {selectedConsulta.paciente}
+                </h2>
+                <p className="text-xs text-gray-400 dark:text-[#71767B]">
+                  {selectedConsulta.id.slice(0, 8)} • {selectedConsulta.fecha}
+                </p>
               </div>
             </div>
 
             <div className="p-8 space-y-6 -mx-6">
               <div>
-                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
-                  <ClipboardList className="h-4 w-4 text-primary-600" /> Datos de Consulta
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+                  <ClipboardList className="h-4 w-4 text-primary-600" /> Datos
+                  de Consulta
                 </h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <Field label="Doctor" value={selectedConsulta.doctor} />
                   <Field label="Tipo" value={selectedConsulta.tipo_consulta} />
-                  <Field label="Fecha y Hora" value={`${selectedConsulta.fecha} ${selectedConsulta.hora_inicio}`} />
-                  <Field label="Hora Fin" value={selectedConsulta.hora_fin || '—'} />
-                  <Field label="Tipo de Visita" value={selectedConsulta.tipo_visita} />
-                  <Field label="Diagnóstico" value={selectedConsulta.diagnostico} />
+                  <Field
+                    label="Fecha y Hora"
+                    value={`${selectedConsulta.fecha} ${selectedConsulta.hora_inicio}`}
+                  />
+                  <Field
+                    label="Hora Fin"
+                    value={selectedConsulta.hora_fin || "—"}
+                  />
+                  <Field
+                    label="Tipo de Visita"
+                    value={selectedConsulta.tipo_visita}
+                  />
+                  <Field
+                    label="Diagnóstico"
+                    value={selectedConsulta.diagnostico}
+                  />
                 </div>
               </div>
 
               <div>
-                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900">
-                  <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
+                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+                  <Activity className="h-4 w-4 text-sky-600" /> Detalles
+                  Clínicos
                 </h4>
                 <div className="space-y-3 text-sm">
-                  <Field label="Estudios" value={selectedConsulta.estudios} full />
-                  <Field label="Procedimientos" value={selectedConsulta.procedimiento} full />
+                  {selectedConsulta.estudios_detalle && selectedConsulta.estudios_detalle.length > 0 ? (
+                    <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios</span>
+                      <div className="mt-1.5 space-y-1.5">
+                        {selectedConsulta.estudios_detalle.map((e, i) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{e.nombre}</span>
+                            {e.doctor && (
+                              <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {e.doctor}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <Field label="Estudios" value={selectedConsulta.estudios} full />
+                  )}
+                  {selectedConsulta.procedimiento ? (
+                    <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimientos</span>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{selectedConsulta.procedimiento}</span>
+                        {selectedConsulta.procedimiento_doctor && (
+                          <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {selectedConsulta.procedimiento_doctor}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <Field label="Procedimientos" value="—" full />
+                  )}
                   <Field label="Notas" value={selectedConsulta.notas} full />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-8 py-5 -mx-6 -mb-6 mt-0">
-              <button type="button" onClick={() => setSelectedConsulta(null)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">CERRAR</button>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-[#2F3336] px-8 py-5 -mx-6 -mb-6 mt-0">
+              <button
+                type="button"
+                onClick={() => setSelectedConsulta(null)}
+                className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-5 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+              >
+                CERRAR
+              </button>
             </div>
           </>
         )}

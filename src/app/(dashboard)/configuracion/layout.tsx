@@ -29,14 +29,14 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
     <div className="mx-auto max-w-[1440px] space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">CONFIGURACIÓN</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA]">CONFIGURACIÓN</h1>
         <p className="mt-1 text-sm text-gray-400">
           Administra los accesos del personal, médicos vinculados e integraciones.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-[#2F3336]">
         <nav className="flex gap-1 -mb-px overflow-x-auto px-2 sm:px-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.label;

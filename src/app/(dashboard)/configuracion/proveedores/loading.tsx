@@ -9,8 +9,8 @@ export default function ProveedoresLoading() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white">
-            <div className="h-1.5 rounded-t-xl bg-gray-100" />
+          <div key={i} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C]">
+            <div className="h-1.5 rounded-t-xl bg-gray-100 dark:bg-[#202327]" />
             <div className="p-5">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -25,7 +25,7 @@ export default function ProveedoresLoading() {
                   <Skeleton className="h-6 w-6 rounded" />
                 </div>
               </div>
-              <div className="space-y-2 border-t border-gray-100 pt-3">
+              <div className="space-y-2 border-t border-gray-100 dark:border-[#2F3336] pt-3">
                 <div className="flex items-center gap-2">
                   <Skeleton className="h-3 w-3 shrink-0" />
                   <Skeleton className="h-3 w-28" />

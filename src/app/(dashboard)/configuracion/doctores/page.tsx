@@ -196,7 +196,7 @@ export default function DoctoresPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar doctor por nombre, especialidad o cédula..."
-              className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
             />
           </div>
           <button
@@ -217,13 +217,13 @@ export default function DoctoresPage() {
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 rounded-xl border border-gray-200 bg-white animate-pulse" />
+              <div key={i} className="h-64 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-            <Stethoscope className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500">No se encontraron doctores</p>
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-12 text-center">
+            <Stethoscope className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500 dark:text-[#71767B]">No se encontraron doctores</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -231,40 +231,40 @@ export default function DoctoresPage() {
               const initials = getInitials(doc.nombre);
               const avatarColor = getAvatarColor(doc.id);
               return (
-                <div key={doc.id} className="group overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div key={doc.id} className="group overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
                   <div className="p-5">
                     <div className="flex items-start gap-4 mb-4">
                       <div className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white', avatarColor)}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-gray-900 truncate">{doc.nombre}</h3>
-                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{doc.nombre}</h3>
+                        <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] flex items-center gap-1 mt-0.5">
                           <Stethoscope className="h-3 w-3" />
                           {doc.especialidad}
                         </p>
                         {doc.cedula && (
-                          <p className="text-xs text-gray-400 mt-0.5">Céd. {doc.cedula}</p>
+                          <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-0.5">Céd. {doc.cedula}</p>
                         )}
                       </div>
                     </div>
 
                     {/* Contact */}
-                    <div className="space-y-1.5 text-xs text-gray-500 border-t border-gray-100 pt-3">
+                    <div className="space-y-1.5 text-xs text-gray-500 dark:text-[#71767B] border-t border-gray-100 dark:border-[#2F3336] pt-3">
                       {doc.email && (
                         <div className="flex items-center gap-2">
-                          <Mail className="h-3.5 w-3.5 text-gray-400" />
+                          <Mail className="h-3.5 w-3.5 text-gray-400 dark:text-[#71767B] dark:text-[#71767B]" />
                           <span className="truncate">{doc.email}</span>
                         </div>
                       )}
                       {doc.telefono && (
                         <div className="flex items-center gap-2">
-                          <Phone className="h-3.5 w-3.5 text-gray-400" />
+                          <Phone className="h-3.5 w-3.5 text-gray-400 dark:text-[#71767B] dark:text-[#71767B]" />
                           <span>{doc.telefono}</span>
                         </div>
                       )}
                       {!doc.email && !doc.telefono && (
-                        <p className="text-gray-300 italic">Sin contacto registrado</p>
+                        <p className="text-gray-300 dark:text-[#71767B] italic">Sin contacto registrado</p>
                       )}
                     </div>
 
@@ -272,7 +272,7 @@ export default function DoctoresPage() {
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={() => handleEditDoctor(doc)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 dark:border-[#2F3336] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] dark:bg-[#202327] transition-colors"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Editar
@@ -280,7 +280,7 @@ export default function DoctoresPage() {
                       <button
                         onClick={() => setDeleteTarget(doc.id)}
                         disabled={deleting === doc.id}
-                        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-400 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] px-3 py-2 text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
                       >
                         {deleting === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                       </button>
@@ -298,18 +298,18 @@ export default function DoctoresPage() {
         <>
           <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={handleCloseSidebar} />
           <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-6">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">
+            <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm lg:sticky lg:top-6">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">
                   {editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}
                 </h3>
-                <button onClick={handleCloseSidebar} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <button onClick={handleCloseSidebar} className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA] dark:text-[#E7E9EA] dark:text-[#71767B] transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">
                     Nombre Completo <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -317,15 +317,15 @@ export default function DoctoresPage() {
                     value={formNombre}
                     onChange={(e) => setFormNombre(e.target.value)}
                     placeholder="Ej. Dra. María García"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Especialidad</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Especialidad</label>
                   <select
                     value={formEspecialidad}
                     onChange={(e) => setFormEspecialidad(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   >
                     <option value="Oftalmología">Oftalmología</option>
                     <option value="Oftalmología Pediátrica">Oftalmología Pediátrica</option>
@@ -340,33 +340,33 @@ export default function DoctoresPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Cédula Profesional</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Cédula Profesional</label>
                   <input
                     type="text"
                     value={formCedula}
                     onChange={(e) => setFormCedula(e.target.value)}
                     placeholder="Ej. 12345678"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Teléfono</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Teléfono</label>
                   <input
                     type="text"
                     value={formTelefono}
                     onChange={(e) => setFormTelefono(e.target.value)}
                     placeholder="Ej. 664-111-2222"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Correo Electrónico</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Correo Electrónico</label>
                   <input
                     type="email"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
                     placeholder="correo@eyeadvanced.com"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
                 {formError && (
@@ -377,7 +377,7 @@ export default function DoctoresPage() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleCloseSidebar}
-                    className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                    className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] dark:bg-[#202327] transition-colors"
                   >
                     CANCELAR
                   </button>

@@ -105,7 +105,7 @@ export default function LoginPage() {
   return (
     <>
       {/* Left side — Form */}
-      <div className="w-full lg:w-1/2 flex flex-col min-h-screen lg:min-h-0 bg-white">
+      <div className="w-full lg:w-1/2 flex flex-col min-h-screen lg:min-h-0 bg-white dark:bg-[#16181C]">
         <div className="flex-1 flex items-center justify-center p-5 sm:p-8">
           <div className="w-full max-w-md">
             {/* Logo */}
@@ -119,7 +119,7 @@ export default function LoginPage() {
 
             {/* Heading */}
             <div className="mb-8">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-[#E7E9EA] tracking-tight">
                 Bienvenido de nuevo
               </h1>
               <p className="mt-2 text-sm text-gray-500">

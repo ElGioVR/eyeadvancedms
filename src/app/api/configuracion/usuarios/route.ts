@@ -18,6 +18,7 @@ const usuarioUpdateSchema = z.object({
   nombre: z.string().min(1).max(255).optional(),
   rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
   activo: z.boolean().optional(),
+  avatar_url: z.string().max(2048).optional().nullable(),
 }).strict();
 
 async function checkLastAdmin(
@@ -185,7 +186,7 @@ export async function PATCH(request: Request) {
   const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in body);
 
   if (isSelfService && !hasAdministrativeFields) {
-    const invalidFields = Object.keys(body).filter((field) => !['id', 'nombre', 'password'].includes(field));
+    const invalidFields = Object.keys(body).filter((field) => !['id', 'nombre', 'password', 'avatar_url'].includes(field));
     if (invalidFields.length > 0) {
       return NextResponse.json({ error: 'Solo puedes actualizar nombre y password' }, { status: 400 });
     }
@@ -222,6 +223,7 @@ export async function PATCH(request: Request) {
   if (updates.rol) profileUpdates.rol = updates.rol;
   if (updates.email) profileUpdates.email = updates.email;
   if (updates.activo !== undefined) profileUpdates.activo = updates.activo;
+  if (updates.avatar_url !== undefined) profileUpdates.avatar_url = updates.avatar_url || null;
 
   if (Object.keys(profileUpdates).length > 0) {
     const { error: profileError } = await supabase

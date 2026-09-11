@@ -73,19 +73,19 @@ interface ReportData {
 const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
   Completada: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   'En Curso': { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
-  Pendiente: { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400' },
+  Pendiente: { bg: 'bg-gray-100 dark:bg-[#202327]', text: 'text-gray-500 dark:text-[#71767B]', dot: 'bg-gray-400' },
 };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-4 text-xs font-extrabold uppercase tracking-widest text-gray-900">{children}</h3>;
+  return <h3 className="mb-4 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">{children}</h3>;
 }
 
 function ProgressBarItem({ label, value, maxValue, displayValue, color }: { label: string; value: number; maxValue: number; displayValue?: string; color?: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm font-bold text-gray-700">{label}</span>
-        <span className="text-xs font-bold text-gray-400">{displayValue}</span>
+        <span className="text-sm font-bold text-gray-700 dark:text-[#E7E9EA]">{label}</span>
+        <span className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{displayValue}</span>
       </div>
       <ProgressBar value={value} maxValue={maxValue} color={color} />
     </div>
@@ -368,62 +368,62 @@ export default function ReportesPage() {
       <div className="mx-auto max-w-[1440px] space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <div className="h-8 w-72 animate-pulse rounded-lg bg-gray-200" />
-            <div className="h-4 w-96 animate-pulse rounded bg-gray-100" />
+            <div className="h-8 w-72 animate-pulse rounded-lg bg-gray-200 dark:bg-[#202327]" />
+            <div className="h-4 w-96 animate-pulse rounded bg-gray-100 dark:bg-[#202327]" />
           </div>
           <div className="flex gap-3">
-            <div className="h-10 w-36 animate-pulse rounded-lg bg-gray-200" />
-            <div className="h-10 w-36 animate-pulse rounded-lg bg-gray-200" />
+            <div className="h-10 w-36 animate-pulse rounded-lg bg-gray-200 dark:bg-[#202327]" />
+            <div className="h-10 w-36 animate-pulse rounded-lg bg-gray-200 dark:bg-[#202327]" />
           </div>
         </div>
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-[#2F3336]">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-10 w-28 animate-pulse rounded-t-lg bg-gray-100" />
+            <div key={i} className="h-10 w-28 animate-pulse rounded-t-lg bg-gray-100 dark:bg-[#202327]" />
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <div className="h-4 w-16 animate-pulse rounded bg-gray-200" />
-          <div className="h-10 w-48 animate-pulse rounded-lg bg-gray-100" />
+          <div className="h-4 w-16 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
+          <div className="h-10 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-[#202327]" />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5">
+            <div key={i} className="animate-pulse rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                  <div className="h-3 w-24 rounded bg-gray-200" />
-                  <div className="h-7 w-16 rounded bg-gray-200" />
+                  <div className="h-3 w-24 rounded bg-gray-200 dark:bg-[#202327]" />
+                  <div className="h-7 w-16 rounded bg-gray-200 dark:bg-[#202327]" />
                 </div>
-                <div className="h-10 w-10 rounded-lg bg-gray-200" />
+                <div className="h-10 w-10 rounded-lg bg-gray-200 dark:bg-[#202327]" />
               </div>
             </div>
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 h-4 w-40 animate-pulse rounded bg-gray-200" />
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-sm">
+            <div className="mb-4 h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3">
-                  <div className="h-3 w-12 animate-pulse rounded bg-gray-200" />
+                <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 dark:border-[#2F3336] px-4 py-3">
+                  <div className="h-3 w-12 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
                   <div className="flex-1 space-y-1">
-                    <div className="h-3.5 w-36 animate-pulse rounded bg-gray-200" />
-                    <div className="h-2.5 w-28 animate-pulse rounded bg-gray-100" />
+                    <div className="h-3.5 w-36 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
+                    <div className="h-2.5 w-28 animate-pulse rounded bg-gray-100 dark:bg-[#202327]" />
                   </div>
-                  <div className="h-5 w-16 animate-pulse rounded-full bg-gray-200" />
+                  <div className="h-5 w-16 animate-pulse rounded-full bg-gray-200 dark:bg-[#202327]" />
                 </div>
               ))}
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 h-4 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-sm">
+            <div className="mb-4 h-4 w-48 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
             <div className="space-y-4">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="h-3 w-32 animate-pulse rounded bg-gray-200" />
-                    <div className="h-3 w-14 animate-pulse rounded bg-gray-100" />
+                    <div className="h-3 w-32 animate-pulse rounded bg-gray-200 dark:bg-[#202327]" />
+                    <div className="h-3 w-14 animate-pulse rounded bg-gray-100 dark:bg-[#202327]" />
                   </div>
-                  <div className="h-2.5 w-full animate-pulse rounded-full bg-gray-200" />
+                  <div className="h-2.5 w-full animate-pulse rounded-full bg-gray-200 dark:bg-[#202327]" />
                 </div>
               ))}
             </div>
@@ -453,7 +453,7 @@ export default function ReportesPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
             >
               <Download className="h-4 w-4" /> Exportar Excel
             </button>
@@ -470,9 +470,9 @@ export default function ReportesPage() {
       <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <span className="text-sm font-bold text-gray-500">Periodo:</span>
+        <span className="text-sm font-bold text-gray-500 dark:text-[#71767B]">Periodo:</span>
         <div className="relative w-full sm:w-auto">
-          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="w-full appearance-none bg-white border border-gray-200 rounded-lg pl-4 pr-9 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="w-full appearance-none bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-lg pl-4 pr-9 py-2 text-sm font-bold text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
             {periodoOptions.map((p) => <option key={p}>{p}</option>)}
           </select>
         </div>
@@ -487,18 +487,18 @@ export default function ReportesPage() {
             <StatCard label="Lentes en Stock" value={String(data.resumen.lentesDisponibles)} icon={Package} color="text-amber-600" bgColor="bg-amber-50" />
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Actividad de Hoy</SectionTitle>
               <div className="space-y-3">
                 {data.actividadHoy.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay actividad registrada hoy.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay actividad registrada hoy.</p>
                 ) : (
                   data.actividadHoy.slice(0, 6).map((a, i) => (
-                    <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50/60 transition-colors">
+                    <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 dark:border-[#2F3336] px-4 py-3 hover:bg-gray-50 dark:bg-[#202327]/60 dark:hover:bg-[#1D1F23]/60 transition-colors">
                       <span className="text-xs font-extrabold text-primary-600 w-12">{a.hora}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{a.paciente}</p>
-                        <p className="text-xs text-gray-400">{a.tipo} · {a.doctor}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{a.paciente}</p>
+                        <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{a.tipo} · {a.doctor}</p>
                       </div>
                       <StatusBadge status={a.estado} config={estadoConfig} />
                     </div>
@@ -506,11 +506,11 @@ export default function ReportesPage() {
                 )}
               </div>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Diagnosticos Mas Frecuentes</SectionTitle>
               <div className="space-y-4">
                 {data.diagnosticos.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay diagnosticos registrados.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay diagnosticos registrados.</p>
                 ) : (
                   data.diagnosticos.slice(0, 5).map((d) => (
                     <ProgressBarItem key={d.name} label={d.name} value={d.pct} maxValue={100} displayValue={`${d.casos} casos`} />
@@ -531,15 +531,15 @@ export default function ReportesPage() {
             <StatCard label="Particulares" value={String(data.resumen.pacientesParticulares)} icon={User} color="text-amber-600" bgColor="bg-amber-50" />
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Distribucion por Edad</SectionTitle>
               <BarChart data={data.pacientes.porEdad} height={200} />
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Pacientes por Aseguradora</SectionTitle>
               <div className="space-y-3">
                 {data.pacientes.porAseguradora.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay datos de aseguradoras.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay datos de aseguradoras.</p>
                 ) : (
                   data.pacientes.porAseguradora.map((s) => (
                     <ProgressBarItem key={s.name} label={s.name} value={s.value} maxValue={Math.max(...data.pacientes.porAseguradora.map((a) => a.value), 1)} displayValue={`${s.value} pacientes`} color={s.color} />
@@ -560,15 +560,15 @@ export default function ReportesPage() {
             <StatCard label="Diagnosticos" value={String(data.diagnosticos.length)} icon={AlertTriangle} color="text-amber-600" bgColor="bg-amber-50" />
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Consultas por Tipo</SectionTitle>
               <BarChart data={data.consultas.porTipo} height={200} />
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Consultas por Medico</SectionTitle>
               <div className="space-y-5">
                 {data.consultas.porDoctor.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay consultas registradas.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay consultas registradas.</p>
                 ) : (
                   data.consultas.porDoctor.map((m) => (
                     <ProgressBarItem key={m.label} label={m.label} value={m.value} maxValue={Math.max(...data.consultas.porDoctor.map((d) => d.value), 1)} displayValue={m.displayValue} />
@@ -577,11 +577,11 @@ export default function ReportesPage() {
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
             <SectionTitle>Diagnosticos Mas Frecuentes</SectionTitle>
             <div className="space-y-4">
               {data.diagnosticos.length === 0 ? (
-                <p className="text-sm text-gray-400">No hay diagnosticos registrados.</p>
+                <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay diagnosticos registrados.</p>
               ) : (
                 data.diagnosticos.map((d) => (
                   <ProgressBarItem key={d.name} label={d.name} value={d.pct} maxValue={100} displayValue={`${d.casos} casos`} />
@@ -601,18 +601,18 @@ export default function ReportesPage() {
             <StatCard label="Metodos de Pago" value={String(data.financiero.porMetodo.length)} icon={Activity} color="text-sky-600" bgColor="bg-sky-50" />
           </div>
           <div className="grid gap-6 lg:grid-cols-5">
-            <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-3 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Ingresos Mensuales</SectionTitle>
               {data.financiero.ingresosMensuales.length === 0 ? (
-                <p className="text-sm text-gray-400">No hay ingresos registrados.</p>
+                <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay ingresos registrados.</p>
               ) : (
                 <BarChart data={data.financiero.ingresosMensuales} height={220} />
               )}
             </div>
-            <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-2 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Metodos de Pago (%)</SectionTitle>
               {data.financiero.porMetodo.length === 0 ? (
-                <p className="text-sm text-gray-400">No hay datos de pago.</p>
+                <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay datos de pago.</p>
               ) : (
                 <DonutChart
                   data={data.financiero.porMetodo}
@@ -623,11 +623,11 @@ export default function ReportesPage() {
             </div>
           </div>
           <div className="grid gap-6 lg:grid-cols-5">
-            <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-3 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Consultas por Medico</SectionTitle>
               <div className="space-y-5">
                 {data.consultas.porDoctor.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay datos.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay datos.</p>
                 ) : (
                   data.consultas.porDoctor.map((m) => (
                     <ProgressBarItem key={m.label} label={m.label} value={m.value} maxValue={Math.max(...data.consultas.porDoctor.map((d) => d.value), 1)} displayValue={m.displayValue} />
@@ -635,11 +635,11 @@ export default function ReportesPage() {
                 )}
               </div>
             </div>
-            <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="lg:col-span-2 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Diagnosticos Mas Frecuentes</SectionTitle>
               <div className="space-y-4">
                 {data.diagnosticos.length === 0 ? (
-                  <p className="text-sm text-gray-400">No hay datos.</p>
+                  <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay datos.</p>
                 ) : (
                   data.diagnosticos.slice(0, 5).map((d) => (
                     <ProgressBarItem key={d.name} label={d.name} value={d.pct} maxValue={100} displayValue={`${d.casos} casos`} />
@@ -660,18 +660,18 @@ export default function ReportesPage() {
             <StatCard label="Sin Stock" value={String(data.resumen.lentesSinStock)} icon={XCircle} color="text-red-500" bgColor="bg-red-50" />
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Lentes por Categoria</SectionTitle>
               {data.inventario.porCategoria.length === 0 ? (
-                <p className="text-sm text-gray-400">No hay categorias registradas.</p>
+                <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay categorias registradas.</p>
               ) : (
                 <BarChart data={data.inventario.porCategoria} height={200} />
               )}
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
               <SectionTitle>Lentes por Proveedor</SectionTitle>
               {data.inventario.porProveedor.length === 0 ? (
-                <p className="text-sm text-gray-400">No hay proveedores registrados.</p>
+                <p className="text-sm text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">No hay proveedores registrados.</p>
               ) : (
                 <BarChart data={data.inventario.porProveedor} height={200} />
               )}

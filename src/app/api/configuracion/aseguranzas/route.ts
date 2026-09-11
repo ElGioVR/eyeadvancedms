@@ -9,6 +9,7 @@ const aseguranzaCreateSchema = z.object({
   telefono: z.string().max(20).optional(),
   direccion: z.string().optional(),
   contacto: z.string().max(255).optional(),
+  porcentaje_cobertura: z.number().min(0).max(100).optional(),
 }).strict();
 
 const aseguranzaUpdateSchema = z.object({
@@ -18,6 +19,7 @@ const aseguranzaUpdateSchema = z.object({
   direccion: z.string().optional().nullable(),
   contacto: z.string().max(255).optional().nullable(),
   activo: z.boolean().optional(),
+  porcentaje_cobertura: z.number().min(0).max(100).optional().nullable(),
 }).strict();
 
 export async function GET() {
@@ -29,7 +31,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('aseguranzas')
-    .select('id, nombre, contacto, telefono, direccion, activo')
+    .select('id, nombre, contacto, telefono, direccion, activo, porcentaje_cobertura')
     .eq('activo', true)
     .order('nombre');
 
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
       telefono: data.telefono?.trim() || null,
       direccion: data.direccion?.trim() || null,
       contacto: data.contacto?.trim() || null,
+      porcentaje_cobertura: data.porcentaje_cobertura ?? 0,
     })
     .select()
     .single();
@@ -111,6 +114,7 @@ export async function PATCH(request: Request) {
   if (updates.direccion !== undefined) profileUpdates.direccion = updates.direccion?.trim() || null;
   if (updates.contacto !== undefined) profileUpdates.contacto = updates.contacto?.trim() || null;
   if (updates.activo !== undefined) profileUpdates.activo = updates.activo;
+  if (updates.porcentaje_cobertura !== undefined) profileUpdates.porcentaje_cobertura = updates.porcentaje_cobertura;
 
   if (Object.keys(profileUpdates).length === 0) {
     return NextResponse.json({ error: 'No hay datos para actualizar' }, { status: 400 });

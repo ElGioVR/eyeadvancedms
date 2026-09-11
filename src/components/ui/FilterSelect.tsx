@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,7 @@ export default function FilterSelect({
   return (
     <div className="relative">
       {label && (
-        <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
+        <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-500 dark:text-[#71767B]">{label}</label>
       )}
       <div className="relative">
         <select
@@ -35,8 +35,8 @@ export default function FilterSelect({
           className={cn(
             'appearance-none rounded-lg border px-3 py-2 pr-8 text-sm font-medium shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500',
             isActive
-              ? activeColor
-              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+          ? activeColor
+          : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] text-gray-700 dark:text-[#E7E9EA] hover:border-gray-300 dark:hover:border-[#536471]'
           )}
         >
           {options.map((option) => (
@@ -46,7 +46,7 @@ export default function FilterSelect({
           ))}
         </select>
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-          <ChevronDown className="h-4 w-4 text-gray-400" />
+          <ChevronDown className="h-4 w-4 text-gray-400 dark:text-[#71767B]" />
         </div>
       </div>
     </div>

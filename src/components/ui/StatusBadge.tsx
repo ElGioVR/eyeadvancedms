@@ -14,7 +14,7 @@ interface StatusBadgeProps {
 }
 
 export default function StatusBadge({ status, config }: StatusBadgeProps) {
-  const style = config[status] || { bg: 'bg-gray-100', text: 'text-gray-700' };
+  const style = config[status] || { bg: 'bg-gray-100 dark:bg-[#202327]', text: 'text-gray-700 dark:text-[#E7E9EA]' };
 
   return (
     <span

@@ -16,7 +16,7 @@ export default function NuevaConsultaLoading() {
       </div>
 
       {/* Patient selector */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6">
         <Skeleton className="mb-3 h-3 w-20" />
         <Skeleton className="h-12 w-full rounded-lg" />
       </div>
@@ -25,8 +25,8 @@ export default function NuevaConsultaLoading() {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0 space-y-5">
           {/* Datos de Consulta */}
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C]">
+            <div className="flex items-center gap-3 border-b border-gray-100 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50 px-6 py-4">
               <Skeleton className="h-8 w-8 rounded-lg" />
               <Skeleton className="h-3 w-36" />
             </div>
@@ -48,11 +48,11 @@ export default function NuevaConsultaLoading() {
           </div>
 
           {/* Estudios */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6">
             <Skeleton className="mb-4 h-3 w-20" />
             <div className="space-y-3">
               {[1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
+                <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 dark:border-[#2F3336] p-3">
                   <Skeleton className="h-8 w-8 rounded-lg" />
                   <Skeleton className="h-3 w-40" />
                   <Skeleton className="ml-auto h-5 w-5 rounded" />
@@ -64,14 +64,14 @@ export default function NuevaConsultaLoading() {
 
         {/* Sidebar */}
         <div className="w-full lg:w-[320px] space-y-5">
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
             <Skeleton className="mb-4 h-4 w-24" />
             <div className="space-y-3">
               <div className="flex justify-between"><Skeleton className="h-3 w-16" /><Skeleton className="h-3 w-24" /></div>
               <div className="flex justify-between"><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-28" /></div>
               <div className="flex justify-between"><Skeleton className="h-3 w-12" /><Skeleton className="h-3 w-20" /></div>
               <div className="flex justify-between"><Skeleton className="h-3 w-16" /><Skeleton className="h-3 w-16" /></div>
-              <div className="border-t border-gray-100 pt-3 flex justify-between">
+              <div className="border-t border-gray-100 dark:border-[#2F3336] pt-3 flex justify-between">
                 <Skeleton className="h-4 w-20" />
                 <Skeleton className="h-4 w-16" />
               </div>
