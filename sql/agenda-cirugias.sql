@@ -1,6 +1,3 @@
--- Migración: Crear tabla agenda_cirugias para el módulo de Agenda de Cirugías
--- Ejecutar en Supabase SQL Editor o como migración
-
 CREATE TYPE agenda_cirugia_estado AS ENUM ('agendada', 'aplazada', 'completada', 'cancelada');
 
 CREATE TABLE agenda_cirugias (
@@ -35,7 +32,6 @@ CREATE INDEX idx_agenda_cirugias_notificado ON agenda_cirugias(notificado, fecha
 
 ALTER TABLE agenda_cirugias ENABLE ROW LEVEL SECURITY;
 
--- Admin ve todo
 CREATE POLICY agenda_cirugias_admin_all ON agenda_cirugias
   USING (
     EXISTS (
@@ -44,7 +40,6 @@ CREATE POLICY agenda_cirugias_admin_all ON agenda_cirugias
     )
   );
 
--- Doctores solo ven sus cirugías asignadas
 CREATE POLICY agenda_cirugias_doctor_own ON agenda_cirugias
   USING (
     doctor_id IN (
@@ -53,7 +48,6 @@ CREATE POLICY agenda_cirugias_doctor_own ON agenda_cirugias
     )
   );
 
--- Recepcionistas ven todo
 CREATE POLICY agenda_cirugias_recepcionista_all ON agenda_cirugias
   USING (
     EXISTS (
