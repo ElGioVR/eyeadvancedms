@@ -17,6 +17,7 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Users, label: 'Pacientes', href: '/pacientes' },
   { icon: Stethoscope, label: 'Consultas', href: '/consultas' },
+  { icon: Calendar, label: 'Agenda', href: '/agenda' },
   { icon: DollarSign, label: 'Cobros', href: '/cobros' },
   { icon: Package, label: 'Inventario', href: '/inventario' },
   { icon: BarChart3, label: 'Reportes', href: '/reportes' },
