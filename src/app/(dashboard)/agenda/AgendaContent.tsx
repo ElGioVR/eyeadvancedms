@@ -71,6 +71,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const [transitionDir, setTransitionDir] = useState(0);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const timeGridRef = useRef<HTMLDivElement>(null);
@@ -97,7 +98,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
       else if (e.key === 'm' || e.key === 'M') setCalendarView('month');
       else if (e.key === 'w' || e.key === 'W') setCalendarView('week');
       else if (e.key === 'd' || e.key === 'D') setCalendarView('day');
-      else if (e.key === 'Escape') { setSelectedDate(null); setDetailCirugia(null); }
+      else if (e.key === 'Escape') { setSelectedDate(null); setDetailCirugia(null); setDetailPosition(null); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -163,6 +164,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const handleDayClick = useCallback((ds: string) => {
     setSelectedDate(prev => prev === ds ? null : ds);
     setDetailCirugia(null);
+    setDetailPosition(null);
     if (calendarView === 'month') setCalendarView('day');
   }, [calendarView]);
 
@@ -233,10 +235,8 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const showTimeIndicator = (calendarView === 'week' || calendarView === 'day') && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 
-  const eventsRef = useFetch<AgendaCirugia>('/api/agenda', fetchParams);
-
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full h-full flex flex-col">
       <PageHeader
         title="AGENDA DE CIRUGÍAS"
         subtitle="Gestión y programación de cirugías."
@@ -278,7 +278,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
       </div>
 
       {/* Main Layout: Sidebar + Calendar */}
-      <div className="flex gap-5">
+      <div className="flex gap-5 flex-1 min-h-0">
         {/* Mini Calendar Sidebar */}
         <div className="hidden xl:block w-[220px] shrink-0">
           <div className="sticky top-24 space-y-4">
@@ -349,7 +349,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
         </div>
 
         {/* Main Calendar Area */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {/* Toolbar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -390,18 +390,17 @@ export default function AgendaContent({ userRol, doctores }: Props) {
           </div>
 
           {/* View Container with transition */}
-          <div className="relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C]"
-            style={{ minHeight: calendarView === 'month' ? 600 : HOUR_HEIGHT * (HOUR_END - HOUR_START) + 40 }}>
+          <div className="relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
-              <div className="animate-in fade-in duration-200">
+              <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 <div className="grid grid-cols-7 border-b border-gray-200 dark:border-[#2F3336]">
                   {DIAS_CORTOS.map(d => (
                     <div key={d} className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] py-2.5 border-r border-gray-100 dark:border-[#2F3336] last:border-r-0">{d}</div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 divide-x divide-gray-100 dark:divide-[#2F3336]">
+                <div className="grid grid-cols-7 divide-x divide-gray-100 dark:divide-[#2F3336] flex-1 min-h-0">
                   {Array.from({ length: Math.ceil((firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth()) + daysInMonth(currentDate.getFullYear(), currentDate.getMonth())) / 7) * 7 }).map((_, i) => {
                     const fd = firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
                     const dim = daysInMonth(currentDate.getFullYear(), currentDate.getMonth());
@@ -439,7 +438,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                         onDragLeave={() => setDragOverDate(null)}
                         onDrop={e => handleDrop(e, cellDateStr)}
                         className={cn(
-                          'min-h-[100px] p-1.5 cursor-pointer transition-all border-b border-gray-100 dark:border-[#2F3336]',
+                          'p-1.5 cursor-pointer transition-all border-b border-gray-100 dark:border-[#2F3336]',
                           !isCurrentMonth && 'bg-gray-50/50 dark:bg-[#16181C]/50',
                           isToday && 'bg-primary-50/30 dark:bg-primary-900/5',
                           isSelected && 'bg-primary-50/60 dark:bg-primary-900/10 ring-2 ring-inset ring-primary-400',
@@ -458,7 +457,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                             <div key={c.id}
                               draggable={userRol !== 'doctor'}
                               onDragStart={e => handleDragStart(e, c.id)}
-                              onClick={e => { e.stopPropagation(); setDetailCirugia(c); }}
+                              onClick={e => { e.stopPropagation(); setDetailCirugia(c); setDetailPosition({ x: e.clientX, y: e.clientY }); }}
                               className={cn(
                                 'flex items-center gap-1 text-[9px] leading-tight px-1.5 py-[3px] rounded cursor-pointer transition-all',
                                 'hover:brightness-95 hover:shadow-sm',
@@ -487,7 +486,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
             {/* WEEK VIEW */}
             {calendarView === 'week' && (
-              <div className="animate-in fade-in duration-200 flex flex-col h-full" style={{ minHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) + 40 }}>
+              <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Headers */}
                 <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
@@ -547,7 +546,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                               <div key={c.id}
                                 draggable={userRol !== 'doctor'}
                                 onDragStart={e => handleDragStart(e, c.id)}
-                                onClick={e => { e.stopPropagation(); setDetailCirugia(c); }}
+                              onClick={e => { e.stopPropagation(); setDetailCirugia(c); setDetailPosition({ x: e.clientX, y: e.clientY }); }}
                                 className={cn(
                                   'absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 cursor-pointer transition-all z-10',
                                   'hover:brightness-95 hover:shadow-md hover:scale-[1.01]',
@@ -590,7 +589,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
             {/* DAY VIEW */}
             {calendarView === 'day' && (
-              <div className="animate-in fade-in duration-200 flex flex-col" style={{ minHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) + 40 }}>
+              <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Header */}
                 <div className="grid grid-cols-[60px_1fr] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
@@ -638,7 +637,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                           <div key={c.id}
                             draggable={userRol !== 'doctor'}
                             onDragStart={e => handleDragStart(e, c.id)}
-                            onClick={e => { e.stopPropagation(); setDetailCirugia(c); }}
+                            onClick={e => { e.stopPropagation(); setDetailCirugia(c); setDetailPosition({ x: e.clientX, y: e.clientY }); }}
                             className={cn(
                               'absolute left-1 right-3 rounded-lg px-3 py-2 cursor-pointer transition-all z-10',
                               'hover:brightness-95 hover:shadow-lg hover:scale-[1.005]',
@@ -689,10 +688,17 @@ export default function AgendaContent({ userRol, doctores }: Props) {
         </div>
       </div>
 
-      {/* Detail Modal */}
-      <Modal isOpen={!!detailCirugia} onClose={() => setDetailCirugia(null)} maxWidth="max-w-xl">
-        {detailCirugia && <CirugiaDetailModal cirugia={detailCirugia} userRol={userRol} onEdit={() => { setDetailCirugia(null); setEditingId(detailCirugia.id); setShowForm(true); }} onClose={() => setDetailCirugia(null)} onRefetch={() => { refetch(); setDetailCirugia(null); }} />}
-      </Modal>
+      {/* Detail Popover Card */}
+      {detailCirugia && detailPosition && (
+        <DetailPopoverCard
+          cirugia={detailCirugia}
+          position={detailPosition}
+          userRol={userRol}
+          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); setEditingId(detailCirugia.id); setShowForm(true); }}
+          onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
+          onRefetch={() => { refetch(); setDetailCirugia(null); setDetailPosition(null); }}
+        />
+      )}
 
       {/* Sidebar Form */}
       <SidebarPanel isOpen={showForm} onClose={() => { setShowForm(false); setEditingId(null); setQuickAddDate(null); }} title={editingId ? 'Editar Cirugía' : 'Nueva Cirugía'}>
@@ -779,6 +785,140 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ───────── Detail Popover Card (Google Calendar style) ───────── */
+function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefetch }: {
+  cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
+  onEdit: () => void; onClose: () => void; onRefetch: () => void;
+}) {
+  const [updating, setUpdating] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [adjustedPos, setAdjustedPos] = useState(position);
+
+  useEffect(() => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let x = position.x;
+    let y = position.y;
+    if (x + rect.width > vw - 16) x = vw - rect.width - 16;
+    if (y + rect.height > vh - 16) y = position.y - rect.height - 10;
+    if (x < 16) x = 16;
+    if (y < 16) y = 16;
+    setAdjustedPos({ x, y });
+  }, [position]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const updateEstado = async (s: AgendaCirugiaEstado) => {
+    setUpdating(true);
+    try {
+      await fetch(`/api/agenda/${cirugia.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: s }) });
+      onRefetch();
+    } finally { setUpdating(false); }
+  };
+
+  return (
+    <div ref={cardRef}
+      className="fixed z-50 w-[340px] rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+      style={{ left: adjustedPos.x, top: adjustedPos.y }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
+          <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{cirugia.nombre_paciente}</h3>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {userRol !== 'doctor' && (
+            <button onClick={() => updateEstado('cancelada')} disabled={updating}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-gray-400 hover:text-red-500"
+              title="Eliminar">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+            </button>
+          )}
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-[#E7E9EA]"
+            title="Cerrar">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Subtitle */}
+      <div className="px-4 pb-2">
+        <p className="text-xs text-gray-500 dark:text-[#71767B]">
+          {cirugia.fecha && fmtDate(cirugia.fecha)}
+        </p>
+      </div>
+
+      {/* Details */}
+      <div className="px-4 pb-3 space-y-2">
+        {cirugia.jornada && (
+          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
+            <MapPin className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+            <span>{cirugia.jornada}</span>
+          </div>
+        )}
+        {cirugia.procedimiento && (
+          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
+            <Stethoscope className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+            <span>{cirugia.procedimiento}</span>
+          </div>
+        )}
+        {cirugia.doctor_nombre && (
+          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
+            <User className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+            <span>{cirugia.doctor_nombre}</span>
+          </div>
+        )}
+        {cirugia.hora && (
+          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
+            <Clock className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+            <span>{fmtTime(cirugia.hora)}{cirugia.tiempo_estimado ? ` · ${cirugia.tiempo_estimado}` : ''}</span>
+          </div>
+        )}
+        {cirugia.ojo && (
+          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
+            <Eye className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+            <span>{cirugia.ojo}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Status + Actions */}
+      <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-[#2F3336] flex items-center gap-2">
+        <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, estadoConfig[cirugia.estado].text)}>
+          <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
+          {estadoLabels[cirugia.estado]}
+        </span>
+        <div className="flex-1" />
+        {userRol !== 'doctor' && cirugia.estado === 'agendada' && (
+          <>
+            <button onClick={() => updateEstado('completada')} disabled={updating}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
+              Completar
+            </button>
+            <button onClick={() => updateEstado('cancelada')} disabled={updating}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+          </>
+        )}
+        <button onClick={onEdit}
+          className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+          Editar
+        </button>
+      </div>
     </div>
   );
 }
