@@ -27,6 +27,9 @@ const errorTranslations: Record<string, string> = {
   'duplicate key value violates unique constraint "aseguranzas_nombre_key"': 'Ya existe una aseguranza con este nombre',
   'duplicate key value violates unique constraint "categorias_lentes_nombre_key"': 'Ya existe una categoría con este nombre',
   'duplicate key value violates unique constraint "proveedores_nombre_key"': 'Ya existe un proveedor con este nombre',
+  'insert or update on table "agenda_cirugias" violates foreign key constraint "agenda_cirugias_paciente_id_fkey"': 'El paciente seleccionado no existe',
+  'insert or update on table "agenda_cirugias" violates foreign key constraint "agenda_cirugias_doctor_id_fkey"': 'El doctor seleccionado no existe',
+  'invalid input value for enum agenda_cirugia_estado': 'Estado de cirugía no válido',
 };
 
 function translateError(msg: string): string {

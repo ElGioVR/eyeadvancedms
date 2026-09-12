@@ -206,3 +206,54 @@ export interface PerfilActividad {
   accion: string;
   tiempo: string;
 }
+
+export type AgendaCirugiaEstado = 'agendada' | 'aplazada' | 'completada' | 'cancelada';
+
+export interface AgendaCirugia {
+  id: string;
+  paciente_id: string | null;
+  nombre_paciente: string;
+  expediente: string | null;
+  fecha: string | null;
+  hora: string | null;
+  jornada: string | null;
+  diagnostico: string | null;
+  procedimiento: string | null;
+  ojo: string | null;
+  lio: string | null;
+  marca_lio: string | null;
+  tiempo_estimado: string | null;
+  tiempo_estancia: string | null;
+  doctor_id: string | null;
+  doctor_nombre: string | null;
+  estado: AgendaCirugiaEstado;
+  procedencia: string | null;
+  motivo_aplazamiento: string | null;
+  notas: string | null;
+  notificado: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgendaCirugiaImportRow {
+  nombre_paciente: string;
+  expediente: string | null;
+  fecha: string | null;
+  hora: string | null;
+  jornada: string | null;
+  diagnostico: string | null;
+  procedimiento: string | null;
+  ojo: string | null;
+  lio: string | null;
+  marca_lio: string | null;
+  tiempo_estimado: string | null;
+  tiempo_estancia: string | null;
+  cirujano_texto: string | null;
+  doctor_id: string | null;
+  doctor_nombre: string | null;
+  notas: string | null;
+  procedencia: string | null;
+  motivo_aplazamiento: string | null;
+  estado: AgendaCirugiaEstado;
+  errores: string[];
+}
