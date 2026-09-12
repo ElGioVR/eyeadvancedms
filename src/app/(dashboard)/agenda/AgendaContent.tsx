@@ -83,12 +83,20 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(id); }, []);
 
+  // On mobile, auto-select today on mount for the week strip
   useEffect(() => {
-    if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current && selectedDate === todayStr) {
-      const px = Math.max(0, (now.getHours() - HOUR_START) * HOUR_HEIGHT - 100);
-      timeGridRef.current.scrollTo({ top: px, behavior: 'smooth' });
+    if (!selectedDate) setSelectedDate(todayStr);
+  }, []);
+
+  useEffect(() => {
+    if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current) {
+      const viewDate = calendarView === 'day' ? (selectedDate || todayStr) : todayStr;
+      if (viewDate === todayStr) {
+        const px = Math.max(0, (now.getHours() - HOUR_START) * HOUR_HEIGHT - 100);
+        timeGridRef.current.scrollTo({ top: px, behavior: 'smooth' });
+      }
     }
-  }, [calendarView, now, todayStr]);
+  }, [calendarView, now, todayStr, selectedDate]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -236,46 +244,96 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const showTimeIndicator = (calendarView === 'week' || calendarView === 'day') && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 
+  // On mobile, day view uses selectedDate (from week strip) instead of currentDate
+  const dayViewDate = selectedDate || toDateStr(currentDate);
+  const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
+
   return (
     <div className="w-full h-full flex flex-col">
-      <PageHeader
-        title="AGENDA DE CIRUGÍAS"
-        subtitle="Gestión y programación de cirugías."
-        action={
-          <div className="flex gap-3">
-            {userRol !== 'doctor' && (
-              <>
-                <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                  <Upload className="h-4 w-4" /> Importar
-                </button>
-                <button onClick={() => { setEditingId(null); setQuickAddDate(null); setShowForm(true); }} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-                  <Plus className="h-4 w-4" /> Nueva Cirugía
-                </button>
-              </>
-            )}
-          </div>
-        }
-      />
+      {/* ─── Desktop Header ─── */}
+      <div className="hidden lg:block">
+        <PageHeader
+          title="AGENDA DE CIRUGÍAS"
+          subtitle="Gestión y programación de cirugías."
+          action={
+            <div className="flex gap-3">
+              {userRol !== 'doctor' && (
+                <>
+                  <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                    <Upload className="h-4 w-4" /> Importar
+                  </button>
+                  <button onClick={() => { setEditingId(null); setQuickAddDate(null); setShowForm(true); }} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
+                    <Plus className="h-4 w-4" /> Nueva Cirugía
+                  </button>
+                </>
+              )}
+            </div>
+          }
+        />
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
-        {[
-          { label: 'Total', value: stats.total, color: 'text-gray-900 dark:text-[#E7E9EA]', Icon: Calendar },
-          { label: 'Agendadas', value: stats.agendadas, color: 'text-blue-600', Icon: Clock },
-          { label: 'Aplazadas', value: stats.aplazadas, color: 'text-amber-600', Icon: Timer },
-          { label: 'Completadas', value: stats.completadas, color: 'text-emerald-600', Icon: CheckCircle2 },
-          { label: 'Canceladas', value: stats.canceladas, color: 'text-red-600', Icon: X },
-        ].map(s => (
-          <div key={s.label} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 flex items-center gap-3">
-            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', s.color.replace('text-', 'bg-').replace('600', '100').replace('900', '100'))}>
-              <s.Icon className={cn('h-4 w-4', s.color)} />
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+          {[
+            { label: 'Total', value: stats.total, color: 'text-gray-900 dark:text-[#E7E9EA]', Icon: Calendar },
+            { label: 'Agendadas', value: stats.agendadas, color: 'text-blue-600', Icon: Clock },
+            { label: 'Aplazadas', value: stats.aplazadas, color: 'text-amber-600', Icon: Timer },
+            { label: 'Completadas', value: stats.completadas, color: 'text-emerald-600', Icon: CheckCircle2 },
+            { label: 'Canceladas', value: stats.canceladas, color: 'text-red-600', Icon: X },
+          ].map(s => (
+            <div key={s.label} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 flex items-center gap-3">
+              <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', s.color.replace('text-', 'bg-').replace('600', '100').replace('900', '100'))}>
+                <s.Icon className={cn('h-4 w-4', s.color)} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">{s.label}</p>
+                <p className={cn('text-xl font-extrabold', s.color)}>{s.value}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">{s.label}</p>
-              <p className={cn('text-xl font-extrabold', s.color)}>{s.value}</p>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
+
+      {/* ─── Mobile Top Bar ─── */}
+      <div className="flex lg:hidden items-center justify-between px-1 py-2 shrink-0">
+        <div className="flex items-center gap-1">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]">
+            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
+          </button>
+          <h2 className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+            {MESES[currentDate.getMonth()]} {currentDate.getFullYear()}
+          </h2>
+          <button onClick={() => navigate(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]">
+            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          {userRol !== 'doctor' && (
+            <button onClick={() => { setEditingId(null); setQuickAddDate(null); setShowForm(true); }} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]">
+              <Plus className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Mobile Week Strip ─── */}
+      <div className="lg:hidden shrink-0 border-b border-gray-200 dark:border-[#2F3336]">
+        <div className="grid grid-cols-7">
+          {weekDays.map(wd => (
+            <button key={wd.dateStr}
+              onClick={() => { setCurrentDate(new Date(wd.dateStr + 'T00:00:00')); setSelectedDate(wd.dateStr); }}
+              className={cn('flex flex-col items-center py-2 transition-colors',
+                wd.dateStr === selectedDate && 'bg-primary-50 dark:bg-primary-900/10'
+              )}>
+              <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">{wd.dayName}</span>
+              <span className={cn('mt-0.5 inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold transition-all',
+                wd.isToday ? 'bg-red-500 text-white' : wd.dateStr === selectedDate ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700' : 'text-gray-900 dark:text-[#E7E9EA]'
+              )}>{wd.day}</span>
+              {(cirugiasPorFecha[wd.dateStr] || []).length > 0 && (
+                <span className={cn('h-1.5 w-1.5 rounded-full mt-1', wd.isToday ? 'bg-red-400' : 'bg-primary-400')} />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Layout: Sidebar + Calendar */}
@@ -351,8 +409,8 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
         {/* Main Calendar Area */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          {/* Toolbar */}
-          <div className="flex items-center justify-between">
+          {/* Desktop Toolbar */}
+          <div className="hidden lg:flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
                 <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
@@ -391,7 +449,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
           </div>
 
           {/* View Container with transition */}
-          <div className="relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
+          <div className="relative overflow-hidden lg:rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
@@ -595,10 +653,10 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                 <div className="grid grid-cols-[64px_1fr] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
                   <div className="text-center py-2">
-                    <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{DIAS_CORTOS[(currentDate.getDay() + 6) % 7]}</span>
+                    <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{DIAS_CORTOS[(dayViewDateObj.getDay() + 6) % 7]}</span>
                     <span className={cn('ml-2 inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-extrabold',
-                      todayStr === toDateStr(currentDate) ? 'bg-primary-600 text-white' : 'text-gray-900 dark:text-[#E7E9EA]'
-                    )}>{currentDate.getDate()}</span>
+                      dayViewDate === todayStr ? 'bg-primary-600 text-white' : 'text-gray-900 dark:text-[#E7E9EA]'
+                    )}>{dayViewDateObj.getDate()}</span>
                   </div>
                 </div>
 
@@ -614,20 +672,20 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                       ))}
                     </div>
                     <div
-                      onDragOver={e => handleDragOver(e, toDateStr(currentDate))}
+                      onDragOver={e => handleDragOver(e, dayViewDate)}
                       onDragLeave={() => setDragOverDate(null)}
-                      onDrop={e => handleDrop(e, toDateStr(currentDate))}
+                      onDrop={e => handleDrop(e, dayViewDate)}
                       className="relative">
                       {hours.map(h => (
                         <div key={h}
-                          onClick={() => userRol !== 'doctor' && handleQuickAdd(toDateStr(currentDate), h)}
+                          onClick={() => userRol !== 'doctor' && handleQuickAdd(dayViewDate, h)}
                           className={cn('border-b border-gray-100 dark:border-[#2F3336] transition-colors',
                             userRol !== 'doctor' && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
                           )} style={{ height: HOUR_HEIGHT }} />
                       ))}
 
                       {/* Surgery Blocks */}
-                      {(cirugiasPorFecha[toDateStr(currentDate)] || []).map(c => {
+                      {(cirugiasPorFecha[dayViewDate] || []).map(c => {
                         if (!c.hora) return null;
                         const startMin = parseTimeToMinutes(c.hora);
                         if (startMin < HOUR_START * 60 || startMin >= HOUR_END * 60) return null;
@@ -673,7 +731,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                       })}
 
                       {/* Current Time Indicator */}
-                      {todayStr === toDateStr(currentDate) && showTimeIndicator && (
+                      {dayViewDate === todayStr && showTimeIndicator && (
                         <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: timeIndicatorTop }}>
                           <div className="flex items-center">
                             <div className="h-3 w-3 rounded-full bg-red-500 -ml-1.5 shrink-0 shadow-md" />
