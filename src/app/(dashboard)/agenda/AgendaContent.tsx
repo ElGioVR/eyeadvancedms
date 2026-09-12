@@ -39,6 +39,7 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 function fmtDate(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 function fmtDateShort(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); }
 function fmtTime(t: string | null) { return t ? t.slice(0, 5) : ''; }
+function fmtHourAMPM(h: number) { return h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`; }
 function daysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
 function firstDayOfMonth(y: number, m: number) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
 function dateStr(y: number, m: number, d: number) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
@@ -488,7 +489,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
             {calendarView === 'week' && (
               <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Headers */}
-                <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
+                <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
                   {weekDays.map(wd => (
                     <div key={wd.dateStr}
@@ -504,12 +505,12 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
                 {/* Time Grid */}
                 <div ref={timeGridRef} className="flex-1 overflow-y-auto relative" style={{ maxHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) }}>
-                  <div className="grid grid-cols-[60px_repeat(7,1fr)] relative">
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] relative">
                     {/* Hour Labels */}
                     <div className="relative">
                       {hours.map(h => (
                         <div key={h} className="border-r border-gray-100 dark:border-[#2F3336]" style={{ height: HOUR_HEIGHT }}>
-                          <span className="absolute -top-2.5 right-2 text-[10px] font-bold text-gray-400 dark:text-[#71767B]">{String(h).padStart(2, '0')}:00</span>
+                          <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-gray-400 dark:text-[#71767B]">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -591,7 +592,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
             {calendarView === 'day' && (
               <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Header */}
-                <div className="grid grid-cols-[60px_1fr] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
+                <div className="grid grid-cols-[64px_1fr] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
                   <div className="text-center py-2">
                     <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{DIAS_CORTOS[(currentDate.getDay() + 6) % 7]}</span>
@@ -603,11 +604,12 @@ export default function AgendaContent({ userRol, doctores }: Props) {
 
                 {/* Time Grid */}
                 <div ref={timeGridRef} className="flex-1 overflow-y-auto relative" style={{ maxHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) }}>
-                  <div className="grid grid-cols-[60px_1fr] relative">
+                  <div className="grid grid-cols-[64px_1fr] relative">
+                    {/* Hour Labels — sticky so they stay visible while scrolling */}
                     <div className="relative">
                       {hours.map(h => (
                         <div key={h} className="border-r border-gray-100 dark:border-[#2F3336]" style={{ height: HOUR_HEIGHT }}>
-                          <span className="absolute -top-2.5 right-2 text-[10px] font-bold text-gray-400 dark:text-[#71767B]">{String(h).padStart(2, '0')}:00</span>
+                          <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-gray-400 dark:text-[#71767B]">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
