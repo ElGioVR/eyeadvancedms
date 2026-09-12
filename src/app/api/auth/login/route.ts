@@ -1,23 +1,28 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { z } from 'zod';
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { z } from "zod";
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-}).strict();
+const loginSchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+  .strict();
 
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
   const validation = loginSchema.safeParse(body);
   if (!validation.success) {
-    return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
+    return NextResponse.json(
+      { error: "Credenciales inválidas" },
+      { status: 401 },
+    );
   }
 
   const { email, password } = validation.data;
@@ -39,26 +44,26 @@ export async function POST(request: NextRequest) {
             value,
             ...options,
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
           });
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: '', ...options });
+          request.cookies.set({ name, value: "", ...options });
           response.cookies.set({
             name,
-            value: '',
+            value: "",
             ...options,
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
             maxAge: 0,
           });
         },
       },
-    }
+    },
   );
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -67,7 +72,16 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
+    console.error("[AUTH LOGIN]", {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+    });
+
+    return NextResponse.json(
+      { error: "Credenciales inválidas" },
+      { status: 401 },
+    );
   }
 
   return response;
