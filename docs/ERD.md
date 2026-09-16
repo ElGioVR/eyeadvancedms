@@ -314,3 +314,15 @@ COBROS ───────── 1:N ─────── EVENTOS_HONORARIO
 | usuario_id | UUID | FK → usuarios ON DELETE SET NULL |
 | ip_address | INET | |
 | created_at | TIMESTAMPTZ NOT NULL | DEFAULT now() |
+
+### configuracion_sistema
+| Campo | Tipo | Constraints |
+|-------|------|-------------|
+| clave | VARCHAR(100) | PRIMARY KEY |
+| valor | JSONB NOT NULL | |
+| descripcion | TEXT | |
+| updated_by | UUID | FK → usuarios ON DELETE SET NULL |
+| updated_at | TIMESTAMPTZ NOT NULL | DEFAULT now() |
+| created_at | TIMESTAMPTZ NOT NULL | DEFAULT now() |
+
+> **RLS:** Admin full access; all users can read.

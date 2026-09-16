@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { HonorariosService } from '@/services/honorarios';
 import { z } from 'zod';
 
 const cobroUpdateSchema = z.object({
@@ -91,6 +92,14 @@ export async function PATCH(
             .delete()
             .eq('consulta_id', existing.consulta_id);
         }
+      }
+
+      // Revert honorarios associated with this cobro
+      try {
+        const honorariosService = new HonorariosService();
+        await honorariosService.revertirPorCobro(id, auth.user.id);
+      } catch (err) {
+        console.error('Error al revertir honorarios:', err);
       }
     } else if (data.estado === 'PENDIENTE') {
       updateData.pagado = false;
@@ -190,6 +199,14 @@ export async function DELETE(
 
   if (deleteError) {
     return NextResponse.json({ error: 'Error al eliminar el cobro' }, { status: 500 });
+  }
+
+  // Revert honorarios associated with this cobro
+  try {
+    const honorariosService = new HonorariosService();
+    await honorariosService.revertirPorCobro(id, auth.user.id);
+  } catch (err) {
+    console.error('Error al revertir honorarios:', err);
   }
 
   return NextResponse.json({ success: true });

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
+import { MotorDevengoService } from '@/services/honorarios';
 import { z } from 'zod';
 
 async function crearNotificacion(
@@ -374,7 +375,26 @@ export async function POST(request: Request) {
     }
   }
 
-  // 7. Generate notification for the doctor
+  // 7. Generate honorarios automatically (devengo) — respects devengo_automatico config
+  try {
+    const { data: honorariosConfig } = await supabase
+      .from('configuracion_sistema')
+      .select('valor')
+      .eq('clave', 'honorarios')
+      .maybeSingle();
+
+    const configValor = (honorariosConfig?.valor as Record<string, unknown>) || {};
+    const devengoAutomatico = configValor.devengo_automatico !== false;
+
+    if (devengoAutomatico) {
+      const motorDevengo = new MotorDevengoService();
+      await motorDevengo.generarDesdeConsulta(consultaData.id);
+    }
+  } catch (err) {
+    console.error('Error al generar honorarios:', err);
+  }
+
+  // 8. Generate notification for the doctor
   if (consultaData.doctor_id) {
     const nombrePaciente = pacienteCheck.data
       ? (await supabase.from('pacientes').select('nombre_completo').eq('id', data.paciente_id).maybeSingle())?.data?.nombre_completo ?? 'un paciente'

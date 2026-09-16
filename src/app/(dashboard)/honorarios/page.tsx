@@ -177,7 +177,7 @@ export default function HonorariosPage() {
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Accesos Rápidos</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link href="/honorarios/tarifas" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors">
                 <DollarSign className="w-8 h-8 text-primary-600" />
                 <div>
@@ -197,6 +197,13 @@ export default function HonorariosPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-900">Liquidaciones</p>
                   <p className="text-xs text-gray-500">Aprobar y exportar pagos</p>
+                </div>
+              </Link>
+              <Link href="/honorarios/reportes" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors">
+                <TrendingUp className="w-8 h-8 text-sky-600" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Reportes</p>
+                  <p className="text-xs text-gray-500">Análisis de honorarios por doctor</p>
                 </div>
               </Link>
             </div>

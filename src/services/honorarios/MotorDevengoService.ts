@@ -16,10 +16,35 @@ interface EventoDevengoInput {
   moneda?: string;
 }
 
+interface ConfigHonorarios {
+  aseguranza_afecta_honorarios: boolean;
+  base_calculo_honorario: 'COBRO_TOTAL' | 'PARTE_PACIENTE';
+  tipo_cambio_default: number;
+  devengo_automatico: boolean;
+}
+
 export class MotorDevengoService {
   private supabase = getSupabaseAdmin();
 
+  private async getConfig(): Promise<ConfigHonorarios> {
+    const { data } = await this.supabase
+      .from('configuracion_sistema')
+      .select('valor')
+      .eq('clave', 'honorarios')
+      .maybeSingle();
+
+    return {
+      aseguranza_afecta_honorarios: false,
+      base_calculo_honorario: 'COBRO_TOTAL',
+      tipo_cambio_default: 17.50,
+      devengo_automatico: true,
+      ...(data?.valor as Partial<ConfigHonorarios> || {}),
+    };
+  }
+
   async generarDesdeConsulta(consultaId: string): Promise<{ eventos_creados: number }> {
+    const config = await this.getConfig();
+
     const { data: consulta, error: e1 } = await this.supabase
       .from('consultas')
       .select('id, paciente_id, doctor_id, fecha, tipo_consulta, tipo_visita')
@@ -27,6 +52,36 @@ export class MotorDevengoService {
       .single();
 
     if (e1 || !consulta) throw new Error(`Consulta ${consultaId} no encontrada`);
+
+    let cobroMonto: number | null = null;
+    let cobroAseguranzaId: string | null = null;
+
+    if (config.aseguranza_afecta_honorarios) {
+      const { data: cobro } = await this.supabase
+        .from('cobros')
+        .select('monto, aseguranza_id')
+        .eq('consulta_id', consultaId)
+        .maybeSingle();
+
+      if (cobro) {
+        cobroMonto = cobro.monto;
+        cobroAseguranzaId = cobro.aseguranza_id;
+      }
+    }
+
+    let porcentajeCobertura = 100;
+    if (config.aseguranza_afecta_honorarios && cobroAseguranzaId) {
+      const { data: cobertura } = await this.supabase
+        .from('coberturas_aseguranza')
+        .select('porcentaje_cobertura')
+        .eq('aseguranza_id', cobroAseguranzaId)
+        .eq('activo', true)
+        .maybeSingle();
+
+      if (cobertura) {
+        porcentajeCobertura = cobertura.porcentaje_cobertura || 100;
+      }
+    }
 
     const { data: conceptos } = await this.supabase
       .from('consulta_conceptos')
@@ -47,9 +102,17 @@ export class MotorDevengoService {
         consulta.fecha
       );
 
-      const montoBase: number = concepto.precio_aplicado || (tarifa && typeof tarifa === 'object' && 'valor' in tarifa
+      let montoBase: number = concepto.precio_aplicado || (tarifa && typeof tarifa === 'object' && 'valor' in tarifa
         ? Number((tarifa as Record<string, unknown>).valor) || 0
         : 0);
+
+      if (config.aseguranza_afecta_honorarios && cobroAseguranzaId && cobroMonto !== null) {
+        if (config.base_calculo_honorario === 'PARTE_PACIENTE') {
+          const partePaciente = cobroMonto * (1 - porcentajeCobertura / 100);
+          const factor = cobroMonto > 0 ? partePaciente / cobroMonto : 1;
+          montoBase = montoBase * factor;
+        }
+      }
 
       const resultado = await this.crearEvento({
         origen_tipo: concepto.tipo_concepto as OrigenTipo,
