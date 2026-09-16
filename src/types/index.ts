@@ -207,7 +207,7 @@ export interface PerfilActividad {
   tiempo: string;
 }
 
-export type AgendaCirugiaEstado = 'agendada' | 'aplazada' | 'completada' | 'cancelada';
+export type AgendaCirugiaEstado = 'agendada' | 'aplazada' | 'reagendada' | 'completada' | 'cancelada';
 
 export interface AgendaCirugia {
   id: string;

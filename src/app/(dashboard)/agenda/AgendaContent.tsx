@@ -18,19 +18,20 @@ import type { AgendaCirugia, AgendaCirugiaEstado, AgendaCirugiaImportRow } from 
 interface Doctor { id: string; nombre_completo: string; }
 interface Props { userRol: string; doctores: Doctor[]; }
 
-const HOUR_START = 6;
-const HOUR_END = 21;
+const HOUR_START = 5;
+const HOUR_END = 22;
 const HOUR_HEIGHT = 64;
 
 const estadoConfig: Record<AgendaCirugiaEstado, { bg: string; text: string; dot: string; border: string; lightBg: string; solid: string }> = {
   agendada: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', border: 'border-l-blue-500', lightBg: 'bg-blue-500/10', solid: 'bg-blue-500' },
   aplazada: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', border: 'border-l-amber-500', lightBg: 'bg-amber-500/10', solid: 'bg-amber-500' },
+  reagendada: { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500', border: 'border-l-violet-500', lightBg: 'bg-violet-500/10', solid: 'bg-violet-500' },
   completada: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border-l-emerald-500', lightBg: 'bg-emerald-500/10', solid: 'bg-emerald-500' },
   cancelada: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-l-red-500', lightBg: 'bg-red-500/10', solid: 'bg-red-500' },
 };
 
 const estadoLabels: Record<AgendaCirugiaEstado, string> = {
-  agendada: 'Agendada', aplazada: 'Aplazada', completada: 'Completada', cancelada: 'Cancelada',
+  agendada: 'Agendada', aplazada: 'Aplazada', reagendada: 'Reagendada', completada: 'Completada', cancelada: 'Cancelada',
 };
 
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -171,7 +172,8 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   }, [todayStr]);
 
   const handleDayClick = useCallback((ds: string) => {
-    setSelectedDate(prev => prev === ds ? null : ds);
+    setSelectedDate(ds);
+    setCurrentDate(new Date(ds + 'T00:00:00'));
     setDetailCirugia(null);
     setDetailPosition(null);
     if (calendarView === 'month') setCalendarView('day');
@@ -244,8 +246,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const showTimeIndicator = (calendarView === 'week' || calendarView === 'day') && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 
-  // On mobile, day view uses selectedDate (from week strip) instead of currentDate
-  const dayViewDate = selectedDate || toDateStr(currentDate);
+  const dayViewDate = toDateStr(currentDate);
   const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
 
   return (
@@ -551,7 +552,7 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                   <div className="border-r border-gray-100 dark:border-[#2F3336]" />
                   {weekDays.map(wd => (
                     <div key={wd.dateStr}
-                      onClick={() => { setSelectedDate(wd.dateStr); setCalendarView('day'); }}
+                      onClick={() => { setSelectedDate(wd.dateStr); setCurrentDate(new Date(wd.dateStr + 'T00:00:00')); setCalendarView('day'); }}
                       className={cn('text-center py-2.5 border-r border-gray-100 dark:border-[#2F3336] last:border-r-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors')}>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">{wd.dayName}</div>
                       <div className={cn('inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold mt-0.5',
@@ -562,13 +563,13 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                 </div>
 
                 {/* Time Grid */}
-                <div ref={timeGridRef} className="flex-1 overflow-y-auto relative" style={{ maxHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) }}>
+                <div ref={timeGridRef} className="flex-1 overflow-y-auto">
                   <div className="grid grid-cols-[64px_repeat(7,1fr)] relative">
                     {/* Hour Labels */}
-                    <div className="relative">
+                    <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336]" style={{ height: HOUR_HEIGHT }}>
-                          <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-gray-400 dark:text-[#71767B]">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-0" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none -mt-[5px]">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -661,13 +662,13 @@ export default function AgendaContent({ userRol, doctores }: Props) {
                 </div>
 
                 {/* Time Grid */}
-                <div ref={timeGridRef} className="flex-1 overflow-y-auto relative" style={{ maxHeight: HOUR_HEIGHT * (HOUR_END - HOUR_START) }}>
+                <div ref={timeGridRef} className="flex-1 overflow-y-auto">
                   <div className="grid grid-cols-[64px_1fr] relative">
-                    {/* Hour Labels — sticky so they stay visible while scrolling */}
-                    <div className="relative">
+                    {/* Hour Labels */}
+                    <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336]" style={{ height: HOUR_HEIGHT }}>
-                          <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-gray-400 dark:text-[#71767B]">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-0" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none -mt-[5px]">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -993,7 +994,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
   const [form, setForm] = useState({
     nombre_paciente: '', expediente: '', fecha: initialDate || '', hora: initialHour || '',
     jornada: '', diagnostico: '', procedimiento: '', ojo: '', lio: '', marca_lio: '',
-    tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '',
+    tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '', motivo_aplazamiento: '',
   });
   const [loadingCirugia, setLoadingCirugia] = useState(!!cirugiaId);
 
@@ -1005,7 +1006,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
           hora: data.hora?.slice(0, 5) || '', jornada: data.jornada || '', diagnostico: data.diagnostico || '',
           procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
           tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
-          notas: data.notas || '', procedencia: data.procedencia || '',
+          notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
         });
         setLoadingCirugia(false);
       });
@@ -1022,6 +1023,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         procedimiento: form.procedimiento || null, ojo: form.ojo || null, lio: form.lio || null,
         marca_lio: form.marca_lio || null, tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
         doctor_id: form.doctor_id || null, notas: form.notas || null, procedencia: form.procedencia || null,
+        motivo_aplazamiento: form.motivo_aplazamiento || null,
       };
       const url = cirugiaId ? `/api/agenda/${cirugiaId}` : '/api/agenda';
       const res = await fetch(url, { method: cirugiaId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

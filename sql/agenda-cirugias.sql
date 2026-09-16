@@ -1,4 +1,4 @@
-CREATE TYPE agenda_cirugia_estado AS ENUM ('agendada', 'aplazada', 'completada', 'cancelada');
+CREATE TYPE agenda_cirugia_estado AS ENUM ('agendada', 'aplazada', 'reagendada', 'completada', 'cancelada');
 
 CREATE TABLE agenda_cirugias (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
