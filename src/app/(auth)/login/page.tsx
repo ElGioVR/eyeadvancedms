@@ -115,7 +115,12 @@ export default function LoginPage() {
               <img
                 src="/images/eyeadvanced-logo.png"
                 alt="EyeAdvanced Medical Solutions"
-                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain"
+                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain block dark:hidden"
+              />
+              <img
+                src="/images/eyeadvanced-logo-white.png"
+                alt="EyeAdvanced Medical Solutions"
+                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain hidden dark:block"
               />
             </div>
 
