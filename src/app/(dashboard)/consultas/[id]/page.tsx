@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity } from 'lucide-react';
+import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -94,6 +94,7 @@ export default function ConsultaDetailPage() {
   const { user } = useUser();
   const [consulta, setConsulta] = useState<ConsultaDetalle | null>(null);
   const [historial, setHistorial] = useState<HistorialEvento[]>([]);
+  const [aseguradoraData, setAseguradoraData] = useState<{ aseguradora: { id: string; nombre: string } | null; cobertura: { porcentaje_cobertura: number; copago_fijo: number | null; aplica_estudios: boolean; aplica_procedimientos: boolean } | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,9 +121,16 @@ export default function ConsultaDetailPage() {
     } catch { /* silent */ }
   }, [id]);
 
+  const fetchAseguradora = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/consultas/${id}/aseguradora`);
+      if (res.ok) setAseguradoraData(await res.json());
+    } catch { /* silent */ }
+  }, [id]);
+
   useEffect(() => {
-    Promise.all([fetchConsulta(), fetchHistorial()]).finally(() => setLoading(false));
-  }, [fetchConsulta, fetchHistorial]);
+    Promise.all([fetchConsulta(), fetchHistorial(), fetchAseguradora()]).finally(() => setLoading(false));
+  }, [fetchConsulta, fetchHistorial, fetchAseguradora]);
 
   function handlePrint() {
     window.print();
@@ -268,6 +276,57 @@ export default function ConsultaDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Aseguradora */}
+          {aseguradoraData?.aseguradora && (
+            <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+              <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+                <Shield className="h-4 w-4 text-sky-600" /> Aseguradora
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nombre</span>
+                  <p className="mt-0.5 font-bold text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData.aseguradora.nombre}</p>
+                </div>
+                {aseguradoraData.cobertura && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-[#71767B]">% Cobertura</span>
+                      <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData.cobertura.porcentaje_cobertura}%</span>
+                    </div>
+                    {aseguradoraData.cobertura.copago_fijo !== null && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-[#71767B]">Copago fijo</span>
+                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${aseguradoraData.cobertura.copago_fijo.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400 dark:text-[#71767B]">Aplica</span>
+                      <span className="text-gray-600 dark:text-[#71767B]">
+                        {aseguradoraData.cobertura.aplica_estudios ? 'Estudios' : ''}{aseguradoraData.cobertura.aplica_estudios && aseguradoraData.cobertura.aplica_procedimientos ? ' + ' : ''}{aseguradoraData.cobertura.aplica_procedimientos ? 'Procedimientos' : ''}
+                      </span>
+                    </div>
+                    {consulta.costo_total > 0 && (
+                      <div className="mt-2 rounded-lg bg-gray-50 dark:bg-[#202327] p-3 space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500 dark:text-[#71767B]">Costo base</span>
+                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.costo_total.toLocaleString('es-MX')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500 dark:text-[#71767B]">Cobertura ({aseguradoraData.cobertura.porcentaje_cobertura}%)</span>
+                          <span className="font-bold text-emerald-600">-${(consulta.costo_total * aseguradoraData.cobertura.porcentaje_cobertura / 100).toLocaleString('es-MX')}</span>
+                        </div>
+                        <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">Monto paciente</span>
+                          <span className="font-extrabold text-gray-900 dark:text-[#E7E9EA]">${(consulta.costo_total * (1 - aseguradoraData.cobertura.porcentaje_cobertura / 100)).toLocaleString('es-MX')}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Timeline */}
           <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
