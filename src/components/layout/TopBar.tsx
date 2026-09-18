@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, CalendarDays, Menu, Search, User, Stethoscope, Package, CreditCard, X, Check } from 'lucide-react';
+import { Bell, CalendarDays, Menu, Search, User, Stethoscope, Package, CreditCard, X, Check, LogOut, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 import Avatar from '@/components/ui/Avatar';
 
@@ -85,6 +85,10 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const [notifLoading, setNotifLoading] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [modoFocus, setModoFocus] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
   const fetchUnreadCount = useCallback(async () => {
     try {
       const res = await fetch('/api/notificaciones/unread-count');
@@ -103,6 +107,32 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/usuarios/me');
+        if (res.ok) {
+          const data = await res.json();
+          const prefs = data.preferencias ?? {};
+          setModoFocus(prefs.modo_focus === true);
+        }
+      } catch { /* silent */ }
+    })();
+  }, [user]);
+
+  async function toggleModoFocus() {
+    const next = !modoFocus;
+    setModoFocus(next);
+    try {
+      await fetch('/api/usuarios/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferencias: { modo_focus: next } }),
+      });
+    } catch { setModoFocus(!next); }
+  }
 
   async function toggleNotifPanel() {
     if (notifOpen) {
@@ -173,6 +203,9 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -334,8 +367,59 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <Avatar initials={user?.iniciales ?? '?'} src={user?.avatar_url} size="md" className="bg-primary-50 text-primary-700 border border-primary-100" />
+          <div ref={userMenuRef} className="relative">
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <Avatar initials={user?.iniciales ?? '?'} src={user?.avatar_url} size="md" className="bg-primary-50 text-primary-700 border border-primary-100" />
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 dark:text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {userMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-[#E7E9EA] truncate">{user?.nombre}</p>
+                  <p className="text-xs text-gray-500 dark:text-[#71767B] truncate">{user?.email}</p>
+                  <span className="mt-1 inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
+                    {user?.rol}
+                  </span>
+                </div>
+
+                {user?.rol === 'admin' && (
+                  <button
+                    onClick={toggleModoFocus}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+                  >
+                    {modoFocus ? (
+                      <EyeOff className="w-4 h-4 text-primary-500" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-gray-400 dark:text-[#71767B]" />
+                    )}
+                    <div className="flex-1">
+                      <span className="text-sm text-gray-700 dark:text-[#E7E9EA]">Modo Focus</span>
+                      <p className="text-[10px] text-gray-400 dark:text-[#71767B]">Ver solo tu información</p>
+                    </div>
+                    <div className={`w-8 h-4.5 rounded-full transition-colors relative ${modoFocus ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${modoFocus ? 'left-[18px]' : 'left-0.5'}`} />
+                    </div>
+                  </button>
+                )}
+
+                <div className="border-t border-gray-100 dark:border-[#2F3336]">
+                  <button
+                    onClick={async () => {
+                      await fetch('/api/auth/logout', { method: 'POST' });
+                      window.location.href = '/auth/login';
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-red-600 dark:text-red-400"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="text-sm">Cerrar sesión</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

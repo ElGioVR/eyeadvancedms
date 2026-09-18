@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
@@ -67,6 +68,16 @@ export async function GET(request: Request) {
   }
   if (search) {
     query = query.or(`nombre_paciente.ilike.%${search}%,expediente.ilike.%${search}%`);
+  }
+
+  // RBAC: doctor solo ve sus cirugías
+  const profileRes = await supabase.from('usuarios').select('rol, preferencias').eq('id', auth.user.id).maybeSingle();
+  const userRole = profileRes.data?.rol;
+  const sessionDoctorId = await resolveDoctorId(auth.user.id);
+  const focus = await isModoFocus(auth.user.id);
+
+  if (userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId)) {
+    query = query.eq('doctor_id', sessionDoctorId);
   }
 
   query = query
