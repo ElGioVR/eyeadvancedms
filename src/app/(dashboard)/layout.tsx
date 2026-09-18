@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import DoctorBottomNav from '@/components/layout/DoctorBottomNav';
+import OfflineAndInstall from '@/components/layout/OfflineAndInstall';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -40,6 +41,7 @@ export default function DashboardLayout({
         </div>
 
         <DoctorBottomNav />
+        <OfflineAndInstall />
       </div>
     </ToastProvider>
   );
