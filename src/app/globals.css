@@ -107,6 +107,11 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media print {
   .no-print, nav, header, footer, .sidebar { display: none !important; }
   .print-page { padding: 0 !important; margin: 0 !important; }
