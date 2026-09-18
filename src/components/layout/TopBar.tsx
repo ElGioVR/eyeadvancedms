@@ -231,11 +231,11 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     <header className="sticky top-0 z-30 bg-white dark:bg-black border-b border-gray-200 dark:border-[#2F3336] px-4 sm:px-6 py-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
-          {onMenuToggle && (
+          {onMenuToggle && user?.rol !== 'doctor' && (
             <button
               onClick={onMenuToggle}
               className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-              aria-label="Abrir menÃº"
+              aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
             </button>

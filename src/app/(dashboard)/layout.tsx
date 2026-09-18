@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
+import DoctorBottomNav from '@/components/layout/DoctorBottomNav';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -33,10 +34,12 @@ export default function DashboardLayout({
           )}
         >
           <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
-          <main className="flex-1 overflow-auto px-4 sm:px-6 py-8">
+          <main className="flex-1 overflow-auto px-4 sm:px-6 py-8 pb-24 lg:pb-8">
             {children}
           </main>
         </div>
+
+        <DoctorBottomNav />
       </div>
     </ToastProvider>
   );

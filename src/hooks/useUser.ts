@@ -12,6 +12,7 @@ interface User {
   avatar_url: string | null;
   last_sign_in_at: string | null;
   created_at: string;
+  doctor_id: string | null;
 }
 
 function getInitials(name: string, email: string): string {
@@ -53,6 +54,16 @@ export function useUser() {
         const nombre = profile?.nombre || finalAuthUser.user_metadata?.nombre || '';
         const rol = profile?.rol || finalAuthUser.user_metadata?.rol || 'recepcionista';
 
+        let doctor_id: string | null = null;
+        if (rol === 'doctor') {
+          const { data: doctorRec } = await supabase
+            .from('doctores')
+            .select('id')
+            .eq('usuario_id', finalAuthUser.id)
+            .maybeSingle();
+          doctor_id = doctorRec?.id ?? null;
+        }
+
         setUser({
           id: finalAuthUser.id,
           email: finalAuthUser.email || '',
@@ -62,6 +73,7 @@ export function useUser() {
           avatar_url: profile?.avatar_url ?? null,
           last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
           created_at: finalAuthUser.created_at,
+          doctor_id,
         });
       } catch (error) {
         console.error('Error fetching user:', error);
