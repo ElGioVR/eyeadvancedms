@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, CalendarDays, Menu, Search, User, Stethoscope, Package, CreditCard, X, Check, LogOut, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Bell, CalendarDays, Menu, Search, User, Stethoscope, Package, X, Check, LogOut, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 import Avatar from '@/components/ui/Avatar';
 
@@ -30,7 +30,6 @@ const tipoIcons: Record<string, typeof User> = {
   consulta: Stethoscope,
   lente: Package,
   doctor: Stethoscope,
-  cobro: CreditCard,
 };
 
 const tipoLabels: Record<string, string> = {
@@ -38,7 +37,6 @@ const tipoLabels: Record<string, string> = {
   consulta: 'Consultas',
   lente: 'Inventario',
   doctor: 'Doctores',
-  cobro: 'Cobros',
 };
 
 const notifColors: Record<string, string> = {
@@ -49,7 +47,6 @@ const notifColors: Record<string, string> = {
 
 const notifEntityHref: Record<string, string> = {
   consulta: '/consultas',
-  cobro: '/cobros',
   lente: '/inventario',
 };
 

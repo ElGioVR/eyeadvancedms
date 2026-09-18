@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Plus,
@@ -10,7 +11,6 @@ import {
   AlertTriangle,
   FileText,
   Eye,
-  Banknote,
   Activity,
   ClipboardList,
 } from "lucide-react";
@@ -20,7 +20,6 @@ import SearchInput from "@/components/ui/SearchInput";
 import FilterSelect from "@/components/ui/FilterSelect";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Avatar from "@/components/ui/Avatar";
-import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
 import Pagination from "@/components/ui/Pagination";
@@ -48,27 +47,23 @@ interface ConsultaAPI {
   procedimiento: string;
   procedimiento_doctor: string | null;
   notas: string;
+  estatus: string;
+  estatus_pago: string;
   costo_total: number;
-  estado_pago: string;
   metodo_pago: string | null;
 }
 
-const estadoConfig: Record<string, { bg: string; text: string; dot: string }> =
+const estatusPagoConfig: Record<string, { bg: string; text: string; dot: string }> =
   {
     PAGADO: {
       bg: "bg-emerald-50",
       text: "text-emerald-700",
       dot: "bg-emerald-500",
     },
-    PENDIENTE: {
+    PENDIENTE_PAGO: {
       bg: "bg-amber-50",
       text: "text-amber-700",
       dot: "bg-amber-500",
-    },
-    CANCELADO: {
-      bg: "bg-red-50",
-      text: "text-red-600",
-      dot: "bg-red-500",
     },
   };
 
@@ -98,6 +93,7 @@ function Field({
 }
 
 export default function ConsultasPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const {
     data: consultas,
@@ -111,9 +107,6 @@ export default function ConsultasPage() {
   });
   const [search, setSearch] = useState("");
   const [filterDoctor, setFilterDoctor] = useState("Todos");
-  const [selectedConsulta, setSelectedConsulta] = useState<ConsultaAPI | null>(
-    null,
-  );
   const [today] = useState(() => new Date().toISOString().split("T")[0]);
 
   const debouncedSearch = useDebounce(search);
@@ -307,12 +300,12 @@ export default function ConsultasPage() {
                       {c.diagnostico || "—"}
                     </td>
                     <td className="hidden sm:table-cell px-5 py-4">
-                      <StatusBadge status={c.estado_pago || 'PENDIENTE'} config={estadoConfig} />
+                      <StatusBadge status={c.estatus_pago || 'PENDIENTE_PAGO'} config={estatusPagoConfig} />
                     </td>
                     <td className="hidden sm:table-cell px-5 py-4">
                       <button
                         aria-label={`Ver consulta de ${c.paciente}`}
-                        onClick={() => setSelectedConsulta(c)}
+                        onClick={() => router.push(`/consultas/${c.id}`)}
                         className="text-gray-400 dark:text-[#71767B] hover:text-primary-600 transition-colors"
                       >
                         <Eye className="h-4 w-4" />
@@ -333,115 +326,6 @@ export default function ConsultasPage() {
           />
         </div>
       )}
-
-      <Modal
-        isOpen={!!selectedConsulta}
-        onClose={() => setSelectedConsulta(null)}
-        maxWidth="max-w-2xl"
-      >
-        {selectedConsulta && (
-          <>
-            <div className="flex items-center gap-3 border-b border-gray-100 dark:border-[#2F3336] px-8 py-5 -mx-6 -mt-6 mb-0">
-              <Avatar
-                initials={selectedConsulta.iniciales}
-                className="bg-primary-500"
-                size="lg"
-              />
-              <div>
-                <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
-                  {selectedConsulta.paciente}
-                </h2>
-                <p className="text-xs text-gray-400 dark:text-[#71767B]">
-                  {selectedConsulta.id.slice(0, 8)} • {selectedConsulta.fecha}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-8 space-y-6 -mx-6">
-              <div>
-                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
-                  <ClipboardList className="h-4 w-4 text-primary-600" /> Datos
-                  de Consulta
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <Field label="Doctor" value={selectedConsulta.doctor} />
-                  <Field label="Tipo" value={selectedConsulta.tipo_consulta} />
-                  <Field
-                    label="Fecha y Hora"
-                    value={`${selectedConsulta.fecha} ${selectedConsulta.hora_inicio}`}
-                  />
-                  <Field
-                    label="Hora Fin"
-                    value={selectedConsulta.hora_fin || "—"}
-                  />
-                  <Field
-                    label="Tipo de Visita"
-                    value={selectedConsulta.tipo_visita}
-                  />
-                  <Field
-                    label="Método de Pago"
-                    value={selectedConsulta.metodo_pago || '—'}
-                  />
-                  <Field
-                    label="Diagnóstico"
-                    value={selectedConsulta.diagnostico}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
-                  <Activity className="h-4 w-4 text-sky-600" /> Detalles
-                  Clínicos
-                </h4>
-                <div className="space-y-3 text-sm">
-                  {selectedConsulta.estudios_detalle && selectedConsulta.estudios_detalle.length > 0 ? (
-                    <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios</span>
-                      <div className="mt-1.5 space-y-1.5">
-                        {selectedConsulta.estudios_detalle.map((e, i) => (
-                          <div key={i} className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{e.nombre}</span>
-                            {e.doctor && (
-                              <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {e.doctor}</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <Field label="Estudios" value={selectedConsulta.estudios} full />
-                  )}
-                  {selectedConsulta.procedimiento ? (
-                    <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimientos</span>
-                      <div className="mt-1.5 flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{selectedConsulta.procedimiento}</span>
-                        {selectedConsulta.procedimiento_doctor && (
-                          <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {selectedConsulta.procedimiento_doctor}</span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <Field label="Procedimientos" value="—" full />
-                  )}
-                  <Field label="Notas" value={selectedConsulta.notas} full />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-[#2F3336] px-8 py-5 -mx-6 -mb-6 mt-0">
-              <button
-                type="button"
-                onClick={() => setSelectedConsulta(null)}
-                className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-5 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
-              >
-                CERRAR
-              </button>
-            </div>
-          </>
-        )}
-      </Modal>
     </div>
   );
 }

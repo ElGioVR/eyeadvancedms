@@ -52,13 +52,6 @@ const metodoPagoMap: Record<string, string> = {
   'No aplica': 'NO_APLICA',
 };
 
-const monedaMap: Record<string, string> = {
-  'MXN - Peso Mexicano': 'PESOS',
-  'USD - Dólar': 'DOLARES',
-  'PESOS': 'PESOS',
-  'DOLARES': 'DOLARES',
-};
-
 const estudioConDoctorSchema = z.object({
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
@@ -79,7 +72,6 @@ const consultaCreateSchema = z.object({
   notas: z.string().optional().nullable(),
   costo: z.union([z.string(), z.number()]).optional().nullable(),
   metodo_pago: z.string().optional().nullable(),
-  aseguradora: z.string().optional().nullable(),
   moneda: z.string().optional().nullable(),
   pago_inmediato: z.boolean().optional().nullable(),
   doctor_costos: z.array(z.object({
@@ -89,6 +81,31 @@ const consultaCreateSchema = z.object({
     descripcion: z.string().optional().nullable(),
   })).optional().nullable(),
 }).strict();
+
+function defaultHoraFin(horaInicio: string): string {
+  const [h, m, s] = horaInicio.split(':').map(Number);
+  const totalMin = h * 60 + m + 30;
+  const nh = Math.floor(totalMin / 60) % 24;
+  const nm = totalMin % 60;
+  return s !== undefined
+    ? `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}:00`
+    : `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+}
+
+async function registrarHistorial(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  consultaId: string,
+  tipoEvento: string,
+  userId: string,
+  payload?: Record<string, unknown>,
+) {
+  await supabase.from('consulta_historial').insert({
+    consulta_id: consultaId,
+    tipo_evento: tipoEvento,
+    usuario_id: userId,
+    payload: payload ?? {},
+  });
+}
 
 export async function GET(request: Request) {
   const auth = await requireAuth();
@@ -165,15 +182,15 @@ export async function GET(request: Request) {
       tipo_consulta: c.tipo_consulta,
       tipo_visita: c.tipo_visita,
       diagnostico: c.diagnostico,
-      estudios: estudiosDetalle.map(e => e!.nombre).join(', '),
+      estudios: c.estudios,
       estudios_detalle: estudiosDetalle,
       procedimiento: c.procedimiento,
       procedimiento_doctor: (c as any).proc_doc?.nombre_completo || null,
       notas: c.notas,
-      costo_total: (c as any).costo_total || 0,
-      estado_pago: (c as any).estado_pago || 'PENDIENTE',
-      monto_pagado: (c as any).monto_pagado || 0,
-      metodo_pago: c.metodo_pago || null,
+      estatus: c.estatus || 'BORRADOR',
+      estatus_pago: (c as any).estatus_pago || 'PENDIENTE_PAGO',
+      costo_total: c.costo_total || 0,
+      monto_pagado: c.monto_pagado || 0,
       created_at: c.created_at,
     };
   });
@@ -246,6 +263,8 @@ export async function POST(request: Request) {
   const est2 = data.estudios?.[2] ? parseEstudio(data.estudios[2]) : null;
 
   // 1. Create consulta
+  const horaFin = data.hora_fin || defaultHoraFin(data.hora_inicio);
+
   const { data: consultaData, error: consultaError } = await supabase
     .from('consultas')
     .insert({
@@ -254,7 +273,7 @@ export async function POST(request: Request) {
       doctor_id: data.doctor_id,
       fecha: data.fecha,
       hora_inicio: data.hora_inicio,
-      hora_fin: data.hora_fin || null,
+      hora_fin: horaFin,
       tipo_consulta: tipoConsulta,
       tipo_visita: tipoVisita,
       diagnostico: data.diagnostico?.trim() || null,
@@ -268,6 +287,8 @@ export async function POST(request: Request) {
       procedimiento_doctor_id: data.procedimiento_doctor_id || null,
       notas: data.notas?.trim() || null,
       metodo_pago: metodoPagoMap[data.metodo_pago || ''] || null,
+      estatus: 'BORRADOR',
+      estatus_pago: 'PENDIENTE_PAGO',
     })
     .select()
     .single();
@@ -308,108 +329,32 @@ export async function POST(request: Request) {
 
   // 4. Determine payment status
   const pagoInmediato = data.pago_inmediato ?? false;
-  const estadoPago = pagoInmediato ? 'PAGADO' : (costoTotal > 0 ? 'PENDIENTE' : 'PAGADO');
+  const estatusPago = pagoInmediato ? 'PAGADO' : (costoTotal > 0 ? 'PENDIENTE_PAGO' : 'PAGADO');
 
-  // 5. Update consulta with cost info
+  // 5. Update consulta with cost and payment status
   if (costoTotal > 0 || pagoInmediato) {
     await supabase
       .from('consultas')
       .update({
         costo_total: costoTotal,
-        estado_pago: estadoPago,
+        estatus_pago: estatusPago,
+        estatus: pagoInmediato ? 'FINALIZADA' : 'PROCESADA',
         monto_pagado: pagoInmediato ? costoTotal : 0,
         fecha_pago: pagoInmediato ? new Date().toISOString() : null,
       })
       .eq('id', consultaData.id);
+  } else {
+    // No cost: mark as PROCESADA
+    await supabase
+      .from('consultas')
+      .update({ estatus: 'PROCESADA' })
+      .eq('id', consultaData.id);
   }
 
-  // 6. Create cobro if payment data provided OR if pago inmediato
-  if (data.costo !== undefined || data.metodo_pago || data.aseguradora || pagoInmediato) {
-    const metodoPago = metodoPagoMap[data.metodo_pago || ''] || 'NO_APLICA';
-    const moneda = monedaMap[data.moneda || ''] || 'PESOS';
-    const monto = costoTotal;
-
-    // Resolve aseguranza_id from patient's FK, with override from request
-    let aseguranzaId: string | null = null;
-    if (data.aseguradora && data.aseguradora !== 'Particular') {
-      // Backward compat: if client sends aseguradora name, look it up
-      const { data: aseguranza } = await supabase
-        .from('aseguranzas')
-        .select('id')
-        .ilike('nombre', data.aseguradora)
-        .eq('activo', true)
-        .single();
-      if (aseguranza) aseguranzaId = aseguranza.id;
-    }
-    // If no override, resolve from patient's aseguranza_id
-    if (!aseguranzaId) {
-      const { data: paciente } = await supabase
-        .from('pacientes')
-        .select('aseguranza_id')
-        .eq('id', consultaData.paciente_id)
-        .maybeSingle();
-      if (paciente?.aseguranza_id) aseguranzaId = paciente.aseguranza_id;
-    }
-
-    // Generate cobro folio
-    const year = new Date().getFullYear().toString().slice(-2);
-    const { count: cobroCount } = await supabase
-      .from('cobros')
-      .select('id', { count: 'exact', head: true });
-    const cobroSeq = ((cobroCount || 0) + 1).toString().padStart(5, '0');
-    const cobroFolio = `CF-${year}-${cobroSeq}`;
-
-    const { error: cobroError } = await supabase
-      .from('cobros')
-      .insert({
-        consulta_id: consultaData.id,
-        paciente_id: consultaData.paciente_id,
-        aseguranza_id: aseguranzaId,
-        metodo_pago: metodoPago,
-        monto,
-        moneda,
-        pagado: pagoInmediato,
-        estado: pagoInmediato ? 'PAGADO' : 'PENDIENTE',
-        folio: cobroFolio,
-        fecha_pago: pagoInmediato ? new Date().toISOString() : null,
-      });
-
-    if (cobroError) {
-      console.error('Error al insertar cobro asociado a consulta');
-    }
-  } else {
-    // Create a pending cobro if there's a cost but no immediate payment
-    if (costoTotal > 0 && !pagoInmediato) {
-      // Resolve aseguranza_id from patient
-      let pendingAseguranzaId: string | null = null;
-      const { data: pacientePending } = await supabase
-        .from('pacientes')
-        .select('aseguranza_id')
-        .eq('id', consultaData.paciente_id)
-        .maybeSingle();
-      if (pacientePending?.aseguranza_id) pendingAseguranzaId = pacientePending.aseguranza_id;
-
-      const year = new Date().getFullYear().toString().slice(-2);
-      const { count: cobroCount } = await supabase
-        .from('cobros')
-        .select('id', { count: 'exact', head: true });
-      const cobroSeq = ((cobroCount || 0) + 1).toString().padStart(5, '0');
-      const cobroFolio = `CF-${year}-${cobroSeq}`;
-
-      await supabase
-        .from('cobros')
-        .insert({
-          consulta_id: consultaData.id,
-          paciente_id: consultaData.paciente_id,
-          aseguranza_id: pendingAseguranzaId,
-          metodo_pago: 'NO_APLICA',
-          monto: costoTotal,
-          moneda: 'PESOS',
-          pagado: false,
-          estado: 'PENDIENTE',
-          folio: cobroFolio,
-        });
-    }
+  // Register historial event
+  await registrarHistorial(supabase, consultaData.id, 'EDICION', auth.user.id, { motivo: 'Creación de consulta' });
+  if (pagoInmediato) {
+    await registrarHistorial(supabase, consultaData.id, 'PAGADO', auth.user.id, { monto: costoTotal });
   }
 
   // 7. Generate honorarios automatically (devengo) — respects devengo_automatico config

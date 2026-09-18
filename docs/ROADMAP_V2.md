@@ -22,17 +22,17 @@
 ---
 
 ## Fase 2 — Consultas (ajuste sobre Fase 4 previa)
-- [ ] `consultas.estatus` → BORRADOR, PROCESADA, PENDIENTE_ESTUDIO, PENDIENTE_CIRUGIA, FINALIZADA
-- [ ] Columna independiente `estatus_pago` (PENDIENTE_PAGO, PAGADO)
+- [x] `consultas.estatus` → BORRADOR, PROCESADA, PENDIENTE_ESTUDIO, PENDIENTE_CIRUGIA, FINALIZADA
+- [x] Columna independiente `estatus_pago` (PENDIENTE_PAGO, PAGADO)
 - [ ] Quitar selector manual de aseguradora; mostrar read-only desde `paciente.aseguranza_id`
 - [ ] Tabla estudios/procedimientos de aseguradora: Servicio · Costo · % Cobertura · Monto paciente
-- [ ] Validación horario: `hora_fin` default = `hora_inicio + 30min`; bloquear si `hora_fin < hora_inicio`
+- [x] Validación horario: `hora_fin` default = `hora_inicio + 30min`; bloquear si `hora_fin < hora_inicio`
 - [ ] Botón sync tipo de cambio USD→MXN (endpoint propio, caché 1h)
-- [ ] Arreglar botón imprimir (handler + layout `@media print`)
+- [x] Arreglar botón imprimir (handler + layout `@media print`)
 - [ ] Agregar acción "Editar" en menú de consulta
-- [ ] Renombrar `consulta_historial_estatus` → `consulta_historial` con `tipo_evento` ENUM
-- [ ] Detalle de consulta como página completa (`app/consultas/[id]/page.tsx`)
-- [ ] Eliminar módulo/pantalla de Cobros; pago desde `estatus_pago = PAGADO`
+- [x] Renombrar `consulta_historial_estatus` → `consulta_historial` con `tipo_evento` ENUM
+- [x] Detalle de consulta como página completa (`app/consultas/[id]/page.tsx`)
+- [x] Eliminar módulo/pantalla de Cobros; pago desde `estatus_pago = PAGADO`
 
 ---
 
