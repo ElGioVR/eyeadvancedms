@@ -14,6 +14,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import SidebarPanel from '@/components/ui/SidebarPanel';
+import MobileCalendarView from '@/components/agenda/MobileCalendarView';
 import type { AgendaCirugia, AgendaCirugiaEstado, AgendaCirugiaImportRow } from '@/types';
 
 interface Doctor { id: string; nombre_completo: string; usuario_id?: string | null; }
@@ -458,8 +459,18 @@ export default function AgendaContent({ userRol, doctores, userId }: Props) {
             </div>
           </div>
 
-          {/* View Container with transition */}
-          <div className="relative overflow-hidden lg:rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
+          {/* Mobile Calendar View (iOS style) */}
+          <div className="lg:hidden">
+            <MobileCalendarView
+              cirugiasPorFecha={cirugiasPorFecha}
+              onDateSelect={(date) => { setSelectedDate(date); }}
+              onAdd={(date) => { setQuickAddDate(date); setShowForm(true); }}
+              todayStr={todayStr}
+            />
+          </div>
+
+          {/* Desktop View Container with transition */}
+          <div className="hidden lg:block relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
