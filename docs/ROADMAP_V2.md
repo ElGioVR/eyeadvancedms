@@ -72,7 +72,7 @@
 - [x] Import CSV/XLSX: CSV de rechazados con motivo por fila + `agenda_import_log`
 - [x] Validación de duplicados (paciente+fecha+hora o folio) antes de insertar
 - [x] Detalle de cirugía como página estructurada (`app/agenda/[id]/page.tsx`)
-- [ ] Filtro "mis operaciones" para doctor en agenda
+- [x] Filtro "mis operaciones" para doctor en agenda
 - [ ] Vista móvil día/semana/mes con carrusel horizontal de fechas
 - [ ] Homologar nombres: usar `cirugia` como entidad canónica interna
 - [x] Auditoría: validación de formularios consistente (Zod), dark/light mode completo, experiencia móvil, "Recordarme" en login
@@ -84,11 +84,11 @@
 | Fase | Estado |
 |------|--------|
 | Fase 0 — Docs | ✅ Completada |
-| Fase 1 — Roles | ⬜ Pendiente |
-| Fase 2 — Consultas | ⬜ Pendiente |
-| Fase 3 — Honorarios | ⬜ Pendiente |
-| Fase 4 — Inventario/Pacientes/Dashboard | ⬜ Pendiente |
-| Fase 5 — Notificaciones | ⬜ Pendiente |
+| Fase 1 — Roles | ✅ Completada |
+| Fase 2 — Consultas | ✅ Completada |
+| Fase 3 — Honorarios | ✅ Completada |
+| Fase 4 — Inventario/Pacientes/Dashboard | ✅ Completada |
+| Fase 5 — Notificaciones | ✅ Completada |
 | Fase 6 — Agenda/generales | ⬜ Pendiente |
 
 ---
