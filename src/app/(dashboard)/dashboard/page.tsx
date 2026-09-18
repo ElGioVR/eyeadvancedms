@@ -5,7 +5,7 @@ import { getDashboardData } from '@/lib/dashboard-data';
 import DashboardContent from './DashboardContent';
 import DashboardLoading from './loading';
 
-async function fetchDashboardData() {
+async function fetchDashboardData(doctorId?: string) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -15,7 +15,7 @@ async function fetchDashboardData() {
 
   const { data: profile } = await supabase
     .from('usuarios')
-    .select('nombre, iniciales, avatar_url')
+    .select('nombre, iniciales, avatar_url, rol')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -27,18 +27,20 @@ async function fetchDashboardData() {
     .join('')
     .toUpperCase();
   const avatar_url = profile?.avatar_url ?? null;
+  const rol = profile?.rol || 'doctor';
 
   const data = await getDashboardData();
 
-  return { data, nombre, iniciales, avatar_url };
+  return { data, nombre, iniciales, avatar_url, rol };
 }
 
-export default async function DashboardPage() {
-  const { data, nombre, iniciales, avatar_url } = await fetchDashboardData();
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ doctor?: string }> }) {
+  const params = await searchParams;
+  const { data, nombre, iniciales, avatar_url, rol } = await fetchDashboardData(params.doctor);
 
   return (
     <Suspense fallback={<DashboardLoading />}>
-      <DashboardContent data={data} userNombre={nombre} userIniciales={iniciales} userAvatarUrl={avatar_url} />
+      <DashboardContent data={data} userNombre={nombre} userIniciales={iniciales} userAvatarUrl={avatar_url} userRol={rol} />
     </Suspense>
   );
 }

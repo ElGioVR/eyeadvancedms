@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, FileText, Calendar, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useFetch } from '@/hooks/useFetch';
@@ -50,12 +51,14 @@ function formatDate(dateStr: string | null): string {
 }
 
 export default function PacientesPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const { data: pacientes, loading, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
   const [search, setSearch] = useState('');
   const [filterSexo, setFilterSexo] = useState('Todos');
   const [filterEdad, setFilterEdad] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
+  const [showAgendar, setShowAgendar] = useState(false);
   const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
 
@@ -84,13 +87,47 @@ export default function PacientesPage() {
         title="PACIENTES"
         subtitle="Listado general y altas del sistema."
         action={
-          <button
-            onClick={() => setShowNewPatient(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo Paciente
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setShowAgendar(!showAgendar)}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+              >
+                <Calendar className="h-4 w-4" /> Agendar
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+              </button>
+              {showAgendar && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowAgendar(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div className="p-1">
+                      <button
+                        onClick={() => { setShowAgendar(false); router.push('/consultas/nueva'); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
+                      >
+                        <Stethoscope className="h-4 w-4 text-primary-500" />
+                        <span className="text-gray-700 dark:text-[#E7E9EA]">Consulta</span>
+                      </button>
+                      <button
+                        onClick={() => { setShowAgendar(false); router.push('/agenda/nueva'); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
+                      >
+                        <Scissors className="h-4 w-4 text-emerald-500" />
+                        <span className="text-gray-700 dark:text-[#E7E9EA]">Cirugía</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setShowNewPatient(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo Paciente
+            </button>
+          </div>
         }
       />
 

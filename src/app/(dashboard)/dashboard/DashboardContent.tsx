@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   Calendar,
@@ -9,6 +11,8 @@ import {
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 import Avatar from '@/components/ui/Avatar';
@@ -21,6 +25,7 @@ interface DashboardContentProps {
   userNombre: string;
   userIniciales: string;
   userAvatarUrl: string | null;
+  userRol: string;
 }
 
 const formatCurrency = (value: number): string => {
@@ -32,10 +37,12 @@ const formatCurrency = (value: number): string => {
 const formatMoneyFull = (value: number): string =>
   `$${value.toLocaleString('es-MX')}`;
 
-export default function DashboardContent({ data, userNombre, userIniciales, userAvatarUrl }: DashboardContentProps) {
+export default function DashboardContent({ data, userNombre, userIniciales, userAvatarUrl, userRol }: DashboardContentProps) {
+  const router = useRouter();
   const firstName = userNombre.split(' ')[0] || 'Usuario';
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Buenos días' : now.getHours() < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
 
   const stats = [
     {
@@ -85,7 +92,7 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 sm:p-8 shadow-sm">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-gray-50 dark:bg-[#202327]" />
         <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-gray-50 dark:bg-[#202327]" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-gray-400 dark:text-[#71767B]">
               {greeting}
@@ -97,7 +104,49 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
               Bienvenido a tu panel clínico. Tienes {data.stats.consultasHoy} consulta{data.stats.consultasHoy !== 1 ? 's' : ''} programada{data.stats.consultasHoy !== 1 ? 's' : ''} para hoy.
             </p>
           </div>
-          <Avatar initials={userIniciales} src={userAvatarUrl} className="h-16 w-16 text-xl" />
+          <div className="flex items-center gap-3">
+            {userRol !== 'doctor' && (
+              <div className="relative">
+                <button
+                  onClick={() => setDoctorDropdownOpen(!doctorDropdownOpen)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm font-medium text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+                >
+                  <Users className="h-4 w-4 text-gray-400 dark:text-[#71767B]" />
+                  Ver como
+                  <ChevronDown className="h-3.5 w-3.5 text-gray-400 dark:text-[#71767B]" />
+                </button>
+                {doctorDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDoctorDropdownOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-gray-100 dark:border-[#2F3336]">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Filtrar por doctor</p>
+                      </div>
+                      <div className="p-1">
+                        <button
+                          onClick={() => { router.push('/dashboard'); setDoctorDropdownOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm font-medium text-gray-700 dark:text-[#E7E9EA] transition-colors"
+                        >
+                          Todos los doctores
+                        </button>
+                        {data.doctores.map((doctor) => (
+                          <button
+                            key={doctor.id}
+                            onClick={() => { router.push(`/dashboard?doctor=${doctor.id}`); setDoctorDropdownOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
+                          >
+                            <Avatar initials={doctor.iniciales} className="h-6 w-6 text-[10px] bg-sky-500" />
+                            <span className="truncate text-gray-700 dark:text-[#E7E9EA]">{doctor.nombre}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <Avatar initials={userIniciales} src={userAvatarUrl} className="h-16 w-16 text-xl" />
+          </div>
         </div>
       </div>
 

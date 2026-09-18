@@ -47,13 +47,13 @@
 ---
 
 ## Fase 4 — Inventario, Pacientes, Dashboard, Reportes
-- [ ] Inventario: alta en pasos (datos básicos → específicos por tipo → proveedor/categoría)
+- [x] Inventario: alta en pasos (datos básicos → específicos por tipo → proveedor/categoría)
 - [x] Autosugiere proveedor y categoría al detectar marca/modelo repetido
-- [ ] Pantallas CRUD de Proveedores y Categorías
+- [x] Pantallas CRUD de Proveedores y Categorías
 - [ ] Panel lateral (drawer) de Kardex al seleccionar ítem en la lista
-- [ ] Pacientes: botón "Agendar" con submenú Consulta/Cirugía
-- [ ] Filtro de pacientes por aseguradora
-- [ ] Dashboard: vista doctor (su info), selector doctor para admin/jefe
+- [x] Pacientes: botón "Agendar" con submenú Consulta/Cirugía
+- [x] Filtro de pacientes por aseguradora
+- [x] Dashboard: vista doctor (su info), selector doctor para admin/jefe
 - [ ] Dashboard: gráficas (consultas por estatus, honorarios por periodo, ocupación agenda, top procedimientos)
 - [ ] Reportes: rentabilidad por aseguradora, honorarios histórico, rotación LIO, Kardex consolidado, embudo consultas, ocupación agenda
 
