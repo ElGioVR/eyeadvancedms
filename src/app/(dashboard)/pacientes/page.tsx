@@ -59,6 +59,7 @@ export default function PacientesPage() {
   const [filterEdad, setFilterEdad] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
+  const [filterAseguradora, setFilterAseguradora] = useState('Todas');
   const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
 
@@ -77,9 +78,10 @@ export default function PacientesPage() {
       const matchesSearch = !term || p.nombre.toLowerCase().includes(term) || p.telefono?.toLowerCase().includes(term);
       const matchesSexo = filterSexo === 'Todos' || (filterSexo === 'Masculino' && p.sexo === 'H') || (filterSexo === 'Femenino' && p.sexo === 'M');
       const matchesEdad = filterByEdad(p.edad, filterEdad);
-      return matchesSearch && matchesSexo && matchesEdad;
+      const matchesAseguradora = filterAseguradora === 'Todas' || p.aseguradora === filterAseguradora;
+      return matchesSearch && matchesSexo && matchesEdad && matchesAseguradora;
     });
-  }, [pacientes, debouncedSearch, filterSexo, filterEdad]);
+  }, [pacientes, debouncedSearch, filterSexo, filterEdad, filterAseguradora]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -169,6 +171,19 @@ export default function PacientesPage() {
                 <option key={o} value={o}>{o === 'Todos' ? 'Edad' : o}</option>
               ))}
             </select>
+
+            {aseguranzas.length > 0 && (
+              <select
+                value={filterAseguradora}
+                onChange={(e) => setFilterAseguradora(e.target.value)}
+                className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              >
+                <option value="Todas">Aseguradora</option>
+                {aseguranzas.map((a) => (
+                  <option key={a.id} value={a.nombre}>{a.nombre}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Patient list */}

@@ -11,8 +11,6 @@ const tabs = [
   { label: 'Aseguranzas', href: '/configuracion/aseguranzas' },
   { label: 'Categorías Lentes', href: '/configuracion/categorias-lentes' },
   { label: 'Proveedores', href: '/configuracion/proveedores' },
-  { label: 'Matriz Costos', href: '/configuracion/matriz-costos' },
-  { label: 'Honorarios', href: '/configuracion/honorarios' },
   { label: 'Sistema', href: '/configuracion/sistema' },
 ];
 

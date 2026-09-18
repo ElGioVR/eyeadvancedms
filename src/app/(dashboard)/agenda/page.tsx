@@ -30,6 +30,7 @@ export default async function AgendaPage() {
     <AgendaContent
       userRol={usuario.rol}
       doctores={doctores || []}
+      userId={user.id}
     />
   );
 }

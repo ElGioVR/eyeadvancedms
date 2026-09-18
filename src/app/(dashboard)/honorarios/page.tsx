@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, Users, TrendingUp, Award, Calendar,
-  ChevronRight, BarChart3,
+  ChevronRight, BarChart3, Download,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
@@ -78,13 +78,30 @@ export default function HonorariosPage() {
         title="Honorarios y Productividad"
         subtitle="Dashboard médico — métricas, tarifas y liquidaciones"
         action={
-          <Link
-            href="/honorarios/tarifas"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
-          >
-            <DollarSign className="w-4 h-4" />
-            Configurar Tarifas
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (ranking.length === 0) return;
+                const header = 'Doctor,Especialidad,Servicios,Devengado\n';
+                const rows = ranking.map(d => `"${d.doctor_nombre}","${d.especialidad}",${d.servicios},${d.devengado}`).join('\n');
+                const total = `\n"TOTAL","","${totalServicios}","${totalDevengado}"`;
+                const blob = new Blob([header + rows + total], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `honorarios-${new Date().toISOString().slice(0,7)}.csv`; a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-700 dark:text-[#E7E9EA] rounded-lg hover:bg-gray-50 dark:hover:bg-[#1D1F23] text-sm font-medium"
+            >
+              <Download className="w-4 h-4" /> CSV General
+            </button>
+            <Link
+              href="/honorarios/tarifas"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium"
+            >
+              <DollarSign className="w-4 h-4" />
+              Configurar Tarifas
+            </Link>
+          </div>
         }
       />
 

@@ -16,8 +16,8 @@ import Modal from '@/components/ui/Modal';
 import SidebarPanel from '@/components/ui/SidebarPanel';
 import type { AgendaCirugia, AgendaCirugiaEstado, AgendaCirugiaImportRow } from '@/types';
 
-interface Doctor { id: string; nombre_completo: string; }
-interface Props { userRol: string; doctores: Doctor[]; }
+interface Doctor { id: string; nombre_completo: string; usuario_id?: string | null; }
+interface Props { userRol: string; doctores: Doctor[]; userId?: string; }
 
 const HOUR_START = 5;
 const HOUR_END = 22;
@@ -58,7 +58,7 @@ function parseTimeToMinutes(t: string | null): number {
   return h * 60 + (m || 0);
 }
 
-export default function AgendaContent({ userRol, doctores }: Props) {
+export default function AgendaContent({ userRol, doctores, userId }: Props) {
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -73,6 +73,14 @@ export default function AgendaContent({ userRol, doctores }: Props) {
   const [quickAddHour, setQuickAddHour] = useState<string>('');
   const [transitionDir, setTransitionDir] = useState(0);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+
+  // Auto-filter for doctor role: show only own operations
+  useEffect(() => {
+    if (userRol === 'doctor' && doctores.length > 0 && userId) {
+      const myDoctor = doctores.find(d => d.usuario_id === userId);
+      if (myDoctor) setFilterDoctor(myDoctor.id);
+    }
+  }, [userRol, doctores, userId]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
 
