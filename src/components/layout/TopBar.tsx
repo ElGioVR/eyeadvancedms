@@ -407,7 +407,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                   <button
                     onClick={async () => {
                       await fetch('/api/auth/logout', { method: 'POST' });
-                      window.location.href = '/auth/login';
+                      window.location.href = '/login';
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-red-600 dark:text-red-400"
                   >
