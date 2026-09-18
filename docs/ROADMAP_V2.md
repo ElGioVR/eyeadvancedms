@@ -60,11 +60,11 @@
 ---
 
 ## Fase 5 — Notificaciones
-- [ ] Tabla `notificacion_preferencias` + `notificaciones`
-- [ ] UI de configuración de preferencias en perfil de usuario
-- [ ] Eventos doctor: pago honorarios, recordatorio 10 min, asignación estudio/procedimiento
-- [ ] Eventos recepcionista: próxima cirugía, cancelación, posposición
-- [ ] Disparar desde capa de servicio (no triggers SQL)
+- [x] Tabla `notificacion_preferencias` + `notificaciones`
+- [x] UI de configuración de preferencias en perfil de usuario
+- [x] Eventos doctor: pago honorarios, recordatorio 10 min, asignación estudio/procedimiento
+- [x] Eventos recepcionista: próxima cirugía, cancelación, posposición
+- [x] Disparar desde capa de servicio (no triggers SQL)
 
 ---
 

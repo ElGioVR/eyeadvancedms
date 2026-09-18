@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { z } from 'zod';
 
 const consultaUpdateSchema = z.object({
@@ -110,6 +111,16 @@ export async function PATCH(
       de: existing.estatus,
       a: data.estatus,
     });
+
+    // Get patient name for notifications
+    const { data: consultaInfo } = await supabase
+      .from('consultas')
+      .select('doctor_id, pacientes:paciente_id(usuarios:usuario_id(id))')
+      .eq('id', id)
+      .maybeSingle();
+
+    const pacienteNombre = ((consultaInfo as any)?.pacientes?.usuarios?.nombre_completo as string) || 'Paciente';
+    const fecha = (await supabase.from('consultas').select('fecha').eq('id', id).maybeSingle()).data?.fecha || '';
   }
 
   if (data.estatus_pago !== undefined) {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Camera, Save, Loader2, X } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Camera, Save, Loader2, X, Bell, BellOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/components/ui/Toast';
@@ -38,6 +38,38 @@ function formatTime(dateStr: string | null): string {
 export default function PerfilPage() {
   const { user, loading } = useUser();
   const { toast } = useToast();
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/notificaciones/preferencias')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.data) {
+          const prefs: Record<string, boolean> = {};
+          for (const p of data.data) {
+            prefs[p.tipo_evento] = p.activo;
+          }
+          setNotifPrefs(prefs);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const toggleNotifPref = useCallback(async (tipo: string) => {
+    const next = !notifPrefs[tipo];
+    setNotifPrefs((p) => ({ ...p, [tipo]: next }));
+    try {
+      await fetch('/api/notificaciones/preferencias', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferencias: [{ tipo_evento: tipo, canal: 'IN_APP', activo: next }] }),
+      });
+    } catch {
+      setNotifPrefs((p) => ({ ...p, [tipo]: !next }));
+    }
+  }, [notifPrefs]);
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
@@ -440,6 +472,42 @@ export default function PerfilPage() {
         imageSrc={selectedImageSrc}
         onCropComplete={handleCropComplete}
       />
+
+      {/* Notification Preferences */}
+      <div className="mx-auto max-w-[1440px] mt-8">
+        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+          <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4 flex items-center gap-3">
+            <Bell className="h-5 w-5 text-primary-600" />
+            <div>
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Preferencias de Notificación</h3>
+              <p className="text-xs text-gray-400 dark:text-[#71767B]">Elige qué notificaciones deseas recibir</p>
+            </div>
+          </div>
+          <div className="p-6">
+            {[
+              { key: 'PAGO_HONORARIOS', label: 'Pago de honorarios', desc: 'Cuando se registre un pago de tus honorarios' },
+              { key: 'RECORDATORIO_CONSULTA', label: 'Recordatorio de consulta', desc: '10 minutos antes de una consulta programada' },
+              { key: 'ASIGNACION_SERVICIO', label: 'Asignación de servicio', desc: 'Cuando se te asigne un estudio o procedimiento' },
+              { key: 'PROXIMA_CIRUGIA', label: 'Próxima cirugía', desc: 'Cirugía programada y quién atiende' },
+              { key: 'CANCELACION', label: 'Cancelaciones', desc: 'Cuando se cancele una consulta o cirugía' },
+              { key: 'REAGENDADO', label: 'Reagendados', desc: 'Cuando se posponga o reagende una cita' },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-[#2F3336] last:border-0">
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{item.label}</p>
+                  <p className="text-xs text-gray-400 dark:text-[#71767B]">{item.desc}</p>
+                </div>
+                <button
+                  onClick={() => toggleNotifPref(item.key)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${notifPrefs[item.key] ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${notifPrefs[item.key] ? 'translate-x-5.5 ml-0.5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </>
   );
 }

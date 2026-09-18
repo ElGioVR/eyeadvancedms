@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { MotorDevengoService } from '@/services/honorarios';
+import { notificarCancelacion, notificarReagendado, notificarAsignacionServicio } from '@/services/notificaciones';
 import { z } from 'zod';
 
 async function crearNotificacion(
