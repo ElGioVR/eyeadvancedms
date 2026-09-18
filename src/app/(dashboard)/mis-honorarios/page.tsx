@@ -73,7 +73,13 @@ export default function MisHonorariosPage() {
   }, [user?.doctor_id, page]);
 
   useEffect(() => {
-    if (!userLoading && user?.doctor_id) fetchData();
+    if (!userLoading) {
+      if (user?.doctor_id) {
+        fetchData();
+      } else {
+        setLoading(false);
+      }
+    }
   }, [userLoading, user?.doctor_id, fetchData]);
 
   if (userLoading || loading) {
