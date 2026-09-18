@@ -24,6 +24,7 @@ interface CatProv {
 
 interface LenteData {
   id?: string;
+  tipo: string;
   marca: string;
   modelo: string;
   categoria_id: string;
@@ -41,13 +42,18 @@ interface LenteData {
   lote: string;
   fecha_caducidad: string;
   notas: string;
+  potencia_dioptrias: string;
+  tipo_lio: string;
+  modelo_fabricante: string;
 }
 
 const emptyForm: LenteData = {
+  tipo: 'LENTE_VISION',
   marca: '', modelo: '', categoria_id: '', proveedor_id: '',
   codigo_barras: '', grado_esferico: '', grado_cilindrico: '', eje: '',
   material: '', color: '', stock: '', stock_minimo: '',
   precio_compra: '', precio_venta: '', lote: '', fecha_caducidad: '', notas: '',
+  potencia_dioptrias: '', tipo_lio: '', modelo_fabricante: '',
 };
 
 interface LenteFormProps {
@@ -105,6 +111,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
     setSaving(true);
     try {
       const payload: Record<string, any> = {
+        tipo: form.tipo,
         marca: form.marca.trim(),
         modelo: form.modelo.trim(),
         codigo_barras: form.codigo_barras || null,
@@ -123,6 +130,12 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         categoria_id: form.categoria_id || null,
         proveedor_id: form.proveedor_id || null,
       };
+
+      if (form.tipo === 'LENTE_INTRAOCULAR') {
+        payload.potencia_dioptrias = form.potencia_dioptrias ? Number(form.potencia_dioptrias) : null;
+        payload.tipo_lio = form.tipo_lio || null;
+        payload.modelo_fabricante = form.modelo_fabricante || null;
+      }
 
       const res = await fetch('/api/inventario', {
         method: mode === 'edit' ? 'PATCH' : 'POST',
@@ -161,10 +174,10 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA]">
-            {mode === 'edit' ? 'EDITAR LENTE' : 'NUEVO LENTE'}
+            {mode === 'edit' ? 'EDITAR ÍTEM' : 'NUEVO ÍTEM DE INVENTARIO'}
           </h1>
           <p className="mt-0.5 text-sm text-gray-400 dark:text-[#71767B]">
-            {mode === 'edit' ? 'Modifique las especificaciones del lente' : 'Registre las especificaciones del lente en el inventario'}
+            {mode === 'edit' ? 'Modifique las especificaciones del ítem' : 'Registre un lente de visión o intraocular en el inventario'}
           </p>
         </div>
         <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
@@ -187,6 +200,40 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column - main info */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Tipo de inventario */}
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Tipo de Inventario</h3>
+            </div>
+            <div className="px-6 py-5">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, tipo: 'LENTE_VISION' }))}
+                  className={cn(
+                    'flex-1 rounded-lg border-2 px-4 py-3 text-sm font-bold transition-all',
+                    form.tipo === 'LENTE_VISION'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:border-gray-300'
+                  )}
+                >
+                  Lente de Visión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, tipo: 'LENTE_INTRAOCULAR' }))}
+                  className={cn(
+                    'flex-1 rounded-lg border-2 px-4 py-3 text-sm font-bold transition-all',
+                    form.tipo === 'LENTE_INTRAOCULAR'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:border-gray-300'
+                  )}
+                >
+                  Lente Intraocular (LIO)
+                </button>
+              </div>
+            </div>
+          </div>
           {/* Identificacion */}
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
@@ -222,7 +269,8 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
             </div>
           </div>
 
-          {/* Especificaciones refractivas */}
+          {/* Especificaciones refractivas - solo para LENTE_VISION */}
+          {form.tipo === 'LENTE_VISION' && (
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones Refractivas</h3>
@@ -249,6 +297,49 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
               </div>
             </div>
           </div>
+          )}
+
+          {/* Especificaciones LIO - solo para LENTE_INTRAOCULAR */}
+          {form.tipo === 'LENTE_INTRAOCULAR' && (
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones LIO</h3>
+            </div>
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Potencia (Dioptrías)</label>
+                  <input type="number" step="0.25" placeholder="Ej. 21.50" value={form.potencia_dioptrias} onChange={(e) => setForm((p) => ({ ...p, potencia_dioptrias: e.target.value }))} className={input} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Tipo LIO</label>
+                  <select value={form.tipo_lio} onChange={(e) => setForm((p) => ({ ...p, tipo_lio: e.target.value }))} className={input}>
+                    <option value="">Seleccionar</option>
+                    <option value="MONOFOCAL">Monofocal</option>
+                    <option value="MULTIFOCAL">Multifocal</option>
+                    <option value="TORICA">Tórica</option>
+                    <option value="EDOF">EDOF</option>
+                    <option value="OTRO">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Modelo Fabricante</label>
+                  <input type="text" placeholder="Ej. Clareon, Panoptic" value={form.modelo_fabricante} onChange={(e) => setForm((p) => ({ ...p, modelo_fabricante: e.target.value }))} className={input} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Lote</label>
+                  <input type="text" placeholder="L-2024-001" value={form.lote} onChange={(e) => setForm((p) => ({ ...p, lote: e.target.value }))} className={input} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Caducidad</label>
+                  <input type="date" value={form.fecha_caducidad} onChange={(e) => setForm((p) => ({ ...p, fecha_caducidad: e.target.value }))} className={input} />
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
 
           {/* Detalles */}
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
@@ -359,7 +450,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
 
           <button onClick={handleSave} disabled={saving} className="w-full rounded-lg bg-primary-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Guardando...' : mode === 'edit' ? 'ACTUALIZAR LENTE' : 'GUARDAR LENTE'}
+            {saving ? 'Guardando...' : mode === 'edit' ? 'ACTUALIZAR ÍTEM' : 'GUARDAR ÍTEM'}
           </button>
         </div>
       </div>

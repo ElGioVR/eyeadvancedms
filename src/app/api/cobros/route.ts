@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     const lenteIds = [...new Set(data.lentes.map((l) => l.lente_id))];
 
     const { data: lentesEnDB } = await supabase
-      .from('lentes')
+      .from('inventario_items')
       .select('id, stock, marca, modelo')
       .in('id', lenteIds);
 
@@ -317,7 +317,7 @@ export async function POST(request: Request) {
       lentesInserts.map((l) => {
         const nuevoStock = l.stockDisponible - l.cantidad;
         return supabase
-          .from('lentes')
+          .from('inventario_items')
           .update({
             stock: nuevoStock,
             estado: nuevoStock === 0 ? 'OCUPADO' : undefined,

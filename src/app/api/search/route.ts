@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       .limit(MAX_RESULTS_PER_TYPE),
 
     supabase
-      .from('lentes')
+      .from('inventario_items')
       .select('id,marca,modelo,codigo_barras,categoria:categorias_lentes(nombre)')
       .or(`marca.ilike.${pattern},modelo.ilike.${pattern},codigo_barras.ilike.${pattern}`)
       .limit(MAX_RESULTS_PER_TYPE),

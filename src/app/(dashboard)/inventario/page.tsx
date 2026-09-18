@@ -34,6 +34,7 @@ const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScan
 interface LenteAPI {
   id: string;
   folio: string;
+  tipo: string;
   marca: string;
   modelo: string;
   codigo_barras: string;
@@ -52,6 +53,9 @@ interface LenteAPI {
   notas: string;
   categoria: string;
   proveedor: string;
+  potencia_dioptrias: number | null;
+  tipo_lio: string | null;
+  modelo_fabricante: string | null;
 }
 
 const estadoConfig: Record<string, { bg: string; text: string; dot?: string }> = {
@@ -75,6 +79,7 @@ export default function InventarioPage() {
   const [filterCategoria, setFilterCategoria] = useState('Todos');
   const [filterProveedor, setFilterProveedor] = useState('Todos');
   const [filterStock, setFilterStock] = useState('Todos');
+  const [filterTipo, setFilterTipo] = useState('Todos');
 
   const [showAdjust, setShowAdjust] = useState<string | null>(null);
   const [adjustQty, setAdjustQty] = useState(0);
@@ -108,13 +113,14 @@ export default function InventarioPage() {
       const matchesSearch = !term || l.folio?.toLowerCase().includes(term) || l.marca.toLowerCase().includes(term) || l.modelo.toLowerCase().includes(term) || l.codigo_barras?.toLowerCase().includes(term);
       const matchesCategoria = filterCategoria === 'Todos' || l.categoria === filterCategoria;
       const matchesProveedor = filterProveedor === 'Todos' || l.proveedor === filterProveedor;
+      const matchesTipo = filterTipo === 'Todos' || l.tipo === filterTipo;
       let matchesStock = true;
       if (filterStock === 'Suficiente') matchesStock = l.stock >= l.stock_minimo;
       else if (filterStock === 'Bajo') matchesStock = l.stock > 0 && l.stock < l.stock_minimo;
       else if (filterStock === 'Sin Stock') matchesStock = l.stock === 0;
-      return matchesSearch && matchesCategoria && matchesProveedor && matchesStock;
+      return matchesSearch && matchesCategoria && matchesProveedor && matchesStock && matchesTipo;
     });
-  }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock]);
+  }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock, filterTipo]);
 
   const stats = useMemo(() => {
     const conStock = lentes.filter((l) => l.stock > 0).length;
@@ -208,14 +214,14 @@ export default function InventarioPage() {
         <Camera className="h-4 w-4" /> ESCANEAR
       </button>
       <Link href="/inventario/nueva" className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-        <PlusIcon className="h-4 w-4" /> Nuevo Lente
+        <PlusIcon className="h-4 w-4" /> Nuevo Ítem
       </Link>
     </div>
   );
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
-      <PageHeader title="INVENTARIO DE LENTES" subtitle="Catalogo general, especificaciones refractivas y stock clinico." action={headerActions} />
+      <PageHeader title="INVENTARIO" subtitle="Lentes de visión, intraoculares, especificaciones y stock clínico." action={headerActions} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -239,6 +245,7 @@ export default function InventarioPage() {
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
           <FilterSelect value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
           <FilterSelect value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
+          <FilterSelect value={filterTipo} onChange={setFilterTipo} options={['Todos', 'LENTE_VISION', 'LENTE_INTRAOCULAR']} />
         </div>
       </div>
 
@@ -277,6 +284,9 @@ export default function InventarioPage() {
                     <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold', sinStock ? 'bg-red-50 text-red-600' : stockBajo ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700')}>
                       {lente.folio || lente.id.slice(0, 8)}
                     </span>
+                    <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase', lente.tipo === 'LENTE_INTRAOCULAR' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600')}>
+                      {lente.tipo === 'LENTE_INTRAOCULAR' ? 'LIO' : 'VISIÓN'}
+                    </span>
                     <div>
                       <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{lente.marca} {lente.modelo}</h3>
                       <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{lente.categoria || 'Sin categoria'} {lente.color ? `\u00b7 ${lente.color}` : ''}</p>
@@ -293,14 +303,19 @@ export default function InventarioPage() {
 
                 <div className="border-t border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/30 dark:bg-[#202327]/30 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-                    {[
-                      { label: 'Esf\u00e9rico (SE)', value: lente.grado_esferico?.toString() || '\u2014' },
-                      { label: 'Cil\u00edndrico (CYL)', value: lente.grado_cilindrico?.toString() || '\u2014' },
-                      { label: 'Eje', value: lente.eje ? `${lente.eje}\u00b0` : '\u2014' },
-                      { label: 'Material', value: lente.material || '\u2014' },
+                    {(lente.tipo === 'LENTE_INTRAOCULAR' ? [
+                      { label: 'Potencia', value: lente.potencia_dioptrias?.toString() || '—' },
+                      { label: 'Tipo LIO', value: lente.tipo_lio || '—' },
+                      { label: 'Modelo', value: lente.modelo_fabricante || '—' },
+                    ] : [
+                      { label: 'Esf\u00e9rico (SE)', value: lente.grado_esferico?.toString() || '—' },
+                      { label: 'Cil\u00edndrico (CYL)', value: lente.grado_cilindrico?.toString() || '—' },
+                      { label: 'Eje', value: lente.eje ? `${lente.eje}\u00b0` : '—' },
+                      { label: 'Material', value: lente.material || '—' },
+                    ] as Array<{ label: string; value: string; className?: string }>).concat([
                       { label: 'Stock Actual', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900 dark:text-[#E7E9EA]' },
                       { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500 dark:text-[#71767B]' },
-                    ].map((item) => (
+                    ]).map((item) => (
                       <div key={item.label} className="rounded-lg bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] px-4 py-3">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{item.label}</span>
                         <p className={cn('mt-1 text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]', item.className)}>{item.value}</p>

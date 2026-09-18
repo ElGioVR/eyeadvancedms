@@ -17,7 +17,7 @@ export async function GET(
   // Get patient
   const { data: patient, error: patientError } = await supabase
     .from('pacientes')
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, created_at')
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at')
     .eq('id', id)
     .single();
 
@@ -47,6 +47,16 @@ export async function GET(
 
   const nombre = patient.nombre_completo || '';
   const iniciales = nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
+
+  let aseguradoraNombre: string | null = null;
+  if (patient.aseguranza_id) {
+    const { data: aseguranza } = await supabase
+      .from('aseguranzas')
+      .select('nombre')
+      .eq('id', patient.aseguranza_id)
+      .maybeSingle();
+    aseguradoraNombre = aseguranza?.nombre || null;
+  }
 
   const consultasResult = (consultas || []).map((c) => {
     const doctor = c.doctores as any;
@@ -86,6 +96,10 @@ export async function GET(
     direccion: patient.direccion,
     contacto_emergencia: patient.contacto_emergencia,
     tel_emergencia: patient.tel_emergencia,
+    aseguranza_id: patient.aseguranza_id || null,
+    aseguradora: aseguradoraNombre,
+    numero_poliza: patient.numero_poliza || null,
+    numero_afiliacion: patient.numero_afiliacion || null,
     created_at: patient.created_at,
     consultas: consultasResult,
     total_consultas: consultasResult.length,

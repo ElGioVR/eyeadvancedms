@@ -4,12 +4,17 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
+const tipoAseguranzaEnum = z.enum(['PRIVADA', 'CONVENIO', 'PARTICULAR']);
+
 const aseguranzaCreateSchema = z.object({
   nombre: z.string().min(1).max(255),
   telefono: z.string().max(20).optional(),
   direccion: z.string().optional(),
   contacto: z.string().max(255).optional(),
   porcentaje_cobertura: z.number().min(0).max(100).optional(),
+  tipo: tipoAseguranzaEnum.optional(),
+  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 }).strict();
 
 const aseguranzaUpdateSchema = z.object({
@@ -20,6 +25,9 @@ const aseguranzaUpdateSchema = z.object({
   contacto: z.string().max(255).optional().nullable(),
   activo: z.boolean().optional(),
   porcentaje_cobertura: z.number().min(0).max(100).optional().nullable(),
+  tipo: tipoAseguranzaEnum.optional(),
+  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 }).strict();
 
 export async function GET() {
@@ -31,7 +39,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('aseguranzas')
-    .select('id, nombre, contacto, telefono, direccion, activo, porcentaje_cobertura')
+    .select('id, nombre, contacto, telefono, direccion, activo, porcentaje_cobertura, tipo, vigente_desde, vigente_hasta')
     .eq('activo', true)
     .order('nombre');
 
@@ -73,6 +81,9 @@ export async function POST(request: Request) {
       direccion: data.direccion?.trim() || null,
       contacto: data.contacto?.trim() || null,
       porcentaje_cobertura: data.porcentaje_cobertura ?? 0,
+      tipo: data.tipo ?? 'PRIVADA',
+      vigente_desde: data.vigente_desde ?? null,
+      vigente_hasta: data.vigente_hasta ?? null,
     })
     .select()
     .single();
@@ -115,6 +126,9 @@ export async function PATCH(request: Request) {
   if (updates.contacto !== undefined) profileUpdates.contacto = updates.contacto?.trim() || null;
   if (updates.activo !== undefined) profileUpdates.activo = updates.activo;
   if (updates.porcentaje_cobertura !== undefined) profileUpdates.porcentaje_cobertura = updates.porcentaje_cobertura;
+  if (updates.tipo !== undefined) profileUpdates.tipo = updates.tipo;
+  if (updates.vigente_desde !== undefined) profileUpdates.vigente_desde = updates.vigente_desde;
+  if (updates.vigente_hasta !== undefined) profileUpdates.vigente_hasta = updates.vigente_hasta;
 
   if (Object.keys(profileUpdates).length === 0) {
     return NextResponse.json({ error: 'No hay datos para actualizar' }, { status: 400 });

@@ -16,6 +16,9 @@ const pacienteCreateSchema = z
     direccion: z.string().max(1000).optional(),
     contacto_emergencia: z.string().max(255).optional(),
     tel_emergencia: z.string().max(20).optional(),
+    aseguranza_id: z.string().uuid().optional().nullable(),
+    numero_poliza: z.string().max(100).optional().nullable(),
+    numero_afiliacion: z.string().max(100).optional().nullable(),
   })
   .strict()
   .refine((data) => data.nombre_completo || data.nombre, {
@@ -37,7 +40,7 @@ export async function GET(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data, error, count } = await supabase
     .from('pacientes')
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, created_at', { count: 'exact' })
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -47,10 +50,21 @@ export async function GET(request: Request) {
 
   // Get consultation counts and last visit for each patient
   const patientIds = data.map((p) => p.id);
-  const { data: consultas } = await supabase
-    .from('consultas')
-    .select('paciente_id, fecha')
-    .in('paciente_id', patientIds);
+  const [consultasResult, aseguranzasResult] = await Promise.all([
+    supabase
+      .from('consultas')
+      .select('paciente_id, fecha')
+      .in('paciente_id', patientIds),
+    supabase
+      .from('aseguranzas')
+      .select('id, nombre')
+      .eq('activo', true),
+  ]);
+
+  const consultas = consultasResult.data;
+  const aseguranzasList = aseguranzasResult.data || [];
+
+  const aseguranzasMap = new Map(aseguranzasList.map((a) => [a.id, a.nombre]));
 
   const consultasMap = new Map<string, { count: number; ultimaVisita: string }>();
   for (const c of consultas || []) {
@@ -82,6 +96,10 @@ export async function GET(request: Request) {
       direccion: p.direccion,
       contacto_emergencia: p.contacto_emergencia,
       tel_emergencia: p.tel_emergencia,
+      aseguranza_id: p.aseguranza_id || null,
+      aseguradora: p.aseguranza_id ? (aseguranzasMap.get(p.aseguranza_id) || null) : null,
+      numero_poliza: p.numero_poliza || null,
+      numero_afiliacion: p.numero_afiliacion || null,
       consultas_count: c?.count || 0,
       ultima_visita: c?.ultimaVisita || null,
       created_at: p.created_at,
@@ -130,6 +148,9 @@ export async function POST(request: Request) {
   if (data.direccion) insertData.direccion = data.direccion;
   if (data.contacto_emergencia) insertData.contacto_emergencia = data.contacto_emergencia;
   if (data.tel_emergencia) insertData.tel_emergencia = data.tel_emergencia;
+  if (data.aseguranza_id) insertData.aseguranza_id = data.aseguranza_id;
+  if (data.numero_poliza) insertData.numero_poliza = data.numero_poliza;
+  if (data.numero_afiliacion) insertData.numero_afiliacion = data.numero_afiliacion;
 
   const { data: paciente, error } = await supabase
     .from('pacientes')
@@ -151,6 +172,9 @@ export async function POST(request: Request) {
     telefono: paciente.telefono,
     email: paciente.email,
     direccion: paciente.direccion,
+    aseguranza_id: paciente.aseguranza_id || null,
+    numero_poliza: paciente.numero_poliza || null,
+    numero_afiliacion: paciente.numero_afiliacion || null,
     created_at: paciente.created_at,
   }, { status: 201 });
 }

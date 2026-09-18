@@ -116,14 +116,14 @@ export async function GET(request: Request) {
       .lte('created_at', fin + 'T23:59:59')
       .eq('pagado', true),
 
-    supabase.from('lentes')
+    supabase.from('inventario_items')
       .select('id, stock, estado, categoria_id, proveedor_id', { count: 'exact' }),
 
-    supabase.from('lentes')
+    supabase.from('inventario_items')
       .select('categoria_id')
       .gt('stock', 0),
 
-    supabase.from('lentes')
+    supabase.from('inventario_items')
       .select('proveedor_id')
       .gt('stock', 0),
 

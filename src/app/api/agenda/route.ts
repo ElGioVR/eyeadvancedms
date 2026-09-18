@@ -23,6 +23,7 @@ const cirugiaCreateSchema = z.object({
   procedencia: z.string().max(255).optional().nullable(),
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
   notas: z.string().optional().nullable(),
+  inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
 
 export async function GET(request: Request) {
@@ -163,6 +164,7 @@ export async function POST(request: Request) {
       procedencia: data.procedencia?.trim() || null,
       motivo_aplazamiento: data.motivo_aplazamiento?.trim() || null,
       notas: data.notas?.trim() || null,
+      inventario_item_id: data.inventario_item_id || null,
     })
     .select()
     .single();

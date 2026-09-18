@@ -7,9 +7,12 @@ const baseSchema = z.object({
   aseguranza_id: z.string().uuid(),
   porcentaje_cobertura: z.number().min(0).max(100),
   monto_maximo: z.number().min(0).max(99999999.99).optional().nullable(),
+  copago_fijo: z.number().min(0).max(99999999.99).optional(),
   aplica_estudios: z.boolean().optional(),
   aplica_procedimientos: z.boolean().optional(),
   activo: z.boolean().optional(),
+  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 }).strict();
 
 const createSchema = baseSchema;

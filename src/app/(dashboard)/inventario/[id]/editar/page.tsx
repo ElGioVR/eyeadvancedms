@@ -24,6 +24,7 @@ export default function EditarLentePage() {
         if (!found) throw new Error('Lente no encontrado');
         setLente({
           id: found.id,
+          tipo: found.tipo || 'LENTE_VISION',
           marca: found.marca || '',
           modelo: found.modelo || '',
           categoria_id: found.categoria_id || '',
@@ -41,6 +42,9 @@ export default function EditarLentePage() {
           lote: found.lote || '',
           fecha_caducidad: found.fecha_caducidad || '',
           notas: found.notas || '',
+          potencia_dioptrias: found.potencia_dioptrias?.toString() || '',
+          tipo_lio: found.tipo_lio || '',
+          modelo_fabricante: found.modelo_fabricante || '',
         });
       } catch (err: any) {
         setError(err.message || 'Error al cargar');

@@ -38,10 +38,14 @@ const lenteBaseSchema = z.object({
   precio_venta: z.number().min(0).max(99999999.99).optional().nullable(),
   lote: z.string().max(100).optional().nullable(),
   fecha_caducidad: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  estado: z.enum(['DISPONIBLE', 'OCUPADO', 'DANADO', 'VENCIDO']).optional(),
+  estado: z.enum(['DISPONIBLE', 'RESERVADO', 'OCUPADO', 'DANADO', 'VENCIDO']).optional(),
   notas: z.string().optional().nullable(),
   categoria_id: z.string().uuid().optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
+  tipo: z.enum(['LENTE_VISION', 'LENTE_INTRAOCULAR']).optional(),
+  potencia_dioptrias: z.number().optional().nullable(),
+  tipo_lio: z.enum(['MONOFOCAL', 'MULTIFOCAL', 'TORICA', 'EDOF', 'OTRO']).optional().nullable(),
+  modelo_fabricante: z.string().max(255).optional().nullable(),
 }).strict();
 
 const lenteCreateSchema = lenteBaseSchema;
@@ -74,6 +78,10 @@ function mapLente(l: any) {
     proveedor: (l.proveedores as any)?.nombre || '',
     categoria_id: l.categoria_id,
     proveedor_id: l.proveedor_id,
+    tipo: l.tipo || 'LENTE_VISION',
+    potencia_dioptrias: l.potencia_dioptrias,
+    tipo_lio: l.tipo_lio,
+    modelo_fabricante: l.modelo_fabricante,
     created_at: l.created_at,
   };
 }
@@ -92,13 +100,13 @@ export async function GET(request: Request) {
 
   if (barcode) {
     const { data, error } = await supabase
-      .from('lentes')
+      .from('inventario_items')
       .select(SELECT)
       .eq('codigo_barras', barcode)
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ error: 'No se encontro lente con ese codigo de barras' }, { status: 404 });
+      return NextResponse.json({ error: 'No se encontro el ítem con ese codigo de barras' }, { status: 404 });
     }
     return NextResponse.json(mapLente(data));
   }
@@ -109,7 +117,7 @@ export async function GET(request: Request) {
   const to = from + pageSize - 1;
 
   const { data, error, count } = await supabase
-    .from('lentes')
+    .from('inventario_items')
     .select(SELECT, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
@@ -146,7 +154,7 @@ export async function POST(request: Request) {
 
   const year = new Date().getFullYear().toString().slice(-2);
   const { count } = await supabase
-    .from('lentes')
+    .from('inventario_items')
     .select('id', { count: 'exact', head: true });
   const seq = ((count || 0) + 1).toString().padStart(5, '0');
   const folio = `LEN-${year}-${seq}`;
@@ -171,10 +179,14 @@ export async function POST(request: Request) {
     notas: data.notas ?? null,
     categoria_id: data.categoria_id ?? null,
     proveedor_id: data.proveedor_id ?? null,
+    tipo: data.tipo ?? 'LENTE_VISION',
+    potencia_dioptrias: data.potencia_dioptrias ?? null,
+    tipo_lio: data.tipo_lio ?? null,
+    modelo_fabricante: data.modelo_fabricante ?? null,
   };
 
   const { data: lente, error } = await supabase
-    .from('lentes')
+    .from('inventario_items')
     .insert(insert)
     .select(SELECT)
     .single();
@@ -215,7 +227,7 @@ export async function PATCH(request: Request) {
     'marca', 'modelo', 'codigo_barras', 'grado_esferico', 'grado_cilindrico',
     'eje', 'color', 'material', 'stock', 'stock_minimo', 'precio_compra',
     'precio_venta', 'lote', 'fecha_caducidad', 'estado', 'notas',
-    'categoria_id', 'proveedor_id',
+    'categoria_id', 'proveedor_id', 'tipo', 'potencia_dioptrias', 'tipo_lio', 'modelo_fabricante',
   ];
   for (const key of allowed) {
     if (updates[key as keyof typeof updates] !== undefined) {
@@ -227,8 +239,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
   }
 
+  // Fetch current stock before update if stock is changing
+  let stockAnterior: number | null = null;
+  if (cleanUpdates.stock !== undefined) {
+    const { data: current } = await supabase
+      .from('inventario_items')
+      .select('stock')
+      .eq('id', id)
+      .single();
+    stockAnterior = current?.stock ?? null;
+  }
+
   const { data: lente, error } = await supabase
-    .from('lentes')
+    .from('inventario_items')
     .update(cleanUpdates)
     .eq('id', id)
     .select(SELECT)
@@ -236,6 +259,21 @@ export async function PATCH(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+  }
+
+  // Register Kardex movement if stock changed
+  if (stockAnterior !== null && cleanUpdates.stock !== undefined && cleanUpdates.stock !== stockAnterior) {
+    const diff = cleanUpdates.stock - stockAnterior;
+    const tipo = diff > 0 ? 'ENTRADA' : 'SALIDA';
+    await supabase.from('inventario_movimientos').insert({
+      inventario_item_id: id,
+      tipo,
+      cantidad: Math.abs(diff),
+      stock_resultante: cleanUpdates.stock,
+      usuario_id: auth.user.id,
+      referencia_tipo: 'AJUSTE_MANUAL',
+      motivo: `Ajuste manual de stock: ${stockAnterior} → ${cleanUpdates.stock}`,
+    });
   }
 
   // Notify if stock is at or below minimum
@@ -253,7 +291,7 @@ export async function PATCH(request: Request) {
           tipo: 'warning',
           titulo: 'Stock bajo',
           mensaje: `Stock mínimo alcanzado — ${lente.marca} ${lente.modelo} (Stock: ${lente.stock})`,
-          entidad_tipo: 'lente',
+          entidad_tipo: 'inventario_item',
           entidad_id: lente.id,
         }))
       );
@@ -277,7 +315,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'ID es obligatorio' }, { status: 400 });
   }
 
-  const { error } = await supabase.from('lentes').delete().eq('id', id);
+  const { error } = await supabase.from('inventario_items').delete().eq('id', id);
 
   if (error) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });

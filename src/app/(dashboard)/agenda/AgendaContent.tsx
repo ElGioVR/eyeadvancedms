@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
+import { useAutosave } from '@/hooks/useAutosave';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
@@ -991,20 +992,50 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
+  const isEditing = !!cirugiaId;
+  interface CirugiaForm {
+    nombre_paciente: string; expediente: string; fecha: string; hora: string;
+    jornada: string; diagnostico: string; procedimiento: string; ojo: string; lio: string; marca_lio: string;
+    inventario_item_id: string;
+    tiempo_estimado: string; tiempo_estancia: string; doctor_id: string; notas: string; procedencia: string; motivo_aplazamiento: string;
+  }
+
+  const defaultCirugiaForm: CirugiaForm = {
     nombre_paciente: '', expediente: '', fecha: initialDate || '', hora: initialHour || '',
     jornada: '', diagnostico: '', procedimiento: '', ojo: '', lio: '', marca_lio: '',
+    inventario_item_id: '',
     tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '', motivo_aplazamiento: '',
+  };
+
+  const [form, setForm] = useState<CirugiaForm>(() => {
+    // Load draft only for new surgeries
+    if (!cirugiaId) {
+      try {
+        const raw = localStorage.getItem('autosave:nueva-cirugia');
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft && draft.nombre_paciente !== undefined) return draft;
+        }
+      } catch {}
+    }
+    return defaultCirugiaForm;
   });
   const [loadingCirugia, setLoadingCirugia] = useState(!!cirugiaId);
+  const [inventarioLIO, setInventarioLIO] = useState<Array<{ id: string; marca: string; modelo: string; potencia_dioptrias: number | null; tipo_lio: string | null; modelo_fabricante: string | null; stock: number; precio_venta: number | null }>>([]);
+
+  const { clearDraft } = useAutosave(isEditing ? '' : 'nueva-cirugia', form, isEditing ? 999999 : 1500);
 
   useState(() => {
+    fetch('/api/inventario/disponible?tipo=LENTE_INTRAOCULAR').then(r => r.json()).then(data => {
+      setInventarioLIO(data.data || []);
+    }).catch(() => {});
     if (cirugiaId) {
       fetch(`/api/agenda/${cirugiaId}`).then(r => r.json()).then(data => {
         setForm({
           nombre_paciente: data.nombre_paciente || '', expediente: data.expediente || '', fecha: data.fecha || '',
           hora: data.hora?.slice(0, 5) || '', jornada: data.jornada || '', diagnostico: data.diagnostico || '',
           procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
+          inventario_item_id: data.inventario_item_id || '',
           tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
           notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
         });
@@ -1012,6 +1043,20 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
       });
     }
   });
+
+  const handleLIOSelect = (itemId: string) => {
+    const item = inventarioLIO.find(i => i.id === itemId);
+    if (item) {
+      setForm(f => ({
+        ...f,
+        inventario_item_id: item.id,
+        lio: item.potencia_dioptrias != null ? `${item.potencia_dioptrias}D` : '',
+        marca_lio: [item.modelo_fabricante, item.tipo_lio].filter(Boolean).join(' - '),
+      }));
+    } else {
+      setForm(f => ({ ...f, inventario_item_id: '', lio: '', marca_lio: '' }));
+    }
+  };
 
   const handleSubmit = async () => {
     if (!form.nombre_paciente.trim()) { setError('El nombre del paciente es obligatorio'); return; }
@@ -1021,13 +1066,15 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         nombre_paciente: form.nombre_paciente.trim(), expediente: form.expediente || null, fecha: form.fecha || null,
         hora: form.hora || null, jornada: form.jornada || null, diagnostico: form.diagnostico || null,
         procedimiento: form.procedimiento || null, ojo: form.ojo || null, lio: form.lio || null,
-        marca_lio: form.marca_lio || null, tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
+        marca_lio: form.marca_lio || null, inventario_item_id: form.inventario_item_id || null,
+        tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
         doctor_id: form.doctor_id || null, notas: form.notas || null, procedencia: form.procedencia || null,
         motivo_aplazamiento: form.motivo_aplazamiento || null,
       };
       const url = cirugiaId ? `/api/agenda/${cirugiaId}` : '/api/agenda';
       const res = await fetch(url, { method: cirugiaId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Error al guardar'); }
+      clearDraft();
       onSaved();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error desconocido'); } finally { setSaving(false); }
   };
@@ -1065,8 +1112,20 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
             <option value="">—</option><option value="OD">OD</option><option value="OI">OI</option>
           </select>
         </div>
-        <div><label className={labelCls}>LIO</label><input type="text" value={form.lio} onChange={e => setForm(f => ({ ...f, lio: e.target.value }))} placeholder="Potencia" className={inputCls} /></div>
-        <div><label className={labelCls}>Marca LIO</label><input type="text" value={form.marca_lio} onChange={e => setForm(f => ({ ...f, marca_lio: e.target.value }))} placeholder="Marca" className={inputCls} /></div>
+        <div className="col-span-2"><label className={labelCls}>LIO desde Inventario</label>
+          <select value={form.inventario_item_id} onChange={e => handleLIOSelect(e.target.value)} className={cn(inputCls, 'appearance-none')}>
+            <option value="">—</option>
+            {inventarioLIO.map(item => (
+              <option key={item.id} value={item.id}>
+                {item.marca} {item.modelo} {item.potencia_dioptrias != null ? `${item.potencia_dioptrias}D` : ''} ({item.stock} pzas)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className={labelCls}>LIO (potencia)</label><input type="text" value={form.lio} onChange={e => setForm(f => ({ ...f, lio: e.target.value }))} placeholder="Ej. 21.5D" className={inputCls} /></div>
+        <div><label className={labelCls}>Marca LIO</label><input type="text" value={form.marca_lio} onChange={e => setForm(f => ({ ...f, marca_lio: e.target.value }))} placeholder="Marca / Modelo" className={inputCls} /></div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div><label className={labelCls}>Tiempo estimado</label><input type="text" value={form.tiempo_estimado} onChange={e => setForm(f => ({ ...f, tiempo_estimado: e.target.value }))} placeholder="Ej. 1 HR" className={inputCls} /></div>

@@ -99,7 +99,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       .eq('pagado', true),
 
     supabase
-      .from('lentes')
+      .from('inventario_items')
       .select('id, marca, modelo, grado_esferico, color, stock')
       .lte('stock', 5)
       .order('stock', { ascending: true })

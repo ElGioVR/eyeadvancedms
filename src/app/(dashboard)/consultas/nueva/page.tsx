@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
+import { useAutosave } from '@/hooks/useAutosave';
 import { useToast } from '@/components/ui/Toast';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
@@ -31,6 +32,7 @@ interface PacienteAPI {
   edad: number | null;
   sexo: string | null;
   aseguradora: string | null;
+  aseguranza_id: string | null;
   telefono: string | null;
   email: string | null;
   direccion: string | null;
@@ -183,7 +185,23 @@ export default function NuevaConsultaPage() {
     direccion: '',
   });
 
-  const [consultationData, setConsultationData] = useState(() => {
+  interface ConsultationForm {
+    doctorId: string;
+    fecha: string;
+    horaInicio: string;
+    horaFin: string;
+    tipo: string;
+    tipoVisita: string;
+    diagnostico: string;
+    estudios: string;
+    procedimiento: string;
+    aseguradora: string;
+    metodoPago: string;
+    moneda: string;
+    costo: string;
+  }
+
+  const defaultConsultation = (): ConsultationForm => {
     const now = new Date();
     const h = now.getHours().toString().padStart(2, '0');
     const m = now.getMinutes().toString().padStart(2, '0');
@@ -205,7 +223,21 @@ export default function NuevaConsultaPage() {
       moneda: 'MXN - Peso Mexicano',
       costo: '',
     };
+  };
+
+  const [consultationData, setConsultationData] = useState<ConsultationForm>(() => {
+    // Try loading from autosave draft first
+    try {
+      const raw = localStorage.getItem('autosave:nueva-consulta');
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft && draft.doctorId !== undefined) return draft;
+      }
+    } catch {}
+    return defaultConsultation();
   });
+
+  const { clearDraft } = useAutosave('nueva-consulta', consultationData, 1500);
 
   useEffect(() => {
     setConsultationData((prev) => prev.fecha ? prev : { ...prev, fecha: new Date().toISOString().split('T')[0] });
@@ -532,6 +564,7 @@ export default function NuevaConsultaPage() {
       }
 
       toast('Consulta creada exitosamente');
+      clearDraft();
       router.push('/consultas');
     } catch {
       setFormError('Error de conexión con el servidor');
@@ -579,7 +612,15 @@ export default function NuevaConsultaPage() {
                         return (
                           <button
                             key={p.id}
-                            onClick={() => { setPacienteSeleccionado(p); setSearchPaciente(''); setShowDropdown(false); }}
+                            onClick={() => {
+                              setPacienteSeleccionado(p);
+                              setSearchPaciente('');
+                              setShowDropdown(false);
+                              // Auto-resolve insurance from patient's FK
+                              if (p.aseguradora) {
+                                updateConsultation('aseguradora', p.aseguradora);
+                              }
+                            }}
                             className="flex w-full items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
                           >
                             <Avatar initials={initials} className={color} />

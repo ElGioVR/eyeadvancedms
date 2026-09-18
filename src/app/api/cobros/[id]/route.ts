@@ -70,14 +70,14 @@ export async function PATCH(
         if (lentesAsignados && lentesAsignados.length > 0) {
           for (const lx of lentesAsignados) {
             const { data: lente } = await supabase
-              .from('lentes')
+              .from('inventario_items')
               .select('stock')
               .eq('id', lx.lente_id)
               .maybeSingle();
 
             if (lente) {
               await supabase
-                .from('lentes')
+                .from('inventario_items')
                 .update({
                   stock: lente.stock + lx.cantidad,
                   estado: 'DISPONIBLE',
@@ -168,14 +168,14 @@ export async function DELETE(
     if (lentesAsignados && lentesAsignados.length > 0) {
       for (const lx of lentesAsignados) {
         const { data: lente } = await supabase
-          .from('lentes')
+          .from('inventario_items')
           .select('stock')
           .eq('id', lx.lente_id)
           .maybeSingle();
 
         if (lente) {
           await supabase
-            .from('lentes')
+            .from('inventario_items')
             .update({
               stock: lente.stock + lx.cantidad,
               estado: 'DISPONIBLE',

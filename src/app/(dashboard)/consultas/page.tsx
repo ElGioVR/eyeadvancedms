@@ -50,6 +50,7 @@ interface ConsultaAPI {
   notas: string;
   costo_total: number;
   estado_pago: string;
+  metodo_pago: string | null;
 }
 
 const estadoConfig: Record<string, { bg: string; text: string; dot: string }> =
@@ -376,6 +377,10 @@ export default function ConsultasPage() {
                   <Field
                     label="Tipo de Visita"
                     value={selectedConsulta.tipo_visita}
+                  />
+                  <Field
+                    label="Método de Pago"
+                    value={selectedConsulta.metodo_pago || '—'}
                   />
                   <Field
                     label="Diagnóstico"

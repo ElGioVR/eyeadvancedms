@@ -222,6 +222,7 @@ export interface AgendaCirugia {
   ojo: string | null;
   lio: string | null;
   marca_lio: string | null;
+  inventario_item_id: string | null;
   tiempo_estimado: string | null;
   tiempo_estancia: string | null;
   doctor_id: string | null;

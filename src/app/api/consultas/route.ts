@@ -47,6 +47,7 @@ const metodoPagoMap: Record<string, string> = {
   'Tarjeta de Crédito': 'TARJETA',
   'Tarjeta de Débito': 'TARJETA',
   'Transferencia': 'TRANSFERENCIA',
+  'Seguro': 'SEGURO',
   'No aplica': 'NO_APLICA',
 };
 
@@ -158,6 +159,7 @@ export async function GET(request: Request) {
       costo_total: (c as any).costo_total || 0,
       estado_pago: (c as any).estado_pago || 'PENDIENTE',
       monto_pagado: (c as any).monto_pagado || 0,
+      metodo_pago: c.metodo_pago || null,
       created_at: c.created_at,
     };
   });
@@ -251,6 +253,7 @@ export async function POST(request: Request) {
       procedimiento: data.procedimiento?.trim() || null,
       procedimiento_doctor_id: data.procedimiento_doctor_id || null,
       notas: data.notas?.trim() || null,
+      metodo_pago: metodoPagoMap[data.metodo_pago || ''] || null,
     })
     .select()
     .single();
@@ -312,9 +315,10 @@ export async function POST(request: Request) {
     const moneda = monedaMap[data.moneda || ''] || 'PESOS';
     const monto = costoTotal;
 
-    // Lookup aseguranza_id by name if provided
-    let aseguranzaId = null;
+    // Resolve aseguranza_id from patient's FK, with override from request
+    let aseguranzaId: string | null = null;
     if (data.aseguradora && data.aseguradora !== 'Particular') {
+      // Backward compat: if client sends aseguradora name, look it up
       const { data: aseguranza } = await supabase
         .from('aseguranzas')
         .select('id')
@@ -322,6 +326,15 @@ export async function POST(request: Request) {
         .eq('activo', true)
         .single();
       if (aseguranza) aseguranzaId = aseguranza.id;
+    }
+    // If no override, resolve from patient's aseguranza_id
+    if (!aseguranzaId) {
+      const { data: paciente } = await supabase
+        .from('pacientes')
+        .select('aseguranza_id')
+        .eq('id', consultaData.paciente_id)
+        .maybeSingle();
+      if (paciente?.aseguranza_id) aseguranzaId = paciente.aseguranza_id;
     }
 
     // Generate cobro folio
@@ -353,6 +366,15 @@ export async function POST(request: Request) {
   } else {
     // Create a pending cobro if there's a cost but no immediate payment
     if (costoTotal > 0 && !pagoInmediato) {
+      // Resolve aseguranza_id from patient
+      let pendingAseguranzaId: string | null = null;
+      const { data: pacientePending } = await supabase
+        .from('pacientes')
+        .select('aseguranza_id')
+        .eq('id', consultaData.paciente_id)
+        .maybeSingle();
+      if (pacientePending?.aseguranza_id) pendingAseguranzaId = pacientePending.aseguranza_id;
+
       const year = new Date().getFullYear().toString().slice(-2);
       const { count: cobroCount } = await supabase
         .from('cobros')
@@ -365,6 +387,7 @@ export async function POST(request: Request) {
         .insert({
           consulta_id: consultaData.id,
           paciente_id: consultaData.paciente_id,
+          aseguranza_id: pendingAseguranzaId,
           metodo_pago: 'NO_APLICA',
           monto: costoTotal,
           moneda: 'PESOS',

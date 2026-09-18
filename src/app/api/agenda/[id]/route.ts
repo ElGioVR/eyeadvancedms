@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
+import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { z } from 'zod';
 
 const cirugiaUpdateSchema = z.object({
@@ -24,6 +25,7 @@ const cirugiaUpdateSchema = z.object({
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
   notas: z.string().optional().nullable(),
   notificado: z.boolean().optional(),
+  inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
 
 export async function GET(
@@ -90,6 +92,13 @@ export async function PATCH(
   const data = validation.data;
   const updates: Record<string, unknown> = {};
 
+  // Read current state before update (for side-effects)
+  const { data: prev } = await supabase
+    .from('agenda_cirugias')
+    .select('estado, inventario_item_id')
+    .eq('id', id)
+    .single();
+
   const fieldMap: Record<string, string> = {
     paciente_id: 'paciente_id',
     nombre_paciente: 'nombre_paciente',
@@ -110,6 +119,7 @@ export async function PATCH(
     motivo_aplazamiento: 'motivo_aplazamiento',
     notas: 'notas',
     notificado: 'notificado',
+    inventario_item_id: 'inventario_item_id',
   };
 
   for (const [key, dbCol] of Object.entries(fieldMap)) {
@@ -131,6 +141,21 @@ export async function PATCH(
       { error: errorTranslations[error.message] || 'Error interno del servidor' },
       { status: 500 }
     );
+  }
+
+  // Side-effects: LIO consumption / release on status change
+  const newEstado = data.estado;
+  const itemId = data.inventario_item_id ?? prev?.inventario_item_id;
+
+  if (itemId && newEstado === 'completada' && prev?.estado !== 'completada') {
+    const result = await consumirLIO(itemId, id, auth.user.id);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+  }
+
+  if (itemId && newEstado === 'cancelada' && prev?.estado !== 'cancelada') {
+    await liberarLIO(itemId, id, auth.user.id);
   }
 
   return NextResponse.json({ success: true });

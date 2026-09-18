@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, FileText, Calendar, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,8 +21,14 @@ interface PacienteAPI {
   telefono: string;
   email: string;
   aseguradora: string;
+  aseguranza_id: string | null;
   consultas_count: number;
   ultima_visita: string | null;
+}
+
+interface AseguranzaOption {
+  id: string;
+  nombre: string;
 }
 
 const sexoFilterOptions = ['Todos', 'Masculino', 'Femenino'] as const;
@@ -50,6 +56,15 @@ export default function PacientesPage() {
   const [filterSexo, setFilterSexo] = useState('Todos');
   const [filterEdad, setFilterEdad] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
+  const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
+  const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
+
+  useEffect(() => {
+    fetch('/api/configuracion/aseguranzas')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setAseguranzas(data); })
+      .catch(() => {});
+  }, []);
 
   const debouncedSearch = useDebounce(search);
 
@@ -241,15 +256,16 @@ export default function PacientesPage() {
                 </div>
                 <div>
                   <label htmlFor="aseguradora" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Aseguradora</label>
-                  <select id="aseguradora" className="w-full appearance-none rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                  <select
+                    id="aseguradora"
+                    value={newPatientAseguranzaId}
+                    onChange={(e) => setNewPatientAseguranzaId(e.target.value)}
+                    className="w-full appearance-none rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
                     <option value="">Seleccionar</option>
-                    <option>ISSSTECALI</option>
-                    <option>JORNADA</option>
-                    <option>GNP</option>
-                    <option>Seguros Monterrey</option>
-                    <option>AXA</option>
-                    <option>MetLife</option>
-                    <option>Particular</option>
+                    {aseguranzas.map((a) => (
+                      <option key={a.id} value={a.id}>{a.nombre}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -271,12 +287,49 @@ export default function PacientesPage() {
 
             <div className="flex gap-3 pt-3 border-t border-gray-100 dark:border-[#2F3336]">
               <button
-                onClick={() => setShowNewPatient(false)}
+                onClick={() => { setShowNewPatient(false); setNewPatientAseguranzaId(''); }}
                 className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
               >
                 CANCELAR
               </button>
-              <button className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
+              <button
+                onClick={async () => {
+                  const nombreEl = document.getElementById('nombre-completo') as HTMLInputElement;
+                  const sexoEl = document.getElementById('sexo') as HTMLSelectElement;
+                  const fechaEl = document.getElementById('fecha-nacimiento') as HTMLInputElement;
+                  const telEl = document.getElementById('telefono') as HTMLInputElement;
+                  const emailEl = document.getElementById('email') as HTMLInputElement;
+                  const contactoEl = document.getElementById('contacto-nombre') as HTMLInputElement;
+                  const contactoTelEl = document.getElementById('contacto-telefono') as HTMLInputElement;
+
+                  if (!nombreEl?.value?.trim()) return;
+
+                  const payload: Record<string, unknown> = {
+                    nombre_completo: nombreEl.value.trim(),
+                    sexo: sexoEl?.value || undefined,
+                    fecha_nacimiento: fechaEl?.value || undefined,
+                    telefono: telEl?.value || undefined,
+                    email: emailEl?.value || undefined,
+                    contacto_emergencia: contactoEl?.value || undefined,
+                    tel_emergencia: contactoTelEl?.value || undefined,
+                  };
+                  if (newPatientAseguranzaId) payload.aseguranza_id = newPatientAseguranzaId;
+
+                  try {
+                    const res = await fetch('/api/pacientes', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload),
+                    });
+                    if (res.ok) {
+                      setShowNewPatient(false);
+                      setNewPatientAseguranzaId('');
+                      window.location.reload();
+                    }
+                  } catch {}
+                }}
+                className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+              >
                 GUARDAR PACIENTE
               </button>
             </div>
