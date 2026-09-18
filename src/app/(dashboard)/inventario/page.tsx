@@ -16,6 +16,12 @@ import {
   Loader2,
   Keyboard,
   ScanLine,
+  History,
+  X,
+  ArrowDown,
+  ArrowUp,
+  RotateCcw,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch, useDebounce } from '@/hooks';
@@ -58,6 +64,25 @@ interface LenteAPI {
   modelo_fabricante: string | null;
 }
 
+interface KardexMovimiento {
+  id: string;
+  tipo: string;
+  cantidad: number;
+  motivo: string | null;
+  costo_unitario: number | null;
+  referencia_tipo: string | null;
+  created_at: string;
+  usuarios: { nombre_completo: string } | null;
+}
+
+const kardexTipoConfig: Record<string, { bg: string; text: string; icon: typeof ArrowDown }> = {
+  ENTRADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: ArrowDown },
+  SALIDA: { bg: 'bg-red-50', text: 'text-red-700', icon: ArrowUp },
+  SALIDA_CIRUGIA: { bg: 'bg-orange-50', text: 'text-orange-700', icon: Wrench },
+  AJUSTE: { bg: 'bg-blue-50', text: 'text-blue-700', icon: SlidersHorizontal },
+  DEVOLUCION: { bg: 'bg-violet-50', text: 'text-violet-700', icon: RotateCcw },
+};
+
 const estadoConfig: Record<string, { bg: string; text: string; dot?: string }> = {
   DISPONIBLE: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   OCUPADO: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
@@ -94,6 +119,11 @@ export default function InventarioPage() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<LenteAPI | null>(null);
   const [scanError, setScanError] = useState('');
+
+  const [kardexItemId, setKardexItemId] = useState<string | null>(null);
+  const [kardexData, setKardexData] = useState<KardexMovimiento[]>([]);
+  const [kardexLoading, setKardexLoading] = useState(false);
+  const [kardexItemName, setKardexItemName] = useState('');
 
   const debouncedSearch = useDebounce(search);
 
@@ -205,6 +235,22 @@ export default function InventarioPage() {
       setScanError('Error de conexion');
     } finally {
       setScanning(false);
+    }
+  }
+
+  async function openKardex(lente: LenteAPI) {
+    setKardexItemId(lente.id);
+    setKardexItemName(`${lente.marca} ${lente.modelo}`);
+    setKardexLoading(true);
+    setKardexData([]);
+    try {
+      const res = await fetch(`/api/inventario/movimientos?item_id=${lente.id}&pageSize=50`);
+      if (res.ok) {
+        const data = await res.json();
+        setKardexData(data.data || []);
+      }
+    } catch { /* silent */ } finally {
+      setKardexLoading(false);
     }
   }
 
@@ -330,6 +376,9 @@ export default function InventarioPage() {
                     <span>Caducidad: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.fecha_caducidad || '\u2014'}</span></span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => openKardex(lente)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                      <History className="h-3 w-3" /> <span className="hidden sm:inline">Kardex</span>
+                    </button>
                     <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                       <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
                     </button>
@@ -506,6 +555,68 @@ export default function InventarioPage() {
         variant="danger"
         loading={deleting}
       />
+
+      {/* Kardex Drawer */}
+      {kardexItemId && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setKardexItemId(null)} />
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-[#16181C] border-l border-gray-200 dark:border-[#2F3336] z-50 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#2F3336] px-6 py-4">
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">Kardex</h3>
+                <p className="text-xs text-gray-400 dark:text-[#71767B]">{kardexItemName}</p>
+              </div>
+              <button onClick={() => setKardexItemId(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#1D1F23] transition-colors">
+                <X className="h-5 w-5 text-gray-400 dark:text-[#71767B]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {kardexLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                </div>
+              ) : kardexData.length === 0 ? (
+                <div className="text-center py-12">
+                  <History className="h-8 w-8 text-gray-300 dark:text-[#2F3336] mx-auto mb-3" />
+                  <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin movimientos registrados</p>
+                </div>
+              ) : (
+                <div className="relative space-y-3">
+                  <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-[#2F3336]" />
+                  {kardexData.map((mov) => {
+                    const config = kardexTipoConfig[mov.tipo] || kardexTipoConfig.AJUSTE;
+                    const Icon = config.icon;
+                    return (
+                      <div key={mov.id} className="relative flex items-start gap-3">
+                        <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336]">
+                          <Icon className={cn('h-4 w-4', config.text)} />
+                        </div>
+                        <div className="flex-1 min-w-0 rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-3">
+                          <div className="flex items-center justify-between">
+                            <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase', config.bg, config.text)}>
+                              {mov.tipo.replace('_', ' ')}
+                            </span>
+                            <span className={cn('text-sm font-extrabold', mov.tipo.startsWith('SALIDA') ? 'text-red-600' : 'text-emerald-600')}>
+                              {mov.tipo.startsWith('SALIDA') ? '-' : '+'}{mov.cantidad}
+                            </span>
+                          </div>
+                          {mov.motivo && (
+                            <p className="mt-1.5 text-xs text-gray-500 dark:text-[#71767B]">{mov.motivo}</p>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-3 text-[10px] text-gray-400 dark:text-[#71767B]">
+                            {mov.usuarios?.nombre_completo && <span>{mov.usuarios.nombre_completo}</span>}
+                            <span>{new Date(mov.created_at).toLocaleString('es-MX')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

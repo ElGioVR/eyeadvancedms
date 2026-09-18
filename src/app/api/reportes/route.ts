@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       .lte('created_at', fin + 'T23:59:59'),
 
     supabase.from('consultas')
-      .select('id, tipo_consulta, doctor_id, diagnostico, fecha, created_at', { count: 'exact' })
+      .select('id, tipo_consulta, doctor_id, diagnostico, fecha, created_at, estatus', { count: 'exact' })
       .gte('fecha', inicio)
       .lte('fecha', fin),
 
@@ -317,6 +317,14 @@ export async function GET(request: Request) {
     estado: 'Pendiente',
   }));
 
+  const embudoConsultas = {
+    BORRADOR: consultas.filter(c => c.estatus === 'BORRADOR').length,
+    PROCESADA: consultas.filter(c => c.estatus === 'PROCESADA').length,
+    PENDIENTE_ESTUDIO: consultas.filter(c => c.estatus === 'PENDIENTE_ESTUDIO').length,
+    PENDIENTE_CIRUGIA: consultas.filter(c => c.estatus === 'PENDIENTE_CIRUGIA').length,
+    FINALIZADA: consultas.filter(c => c.estatus === 'FINALIZADA').length,
+  };
+
   return NextResponse.json({
     resumen: {
       totalPacientes: pacientesResult.count || 0,
@@ -351,5 +359,6 @@ export async function GET(request: Request) {
       porProveedor: inventarioPorProveedor,
     },
     actividadHoy,
+    embudoConsultas,
   });
 }

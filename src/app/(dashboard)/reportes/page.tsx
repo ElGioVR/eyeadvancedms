@@ -24,6 +24,7 @@ import ProgressBar from '@/components/ui/ProgressBar';
 import BarChart from '@/components/ui/BarChart';
 import DonutChart from '@/components/ui/DonutChart';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/utils';
 
 const tabs = ['Resumen', 'Pacientes', 'Consultas', 'Financiero', 'Inventario'];
 const periodoOptions = ['Este Mes', 'Últimos 3 Meses', 'Últimos 6 Meses', 'Este Año', 'Todo'];
@@ -68,6 +69,7 @@ interface ReportData {
     doctor: string;
     estado: string;
   }>;
+  embudoConsultas: Record<string, number>;
 }
 
 const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -518,6 +520,42 @@ export default function ReportesPage() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Embudo de Consultas */}
+          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm p-6">
+            <SectionTitle>Embudo de Consultas</SectionTitle>
+            <p className="text-xs text-gray-400 dark:text-[#71767B] mb-4">Distribución actual de consultas por estatus del periodo</p>
+            {(() => {
+              const embudo = data.embudoConsultas || {};
+              const total = Object.values(embudo).reduce((s, n) => s + n, 0) || 1;
+              const pasos = [
+                { key: 'BORRADOR', label: 'Borrador', color: 'bg-gray-400' },
+                { key: 'PROCESADA', label: 'Procesada', color: 'bg-blue-500' },
+                { key: 'PENDIENTE_ESTUDIO', label: 'Pend. Estudio', color: 'bg-amber-500' },
+                { key: 'PENDIENTE_CIRUGIA', label: 'Pend. Cirugía', color: 'bg-orange-500' },
+                { key: 'FINALIZADA', label: 'Finalizada', color: 'bg-emerald-500' },
+              ];
+              return (
+                <div className="space-y-3">
+                  {pasos.map((paso) => {
+                    const count = embudo[paso.key] || 0;
+                    const pct = (count / total) * 100;
+                    return (
+                      <div key={paso.key}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-bold text-gray-700 dark:text-[#E7E9EA]">{paso.label}</span>
+                          <span className="text-xs font-bold text-gray-500 dark:text-[#71767B]">{count} ({pct.toFixed(0)}%)</span>
+                        </div>
+                        <div className="h-4 bg-gray-100 dark:bg-[#202327] rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full transition-all', paso.color)} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </>
       )}

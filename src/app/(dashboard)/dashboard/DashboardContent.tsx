@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import {
   Users,
   Calendar,
@@ -43,6 +44,18 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Buenos días' : now.getHours() < 19 ? 'Buenas tardes' : 'Buenas noches';
   const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
+  const [chartData, setChartData] = useState<{
+    consultasPorEstatus: Record<string, number>;
+    topProcedimientos: { nombre: string; cantidad: number }[];
+    agendaOcupacion: { nombre: string; cantidad: number }[];
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/dashboard/charts')
+      .then((r) => r.json())
+      .then(setChartData)
+      .catch(() => {});
+  }, []);
 
   const stats = [
     {
@@ -342,6 +355,98 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
           )}
         </div>
       </section>
+
+      {chartData && (
+        <div className="grid gap-5 lg:grid-cols-3">
+          {/* Consultas por Estatus */}
+          <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Consultas (30 días)</h2>
+            </div>
+            <div className="p-4 space-y-2">
+              {Object.entries(chartData.consultasPorEstatus).length === 0 ? (
+                <p className="text-sm text-gray-400 dark:text-[#71767B] text-center py-4">Sin datos</p>
+              ) : (
+                Object.entries(chartData.consultasPorEstatus).map(([estatus, count]) => {
+                  const max = Math.max(...Object.values(chartData.consultasPorEstatus), 1);
+                  const colors: Record<string, string> = {
+                    BORRADOR: 'bg-gray-400', PROCESADA: 'bg-blue-500',
+                    PENDIENTE_ESTUDIO: 'bg-amber-500', PENDIENTE_CIRUGIA: 'bg-orange-500',
+                    FINALIZADA: 'bg-emerald-500',
+                  };
+                  return (
+                    <div key={estatus} className="flex items-center gap-3">
+                      <span className="w-28 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#71767B] truncate">{estatus.replace('_', ' ')}</span>
+                      <div className="flex-1 h-5 bg-gray-100 dark:bg-[#202327] rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full transition-all', colors[estatus] || 'bg-gray-400')} style={{ width: `${(count / max) * 100}%` }} />
+                      </div>
+                      <span className="text-xs font-extrabold text-gray-900 dark:text-[#E7E9EA] w-8 text-right">{count}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          {/* Top Procedimientos */}
+          <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Top Procedimientos</h2>
+            </div>
+            <div className="p-4 space-y-2">
+              {chartData.topProcedimientos.length === 0 ? (
+                <p className="text-sm text-gray-400 dark:text-[#71767B] text-center py-4">Sin datos</p>
+              ) : (
+                chartData.topProcedimientos.map((proc, i) => {
+                  const max = chartData.topProcedimientos[0]?.cantidad || 1;
+                  const colors = ['bg-primary-500', 'bg-sky-500', 'bg-violet-500', 'bg-amber-500', 'bg-emerald-500'];
+                  return (
+                    <div key={proc.nombre} className="flex items-center gap-3">
+                      <span className="w-6 text-xs font-extrabold text-gray-400 dark:text-[#71767B]">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{proc.nombre}</p>
+                        <div className="mt-1 h-2 bg-gray-100 dark:bg-[#202327] rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', colors[i % colors.length])} style={{ width: `${(proc.cantidad / max) * 100}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-xs font-extrabold text-gray-900 dark:text-[#E7E9EA]">{proc.cantidad}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          {/* Ocupación de Agenda */}
+          <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Agenda (7 días)</h2>
+            </div>
+            <div className="p-4 space-y-2">
+              {chartData.agendaOcupacion.length === 0 ? (
+                <p className="text-sm text-gray-400 dark:text-[#71767B] text-center py-4">Sin cirugías programadas</p>
+              ) : (
+                chartData.agendaOcupacion.map((doc, i) => {
+                  const max = chartData.agendaOcupacion[0]?.cantidad || 1;
+                  const colors = ['bg-emerald-500', 'bg-sky-500', 'bg-violet-500', 'bg-amber-500', 'bg-primary-500'];
+                  return (
+                    <div key={doc.nombre} className="flex items-center gap-3">
+                      <span className="w-6 text-xs font-extrabold text-gray-400 dark:text-[#71767B]">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{doc.nombre}</p>
+                        <div className="mt-1 h-2 bg-gray-100 dark:bg-[#202327] rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', colors[i % colors.length])} style={{ width: `${(doc.cantidad / max) * 100}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-xs font-extrabold text-gray-900 dark:text-[#E7E9EA]">{doc.cantidad}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

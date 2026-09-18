@@ -50,12 +50,12 @@
 - [x] Inventario: alta en pasos (datos básicos → específicos por tipo → proveedor/categoría)
 - [x] Autosugiere proveedor y categoría al detectar marca/modelo repetido
 - [x] Pantallas CRUD de Proveedores y Categorías
-- [ ] Panel lateral (drawer) de Kardex al seleccionar ítem en la lista
+- [x] Panel lateral (drawer) de Kardex al seleccionar ítem en la lista
 - [x] Pacientes: botón "Agendar" con submenú Consulta/Cirugía
 - [x] Filtro de pacientes por aseguradora
 - [x] Dashboard: vista doctor (su info), selector doctor para admin/jefe
-- [ ] Dashboard: gráficas (consultas por estatus, honorarios por periodo, ocupación agenda, top procedimientos)
-- [ ] Reportes: rentabilidad por aseguradora, honorarios histórico, rotación LIO, Kardex consolidado, embudo consultas, ocupación agenda
+- [x] Dashboard: gráficas (consultas por estatus, honorarios por periodo, ocupación agenda, top procedimientos)
+- [x] Reportes: rentabilidad por aseguradora, honorarios histórico, rotación LIO, Kardex consolidado, embudo consultas, ocupación agenda
 
 ---
 
