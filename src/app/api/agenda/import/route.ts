@@ -246,14 +246,38 @@ export async function POST(request: Request) {
   let insertadas = 0;
   let insertadasAplazadas = 0;
   let erroresInsercion = 0;
+  const rechazados: Array<{ fila: number; motivo: string; nombre: string; fecha?: string }> = [];
+
+  // Duplicate check: collect existing (patient+fecha+hora)
+  const existingCirugias = await supabase
+    .from('agenda_cirugias')
+    .select('nombre_paciente, fecha, hora');
+
+  const existingSet = new Set(
+    (existingCirugias.data || []).map(
+      (e) => `${(e.nombre_paciente || '').toLowerCase()}|${e.fecha}|${e.hora}`
+    )
+  );
 
   for (const fila of filasCirugia) {
+    const key = `${(fila.nombre_paciente as string || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
+    if (existingSet.has(key)) {
+      rechazados.push({ fila: insertadas + 1, motivo: 'Duplicado (paciente+fecha+hora)', nombre: fila.nombre_paciente as string, fecha: fila.fecha as string });
+      erroresInsercion++;
+      continue;
+    }
+
     const { cirujano_texto: _, doctor_nombre_temp: __, ...insertData } = fila;
     const { error } = await supabase
       .from('agenda_cirugias')
       .insert(insertData);
-    if (error) erroresInsercion++;
-    else insertadas++;
+    if (error) {
+      rechazados.push({ fila: insertadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string });
+      erroresInsercion++;
+    } else {
+      insertadas++;
+      existingSet.add(key);
+    }
   }
 
   for (const fila of filasAplazadas) {
@@ -264,11 +288,31 @@ export async function POST(request: Request) {
     else insertadasAplazadas++;
   }
 
+  // Log the import
+  await supabase.from('agenda_import_log').insert({
+    usuario_id: auth.user.id,
+    archivo_nombre: file.name,
+    total_filas: filasCirugia.length + filasAplazadas.length,
+    filas_ok: insertadas + insertadasAplazadas,
+    filas_rechazadas: rechazados.length + erroresCount.cirugia + erroresCount.aplazada,
+    detalle_rechazados: rechazados,
+  });
+
+  // Generate rejected CSV
+  let rechazadosCsv: string | null = null;
+  if (rechazados.length > 0) {
+    const header = 'Fila,Motivo,Paciente,Fecha\n';
+    const rows = rechazados.map(r => `${r.fila},"${r.motivo}","${r.nombre}","${r.fecha || ''}"`).join('\n');
+    rechazadosCsv = header + rows;
+  }
+
   return NextResponse.json({
     preview: false,
     importadas: insertadas,
     aplazadasImportadas: insertadasAplazadas,
     errores: erroresInsercion,
     doctorNoEncontrado: doctorNoEncontradoCount,
+    rechazados,
+    rechazadosCsv,
   });
 }

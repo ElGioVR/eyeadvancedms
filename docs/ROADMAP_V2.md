@@ -69,13 +69,13 @@
 ---
 
 ## Fase 6 — Agenda y generales
-- [ ] Import CSV/XLSX: CSV de rechazados con motivo por fila + `agenda_import_log`
-- [ ] Validación de duplicados (paciente+fecha+hora o folio) antes de insertar
-- [ ] Detalle de cirugía como página estructurada (`app/agenda/[id]/page.tsx`)
+- [x] Import CSV/XLSX: CSV de rechazados con motivo por fila + `agenda_import_log`
+- [x] Validación de duplicados (paciente+fecha+hora o folio) antes de insertar
+- [x] Detalle de cirugía como página estructurada (`app/agenda/[id]/page.tsx`)
 - [ ] Filtro "mis operaciones" para doctor en agenda
 - [ ] Vista móvil día/semana/mes con carrusel horizontal de fechas
 - [ ] Homologar nombres: usar `cirugia` como entidad canónica interna
-- [ ] Auditoría: validación de formularios consistente (Zod), dark/light mode completo, experiencia móvil, "Recordarme" en login
+- [x] Auditoría: validación de formularios consistente (Zod), dark/light mode completo, experiencia móvil, "Recordarme" en login
 
 ---
 
