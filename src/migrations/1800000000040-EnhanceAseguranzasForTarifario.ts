@@ -27,9 +27,10 @@ export class EnhanceAseguranzasForTarifario1800000000040 implements MigrationInt
         ADD COLUMN IF NOT EXISTS vigente_hasta DATE;
     `);
 
-    // 3. numero_poliza y numero_afiliacion en pacientes
+    // 3. aseguranza_id, numero_poliza y numero_afiliacion en pacientes
     await queryRunner.query(`
       ALTER TABLE pacientes
+        ADD COLUMN IF NOT EXISTS aseguranza_id UUID REFERENCES aseguranzas(id) ON DELETE SET NULL,
         ADD COLUMN IF NOT EXISTS numero_poliza VARCHAR(100),
         ADD COLUMN IF NOT EXISTS numero_afiliacion VARCHAR(100);
     `);
@@ -57,6 +58,9 @@ export class EnhanceAseguranzasForTarifario1800000000040 implements MigrationInt
     // 6. Índices para búsquedas frecuentes
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_aseguranzas_tipo ON aseguranzas(tipo);
+    `);
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_pacientes_aseguranza_id ON pacientes(aseguranza_id) WHERE aseguranza_id IS NOT NULL;
     `);
   }
