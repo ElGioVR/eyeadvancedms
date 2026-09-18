@@ -296,7 +296,7 @@ export default function HistorialMedicoPage() {
                           Ver detalle <span className="text-xs">→</span>
                         </Link>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
                         <div>
                           <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Médico</p>
                           <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.doctor || '—'}</p>

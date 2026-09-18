@@ -177,12 +177,12 @@ export default function DoctorHonorariosPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
       ) : kpis ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={BarChart3} label="Servicios" value={String(kpis.servicios_ejecutados)} color="text-blue-600" bgColor="bg-blue-50" />
             <StatCard icon={DollarSign} label="Devengado" value={fmtMoney(kpis.honorario_devengado)} color="text-emerald-600" bgColor="bg-emerald-50" />
             <StatCard icon={Clock} label="Pendiente" value={fmtMoney(devengadoPendiente)} color="text-amber-600" bgColor="bg-amber-50" />

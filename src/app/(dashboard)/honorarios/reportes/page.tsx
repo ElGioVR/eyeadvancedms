@@ -96,12 +96,12 @@ export default function ReportesHonorariosPage() {
       <FiltrosReporte onFilter={handleFilter} showDoctor doctores={doctores} loading={loading} />
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
       ) : totals ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Users} label="Doctores" value={String(totals.num_doctores)} color="text-blue-600" bgColor="bg-blue-50" />
             <StatCard icon={DollarSign} label="Total Cobrado" value={formatCurrency(totals.total_cobrado)} color="text-emerald-600" bgColor="bg-emerald-50" />
             <StatCard icon={Award} label="Total Honorarios" value={formatCurrency(totals.total_honorarios)} color="text-primary-600" bgColor="bg-primary-50" />

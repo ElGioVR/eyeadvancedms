@@ -106,14 +106,14 @@ export default function HonorariosPage() {
       />
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Users} label="Doctores Activos" value={String(ranking.length)} color="text-blue-600" bgColor="bg-blue-50" />
             <StatCard icon={BarChart3} label="Servicios del Mes" value={String(totalServicios)} color="text-emerald-600" bgColor="bg-emerald-50" />
             <StatCard icon={DollarSign} label="Devengado del Mes" value={fmtMoney(totalDevengado)} color="text-violet-600" bgColor="bg-violet-50" />
@@ -194,7 +194,7 @@ export default function HonorariosPage() {
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Accesos Rápidos</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Link href="/honorarios/tarifas" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors">
                 <DollarSign className="w-8 h-8 text-primary-600" />
                 <div>
