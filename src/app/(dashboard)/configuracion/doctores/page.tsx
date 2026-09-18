@@ -24,8 +24,15 @@ interface DoctorAPI {
   cedula: string | null;
   telefono: string | null;
   email: string | null;
+  usuario_id: string | null;
   activo: boolean;
   created_at: string;
+}
+
+interface UsuarioOption {
+  id: string;
+  email: string;
+  nombre: string;
 }
 
 const avatarColors = [
@@ -69,6 +76,8 @@ export default function DoctoresPage() {
   const [formCedula, setFormCedula] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formEmail, setFormEmail] = useState('');
+  const [formUsuarioId, setFormUsuarioId] = useState('');
+  const [usuariosDoctor, setUsuariosDoctor] = useState<UsuarioOption[]>([]);
 
   const filtered = useMemo(
     () =>
@@ -87,13 +96,26 @@ export default function DoctoresPage() {
     setFormCedula('');
     setFormTelefono('');
     setFormEmail('');
+    setFormUsuarioId('');
+  }, []);
+
+  const fetchUsuariosDoctor = useCallback(async () => {
+    try {
+      const res = await fetch('/api/configuracion/usuarios');
+      if (res.ok) {
+        const data = await res.json();
+        const all: UsuarioOption[] = Array.isArray(data) ? data : data.data || [];
+        setUsuariosDoctor(all.filter((u) => (u as any).rol === 'doctor'));
+      }
+    } catch { /* silent */ }
   }, []);
 
   const handleNewDoctor = useCallback(() => {
     resetForm();
     setFormError(null);
     setShowNewDoctor(true);
-  }, [resetForm]);
+    fetchUsuariosDoctor();
+  }, [resetForm, fetchUsuariosDoctor]);
 
   const handleEditDoctor = useCallback((doc: DoctorAPI) => {
     setFormNombre(doc.nombre);
@@ -101,9 +123,11 @@ export default function DoctoresPage() {
     setFormCedula(doc.cedula || '');
     setFormTelefono(doc.telefono || '');
     setFormEmail(doc.email || '');
+    setFormUsuarioId(doc.usuario_id || '');
     setFormError(null);
     setEditingDoctor(doc);
-  }, []);
+    fetchUsuariosDoctor();
+  }, [fetchUsuariosDoctor]);
 
   const handleCloseSidebar = useCallback(() => {
     setEditingDoctor(null);
@@ -125,6 +149,7 @@ export default function DoctoresPage() {
           cedula: formCedula,
           telefono: formTelefono,
           email: formEmail,
+          usuario_id: formUsuarioId || null,
         }),
       });
       if (!res.ok) {
@@ -155,6 +180,7 @@ export default function DoctoresPage() {
           cedula: formCedula,
           telefono: formTelefono,
           email: formEmail,
+          usuario_id: formUsuarioId || null,
         }),
       });
       if (!res.ok) {
@@ -368,6 +394,20 @@ export default function DoctoresPage() {
                     placeholder="correo@eyeadvanced.com"
                     className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Vincular Usuario</label>
+                  <select
+                    value={formUsuarioId}
+                    onChange={(e) => setFormUsuarioId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
+                    <option value="">Sin vincular</option>
+                    {usuariosDoctor.map((u) => (
+                      <option key={u.id} value={u.id}>{u.nombre || u.email}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-gray-400 dark:text-[#71767B]">Selecciona el usuario doctor para vincular al sistema</p>
                 </div>
                 {formError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

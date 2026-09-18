@@ -39,7 +39,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('doctores')
-    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, activo, honorario_consulta, honorario_estudio, honorario_procedimiento, created_at')
+    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, usuario_id, activo, honorario_consulta, honorario_estudio, honorario_procedimiento, created_at')
     .eq('activo', true)
     .order('nombre_completo');
 
@@ -54,6 +54,7 @@ export async function GET() {
     cedula: d.cedula_profesional,
     telefono: d.telefono,
     email: d.email,
+    usuario_id: d.usuario_id || null,
     activo: d.activo,
     honorario_consulta: d.honorario_consulta || 0,
     honorario_estudio: d.honorario_estudio || 0,
