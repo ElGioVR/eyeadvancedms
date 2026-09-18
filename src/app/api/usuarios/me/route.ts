@@ -9,7 +9,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('usuarios')
-    .select('id, email, nombre, rol, doctor_id, avatar_url, preferencias')
+    .select('id, email, nombre, rol, avatar_url, preferencias')
     .eq('id', auth.user.id)
     .maybeSingle();
 
@@ -17,8 +17,40 @@ export async function GET() {
     return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 });
   }
 
+  // Resolve doctor_id from doctores table (server-side with service_role)
+  let doctor_id: string | null = null;
+  if (data.rol === 'doctor' || data.rol === 'admin') {
+    // 1. Try by usuario_id
+    const { data: doctorRec } = await supabase
+      .from('doctores')
+      .select('id')
+      .eq('usuario_id', auth.user.id)
+      .maybeSingle();
+
+    if (doctorRec) {
+      doctor_id = doctorRec.id;
+    } else {
+      // 2. Fallback: match by email
+      const { data: doctorByEmail } = await supabase
+        .from('doctores')
+        .select('id')
+        .ilike('email', data.email || '')
+        .maybeSingle();
+
+      if (doctorByEmail) {
+        doctor_id = doctorByEmail.id;
+        // Auto-link server-side (has permission)
+        await supabase
+          .from('doctores')
+          .update({ usuario_id: auth.user.id })
+          .eq('id', doctorByEmail.id);
+      }
+    }
+  }
+
   return NextResponse.json({
     ...data,
+    doctor_id,
     iniciales: data.nombre
       ? data.nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
       : '?',

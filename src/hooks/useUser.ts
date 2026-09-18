@@ -31,7 +31,7 @@ export function useUser() {
 
     async function getUser() {
       try {
-        const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
 
         let finalAuthUser = authUser;
 
@@ -45,53 +45,35 @@ export function useUser() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from('usuarios')
-          .select('id,nombre,rol,activo,avatar_url')
-          .eq('id', finalAuthUser.id)
-          .single();
-
-        const nombre = profile?.nombre || finalAuthUser.user_metadata?.nombre || '';
-        const rol = profile?.rol || finalAuthUser.user_metadata?.rol || 'recepcionista';
-
-        let doctor_id: string | null = null;
-        if (rol === 'doctor' || rol === 'admin') {
-          const { data: doctorRec } = await supabase
-            .from('doctores')
-            .select('id')
-            .eq('usuario_id', finalAuthUser.id)
-            .maybeSingle();
-          if (doctorRec) {
-            doctor_id = doctorRec.id;
-          } else {
-            // Fallback: match by email
-            const { data: doctorByEmail } = await supabase
-              .from('doctores')
-              .select('id')
-              .ilike('email', finalAuthUser.email || '')
-              .maybeSingle();
-            if (doctorByEmail) {
-              doctor_id = doctorByEmail.id;
-              // Auto-link
-              await supabase
-                .from('doctores')
-                .update({ usuario_id: finalAuthUser.id })
-                .eq('id', doctorByEmail.id);
-            }
-          }
+        // Get full profile + doctor_id from server endpoint (has service_role)
+        const meRes = await fetch('/api/usuarios/me');
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setUser({
+            id: meData.id,
+            email: meData.email || finalAuthUser.email || '',
+            nombre: meData.nombre || finalAuthUser.user_metadata?.nombre || '',
+            rol: meData.rol || 'recepcionista',
+            iniciales: meData.iniciales || getInitials(meData.nombre || '', meData.email || ''),
+            avatar_url: meData.avatar_url ?? null,
+            last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
+            created_at: finalAuthUser.created_at,
+            doctor_id: meData.doctor_id ?? null,
+          });
+        } else {
+          // Fallback without doctor_id
+          setUser({
+            id: finalAuthUser.id,
+            email: finalAuthUser.email || '',
+            nombre: finalAuthUser.user_metadata?.nombre || '',
+            rol: finalAuthUser.user_metadata?.rol || 'recepcionista',
+            iniciales: getInitials(finalAuthUser.user_metadata?.nombre || '', finalAuthUser.email || ''),
+            avatar_url: null,
+            last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
+            created_at: finalAuthUser.created_at,
+            doctor_id: null,
+          });
         }
-
-        setUser({
-          id: finalAuthUser.id,
-          email: finalAuthUser.email || '',
-          nombre,
-          rol,
-          iniciales: getInitials(nombre, finalAuthUser.email || ''),
-          avatar_url: profile?.avatar_url ?? null,
-          last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
-          created_at: finalAuthUser.created_at,
-          doctor_id,
-        });
       } catch (error) {
         console.error('Error fetching user:', error);
       } finally {
