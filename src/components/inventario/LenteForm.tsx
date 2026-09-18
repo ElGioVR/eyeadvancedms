@@ -22,6 +22,20 @@ interface CatProv {
   nombre: string;
 }
 
+// Auto-suggest: when user types a marca, suggest matching categoria/proveedor
+const suggestFromMarca = (marca: string, cats: CatProv[], provs: CatProv[]): { categoriaId?: string; proveedorId?: string } => {
+  const lower = marca.toLowerCase().trim();
+  if (!lower) return {};
+
+  const catMatch = cats.find((c) => c.nombre.toLowerCase().includes(lower));
+  const provMatch = provs.find((p) => p.nombre.toLowerCase().includes(lower));
+
+  return {
+    categoriaId: catMatch?.id,
+    proveedorId: provMatch?.id,
+  };
+};
+
 interface LenteData {
   id?: string;
   tipo: string;
@@ -74,6 +88,15 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
     fetch('/api/configuracion/categorias-lentes').then((r) => r.json()).then(setCats).catch(() => {});
     fetch('/api/configuracion/proveedores').then((r) => r.json()).then(setProvs).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const suggestion = suggestFromMarca(form.marca, cats, provs);
+    setForm((p) => ({
+      ...p,
+      ...(suggestion.categoriaId ? { categoria_id: suggestion.categoriaId } : {}),
+      ...(suggestion.proveedorId ? { proveedor_id: suggestion.proveedorId } : {}),
+    }));
+  }, [form.marca, cats, provs]);
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
@@ -257,6 +280,9 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                     <option value="">Sin categoria</option>
                     {cats.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
+                  {suggestFromMarca(form.marca, cats, provs).categoriaId && (
+                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {cats.find((c) => c.id === suggestFromMarca(form.marca, cats, provs)?.categoriaId)?.nombre || ''}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Proveedor</label>
@@ -264,6 +290,9 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                     <option value="">Sin proveedor</option>
                     {provs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
+                  {suggestFromMarca(form.marca, cats, provs).proveedorId && (
+                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {provs.find((p) => p.id === suggestFromMarca(form.marca, cats, provs)?.proveedorId)?.nombre || ''}</p>
+                  )}
                 </div>
               </div>
             </div>
