@@ -241,6 +241,13 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             </button>
           )}
 
+          {user?.rol === 'doctor' && (
+            <div className="lg:hidden shrink-0">
+              <img src="/images/eyeadvanced-logo.png" alt="EyeAdvanced" className="h-7 w-auto block dark:hidden" />
+              <img src="/images/logo-eye.png" alt="EyeAdvanced" className="h-7 w-auto hidden dark:block" />
+            </div>
+          )}
+
           <div ref={searchRef} className="relative hidden sm:flex flex-1 max-w-xl">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#71767B]" />

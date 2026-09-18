@@ -13,7 +13,9 @@ import {
   ArrowRight,
   ShieldCheck,
   ChevronDown,
-  X,
+  TrendingUp,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 import Avatar from '@/components/ui/Avatar';
@@ -49,6 +51,12 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
     topProcedimientos: { nombre: string; cantidad: number }[];
     agendaOcupacion: { nombre: string; cantidad: number }[];
   } | null>(null);
+  const [doctorMetrics, setDoctorMetrics] = useState<{
+    servicios: number;
+    devengado: number;
+    pendiente: number;
+    pagado: number;
+  } | null>(null);
 
   useEffect(() => {
     fetch('/api/dashboard/charts')
@@ -56,6 +64,24 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
       .then(setChartData)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (userRol !== 'doctor') return;
+    fetch('/api/honorarios/metricas/ranking')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const me = data[0];
+          setDoctorMetrics({
+            servicios: me.servicios || 0,
+            devengado: me.devengado || 0,
+            pendiente: 0,
+            pagado: 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [userRol]);
 
   const stats = [
     {
@@ -162,6 +188,34 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
           </div>
         </div>
       </div>
+
+      {/* Doctor Honorarios Section */}
+      {userRol === 'doctor' && doctorMetrics && (
+        <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+          <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4 flex items-center justify-between">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Mis Honorarios</h2>
+            <Link href="/mis-honorarios" className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-500 hover:text-primary-700">
+              Ver todo <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-4 p-6">
+            <div className="rounded-xl bg-emerald-500/10 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                <span className="text-xs font-bold text-emerald-600">Devengado</span>
+              </div>
+              <p className="text-xl font-extrabold text-emerald-600">{formatMoneyFull(doctorMetrics.devengado)}</p>
+            </div>
+            <div className="rounded-xl bg-blue-500/10 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                <span className="text-xs font-bold text-blue-600">Servicios</span>
+              </div>
+              <p className="text-xl font-extrabold text-blue-600">{doctorMetrics.servicios}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (

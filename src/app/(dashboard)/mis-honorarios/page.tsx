@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, Clock, CheckCircle2, DollarSign, ArrowDownLeft, ArrowUpRight, Calendar, Loader2 } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle2, DollarSign, ArrowDownLeft, ArrowUpRight, Calendar } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 import { cn } from '@/lib/utils';
+import Skeleton from '@/components/ui/Skeleton';
 
 interface KPIs {
   servicios_ejecutados: number;
@@ -84,8 +85,26 @@ export default function MisHonorariosPage() {
 
   if (userLoading || loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+      <div className="mx-auto max-w-[600px] space-y-5">
+        <div className="space-y-1.5">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16 rounded-2xl" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16 rounded-2xl" />
+        </div>
       </div>
     );
   }
