@@ -10,6 +10,7 @@ const doctorCreateSchema = z.object({
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional(),
   email: z.string().email().max(255).optional(),
+  usuario_id: z.string().uuid().optional().nullable(),
   honorario_consulta: z.number().min(0).optional(),
   honorario_estudio: z.number().min(0).optional(),
   honorario_procedimiento: z.number().min(0).optional(),
@@ -22,6 +23,7 @@ const doctorUpdateSchema = z.object({
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional().nullable(),
   email: z.string().email().max(255).optional().nullable(),
+  usuario_id: z.string().uuid().optional().nullable(),
   activo: z.boolean().optional(),
   honorario_consulta: z.number().min(0).optional(),
   honorario_estudio: z.number().min(0).optional(),
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
       especialidad: data.especialidad?.trim() || 'Oftalmología',
       telefono: data.telefono?.trim() || null,
       email: data.email?.trim() || null,
+      usuario_id: data.usuario_id || null,
       honorario_consulta: data.honorario_consulta || 0,
       honorario_estudio: data.honorario_estudio || 0,
       honorario_procedimiento: data.honorario_procedimiento || 0,
@@ -137,6 +140,7 @@ export async function PATCH(request: Request) {
   if (updates.especialidad) profileUpdates.especialidad = updates.especialidad.trim();
   if (updates.telefono !== undefined) profileUpdates.telefono = updates.telefono?.trim() || null;
   if (updates.email !== undefined) profileUpdates.email = updates.email?.trim() || null;
+  if (updates.usuario_id !== undefined) profileUpdates.usuario_id = updates.usuario_id || null;
   if (updates.activo !== undefined) profileUpdates.activo = updates.activo;
   if (updates.honorario_consulta !== undefined) profileUpdates.honorario_consulta = updates.honorario_consulta;
   if (updates.honorario_estudio !== undefined) profileUpdates.honorario_estudio = updates.honorario_estudio;

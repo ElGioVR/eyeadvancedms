@@ -55,13 +55,30 @@ export function useUser() {
         const rol = profile?.rol || finalAuthUser.user_metadata?.rol || 'recepcionista';
 
         let doctor_id: string | null = null;
-        if (rol === 'doctor') {
+        if (rol === 'doctor' || rol === 'admin') {
           const { data: doctorRec } = await supabase
             .from('doctores')
             .select('id')
             .eq('usuario_id', finalAuthUser.id)
             .maybeSingle();
-          doctor_id = doctorRec?.id ?? null;
+          if (doctorRec) {
+            doctor_id = doctorRec.id;
+          } else {
+            // Fallback: match by email
+            const { data: doctorByEmail } = await supabase
+              .from('doctores')
+              .select('id')
+              .ilike('email', finalAuthUser.email || '')
+              .maybeSingle();
+            if (doctorByEmail) {
+              doctor_id = doctorByEmail.id;
+              // Auto-link
+              await supabase
+                .from('doctores')
+                .update({ usuario_id: finalAuthUser.id })
+                .eq('id', doctorByEmail.id);
+            }
+          }
         }
 
         setUser({
