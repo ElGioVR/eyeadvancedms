@@ -40,6 +40,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
@@ -105,37 +106,38 @@ export default function LoginPage() {
   return (
     <>
       {/* Left side — Form */}
-      <div className="w-full lg:w-1/2 flex flex-col min-h-screen lg:min-h-0 bg-white dark:bg-[#16181C]">
-        <div className="flex-1 flex items-center justify-center p-5 sm:p-8">
-          <div className="w-full max-w-md">
+      <div className="w-full lg:w-1/2 flex flex-col min-h-[100dvh] lg:min-h-0 bg-slate-50 dark:bg-[#090B0F]">
+        <div className="relative flex-1 flex items-center justify-center overflow-y-auto px-4 py-8 sm:p-8 lg:py-12">
+          <div className="pointer-events-none absolute left-1/2 top-1/4 h-64 w-64 -translate-x-1/2 rounded-full bg-primary-500/10 blur-3xl dark:bg-primary-500/10" />
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200/80 bg-white/95 p-5 shadow-xl shadow-slate-900/5 dark:border-white/10 dark:bg-[#11151B]/95 dark:shadow-black/30 sm:p-8">
             {/* Logo */}
-            <div className="mb-8 sm:mb-10">
+            <div className="mb-7 sm:mb-9">
               <img
                 src="/images/eyeadvanced-logo.png"
                 alt="EyeAdvanced Medical Solutions"
-                className="h-10 sm:h-12 w-auto max-w-[200px] sm:max-w-[240px] object-contain"
+                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain"
               />
             </div>
 
             {/* Heading */}
-            <div className="mb-8">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-[#E7E9EA] tracking-tight">
+            <div className="mb-7 sm:mb-8">
+              <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-gray-900 dark:text-[#F4F7FA] tracking-tight">
                 Bienvenido de nuevo
               </h1>
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 Ingresa tus credenciales para acceder al sistema clínico.
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" noValidate>
               {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1.5">
                   Correo Electrónico
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 pointer-events-none" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-400 dark:text-slate-500 pointer-events-none" />
                   <input
                     id="email"
                     name="email"
@@ -143,7 +145,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="usuario@clinica.com"
-                    className="input-field pl-11 min-h-[46px] rounded-lg"
+                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-[#1A1F26] dark:text-slate-100 dark:placeholder:text-slate-500"
                     autoComplete="email"
                     required
                     disabled={loading || isLocked}
@@ -153,11 +155,11 @@ export default function LoginPage() {
 
               {/* Password */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1.5">
                   Contraseña
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 pointer-events-none" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-400 dark:text-slate-500 pointer-events-none" />
                   <input
                     id="password"
                     name="password"
@@ -165,7 +167,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field pl-11 pr-11 min-h-[46px] rounded-lg"
+                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-[#1A1F26] dark:text-slate-100 dark:placeholder:text-slate-500"
                     autoComplete="current-password"
                     required
                     disabled={loading || isLocked}
@@ -173,7 +175,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-0 top-0 h-full px-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                     className="absolute right-0 top-0 h-full px-3.5 flex items-center text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors"
                     aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     tabIndex={-1}
                   >
@@ -182,10 +184,26 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <label htmlFor="remember-me" className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-white/20 dark:bg-[#1A1F26]"
+                    disabled={loading || isLocked}
+                  />
+                  Recordarme
+                </label>
+                <span className="text-xs text-slate-400 dark:text-slate-500">Sesión segura</span>
+              </div>
+
               {/* Error */}
               <div className="min-h-[20px]" role="alert" aria-live="assertive">
                 {error && (
-                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm font-medium">
+                  <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300">
                     <AlertCircle className="w-5 h-5 shrink-0" />
                     <span>{error}</span>
                   </div>
@@ -196,7 +214,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || isLocked}
-                className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-3 min-h-[48px] text-sm font-bold tracking-wide rounded-lg shadow-md shadow-primary-900/15 hover:from-primary-700 hover:to-primary-800 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+                className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-3 min-h-[50px] text-sm font-bold tracking-wide rounded-xl shadow-md shadow-primary-900/15 hover:from-primary-700 hover:to-primary-800 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
               >
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
@@ -213,7 +231,7 @@ export default function LoginPage() {
             </form>
 
             {/* Footer */}
-            <p className="mt-8 text-center text-xs text-gray-400">
+            <p className="mt-7 text-center text-xs text-slate-400 dark:text-slate-500">
               EyeAdvanced Medical Solutions &copy; {new Date().getFullYear()}
             </p>
           </div>
