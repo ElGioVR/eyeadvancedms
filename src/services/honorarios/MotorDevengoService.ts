@@ -47,26 +47,25 @@ export class MotorDevengoService {
 
     const { data: consulta, error: e1 } = await this.supabase
       .from('consultas')
-      .select('id, paciente_id, doctor_id, fecha, tipo_consulta, tipo_visita')
+      .select('id, paciente_id, doctor_id, fecha, tipo_consulta, tipo_visita, costo_total, monto_pagado, estatus_pago')
       .eq('id', consultaId)
       .single();
 
     if (e1 || !consulta) throw new Error(`Consulta ${consultaId} no encontrada`);
 
+    // Read insurance and coverage from consultas (replaces cobros reference)
     let cobroMonto: number | null = null;
     let cobroAseguranzaId: string | null = null;
 
     if (config.aseguranza_afecta_honorarios) {
-      const { data: cobro } = await this.supabase
-        .from('cobros')
-        .select('monto, aseguranza_id')
-        .eq('consulta_id', consultaId)
+      cobroMonto = consulta.costo_total || 0;
+      // Resolve aseguranza_id from patient
+      const { data: paciente } = await this.supabase
+        .from('pacientes')
+        .select('aseguranza_id')
+        .eq('id', consulta.paciente_id)
         .maybeSingle();
-
-      if (cobro) {
-        cobroMonto = cobro.monto;
-        cobroAseguranzaId = cobro.aseguranza_id;
-      }
+      cobroAseguranzaId = paciente?.aseguranza_id ?? null;
     }
 
     let porcentajeCobertura = 100;

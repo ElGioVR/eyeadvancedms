@@ -37,12 +37,12 @@
 ---
 
 ## Fase 3 — Honorarios (módulo completo)
-- [ ] Vista raíz: tabla doctores con métricas + botón CSV general
+- [x] Vista raíz: tabla doctores con métricas + botón CSV general
 - [ ] Detalle doctor: doctor-jefe edita periodo y tarifas (tipo_calculo=PORCENTAJE); doctor ve solo lectura
-- [ ] Lista paginada de servicios del periodo, filtro por rango de fechas
-- [ ] Tabs métricas: pendientes, pagados, ganancias libres + gráfica tendencia (Recharts)
-- [ ] CSV del doctor: procedimientos, estudios, costos, paciente, consulta
-- [ ] Flujo automático intacto: servicio → honorario PENDIENTE → estatus_pago PAGADO → LISTO_PARA_PAGO → doctor-jefe paga
+- [x] Lista paginada de servicios del periodo, filtro por rango de fechas
+- [x] Tabs métricas: pendientes, pagados, ganancias libres + gráfica tendencia (Recharts)
+- [x] CSV del doctor: procedimientos, estudios, costos, paciente, consulta
+- [x] Flujo automático intacto: servicio → honorario PENDIENTE → estatus_pago PAGADO → LISTO_PARA_PAGO → doctor-jefe paga
 
 ---
 

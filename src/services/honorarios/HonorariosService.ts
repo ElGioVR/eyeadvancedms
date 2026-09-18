@@ -106,6 +106,27 @@ export class HonorariosService {
       }
     }
 
+    // For new consultas (no cobros), resolve from consultas table
+    const consultaIds = [...new Set((eventos || [])
+      .filter(e => !e.cobro_id && e.origen_tipo === 'CONSULTA')
+      .map(e => e.origen_id))];
+    let consultasMap = new Map<string, { costo_total: number; estatus_pago: string; metodo_pago: string | null }>();
+
+    if (consultaIds.length > 0) {
+      const { data: consultas } = await this.supabase
+        .from('consultas')
+        .select('id, costo_total, estatus_pago, metodo_pago')
+        .in('id', consultaIds);
+
+      for (const c of consultas || []) {
+        consultasMap.set(c.id, {
+          costo_total: c.costo_total || 0,
+          estatus_pago: c.estatus_pago || 'PENDIENTE_PAGO',
+          metodo_pago: c.metodo_pago,
+        });
+      }
+    }
+
     const detalles: ReporteDoctorFila[] = [];
     const totales: ReporteDoctorTotales = {
       num_consultas: 0,
@@ -124,7 +145,20 @@ export class HonorariosService {
       const doctorNombre = (ev.doctores as unknown as Record<string, unknown>)?.nombre_completo as string || '';
       const pacienteNombre = (ev.pacientes as unknown as Record<string, unknown>)?.nombre_completo as string || '';
 
-      const montoCobrado = cobro?.monto ?? 0;
+      // Resolve from cobros (legacy) or consultas (new)
+      let montoCobrado = cobro?.monto ?? 0;
+      let metodoPago = cobro?.metodo_pago || null;
+      let aseguranza = cobro?.aseguranza || null;
+      let estadoPago = cobro?.pagado ? 'PAGADO' : (cobro ? 'PENDIENTE' : 'SIN_COBRO');
+
+      if (!cobro && !ev.cobro_id && ev.origen_tipo === 'CONSULTA') {
+        const consulta = consultasMap.get(ev.origen_id);
+        if (consulta) {
+          montoCobrado = consulta.costo_total;
+          metodoPago = consulta.metodo_pago;
+          estadoPago = consulta.estatus_pago === 'PAGADO' ? 'PAGADO' : 'PENDIENTE';
+        }
+      }
       const montoBase = ev.monto_base ?? 0;
       const tarifaSnapshot = (ev.tarifa_snapshot as Record<string, unknown>) || {};
       const tarifaValor = (tarifaSnapshot.valor as number) || 0;
@@ -142,21 +176,21 @@ export class HonorariosService {
         tipo_visita: null,
         diagnostico: null,
         procedimiento: null,
-        aseguranza: cobro?.aseguranza || null,
-        metodo_pago: cobro?.metodo_pago || null,
+        aseguranza,
+        metodo_pago: metodoPago,
         moneda: ev.moneda,
         monto_cobrado: montoCobradoPesos,
         base_calculo: montoBase,
         tarifa_aplicada: tarifaValor,
         honorario_doctor: honorarioPesos,
-        estado_pago: cobro?.pagado ? 'PAGADO' : (cobro ? 'PENDIENTE' : 'SIN_COBRO'),
+        estado_pago: estadoPago,
       });
 
       totales.num_consultas++;
       totales.total_cobrado = roundMoney(totales.total_cobrado + montoCobradoPesos);
       totales.total_honorarios = roundMoney(totales.total_honorarios + honorarioPesos);
 
-      if (cobro?.pagado) {
+      if (estadoPago === 'PAGADO') {
         totales.pagado = roundMoney(totales.pagado + honorarioPesos);
       } else {
         totales.pendiente = roundMoney(totales.pendiente + honorarioPesos);
@@ -167,7 +201,7 @@ export class HonorariosService {
       totales.por_moneda[monedaKey].cobrado = roundMoney(totales.por_moneda[monedaKey].cobrado + montoCobradoPesos);
       totales.por_moneda[monedaKey].honorarios = roundMoney(totales.por_moneda[monedaKey].honorarios + honorarioPesos);
 
-      const metodoKey = cobro?.metodo_pago || 'SIN_METODO';
+      const metodoKey = metodoPago || 'SIN_METODO';
       totales.por_metodo_pago[metodoKey] = roundMoney((totales.por_metodo_pago[metodoKey] || 0) + montoCobradoPesos);
     }
 
