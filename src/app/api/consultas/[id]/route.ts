@@ -62,7 +62,7 @@ export async function GET(
     .from('consultas')
     .select(`
       id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
-      pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo),
+      pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo, email, numero_poliza, numero_afiliacion),
       doctores:doctor_id (nombre_completo),
       est1_doc:estudio_1_doctor_id (nombre_completo),
       est2_doc:estudio_2_doctor_id (nombre_completo),
@@ -86,7 +86,7 @@ export async function GET(
     }
   }
 
-  const [historialResult, conceptosResult, aseguranzaResult] = await Promise.all([
+  const [historialResult, conceptosResult, aseguranzaResult, coberturaResult] = await Promise.all([
     supabase
       .from('consulta_historial')
       .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at, usuarios:usuario_id(nombre)')
@@ -94,31 +94,47 @@ export async function GET(
       .order('created_at', { ascending: true }),
     supabase
       .from('consulta_conceptos')
-    .select('id, consulta_id, concepto, cantidad, costo_unitario, subtotal, created_at')
-    .eq('consulta_id', id),
+      .select('id, consulta_id, tipo_concepto, concepto_id, texto_original, precio_aplicado, doctor_id, created_at')
+      .eq('consulta_id', id),
     consulta.aseguranza_id
       ? supabase.from('aseguranzas').select('id, nombre, telefono, direccion, notas, activo, created_at').eq('id', consulta.aseguranza_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    consulta.aseguranza_id
+      ? supabase.from('coberturas_aseguranza').select('id, porcentaje_cobertura, monto_maximo, aplica_estudios, aplica_procedimientos').eq('aseguranza_id', consulta.aseguranza_id).eq('activo', true).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+
+  interface PacienteJoin { nombre_completo: string; fecha_nacimiento: string | null; telefono: string | null; sexo: string | null; email: string | null; numero_poliza: string | null; numero_afiliacion: string | null }
+  interface DoctorJoin { nombre_completo: string }
+
+  const pacienteData = (consulta as Record<string, unknown>).pacientes as PacienteJoin | undefined;
+  const doctorData = (consulta as Record<string, unknown>).doctores as DoctorJoin | undefined;
+  const est1Doc = (consulta as Record<string, unknown>).est1_doc as DoctorJoin | undefined;
+  const est2Doc = (consulta as Record<string, unknown>).est2_doc as DoctorJoin | undefined;
+  const est3Doc = (consulta as Record<string, unknown>).est3_doc as DoctorJoin | undefined;
+  const procDoc = (consulta as Record<string, unknown>).proc_doc as DoctorJoin | undefined;
 
   return NextResponse.json({
     consulta: {
       ...consulta,
-      paciente: (consulta.pacientes as any)?.nombre_completo || null,
-      iniciales: ((consulta.pacientes as any)?.nombre_completo || '?').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
-      doctor: (consulta.doctores as any)?.nombre_completo || null,
-      est1_doctor: (consulta as any).est1_doc?.nombre_completo || null,
-      est2_doctor: (consulta as any).est2_doc?.nombre_completo || null,
-      est3_doctor: (consulta as any).est3_doc?.nombre_completo || null,
-      proc_doctor: (consulta as any).proc_doc?.nombre_completo || null,
-      paciente_sexo: (consulta.pacientes as any)?.sexo || null,
-      paciente_telefono: (consulta.pacientes as any)?.telefono || null,
-      paciente_fecha_nacimiento: (consulta.pacientes as any)?.fecha_nacimiento || null,
-      paciente_email: null,
+      paciente: pacienteData?.nombre_completo || null,
+      iniciales: (pacienteData?.nombre_completo || '?').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
+      doctor: doctorData?.nombre_completo || null,
+      est1_doctor: est1Doc?.nombre_completo || null,
+      est2_doctor: est2Doc?.nombre_completo || null,
+      est3_doctor: est3Doc?.nombre_completo || null,
+      proc_doctor: procDoc?.nombre_completo || null,
+      paciente_sexo: pacienteData?.sexo || null,
+      paciente_telefono: pacienteData?.telefono || null,
+      paciente_fecha_nacimiento: pacienteData?.fecha_nacimiento || null,
+      paciente_email: pacienteData?.email || null,
+      paciente_poliza: pacienteData?.numero_poliza || null,
+      paciente_afiliacion: pacienteData?.numero_afiliacion || null,
     },
     historial: historialResult.data ?? [],
     conceptos: conceptosResult.data ?? [],
     aseguranza: aseguranzaResult.data ?? null,
+    cobertura: coberturaResult.data ?? null,
   });
 }
 

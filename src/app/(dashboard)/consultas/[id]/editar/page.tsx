@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 interface ConsultaData {
   id: string;
   doctor_id: string;
+  paciente: string;
   fecha: string;
   hora_inicio: string;
   hora_fin: string | null;
@@ -17,6 +18,10 @@ interface ConsultaData {
   diagnostico: string | null;
   notas: string | null;
   metodo_pago: string | null;
+  moneda: string | null;
+  estatus: string;
+  estatus_pago: string;
+  costo_total: number;
 }
 
 const input = 'w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
@@ -29,24 +34,30 @@ export default function EditarConsultaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<ConsultaData>>({});
+  const [patientName, setPatientName] = useState('');
 
   const fetchConsulta = useCallback(async () => {
     try {
-      const res = await fetch(`/api/consultas?pageSize=999`);
+      const res = await fetch(`/api/consultas/${id}`);
       if (!res.ok) throw new Error('Error');
       const data = await res.json();
-      const found = data.data?.find((c: ConsultaData) => c.id === id);
-      if (!found) throw new Error('No encontrada');
+      if (!data.consulta) throw new Error('No encontrada');
+      const c = data.consulta;
+      setPatientName(c.paciente || '');
       setForm({
-        doctor_id: found.doctor_id,
-        fecha: found.fecha,
-        hora_inicio: found.hora_inicio,
-        hora_fin: found.hora_fin,
-        tipo_consulta: found.tipo_consulta,
-        tipo_visita: found.tipo_visita,
-        diagnostico: found.diagnostico,
-        notas: found.notas,
-        metodo_pago: found.metodo_pago,
+        doctor_id: c.doctor_id,
+        fecha: c.fecha,
+        hora_inicio: c.hora_inicio,
+        hora_fin: c.hora_fin,
+        tipo_consulta: c.tipo_consulta,
+        tipo_visita: c.tipo_visita,
+        diagnostico: c.diagnostico,
+        notas: c.notas,
+        metodo_pago: c.metodo_pago,
+        moneda: c.moneda,
+        estatus: c.estatus,
+        estatus_pago: c.estatus_pago,
+        costo_total: c.costo_total,
       });
     } catch {
       toast('Error al cargar consulta', 'error');
@@ -60,12 +71,35 @@ export default function EditarConsultaPage() {
   async function handleSave() {
     setSaving(true);
     try {
+      const { paciente, estatus, estatus_pago, costo_total, moneda, ...patchData } = form;
+      void paciente;
+      void estatus;
+      void estatus_pago;
+      void costo_total;
+      void moneda;
+
       const res = await fetch(`/api/consultas/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          fecha: patchData.fecha,
+          hora_inicio: patchData.hora_inicio,
+          hora_fin: patchData.hora_fin,
+          tipo_consulta: patchData.tipo_consulta,
+          tipo_visita: patchData.tipo_visita,
+          diagnostico: patchData.diagnostico,
+          notas: patchData.notas,
+          metodo_pago: patchData.metodo_pago,
+          doctor_id: patchData.doctor_id,
+          estatus: estatus,
+          estatus_pago: estatus_pago,
+        }),
       });
-      if (!res.ok) throw new Error('Error');
+      if (!res.ok) {
+        const err = await res.json();
+        toast(err.error || 'Error al guardar', 'error');
+        return;
+      }
       toast('Consulta actualizada');
       router.push(`/consultas/${id}`);
     } catch {
@@ -83,7 +117,7 @@ export default function EditarConsultaPage() {
     <div className="mx-auto max-w-[900px] space-y-6">
       <PageHeader
         title="Editar Consulta"
-        subtitle={`Consulta ${id.slice(0, 8)}`}
+        subtitle={patientName ? `${patientName} — Consulta ${id.slice(0, 8)}` : `Consulta ${id.slice(0, 8)}`}
         backLink={{ href: `/consultas/${id}`, label: 'Consulta' }}
         action={
           <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors">
@@ -134,6 +168,25 @@ export default function EditarConsultaPage() {
               <option value="TARJETA">Tarjeta</option>
               <option value="TRANSFERENCIA">Transferencia</option>
               <option value="SEGURO">Seguro</option>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Estatus</label>
+            <select value={form.estatus || ''} onChange={(e) => setForm({ ...form, estatus: e.target.value })} className={input}>
+              <option value="">Seleccionar</option>
+              <option value="BORRADOR">Borrador</option>
+              <option value="PROCESADA">Procesada</option>
+              <option value="PENDIENTE_ESTUDIO">Pendiente Estudio</option>
+              <option value="PENDIENTE_CIRUGIA">Pendiente Cirugía</option>
+              <option value="FINALIZADA">Finalizada</option>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Estatus Pago</label>
+            <select value={form.estatus_pago || ''} onChange={(e) => setForm({ ...form, estatus_pago: e.target.value })} className={input}>
+              <option value="">Seleccionar</option>
+              <option value="PENDIENTE_PAGO">Pendiente de Pago</option>
+              <option value="PAGADO">Pagado</option>
             </select>
           </div>
         </div>

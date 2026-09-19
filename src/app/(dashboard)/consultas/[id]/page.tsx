@@ -54,6 +54,8 @@ interface ConsultaDetalle {
   paciente_telefono: string | null;
   paciente_fecha_nacimiento: string | null;
   paciente_email: string | null;
+  paciente_poliza: string | null;
+  paciente_afiliacion: string | null;
   created_at: string;
   pacientes?: PacienteInfo | null;
 }
@@ -142,8 +144,8 @@ export default function ConsultaDetailPage() {
       const data = await res.json();
       if (!data.consulta) throw new Error('Consulta no encontrada');
       setConsulta(data.consulta);
-      if (data.aseguranza) {
-        setAseguradoraData({ aseguradora: data.aseguranza, cobertura: null });
+      if (data.aseguranza || data.cobertura) {
+        setAseguradoraData({ aseguradora: data.aseguranza, cobertura: data.cobertura });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -260,6 +262,18 @@ export default function ConsultaDetailPage() {
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Aseguradora</span>
                 <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData?.aseguradora?.nombre || '—'}</p>
               </div>
+              {consulta.paciente_poliza && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Póliza</span>
+                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_poliza}</p>
+                </div>
+              )}
+              {consulta.paciente_afiliacion && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Afiliación</span>
+                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_afiliacion}</p>
+                </div>
+              )}
               {consulta.paciente_email && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Email</span>
