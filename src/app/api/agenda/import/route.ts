@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface ImportRow {
   'FECHA'?: string;
@@ -137,18 +137,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No se proporcionó un archivo' }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const fileBuffer = await file.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+  await (workbook.xlsx as any).load(fileBuffer);
 
-  const cirugiaSheet = workbook.Sheets['CIRUGIA'];
-  const aplazadosSheet = workbook.Sheets['APLAZADOS'];
+  function sheetToJson<T>(worksheet: ExcelJS.Worksheet | undefined): T[] {
+    if (!worksheet) return [];
+    const rows: T[] = [];
+    const headers: string[] = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        row.eachCell((cell, colNumber) => { headers[colNumber] = String(cell.value || ''); });
+        return;
+      }
+      const obj: Record<string, unknown> = {};
+      row.eachCell((cell, colNumber) => { obj[headers[colNumber]] = cell.value; });
+      rows.push(obj as T);
+    });
+    return rows;
+  }
 
-  const cirugiaData: ImportRow[] = cirugiaSheet
-    ? XLSX.utils.sheet_to_json(cirugiaSheet) as ImportRow[]
-    : [];
-  const aplazadosData: AplazadoRow[] = aplazadosSheet
-    ? XLSX.utils.sheet_to_json(aplazadosSheet) as AplazadoRow[]
-    : [];
+  const cirugiaSheet = workbook.getWorksheet('CIRUGIA');
+  const aplazadosSheet = workbook.getWorksheet('APLAZADOS');
+
+  const cirugiaData: ImportRow[] = sheetToJson(cirugiaSheet);
+  const aplazadosData: AplazadoRow[] = sheetToJson(aplazadosSheet);
 
   if (cirugiaData.length === 0 && aplazadosData.length === 0) {
     return NextResponse.json({ error: 'El archivo no contiene datos válidos' }, { status: 400 });

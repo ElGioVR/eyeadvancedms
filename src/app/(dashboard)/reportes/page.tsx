@@ -250,12 +250,16 @@ async function exportPDF(data: ReportData, periodo: string) {
 }
 
 async function exportExcel(data: ReportData, periodo: string) {
-  const XLSX = await import('xlsx');
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
 
-  const wb = XLSX.utils.book_new();
+  function addSheet(name: string, headers: string[], rows: (string | number)[][]) {
+    const ws = wb.addWorksheet(name);
+    ws.addRow(headers);
+    for (const row of rows) ws.addRow(row);
+  }
 
-  const resumenData = [
-    ['Metrica', 'Valor'],
+  addSheet('Resumen', ['Metrica', 'Valor'], [
     ['Pacientes Totales', data.resumen.totalPacientes],
     ['Pacientes Nuevos', data.resumen.pacientesNuevos],
     ['Consultas del Periodo', data.resumen.totalConsultas],
@@ -264,77 +268,32 @@ async function exportExcel(data: ReportData, periodo: string) {
     ['Lentes Disponibles', data.resumen.lentesDisponibles],
     ['Lentes Stock Bajo', data.resumen.lentesStockBajo],
     ['Lentes Sin Stock', data.resumen.lentesSinStock],
-  ];
-  const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-
-  const consultasData = [
-    ['Tipo', 'Cantidad'],
-    ...data.consultas.porTipo.map((t) => [t.label, t.value]),
-  ];
-  const wsConsultas = XLSX.utils.aoa_to_sheet(consultasData);
-  XLSX.utils.book_append_sheet(wb, wsConsultas, 'Consultas por Tipo');
-
-  const doctoresData = [
-    ['Doctor', 'Consultas'],
-    ...data.consultas.porDoctor.map((d) => [d.label, d.value]),
-  ];
-  const wsDoctores = XLSX.utils.aoa_to_sheet(doctoresData);
-  XLSX.utils.book_append_sheet(wb, wsDoctores, 'Consultas por Doctor');
+  ]);
+  addSheet('Consultas por Tipo', ['Tipo', 'Cantidad'], data.consultas.porTipo.map((t) => [t.label, t.value]));
+  addSheet('Consultas por Doctor', ['Doctor', 'Consultas'], data.consultas.porDoctor.map((d) => [d.label, d.value]));
 
   if (data.diagnosticos.length > 0) {
-    const diagData = [
-      ['Diagnostico', 'Casos'],
-      ...data.diagnosticos.map((d) => [d.name, d.casos]),
-    ];
-    const wsDiag = XLSX.utils.aoa_to_sheet(diagData);
-    XLSX.utils.book_append_sheet(wb, wsDiag, 'Diagnosticos');
+    addSheet('Diagnosticos', ['Diagnostico', 'Casos'], data.diagnosticos.map((d) => [d.name, d.casos]));
   }
 
-  const edadData = [
-    ['Rango', 'Pacientes'],
-    ...data.pacientes.porEdad.map((e) => [e.label, e.value]),
-  ];
-  const wsEdad = XLSX.utils.aoa_to_sheet(edadData);
-  XLSX.utils.book_append_sheet(wb, wsEdad, 'Pacientes por Edad');
-
-  const asegData = [
-    ['Aseguradora', 'Pacientes'],
-    ...data.pacientes.porAseguradora.map((a) => [a.name, a.value]),
-  ];
-  const wsAseg = XLSX.utils.aoa_to_sheet(asegData);
-  XLSX.utils.book_append_sheet(wb, wsAseg, 'Pacientes por Seguro');
-
-  const financieroData = [
-    ['Concepto', 'Monto'],
+  addSheet('Pacientes por Edad', ['Rango', 'Pacientes'], data.pacientes.porEdad.map((e) => [e.label, e.value]));
+  addSheet('Pacientes por Seguro', ['Aseguradora', 'Pacientes'], data.pacientes.porAseguradora.map((a) => [a.name, a.value]));
+  addSheet('Financiero', ['Concepto', 'Monto'], [
     ['Ingresos Totales', data.financiero.totalCobros],
     ...data.financiero.ingresosMensuales.map((i) => [`Ingresos ${i.label}`, i.value * 1000]),
-  ];
-  const wsFin = XLSX.utils.aoa_to_sheet(financieroData);
-  XLSX.utils.book_append_sheet(wb, wsFin, 'Financiero');
+  ]);
+  addSheet('Metodos de Pago', ['Metodo', 'Porcentaje'], data.financiero.porMetodo.map((m) => [m.name, `${m.value}%`]));
+  addSheet('Inventario por Categoria', ['Categoria', 'Unidades'], data.inventario.porCategoria.map((c) => [c.label, c.value]));
+  addSheet('Inventario por Proveedor', ['Proveedor', 'Unidades'], data.inventario.porProveedor.map((p) => [p.label, p.value]));
 
-  const metodoData = [
-    ['Metodo', 'Porcentaje'],
-    ...data.financiero.porMetodo.map((m) => [m.name, `${m.value}%`]),
-  ];
-  const wsMetodo = XLSX.utils.aoa_to_sheet(metodoData);
-  XLSX.utils.book_append_sheet(wb, wsMetodo, 'Metodos de Pago');
-
-  const invCatData = [
-    ['Categoria', 'Unidades'],
-    ...data.inventario.porCategoria.map((c) => [c.label, c.value]),
-  ];
-  const wsInvCat = XLSX.utils.aoa_to_sheet(invCatData);
-  XLSX.utils.book_append_sheet(wb, wsInvCat, 'Inventario por Categoria');
-
-  const invProvData = [
-    ['Proveedor', 'Unidades'],
-    ...data.inventario.porProveedor.map((p) => [p.label, p.value]),
-  ];
-  const wsInvProv = XLSX.utils.aoa_to_sheet(invProvData);
-  XLSX.utils.book_append_sheet(wb, wsInvProv, 'Inventario por Proveedor');
-
-  XLSX.writeFile(wb, `reporte-${periodo.toLowerCase().replace(/\s+/g, '-')}.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte-${periodo.toLowerCase().replace(/\s+/g, '-')}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function ReportesPage() {
