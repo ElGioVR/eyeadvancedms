@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Plus, ArrowLeft, Save } from 'lucide-react';
+import { DollarSign, Plus, ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
@@ -37,6 +37,8 @@ export default function TarifasPage() {
   const [doctores, setDoctores] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [form, setForm] = useState({
     doctor_id: '',
     tipo_concepto: 'CONSULTA',
@@ -68,14 +70,25 @@ export default function TarifasPage() {
 
   const handleCrear = async () => {
     if (!form.doctor_id || form.valor <= 0) return;
-    const res = await fetch('/api/honorarios/tarifas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch('/api/honorarios/tarifas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
+        setCreateError(err.error || 'Error al crear tarifa');
+        return;
+      }
       setShowForm(false);
       fetchData();
+    } catch {
+      setCreateError('Error de conexión');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -228,20 +241,26 @@ export default function TarifasPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
           </div>
+          {createError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {createError}
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-4">
             <button
-              onClick={() => setShowForm(false)}
+              onClick={() => { setShowForm(false); setCreateError(null); }}
               className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
             >
               Cancelar
             </button>
             <button
               onClick={handleCrear}
-              disabled={!form.doctor_id || form.valor <= 0}
+              disabled={!form.doctor_id || form.valor <= 0 || creating}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm disabled:opacity-50"
             >
-              <Save className="w-4 h-4" />
-              Crear Tarifa
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {creating ? 'Creando...' : 'Crear Tarifa'}
             </button>
           </div>
         </div>

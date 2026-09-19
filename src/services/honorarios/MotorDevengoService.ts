@@ -184,6 +184,7 @@ export class MotorDevengoService {
 
   private async crearEvento(input: EventoDevengoInput): Promise<boolean> {
     const montoDevengado = this.calcularMontoDevengado(input);
+    const periodoId = await this.resolverPeriodo(input.fecha_servicio);
 
     const { error } = await this.supabase
       .from('eventos_honorario')
@@ -199,6 +200,7 @@ export class MotorDevengoService {
         monto_devengado: montoDevengado,
         moneda: input.moneda || 'PESOS',
         estado: 'DEVENGADO',
+        periodo_id: periodoId,
       });
 
     if (error) {
@@ -207,6 +209,17 @@ export class MotorDevengoService {
     }
 
     return true;
+  }
+
+  private async resolverPeriodo(fecha: string): Promise<string | null> {
+    const { data } = await this.supabase
+      .from('periodos_pago')
+      .select('id')
+      .lte('fecha_desde', fecha)
+      .gte('fecha_hasta', fecha)
+      .in('estado', ['ABIERTO', 'EN_REVISION'])
+      .maybeSingle();
+    return data?.id ?? null;
   }
 
   private calcularMontoDevengado(input: EventoDevengoInput): number {
