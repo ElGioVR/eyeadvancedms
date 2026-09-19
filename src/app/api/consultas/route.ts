@@ -192,6 +192,7 @@ export async function GET(request: Request) {
       estatus_pago: (c as any).estatus_pago || 'PENDIENTE_PAGO',
       costo_total: c.costo_total || 0,
       monto_pagado: c.monto_pagado || 0,
+      aseguranza_id: (c as any).aseguranza_id || null,
       created_at: c.created_at,
     };
   });
@@ -263,6 +264,27 @@ export async function POST(request: Request) {
   const est1 = data.estudios?.[1] ? parseEstudio(data.estudios[1]) : null;
   const est2 = data.estudios?.[2] ? parseEstudio(data.estudios[2]) : null;
 
+  // Resolve patient's insurance and server-side prices
+  const { data: pacienteInfo } = await supabase
+    .from('pacientes')
+    .select('aseguranza_id')
+    .eq('id', data.paciente_id)
+    .maybeSingle();
+  const aseguranzaId = pacienteInfo?.aseguranza_id || null;
+
+  async function resolverCostoServicio(nombre: string, tipo: string): Promise<number> {
+    if (!aseguranzaId) return 0;
+    const { data: svc } = await supabase
+      .from('aseguranza_servicios')
+      .select('costo')
+      .eq('aseguranza_id', aseguranzaId)
+      .eq('tipo', tipo)
+      .ilike('nombre', nombre)
+      .eq('activo', true)
+      .maybeSingle();
+    return svc?.costo || 0;
+  }
+
   // 1. Create consulta
   const horaFin = data.hora_fin || defaultHoraFin(data.hora_inicio);
 
@@ -290,6 +312,7 @@ export async function POST(request: Request) {
       metodo_pago: metodoPagoMap[data.metodo_pago || ''] || null,
       estatus: 'BORRADOR',
       estatus_pago: 'PENDIENTE_PAGO',
+      aseguranza_id: aseguranzaId,
     })
     .select()
     .single();
@@ -320,11 +343,14 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. Calculate total cost from doctor costos
+  // 3. Calculate total cost from server-side resolved prices
   let costoTotal = 0;
-  if (data.doctor_costos && data.doctor_costos.length > 0) {
-    costoTotal = data.doctor_costos.reduce((sum, dc) => sum + dc.monto, 0);
-  } else if (data.costo) {
+  if (est0?.nombre) costoTotal += await resolverCostoServicio(est0.nombre, 'ESTUDIO');
+  if (est1?.nombre) costoTotal += await resolverCostoServicio(est1.nombre, 'ESTUDIO');
+  if (est2?.nombre) costoTotal += await resolverCostoServicio(est2.nombre, 'ESTUDIO');
+  if (data.procedimiento) costoTotal += await resolverCostoServicio(data.procedimiento, 'PROCEDIMIENTO');
+  // Fallback: if no server prices, use client cost (legacy mode)
+  if (costoTotal === 0 && data.costo) {
     costoTotal = typeof data.costo === 'string' ? parseFloat(data.costo) || 0 : (data.costo || 0);
   }
 
