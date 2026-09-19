@@ -32,6 +32,7 @@ const MIGRATION_ORDER = [
   '1800000000130-SeedDoctorPilotoHonorarios.ts',
   '1800000000140-AddConstraintsAndIndices.ts',
   '1800000000150-CreateAseguranzaServicios.ts',
+  '1800000000160-CreateCrearConsultaRPC.ts',
 ];
 
 if (!process.env.DATABASE_URL) {
@@ -51,7 +52,15 @@ if (endIdx <= startIdx || endIdx > MIGRATION_ORDER.length) {
   process.exit(1);
 }
 
-function extractSql(content) {
+function extractUpMethodSql(content) {
+  var upStart = content.indexOf('public async up(');
+  var downStart = content.indexOf('public async down(');
+  if (upStart === -1) return [];
+  if (downStart !== -1 && downStart > upStart) {
+    content = content.substring(upStart, downStart);
+  } else {
+    content = content.substring(upStart);
+  }
   var queries = [];
   var idx = 0;
   while (idx < content.length) {
@@ -157,7 +166,7 @@ async function main() {
 
     console.log('[' + (startIdx + i) + '] Running: ' + filename);
     var content = fs.readFileSync(filePath, 'utf8');
-    var queries = extractSql(content);
+    var queries = extractUpMethodSql(content);
 
     if (queries.length === 0) {
       console.log('  No queries extracted - skipping.');

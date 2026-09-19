@@ -282,6 +282,15 @@ export default function AseguranzasPage() {
                         <p className="text-gray-300 dark:text-[#71767B] italic">Sin información de contacto</p>
                       )}
                     </div>
+                    {/* Services link */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#2F3336]">
+                      <a
+                        href={`/configuracion/aseguranzas/${item.id}/servicios`}
+                        className="text-xs font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 transition-colors"
+                      >
+                        Ver catálogo de servicios →
+                      </a>
+                    </div>
                   </div>
                 </div>
               );
