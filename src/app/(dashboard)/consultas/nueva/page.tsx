@@ -550,10 +550,8 @@ export default function NuevaConsultaPage() {
           estudios: estudiosData,
           procedimiento: procedimientosData.length > 0 ? procedimientosData.join(', ') : null,
           procedimiento_doctor_id: procDoctorId,
-          aseguradora: consultationData.aseguradora,
           metodo_pago: consultationData.metodoPago,
           moneda: consultationData.moneda,
-          costo: costoTotal,
         }),
       });
 
