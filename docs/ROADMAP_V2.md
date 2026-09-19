@@ -92,6 +92,7 @@
 | Fase 6 — Agenda/generales | ⬜ Pendiente |
 | **F1 — Seguridad P0** | **✅ Completada** |
 | **F2 — Migraciones** | **✅ Completada** |
+| **F3 — Modelo Aseguradoras/Consultas** | **✅ Completada** |
 
 ---
 
