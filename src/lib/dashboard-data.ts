@@ -56,12 +56,13 @@ export async function getDashboardData(): Promise<DashboardData> {
   const supabase = getSupabaseAdmin();
 
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const tijuanaNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Tijuana' }));
+  const today = tijuanaNow.toISOString().slice(0, 10);
 
-  const dayOfWeek = now.getDay();
+  const dayOfWeek = tijuanaNow.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
+  const monday = new Date(tijuanaNow);
+  monday.setDate(tijuanaNow.getDate() + mondayOffset);
   const weekStart = monday.toISOString().slice(0, 10);
 
   const sunday = new Date(monday);

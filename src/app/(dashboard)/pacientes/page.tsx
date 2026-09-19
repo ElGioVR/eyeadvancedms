@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors } from 'lucide-react';
+import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useFetch } from '@/hooks/useFetch';
@@ -35,6 +36,17 @@ interface AseguranzaOption {
 const sexoFilterOptions = ['Todos', 'Masculino', 'Femenino'] as const;
 const edadOptions = ['Todos', '0-18', '19-35', '36-50', '51+'] as const;
 
+const nuevoPacienteSchema = z.object({
+  nombre_completo: z.string().min(1, 'El nombre es requerido'),
+  sexo: z.enum(['H', 'M'], { errorMap: () => ({ message: 'Selecciona un sexo' }) }),
+  fecha_nacimiento: z.string().min(1, 'La fecha de nacimiento es requerida'),
+  telefono: z.string().min(1, 'El teléfono es requerido'),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  aseguranza_id: z.string().optional().or(z.literal('')),
+  contacto_emergencia: z.string().optional().or(z.literal('')),
+  tel_emergencia: z.string().optional().or(z.literal('')),
+});
+
 function filterByEdad(edad: number, filter: string): boolean {
   if (filter === 'Todos') return true;
   if (filter === '0-18') return edad <= 18;
@@ -62,6 +74,7 @@ export default function PacientesPage() {
   const [filterAseguradora, setFilterAseguradora] = useState('Todas');
   const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch('/api/configuracion/aseguranzas')
@@ -282,29 +295,34 @@ export default function PacientesPage() {
               <div className="space-y-3">
                 <div>
                   <label htmlFor="nombre-completo" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Nombre completo <span className="text-red-500">*</span></label>
-                  <input id="nombre-completo" type="text" placeholder="Ej. Juan Pérez González" className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <input id="nombre-completo" type="text" placeholder="Ej. Juan Pérez González" className={cn("w-full rounded-lg border bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.nombre_completo ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2F3336]')} />
+                  {formErrors.nombre_completo && <p className="mt-1 text-xs text-red-500">{formErrors.nombre_completo}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="sexo" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Sexo <span className="text-red-500">*</span></label>
-                    <select id="sexo" className="w-full appearance-none rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                    <select id="sexo" className={cn("w-full appearance-none rounded-lg border bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.sexo ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2F3336]')}>
                       <option value="">Seleccionar</option>
                       <option value="H">Masculino</option>
                       <option value="M">Femenino</option>
                     </select>
+                    {formErrors.sexo && <p className="mt-1 text-xs text-red-500">{formErrors.sexo}</p>}
                   </div>
                   <div>
                     <label htmlFor="fecha-nacimiento" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Fecha de Nacimiento <span className="text-red-500">*</span></label>
-                    <input id="fecha-nacimiento" type="date" className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                    <input id="fecha-nacimiento" type="date" className={cn("w-full rounded-lg border bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.fecha_nacimiento ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2F3336]')} />
+                    {formErrors.fecha_nacimiento && <p className="mt-1 text-xs text-red-500">{formErrors.fecha_nacimiento}</p>}
                   </div>
                 </div>
                 <div>
                   <label htmlFor="telefono" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Teléfono <span className="text-red-500">*</span></label>
-                  <input id="telefono" type="tel" placeholder="Ej. 664 123 4567" className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <input id="telefono" type="tel" placeholder="Ej. 664 123 4567" className={cn("w-full rounded-lg border bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.telefono ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2F3336]')} />
+                  {formErrors.telefono && <p className="mt-1 text-xs text-red-500">{formErrors.telefono}</p>}
                 </div>
                 <div>
                   <label htmlFor="email" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Email</label>
-                  <input id="email" type="email" placeholder="correo@ejemplo.com" className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+                  <input id="email" type="email" placeholder="correo@ejemplo.com" className={cn("w-full rounded-lg border bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.email ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-[#2F3336]')} />
+                  {formErrors.email && <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>}
                 </div>
                 <div>
                   <label htmlFor="aseguradora" className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Aseguradora</label>
@@ -339,7 +357,7 @@ export default function PacientesPage() {
 
             <div className="flex gap-3 pt-3 border-t border-gray-100 dark:border-[#2F3336]">
               <button
-                onClick={() => { setShowNewPatient(false); setNewPatientAseguranzaId(''); }}
+                onClick={() => { setShowNewPatient(false); setNewPatientAseguranzaId(''); setFormErrors({}); }}
                 className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
               >
                 CANCELAR
@@ -354,18 +372,37 @@ export default function PacientesPage() {
                   const contactoEl = document.getElementById('contacto-nombre') as HTMLInputElement;
                   const contactoTelEl = document.getElementById('contacto-telefono') as HTMLInputElement;
 
-                  if (!nombreEl?.value?.trim()) return;
+                  const result = nuevoPacienteSchema.safeParse({
+                    nombre_completo: nombreEl?.value?.trim() || '',
+                    sexo: sexoEl?.value || '',
+                    fecha_nacimiento: fechaEl?.value || '',
+                    telefono: telEl?.value || '',
+                    email: emailEl?.value || '',
+                    aseguranza_id: newPatientAseguranzaId || '',
+                    contacto_emergencia: contactoEl?.value || '',
+                    tel_emergencia: contactoTelEl?.value || '',
+                  });
 
+                  if (!result.success) {
+                    const errors: Record<string, string> = {};
+                    result.error.errors.forEach((err) => {
+                      if (err.path[0]) errors[err.path[0] as string] = err.message;
+                    });
+                    setFormErrors(errors);
+                    return;
+                  }
+
+                  setFormErrors({});
                   const payload: Record<string, unknown> = {
-                    nombre_completo: nombreEl.value.trim(),
-                    sexo: sexoEl?.value || undefined,
-                    fecha_nacimiento: fechaEl?.value || undefined,
-                    telefono: telEl?.value || undefined,
-                    email: emailEl?.value || undefined,
-                    contacto_emergencia: contactoEl?.value || undefined,
-                    tel_emergencia: contactoTelEl?.value || undefined,
+                    nombre_completo: result.data.nombre_completo,
+                    sexo: result.data.sexo,
+                    fecha_nacimiento: result.data.fecha_nacimiento,
+                    telefono: result.data.telefono,
                   };
-                  if (newPatientAseguranzaId) payload.aseguranza_id = newPatientAseguranzaId;
+                  if (result.data.email) payload.email = result.data.email;
+                  if (result.data.aseguranza_id) payload.aseguranza_id = result.data.aseguranza_id;
+                  if (result.data.contacto_emergencia) payload.contacto_emergencia = result.data.contacto_emergencia;
+                  if (result.data.tel_emergencia) payload.tel_emergencia = result.data.tel_emergencia;
 
                   try {
                     const res = await fetch('/api/pacientes', {
@@ -376,6 +413,7 @@ export default function PacientesPage() {
                     if (res.ok) {
                       setShowNewPatient(false);
                       setNewPatientAseguranzaId('');
+                      setFormErrors({});
                       window.location.reload();
                     }
                   } catch {}

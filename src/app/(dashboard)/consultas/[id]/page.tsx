@@ -13,6 +13,15 @@ interface EstudioDetalle {
   doctor: string | null;
 }
 
+interface PacienteInfo {
+  nombre_completo: string;
+  fecha_nacimiento: string | null;
+  telefono: string | null;
+  sexo: string | null;
+  email?: string | null;
+  aseguradora?: string | null;
+}
+
 interface ConsultaDetalle {
   id: string;
   folio: string | null;
@@ -38,6 +47,7 @@ interface ConsultaDetalle {
   monto_pagado: number;
   metodo_pago: string | null;
   created_at: string;
+  pacientes?: PacienteInfo | null;
 }
 
 interface HistorialEvento {
@@ -97,15 +107,18 @@ export default function ConsultaDetailPage() {
   const [aseguradoraData, setAseguradoraData] = useState<{ aseguradora: { id: string; nombre: string } | null; cobertura: { porcentaje_cobertura: number; copago_fijo: number | null; aplica_estudios: boolean; aplica_procedimientos: boolean } | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPatientDetails, setShowPatientDetails] = useState(false);
 
   const fetchConsulta = useCallback(async () => {
     try {
-      const res = await fetch(`/api/consultas?pageSize=1`);
+      const res = await fetch(`/api/consultas/${id}`);
       if (!res.ok) throw new Error('Error al cargar');
       const data = await res.json();
-      const found = data.data?.find((c: ConsultaDetalle) => c.id === id);
-      if (!found) throw new Error('Consulta no encontrada');
-      setConsulta(found);
+      if (!data.consulta) throw new Error('Consulta no encontrada');
+      setConsulta(data.consulta);
+      if (data.aseguranza) {
+        setAseguradoraData({ aseguradora: data.aseguranza, cobertura: null });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -121,16 +134,9 @@ export default function ConsultaDetailPage() {
     } catch { /* silent */ }
   }, [id]);
 
-  const fetchAseguradora = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/consultas/${id}/aseguradora`);
-      if (res.ok) setAseguradoraData(await res.json());
-    } catch { /* silent */ }
-  }, [id]);
-
   useEffect(() => {
-    Promise.all([fetchConsulta(), fetchHistorial(), fetchAseguradora()]).finally(() => setLoading(false));
-  }, [fetchConsulta, fetchHistorial, fetchAseguradora]);
+    Promise.all([fetchConsulta(), fetchHistorial()]).finally(() => setLoading(false));
+  }, [fetchConsulta, fetchHistorial]);
 
   function handlePrint() {
     window.print();
@@ -193,6 +199,57 @@ export default function ConsultaDetailPage() {
           <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />
         </div>
       </div>
+
+      {/* Patient summary */}
+      {consulta.pacientes && (
+        <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6">
+          <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+            <User className="h-4 w-4 text-primary-600" /> Resumen del Paciente
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nombre</span>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.nombre_completo}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Edad</span>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">
+                {consulta.pacientes.fecha_nacimiento
+                  ? `${Math.floor((Date.now() - new Date(consulta.pacientes.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} años`
+                  : '—'}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Sexo</span>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.sexo === 'H' ? 'Masculino' : consulta.pacientes.sexo === 'M' ? 'Femenino' : '—'}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Teléfono</span>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.telefono || '—'}</p>
+            </div>
+          </div>
+          {showPatientDetails && (
+            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#2F3336] grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Aseguradora</span>
+                <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.aseguradora || '—'}</p>
+              </div>
+              {consulta.pacientes.email && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Email</span>
+                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.email}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => setShowPatientDetails(!showPatientDetails)}
+            className="mt-3 text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors"
+          >
+            {showPatientDetails ? 'Mostrar menos' : 'Mostrar más'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}

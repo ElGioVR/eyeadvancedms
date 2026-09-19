@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import Skeleton from '@/components/ui/Skeleton';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface Periodo {
   id: string;
@@ -33,6 +34,8 @@ export default function PeriodosPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [cerrando, setCerrando] = useState<string | null>(null);
+  const [showConfirmCerrar, setShowConfirmCerrar] = useState(false);
+  const [periodoACerrar, setPeriodoACerrar] = useState<string | null>(null);
   const [form, setForm] = useState({
     codigo: '',
     fecha_desde: '',
@@ -68,10 +71,16 @@ export default function PeriodosPage() {
   };
 
   const handleCerrar = async (periodoId: string) => {
-    if (!confirm('¿Cerrar este período? Esto congelará todos los eventos devengados y generará las liquidaciones.')) return;
-    setCerrando(periodoId);
+    setShowConfirmCerrar(true);
+    setPeriodoACerrar(periodoId);
+  };
+
+  const confirmCerrar = async () => {
+    if (!periodoACerrar) return;
+    setCerrando(periodoACerrar);
+    setShowConfirmCerrar(false);
     try {
-      const res = await fetch(`/api/honorarios/periodos/${periodoId}/cerrar`, { method: 'POST' });
+      const res = await fetch(`/api/honorarios/periodos/${periodoACerrar}/cerrar`, { method: 'POST' });
       if (res.ok) {
         fetchData();
       } else {
@@ -82,6 +91,7 @@ export default function PeriodosPage() {
       alert('Error de red');
     } finally {
       setCerrando(null);
+      setPeriodoACerrar(null);
     }
   };
 
@@ -217,6 +227,17 @@ export default function PeriodosPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={showConfirmCerrar}
+        onClose={() => { setShowConfirmCerrar(false); setPeriodoACerrar(null); }}
+        onConfirm={confirmCerrar}
+        title="Cerrar período"
+        message="¿Cerrar este período? Esto congelará todos los eventos devengados y generará las liquidaciones."
+        confirmText="Cerrar período"
+        variant="warning"
+        loading={cerrando !== null}
+      />
     </div>
   );
 }

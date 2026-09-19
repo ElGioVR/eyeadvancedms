@@ -44,7 +44,8 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
   const router = useRouter();
   const firstName = userNombre.split(' ')[0] || 'Usuario';
   const now = new Date();
-  const greeting = now.getHours() < 12 ? 'Buenos días' : now.getHours() < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const tijuanaHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/Tijuana' })).getHours();
+  const greeting = tijuanaHour < 12 ? 'Buenos días' : tijuanaHour < 19 ? 'Buenas tardes' : 'Buenas noches';
   const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
   const [chartData, setChartData] = useState<{
     consultasPorEstatus: Record<string, number>;
@@ -99,14 +100,6 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
       color: 'text-sky-600',
       bgColor: 'bg-sky-50',
       borderColor: 'border-sky-100',
-    },
-    {
-      label: 'Cobros del Día',
-      value: formatMoneyFull(data.stats.cobrosDelDia),
-      icon: CreditCard,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      borderColor: 'border-emerald-100',
     },
     {
       label: 'Lentes Bajo Stock',

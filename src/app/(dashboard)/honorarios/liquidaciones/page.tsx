@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import Skeleton from '@/components/ui/Skeleton';
 import EmptyState from '@/components/ui/EmptyState';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface Liquidacion {
   id: string;
@@ -39,6 +40,8 @@ export default function LiquidacionesPage() {
   const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [aprobando, setAprobando] = useState<string | null>(null);
+  const [showConfirmAprobar, setShowConfirmAprobar] = useState(false);
+  const [liquidacionAAprobar, setLiquidacionAAprobar] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -57,10 +60,16 @@ export default function LiquidacionesPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleAprobar = async (id: string) => {
-    if (!confirm('¿Aprobar esta liquidación?')) return;
-    setAprobando(id);
+    setShowConfirmAprobar(true);
+    setLiquidacionAAprobar(id);
+  };
+
+  const confirmAprobar = async () => {
+    if (!liquidacionAAprobar) return;
+    setAprobando(liquidacionAAprobar);
+    setShowConfirmAprobar(false);
     try {
-      const res = await fetch(`/api/honorarios/liquidaciones/${id}/aprobar`, { method: 'POST' });
+      const res = await fetch(`/api/honorarios/liquidaciones/${liquidacionAAprobar}/aprobar`, { method: 'POST' });
       if (res.ok) fetchData();
       else {
         const err = await res.json();
@@ -70,6 +79,7 @@ export default function LiquidacionesPage() {
       alert('Error de red');
     } finally {
       setAprobando(null);
+      setLiquidacionAAprobar(null);
     }
   };
 
@@ -172,6 +182,17 @@ export default function LiquidacionesPage() {
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={showConfirmAprobar}
+        onClose={() => { setShowConfirmAprobar(false); setLiquidacionAAprobar(null); }}
+        onConfirm={confirmAprobar}
+        title="Aprobar liquidación"
+        message="¿Aprobar esta liquidación?"
+        confirmText="Aprobar"
+        variant="warning"
+        loading={aprobando !== null}
+      />
     </div>
   );
 }

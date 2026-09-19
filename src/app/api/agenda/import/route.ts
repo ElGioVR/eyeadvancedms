@@ -259,7 +259,8 @@ export async function POST(request: Request) {
   let insertadas = 0;
   let insertadasAplazadas = 0;
   let erroresInsercion = 0;
-  const rechazados: Array<{ fila: number; motivo: string; nombre: string; fecha?: string }> = [];
+  const rechazados: Array<{ fila: number; motivo: string; nombre: string; fecha?: string; fila_original: string }> = [];
+  const yaExistentes: Array<{ fila: number; nombre: string; fecha?: string; fila_original: string }> = [];
 
   // Duplicate check: collect existing (patient+fecha+hora)
   const existingCirugias = await supabase
@@ -274,9 +275,29 @@ export async function POST(request: Request) {
 
   for (const fila of filasCirugia) {
     const key = `${(fila.nombre_paciente as string || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
+    const filaOriginal = [
+      fila.fecha,
+      fila.nombre_paciente,
+      null,
+      fila.hora,
+      fila.jornada,
+      null,
+      null,
+      null,
+      null,
+      fila.diagnostico,
+      fila.procedimiento,
+      fila.ojo,
+      fila.lio,
+      fila.marca_lio,
+      fila.tiempo_estimado,
+      fila.tiempo_estancia,
+      fila.cirujano_texto,
+      fila.notas,
+    ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+
     if (existingSet.has(key)) {
-      rechazados.push({ fila: insertadas + 1, motivo: 'Duplicado (paciente+fecha+hora)', nombre: fila.nombre_paciente as string, fecha: fila.fecha as string });
-      erroresInsercion++;
+      yaExistentes.push({ fila: insertadas + insertadasAplazadas + 1, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: filaOriginal });
       continue;
     }
 
@@ -285,7 +306,7 @@ export async function POST(request: Request) {
       .from('agenda_cirugias')
       .insert(insertData);
     if (error) {
-      rechazados.push({ fila: insertadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string });
+      rechazados.push({ fila: insertadas + insertadasAplazadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: filaOriginal });
       erroresInsercion++;
     } else {
       insertadas++;
@@ -307,15 +328,15 @@ export async function POST(request: Request) {
     archivo_nombre: file.name,
     total_filas: filasCirugia.length + filasAplazadas.length,
     filas_ok: insertadas + insertadasAplazadas,
-    filas_rechazadas: rechazados.length + erroresCount.cirugia + erroresCount.aplazada,
+    filas_rechazadas: rechazados.length + yaExistentes.length + erroresCount.cirugia + erroresCount.aplazada,
     detalle_rechazados: rechazados,
   });
 
-  // Generate rejected CSV
+  // Generate rejected CSV (errors only, excludes duplicates)
   let rechazadosCsv: string | null = null;
   if (rechazados.length > 0) {
-    const header = 'Fila,Motivo,Paciente,Fecha\n';
-    const rows = rechazados.map(r => `${r.fila},"${r.motivo}","${r.nombre}","${r.fecha || ''}"`).join('\n');
+    const header = 'Fila,Motivo,Paciente,Fecha,fila_original\n';
+    const rows = rechazados.map(r => `${r.fila},"${r.motivo}","${r.nombre}","${r.fecha || ''}","${r.fila_original.replace(/"/g, '""')}"`).join('\n');
     rechazadosCsv = header + rows;
   }
 
@@ -326,6 +347,7 @@ export async function POST(request: Request) {
     errores: erroresInsercion,
     doctorNoEncontrado: doctorNoEncontradoCount,
     rechazados,
+    yaExistentes,
     rechazadosCsv,
   });
 }

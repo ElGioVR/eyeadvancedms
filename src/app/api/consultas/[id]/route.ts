@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { z } from 'zod';
 
@@ -42,6 +43,69 @@ async function registrarHistorial(
     tipo_evento: tipoEvento,
     usuario_id: userId,
     payload: payload ?? {},
+  });
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
+
+  const { id } = await params;
+  const supabase = getSupabaseAdmin();
+
+  const { data: consulta, error: consultaError } = await supabase
+    .from('consultas')
+    .select(`
+      *,
+      pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo),
+      doctores:doctor_id (nombre_completo),
+      est1_doc:estudio_1_doctor_id (nombre_completo),
+      est2_doc:estudio_2_doctor_id (nombre_completo),
+      est3_doc:estudio_3_doctor_id (nombre_completo),
+      proc_doc:procedimiento_doctor_id (nombre_completo)
+    `)
+    .eq('id', id)
+    .maybeSingle();
+
+  if (consultaError || !consulta) {
+    return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
+  }
+
+  // RBAC: doctor solo ve sus propias consultas
+  const userRole = (await supabase.from('usuarios').select('rol').eq('id', auth.user.id).maybeSingle()).data?.rol;
+  if (userRole === 'doctor') {
+    const doctorId = await resolveDoctorId(auth.user.id);
+    const focus = await isModoFocus(auth.user.id);
+    if (consulta.doctor_id !== doctorId && !(focus && doctorId)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+  }
+
+  const [historialResult, conceptosResult, aseguranzaResult] = await Promise.all([
+    supabase
+      .from('consulta_historial')
+      .select('*, usuarios:usuario_id(nombre)')
+      .eq('consulta_id', id)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('consulta_conceptos')
+      .select('*')
+      .eq('consulta_id', id),
+    consulta.aseguranza_id
+      ? supabase.from('aseguranzas').select('*').eq('id', consulta.aseguranza_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  return NextResponse.json({
+    consulta,
+    historial: historialResult.data ?? [],
+    conceptos: conceptosResult.data ?? [],
+    aseguranza: aseguranzaResult.data ?? null,
   });
 }
 

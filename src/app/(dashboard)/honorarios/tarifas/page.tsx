@@ -131,7 +131,9 @@ export default function TarifasPage() {
                   <td className="px-4 py-3 text-gray-700">{t.tipo_concepto}</td>
                   <td className="px-4 py-3 text-gray-600">{t.rol}</td>
                   <td className="px-4 py-3 text-gray-600">{t.tipo_calculo}</td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-900">{fmtMoney(t.valor)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-gray-900">
+                    {t.tipo_calculo === 'PORCENTAJE' ? `${t.valor}%` : fmtMoney(t.valor)}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{t.vigente_desde}</td>
                   <td className="px-4 py-3">
                     <span className={cn(

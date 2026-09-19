@@ -1168,7 +1168,7 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
   const [preview, setPreview] = useState<{ cirugias: AgendaCirugiaImportRow[]; aplazadas: AgendaCirugiaImportRow[]; totalCirugias: number; totalAplazadas: number; erroresCirugia: number; erroresAplazada: number; doctorNoEncontrado: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ importadas: number; aplazadasImportadas: number; errores: number; doctorNoEncontrado: number } | null>(null);
+  const [result, setResult] = useState<{ importadas: number; aplazadasImportadas: number; errores: number; doctorNoEncontrado: number; yaExistentes?: Array<{ fila: number; nombre: string; fecha?: string }> } | null>(null);
 
   const handleUpload = async () => {
     if (!file) return; setLoading(true); setError(null);
@@ -1232,6 +1232,7 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded bg-green-50 p-2"><span className="font-bold text-green-700">{result.importadas}</span> cirugías</div>
             <div className="rounded bg-yellow-50 p-2"><span className="font-bold text-yellow-700">{result.aplazadasImportadas}</span> aplazadas</div>
+            {result.yaExistentes && result.yaExistentes.length > 0 && <div className="rounded bg-blue-50 p-2 col-span-2"><span className="font-bold text-blue-700">{result.yaExistentes.length}</span> ya insertadas (omitidas)</div>}
             {result.errores > 0 && <div className="rounded bg-red-50 p-2 col-span-2"><span className="font-bold text-red-700">{result.errores}</span> errores</div>}
           </div>
           <button onClick={onImported} className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-bold text-white hover:bg-primary-700">Cerrar</button>

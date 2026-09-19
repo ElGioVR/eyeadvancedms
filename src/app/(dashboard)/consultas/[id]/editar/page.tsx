@@ -112,28 +112,28 @@ export default function EditarConsultaPage() {
             <label className={label}>Tipo Consulta</label>
             <select value={form.tipo_consulta || ''} onChange={(e) => setForm({ ...form, tipo_consulta: e.target.value })} className={input}>
               <option value="">Seleccionar</option>
-              <option value="Primera Consulta">Primera Consulta</option>
-              <option value="Consulta de Urgencia">Consulta de Urgencia</option>
-              <option value="Revisión Pre-Operatoria">Revisión Pre-Operatoria</option>
-              <option value="Control Post-Operatorio">Control Post-Operatorio</option>
+              <option value="CONSULTA">Consulta</option>
+              <option value="ESTUDIO">Estudio</option>
+              <option value="REVISION">Revisión</option>
+              <option value="PROCEDIMIENTO">Procedimiento</option>
             </select>
           </div>
           <div>
             <label className={label}>Tipo Visita</label>
             <select value={form.tipo_visita || ''} onChange={(e) => setForm({ ...form, tipo_visita: e.target.value })} className={input}>
               <option value="">Seleccionar</option>
-              <option value="Visita de Retorno">Visita de Retorno</option>
-              <option value="Primera Vez">Primera Vez</option>
+              <option value="PRIMERA_VEZ">Primera Vez</option>
+              <option value="SUBSECUENTE">Subsecuente</option>
             </select>
           </div>
           <div>
             <label className={label}>Método de Pago</label>
             <select value={form.metodo_pago || ''} onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })} className={input}>
               <option value="">Seleccionar</option>
-              <option value="Efectivo">Efectivo</option>
-              <option value="Tarjeta">Tarjeta</option>
-              <option value="Transferencia">Transferencia</option>
-              <option value="Seguro">Seguro</option>
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TARJETA">Tarjeta</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+              <option value="SEGURO">Seguro</option>
             </select>
           </div>
         </div>
