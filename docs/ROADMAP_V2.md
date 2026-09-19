@@ -94,6 +94,7 @@
 | **F2 — Migraciones** | **✅ Completada** |
 | **F3 — Modelo Aseguradoras/Consultas** | **✅ Completada** |
 | **F4 — Limpieza e Inyección de Datos** | **✅ Completada** |
+| **F5 — Comentarios/UX** | **✅ Completada** |
 
 ---
 
