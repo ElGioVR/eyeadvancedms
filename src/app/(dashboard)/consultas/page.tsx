@@ -13,6 +13,7 @@ import {
   Eye,
   Activity,
   ClipboardList,
+  CreditCard,
 } from "lucide-react";
 import { useFetch, useDebounce } from "@/hooks";
 import StatCard from "@/components/ui/StatCard";
@@ -23,6 +24,7 @@ import Avatar from "@/components/ui/Avatar";
 import EmptyState from "@/components/ui/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
 import Pagination from "@/components/ui/Pagination";
+import { useToast } from "@/components/ui/Toast";
 
 interface EstudioDetalle {
   nombre: string;
@@ -94,6 +96,7 @@ function Field({
 
 export default function ConsultasPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [page, setPage] = useState(1);
   const {
     data: consultas,
@@ -108,6 +111,8 @@ export default function ConsultasPage() {
   const [search, setSearch] = useState("");
   const [filterDoctor, setFilterDoctor] = useState("Todos");
   const [today] = useState(() => new Date().toISOString().split("T")[0]);
+  const [pagoConsulta, setPagoConsulta] = useState<ConsultaAPI | null>(null);
+  const [pagando, setPagando] = useState(false);
 
   const debouncedSearch = useDebounce(search);
 
@@ -169,6 +174,29 @@ export default function ConsultasPage() {
       },
     ];
   }, [consultas, total]);
+
+  async function handlePago() {
+    if (!pagoConsulta) return;
+    setPagando(true);
+    try {
+      const res = await fetch(`/api/consultas/${pagoConsulta.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estatus_pago: "PAGADO",
+          monto_pagado: pagoConsulta.costo_total,
+          fecha_pago: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error("Error al procesar pago");
+      toast("Pago registrado exitosamente");
+      setPagoConsulta(null);
+    } catch {
+      toast("Error al procesar el pago", "error");
+    } finally {
+      setPagando(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -303,13 +331,24 @@ export default function ConsultasPage() {
                       <StatusBadge status={c.estatus_pago || 'PENDIENTE_PAGO'} config={estatusPagoConfig} />
                     </td>
                     <td className="hidden sm:table-cell px-5 py-4">
-                      <button
-                        aria-label={`Ver consulta de ${c.paciente}`}
-                        onClick={() => router.push(`/consultas/${c.id}`)}
-                        className="text-gray-400 dark:text-[#71767B] hover:text-primary-600 transition-colors"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {c.estatus_pago !== 'PAGADO' && c.costo_total > 0 && (
+                          <button
+                            aria-label={`Registrar pago de ${c.paciente}`}
+                            onClick={() => setPagoConsulta(c)}
+                            className="text-amber-500 hover:text-amber-600 transition-colors"
+                          >
+                            <CreditCard className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          aria-label={`Ver consulta de ${c.paciente}`}
+                          onClick={() => router.push(`/consultas/${c.id}`)}
+                          className="text-gray-400 dark:text-[#71767B] hover:text-primary-600 transition-colors"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -324,6 +363,72 @@ export default function ConsultasPage() {
             onPageChange={(p) => setPage(p)}
             label="consultas"
           />
+        </div>
+      )}
+
+      {/* Modal de Confirmación de Pago */}
+      {pagoConsulta && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => !pagando && setPagoConsulta(null)}>
+          <div className="bg-white dark:bg-[#16181C] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <CreditCard className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-[#E7E9EA]">Registrar Pago</h3>
+                <p className="text-xs text-gray-400 dark:text-[#71767B]">Confirmar pago de consulta</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-4 space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-[#71767B]">Folio</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.folio || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-[#71767B]">Paciente</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.paciente}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-[#71767B]">Doctor</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.doctor}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-[#71767B]">Fecha</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.fecha}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-[#71767B]">Tipo</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.tipo_consulta}</span>
+              </div>
+              <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2.5 flex justify-between">
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">Total a pagar</span>
+                <span className="text-lg font-extrabold text-emerald-600">${pagoConsulta.costo_total.toLocaleString('es-MX')} MXN</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setPagoConsulta(null)}
+                disabled={pagando}
+                className="flex-1 rounded-xl border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePago}
+                disabled={pagando}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {pagando ? (
+                  <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                ) : (
+                  <CheckCircle className="h-4 w-4" />
+                )}
+                {pagando ? 'Procesando...' : 'Confirmar Pago'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
