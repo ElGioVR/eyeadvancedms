@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
-import { useAutosave } from '@/hooks/useAutosave';
 import { useToast } from '@/components/ui/Toast';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
@@ -225,19 +224,12 @@ export default function NuevaConsultaPage() {
     };
   };
 
-  const [consultationData, setConsultationData] = useState<ConsultationForm>(() => {
-    // Try loading from autosave draft first
-    try {
-      const raw = localStorage.getItem('autosave:nueva-consulta');
-      if (raw) {
-        const draft = JSON.parse(raw);
-        if (draft && draft.doctorId !== undefined) return draft;
-      }
-    } catch {}
-    return defaultConsultation();
-  });
+  // Clear any stale draft from previous sessions
+  useEffect(() => {
+    try { localStorage.removeItem('autosave:nueva-consulta'); } catch {}
+  }, []);
 
-  const { clearDraft } = useAutosave('nueva-consulta', consultationData, 1500);
+  const [consultationData, setConsultationData] = useState<ConsultationForm>(() => defaultConsultation());
 
   useEffect(() => {
     setConsultationData((prev) => prev.fecha ? prev : { ...prev, fecha: new Date().toISOString().split('T')[0] });
@@ -562,7 +554,6 @@ export default function NuevaConsultaPage() {
       }
 
       toast('Consulta creada exitosamente');
-      clearDraft();
       router.push('/consultas');
     } catch {
       setFormError('Error de conexión con el servidor');
