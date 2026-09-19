@@ -16,7 +16,7 @@ export async function POST(
 
   const { data: liquidacion, error: e1 } = await supabase
     .from('liquidaciones_doctor')
-    .select('*')
+    .select('id, periodo_id, doctor_id, total_devengado, total_ajustes, total_retenciones, neto_pagar, moneda, estado, aprobado_por, aprobado_at, created_at, updated_at')
     .eq('id', id)
     .maybeSingle();
 

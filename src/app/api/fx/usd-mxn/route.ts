@@ -25,6 +25,6 @@ export async function GET() {
     if (cachedRate) {
       return NextResponse.json({ rate: cachedRate.rate, source: 'stale-cache', updated_at: new Date(cachedRate.timestamp).toISOString() });
     }
-    return NextResponse.json({ rate: 20.5, source: 'fallback', updated_at: new Date().toISOString() });
+    return NextResponse.json({ rate: 20.5, source: 'estimado', warning: 'Rate from fallback, may not reflect current market', updated_at: new Date().toISOString() });
   }
 }

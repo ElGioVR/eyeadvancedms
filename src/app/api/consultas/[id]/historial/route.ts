@@ -16,7 +16,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from('consulta_historial')
-    .select('*, usuarios:usuario_id(nombre)')
+    .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at, usuarios:usuario_id(nombre)')
     .eq('consulta_id', id)
     .order('created_at', { ascending: true });
 

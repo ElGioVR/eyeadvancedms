@@ -61,7 +61,7 @@ export async function GET(
   const { data: consulta, error: consultaError } = await supabase
     .from('consultas')
     .select(`
-      *,
+      id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
       pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo),
       doctores:doctor_id (nombre_completo),
       est1_doc:estudio_1_doctor_id (nombre_completo),
@@ -89,15 +89,15 @@ export async function GET(
   const [historialResult, conceptosResult, aseguranzaResult] = await Promise.all([
     supabase
       .from('consulta_historial')
-      .select('*, usuarios:usuario_id(nombre)')
+      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at, usuarios:usuario_id(nombre)')
       .eq('consulta_id', id)
       .order('created_at', { ascending: true }),
     supabase
       .from('consulta_conceptos')
-      .select('*')
-      .eq('consulta_id', id),
+    .select('id, consulta_id, concepto, cantidad, costo_unitario, subtotal, created_at')
+    .eq('consulta_id', id),
     consulta.aseguranza_id
-      ? supabase.from('aseguranzas').select('*').eq('id', consulta.aseguranza_id).maybeSingle()
+      ? supabase.from('aseguranzas').select('id, nombre, telefono, direccion, notas, activo, created_at').eq('id', consulta.aseguranza_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 

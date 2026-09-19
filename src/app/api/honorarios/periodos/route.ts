@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from('periodos_pago')
-    .select('*')
+    .select('id, codigo, fecha_desde, fecha_hasta, estado, cerrado_por, cerrado_at, created_at, updated_at')
     .order('fecha_desde', { ascending: false });
 
   if (error) {

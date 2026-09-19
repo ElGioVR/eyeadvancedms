@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
-import ExcelJS from 'exceljs';
+import type { Worksheet } from 'exceljs';
 
 interface ImportRow {
   'FECHA'?: string;
@@ -137,11 +137,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No se proporcionó un archivo' }, { status: 400 });
   }
 
+  const ExcelJS = (await import('exceljs')).default;
+
   const fileBuffer = await file.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
   await (workbook.xlsx as any).load(fileBuffer);
 
-  function sheetToJson<T>(worksheet: ExcelJS.Worksheet | undefined): T[] {
+  function sheetToJson<T>(worksheet: Worksheet | undefined): T[] {
     if (!worksheet) return [];
     const rows: T[] = [];
     const headers: string[] = [];
@@ -273,6 +275,8 @@ export async function POST(request: Request) {
     )
   );
 
+  // Filter duplicates and prepare batch
+  const cirugiaBatch: Array<Record<string, unknown>> = [];
   for (const fila of filasCirugia) {
     const key = `${(fila.nombre_paciente as string || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
     const filaOriginal = [
@@ -302,24 +306,38 @@ export async function POST(request: Request) {
     }
 
     const { cirujano_texto: _, doctor_nombre_temp: __, ...insertData } = fila;
+    cirugiaBatch.push(insertData);
+  }
+
+  // Batch insert cirugias
+  if (cirugiaBatch.length > 0) {
     const { error } = await supabase
       .from('agenda_cirugias')
-      .insert(insertData);
+      .insert(cirugiaBatch);
     if (error) {
-      rechazados.push({ fila: insertadas + insertadasAplazadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: filaOriginal });
-      erroresInsercion++;
+      erroresInsercion += cirugiaBatch.length;
+      for (const fila of cirugiaBatch) {
+        rechazados.push({ fila: insertadas + insertadasAplazadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: '' });
+      }
     } else {
-      insertadas++;
-      existingSet.add(key);
+      insertadas = cirugiaBatch.length;
+      for (const fila of cirugiaBatch) {
+        const key = `${(fila.nombre_paciente as string || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
+        existingSet.add(key);
+      }
     }
   }
 
-  for (const fila of filasAplazadas) {
+  // Batch insert aplazadas
+  if (filasAplazadas.length > 0) {
     const { error } = await supabase
       .from('agenda_cirugias')
-      .insert(fila);
-    if (error) erroresInsercion++;
-    else insertadasAplazadas++;
+      .insert(filasAplazadas);
+    if (error) {
+      erroresInsercion += filasAplazadas.length;
+    } else {
+      insertadasAplazadas = filasAplazadas.length;
+    }
   }
 
   // Log the import

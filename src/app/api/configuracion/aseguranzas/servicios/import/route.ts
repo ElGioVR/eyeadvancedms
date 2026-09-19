@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import ExcelJS from 'exceljs';
 
 function normalize(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -37,6 +36,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const ExcelJS = (await import('exceljs')).default;
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = new ExcelJS.Workbook();
     await (workbook.xlsx as any).load(buffer);
