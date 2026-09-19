@@ -5,6 +5,11 @@ const { Client } = require('pg');
 const MIGRATION_DIR = path.join(__dirname, '..', 'src', 'migrations');
 
 const MIGRATION_ORDER = [
+  '1725900000000-CreateNotificacionesTable.ts',
+  '1725900000001-MakeCobrosConsultaIdNullable.ts',
+  '1725900000002-CreateMatrizCostosSystem.ts',
+  '1725900000003-AddLentesFolio.ts',
+  '1757600000000-CreateAgendaCirugiasTable.ts',
   '1800000000000-FormalizeConsultaDoctorCosto.ts',
   '1800000000001-EnhanceCatalogoEstudiosProcedimientos.ts',
   '1800000000002-CreateConsultaConceptosTable.ts',
