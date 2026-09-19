@@ -90,6 +90,7 @@
 | Fase 4 — Inventario/Pacientes/Dashboard | ✅ Completada |
 | Fase 5 — Notificaciones | ✅ Completada |
 | Fase 6 — Agenda/generales | ⬜ Pendiente |
+| **F1 — Seguridad P0** | **✅ Completada** |
 
 ---
 
