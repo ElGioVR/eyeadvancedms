@@ -1,41 +1,38 @@
-# FASE 3 — MODELO ASEGURADORAS/CONSULTAS
+# FASE 3 — MODELO ASEGURADORAS/CONSULTAS (ACTUALIZADO)
 
 **Fecha:** 2026-09-18
-**Commits:** `98eba99`, `37ebd8c`
+**Commits:** `98eba99`, `37ebd8c`, `28ed824`, `c09befb`
 
 ## Cambios aplicados
 
 | # | Item | Cambio | Archivos |
 |---|------|--------|----------|
-| 1 | Tabla `aseguranza_servicios` | CREATE TABLE + RLS (read authenticated, write admin) + UNIQUE(aseguranza_id,tipo,nombre_norm) + CHECK 0..100 | Migración 150, DB |
-| 2 | Catálogo 81 procedimientos oftalmológicos | Seed: 22 estudios, 6 consultas, 53 procedimientos — todos bajo ISSSTECALI | `scripts/setup-aseguranza-servicios.js` (ejecutado, borrado) |
-| 3 | API CRUD `aseguranza_servicios` | GET (filtro por aseguradora/tipo/search), POST (admin), PATCH (admin) | `api/configuracion/aseguranzas/servicios/route.ts` |
-| 4 | Endpoint catálogo por paciente | `GET /api/catalogo-servicios?paciente_id=X` — resuelve aseguranza del paciente, retorna servicios + fallback genérico | `api/catalogo-servicios/route.ts` |
-| 5 | Precio resuelto en servidor | POST consultas: `resolverCostoServicio()` consulta `aseguranza_servicios` por nombre normalizado, fallback a costo client si no hay precio server | `api/consultas/route.ts` |
-| 6 | `consultas.aseguranza_id` snapshot | INSERT incluye `aseguranza_id` del paciente; GET retorna el campo | `api/consultas/route.ts` |
-| 7 | CSV de referencia guardado | `data/ENTRADA_Y_SALIDA_2026_SEPTIEMBRE.csv` — 31 consultas, 75+ procedimientos, 2 aseguradoras | `data/` |
+| 1 | Tabla `aseguranza_servicios` | CREATE TABLE + RLS (read auth, write admin) + CHECK 0..100 + UNIQUE | Migración 150 |
+| 2 | 81 procedimientos oftalmológicos | Seed: 22 estudios, 6 consultas, 53 procedimientos (ISSSTECALI) | DB seed |
+| 3 | API CRUD aseguranza_servicios | GET (filtro), POST (admin), PATCH (admin) | `api/configuracion/aseguranzas/servicios/route.ts` |
+| 4 | Catálogo por paciente | `GET /api/catalogo-servicios?paciente_id=X` — resuelve aseguranza + fallback | `api/catalogo-servicios/route.ts` |
+| 5 | Precio server-side | POST consultas: `resolverCostoServicio()` desde aseguranza_servicios | `api/consultas/route.ts` |
+| 6 | `consultas.aseguranza_id` | Snapshot en INSERT + retorno en GET | `api/consultas/route.ts` |
+| 7 | RPC `crear_consulta` | SQL function atómica: consulta + conceptos + historial en 1 txn | Migración 160 |
+| 8 | RPC `actualizar_consulta` | SQL function: update + historial automático | Migración 160 |
+| 9 | Matriz de consultas editable | Página `/configuracion/aseguranzas/[id]/servicios` con edición inline | `[id]/servicios/page.tsx` |
+| 10 | Import masivo servicios | `POST .../servicios/import` — Excel/CSV → preview → confirm → insert | `servicios/import/route.ts` |
+| 11 | Import UI | Botón Importar en matriz con modal de preview/rechazados | `[id]/servicios/page.tsx` |
+| 12 | CSV de referencia | `data/ENTRADA_Y_SALIDA_2026_SEPTIEMBRE.csv` guardado | `data/` |
 
-## Perfil del CSV
+## Archivos totales creados/modificados en F3
 
-- **31 consultas** reales (Septiembre 2026)
-- **77 procedimientos** únicos extraídos como catálogo
-- **Aseguradoras**: ISSSTECALI (20), JORNADA (8) + overflow: GNP, DOCTORALIA, BANCOS, PLAN SEGURO
-- **Problemas**: encoding CP-1252, 9 filas con datos overflow, 6 columnas vacías
+- `src/migrations/1800000000150-CreateAseguranzaServicios.ts`
+- `src/migrations/1800000000160-CreateCrearConsultaRPC.ts`
+- `src/app/api/configuracion/aseguranzas/servicios/route.ts`
+- `src/app/api/configuracion/aseguranzas/servicios/import/route.ts`
+- `src/app/api/catalogo-servicios/route.ts`
+- `src/app/(dashboard)/configuracion/aseguranzas/page.tsx` (link servicios)
+- `src/app/(dashboard)/configuracion/aseguranzas/[id]/servicios/page.tsx`
+- `src/app/api/consultas/route.ts` (precio server + aseguranza_id)
+- `scripts/run-migrations.js` (order update)
+- `data/ENTRADA_Y_SALIDA_2026_SEPTIEMBRE.csv`
 
-## Pendiente
+## Pendiente (requiere datos adicionales)
 
-| # | Item | Razón |
-|---|------|-------|
-| F3.3 | Matriz de consultas editable | Falta Excel de matriz con precios/coberturas por aseguradora |
-| F3.5 | RPC `crear_consulta` atómica | Requiere función SQL en Supabase (no solo JS API); evaluar si el flujo actual (8 pasos secuenciales) cumple la atomicidad suficiente |
-| F3.2 | UI import masivo en Configuración>Aseguranzas | Requiere componentes UI nuevos; la API POST/PATCH de servicios ya existe |
-
-## Tablas nuevas
-
-| Tabla | RLS | Policies |
-|-------|-----|----------|
-| `aseguranza_servicios` | ON | `aseguranza_servicios_read` (all authenticated), `aseguranza_servicios_admin_write` (admin only) |
-
-## Nota: scripts eliminados
-
-Los scripts `seed-aseguranza-servicios.js` y `setup-aseguranza-servicios.js` se ejecutaron y eliminaron. No deben volver a ejecutarse (idempotentes pero redundantes).
+- F3.3 Matrix con precios: la matriz ahora es editable pero con costo=0 para todos los servicios. Para poblar precios reales necesitas el **Excel de procedimientos por aseguradora** con costo y % cobertura por servicio.
