@@ -97,6 +97,20 @@ export async function GET(request: Request) {
   const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const barcode = searchParams.get('barcode');
+  const itemId = searchParams.get('id');
+
+  if (itemId) {
+    const { data, error } = await supabase
+      .from('inventario_items')
+      .select(SELECT)
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return NextResponse.json({ error: 'Ítem no encontrado' }, { status: 404 });
+    }
+    return NextResponse.json(mapLente(data));
+  }
 
   if (barcode) {
     const { data, error } = await supabase

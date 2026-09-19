@@ -101,7 +101,19 @@ export async function liberarLIO(
     .maybeSingle();
 
   if (!existente) {
-    // No consumption recorded — nothing to release
+    return { success: true };
+  }
+
+  const { data: yaLiberado } = await supabase
+    .from('inventario_movimientos')
+    .select('id')
+    .eq('referencia_tipo', 'CIRUGIA')
+    .eq('referencia_id', cirugiaId)
+    .eq('inventario_item_id', inventarioItemId)
+    .eq('tipo', 'DEVOLUCION')
+    .maybeSingle();
+
+  if (yaLiberado) {
     return { success: true };
   }
 

@@ -6,22 +6,70 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import LenteForm from '@/components/inventario/LenteForm';
 
+interface LenteData {
+  id: string;
+  tipo: string;
+  marca: string;
+  modelo: string;
+  categoria_id: string;
+  proveedor_id: string;
+  codigo_barras: string;
+  grado_esferico: string;
+  grado_cilindrico: string;
+  eje: string;
+  material: string;
+  color: string;
+  stock: string;
+  stock_minimo: string;
+  precio_compra: string;
+  precio_venta: string;
+  lote: string;
+  fecha_caducidad: string;
+  notas: string;
+  potencia_dioptrias: string;
+  tipo_lio: string;
+  modelo_fabricante: string;
+}
+
+interface RawLente {
+  id: string;
+  tipo: string;
+  marca: string;
+  modelo: string;
+  categoria_id: string | null;
+  proveedor_id: string | null;
+  codigo_barras: string | null;
+  grado_esferico: number | null;
+  grado_cilindrico: number | null;
+  eje: number | null;
+  material: string | null;
+  color: string | null;
+  stock: number;
+  stock_minimo: number;
+  precio_compra: number | null;
+  precio_venta: number | null;
+  lote: string | null;
+  fecha_caducidad: string | null;
+  notas: string | null;
+  potencia_dioptrias: number | null;
+  tipo_lio: string | null;
+  modelo_fabricante: string | null;
+}
+
 export default function EditarLentePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
-  const [lente, setLente] = useState<any>(null);
+  const [lente, setLente] = useState<LenteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     async function fetchLente() {
       try {
-        const res = await fetch('/api/inventario');
-        const json = await res.json();
-        const items = Array.isArray(json) ? json : json.data || [];
-        const found = items.find((l: any) => l.id === id);
-        if (!found) throw new Error('Lente no encontrado');
+        const res = await fetch(`/api/inventario?id=${id}`);
+        if (!res.ok) throw new Error('Lente no encontrado');
+        const found: RawLente = await res.json();
         setLente({
           id: found.id,
           tipo: found.tipo || 'LENTE_VISION',
@@ -46,8 +94,8 @@ export default function EditarLentePage() {
           tipo_lio: found.tipo_lio || '',
           modelo_fabricante: found.modelo_fabricante || '',
         });
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al cargar');
       } finally {
         setLoading(false);
       }
