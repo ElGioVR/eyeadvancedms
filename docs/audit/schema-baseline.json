@@ -1,0 +1,3363 @@
+[
+  {
+    "table": "agenda_cirugia_doctores",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "cirugia_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "rol",
+        "data_type": "rol_cirugia",
+        "not_null": true,
+        "default_value": "'CIRUJANO_PRINCIPAL'::rol_cirugia"
+      },
+      {
+        "column_name": "porcentaje_participacion",
+        "data_type": "numeric(5,2)",
+        "not_null": true,
+        "default_value": "100.00"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "agenda_cirugia_doctores_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "agenda_cirugia_doctores_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "agenda_cirugia_doctores_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "agenda_cirugia_doctores_pkey",
+        "indexdef": "CREATE UNIQUE INDEX agenda_cirugia_doctores_pkey ON public.agenda_cirugia_doctores USING btree (id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugia_doctores_cirugia_id",
+        "indexdef": "CREATE INDEX idx_agenda_cirugia_doctores_cirugia_id ON public.agenda_cirugia_doctores USING btree (cirugia_id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugia_doctores_doctor_id",
+        "indexdef": "CREATE INDEX idx_agenda_cirugia_doctores_doctor_id ON public.agenda_cirugia_doctores USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugia_doctores_unique",
+        "indexdef": "CREATE UNIQUE INDEX idx_agenda_cirugia_doctores_unique ON public.agenda_cirugia_doctores USING btree (cirugia_id, doctor_id, rol)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "cirugia_id",
+        "foreign_table": "agenda_cirugias",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "agenda_cirugias",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "paciente_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "nombre_paciente",
+        "data_type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "expediente",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "hora",
+        "data_type": "time without time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "jornada",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "diagnostico",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "procedimiento",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "ojo",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "lio",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "marca_lio",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tiempo_estimado",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tiempo_estancia",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estado",
+        "data_type": "agenda_cirugia_estado",
+        "not_null": true,
+        "default_value": "'agendada'::agenda_cirugia_estado"
+      },
+      {
+        "column_name": "procedencia",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "motivo_aplazamiento",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notificado",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "false"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "inventario_item_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "agenda_cirugias_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "agenda_cirugias_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "agenda_cirugias_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "agenda_cirugias_pkey",
+        "indexdef": "CREATE UNIQUE INDEX agenda_cirugias_pkey ON public.agenda_cirugias USING btree (id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_consulta_id",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_consulta_id ON public.agenda_cirugias USING btree (consulta_id) WHERE (consulta_id IS NOT NULL)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_doctor_id",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_doctor_id ON public.agenda_cirugias USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_estado",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_estado ON public.agenda_cirugias USING btree (estado)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_fecha",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_fecha ON public.agenda_cirugias USING btree (fecha)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_inventario_item_id",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_inventario_item_id ON public.agenda_cirugias USING btree (inventario_item_id)"
+      },
+      {
+        "indexname": "idx_agenda_cirugias_notificado",
+        "indexdef": "CREATE INDEX idx_agenda_cirugias_notificado ON public.agenda_cirugias USING btree (notificado, fecha, hora)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "inventario_item_id",
+        "foreign_table": "inventario_items",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "paciente_id",
+        "foreign_table": "pacientes",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "agenda_import_log",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "archivo_nombre",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "total_filas",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "filas_ok",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "filas_rechazadas",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "detalle_rechazados",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": "'[]'::jsonb"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "Allow all for authenticated",
+        "cmd": "ALL",
+        "using_clause": "true"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "agenda_import_log_pkey",
+        "indexdef": "CREATE UNIQUE INDEX agenda_import_log_pkey ON public.agenda_import_log USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "usuario_id",
+        "foreign_table": "users",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "ajustes_liquidacion",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "liquidacion_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo",
+        "data_type": "tipo_ajuste_liquidacion",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "concepto",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "monto",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "motivo",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "creado_por",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "ajustes_liquidacion_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "ajustes_liquidacion_pkey",
+        "indexdef": "CREATE UNIQUE INDEX ajustes_liquidacion_pkey ON public.ajustes_liquidacion USING btree (id)"
+      },
+      {
+        "indexname": "idx_ajustes_liquidacion_liquidacion_id",
+        "indexdef": "CREATE INDEX idx_ajustes_liquidacion_liquidacion_id ON public.ajustes_liquidacion USING btree (liquidacion_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "creado_por",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "liquidacion_id",
+        "foreign_table": "liquidaciones_doctor",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "aseguranzas",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "telefono",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "direccion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "contacto",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": false,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "porcentaje_cobertura",
+        "data_type": "numeric(5,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "tipo",
+        "data_type": "tipo_aseguranza",
+        "not_null": true,
+        "default_value": "'PRIVADA'::tipo_aseguranza"
+      },
+      {
+        "column_name": "vigente_desde",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "vigente_hasta",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "aseguranzas_pkey",
+        "indexdef": "CREATE UNIQUE INDEX aseguranzas_pkey ON public.aseguranzas USING btree (id)"
+      },
+      {
+        "indexname": "idx_aseguranzas_tipo",
+        "indexdef": "CREATE INDEX idx_aseguranzas_tipo ON public.aseguranzas USING btree (tipo)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "bitacora_honorarios",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "tabla",
+        "data_type": "character varying(50)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "registro_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "accion",
+        "data_type": "character varying(50)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "valor_anterior",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "valor_nuevo",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "ip_address",
+        "data_type": "inet",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "bitacora_honorarios_admin_only",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "bitacora_honorarios_pkey",
+        "indexdef": "CREATE UNIQUE INDEX bitacora_honorarios_pkey ON public.bitacora_honorarios USING btree (id)"
+      },
+      {
+        "indexname": "idx_bitacora_honorarios_created_at",
+        "indexdef": "CREATE INDEX idx_bitacora_honorarios_created_at ON public.bitacora_honorarios USING btree (created_at DESC)"
+      },
+      {
+        "indexname": "idx_bitacora_honorarios_tabla",
+        "indexdef": "CREATE INDEX idx_bitacora_honorarios_tabla ON public.bitacora_honorarios USING btree (tabla, registro_id)"
+      },
+      {
+        "indexname": "idx_bitacora_honorarios_usuario_id",
+        "indexdef": "CREATE INDEX idx_bitacora_honorarios_usuario_id ON public.bitacora_honorarios USING btree (usuario_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "usuario_id",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "catalogo_estudios",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "costo",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "bilateral",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "codigo",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "categoria",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": "'Diagnóstico'::character varying"
+      },
+      {
+        "column_name": "precio_lista",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "catalogo_estudios_pkey",
+        "indexdef": "CREATE UNIQUE INDEX catalogo_estudios_pkey ON public.catalogo_estudios USING btree (id)"
+      },
+      {
+        "indexname": "idx_catalogo_estudios_codigo",
+        "indexdef": "CREATE UNIQUE INDEX idx_catalogo_estudios_codigo ON public.catalogo_estudios USING btree (codigo) WHERE (codigo IS NOT NULL)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "catalogo_procedimientos",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "costo",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "por_ojo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "codigo",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "categoria",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": "'Quirúrgico'::character varying"
+      },
+      {
+        "column_name": "precio_lista",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "requiere_quirofano",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "false"
+      },
+      {
+        "column_name": "duracion_estimada_min",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "catalogo_procedimientos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX catalogo_procedimientos_pkey ON public.catalogo_procedimientos USING btree (id)"
+      },
+      {
+        "indexname": "idx_catalogo_procedimientos_codigo",
+        "indexdef": "CREATE UNIQUE INDEX idx_catalogo_procedimientos_codigo ON public.catalogo_procedimientos USING btree (codigo) WHERE (codigo IS NOT NULL)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "categorias_lentes",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "categorias_lentes_pkey",
+        "indexdef": "CREATE UNIQUE INDEX categorias_lentes_pkey ON public.categorias_lentes USING btree (id)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "coberturas_aseguranza",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "aseguranza_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "porcentaje_cobertura",
+        "data_type": "numeric(5,2)",
+        "not_null": true,
+        "default_value": "100"
+      },
+      {
+        "column_name": "monto_maximo",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "aplica_estudios",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "aplica_procedimientos",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "copago_fijo",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "vigente_desde",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "vigente_hasta",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "coberturas_aseguranza_aseguranza_id_key",
+        "indexdef": "CREATE UNIQUE INDEX coberturas_aseguranza_aseguranza_id_key ON public.coberturas_aseguranza USING btree (aseguranza_id)"
+      },
+      {
+        "indexname": "coberturas_aseguranza_pkey",
+        "indexdef": "CREATE UNIQUE INDEX coberturas_aseguranza_pkey ON public.coberturas_aseguranza USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "aseguranza_id",
+        "foreign_table": "aseguranzas",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "cobro_detalles",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "cobro_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "consulta_concepto_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "monto",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "descuento",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "monto_final",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "cobro_detalles_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "cobro_detalles_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "cobro_detalles_pkey",
+        "indexdef": "CREATE UNIQUE INDEX cobro_detalles_pkey ON public.cobro_detalles USING btree (id)"
+      },
+      {
+        "indexname": "idx_cobro_detalles_cobro_id",
+        "indexdef": "CREATE INDEX idx_cobro_detalles_cobro_id ON public.cobro_detalles USING btree (cobro_id)"
+      },
+      {
+        "indexname": "idx_cobro_detalles_consulta_concepto_id",
+        "indexdef": "CREATE INDEX idx_cobro_detalles_consulta_concepto_id ON public.cobro_detalles USING btree (consulta_concepto_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "cobro_id",
+        "foreign_table": "cobros",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "consulta_concepto_id",
+        "foreign_table": "consulta_conceptos",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "cobros",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "paciente_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "aseguranza_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "metodo_pago",
+        "data_type": "metodo_pago",
+        "not_null": false,
+        "default_value": "'NO_APLICA'::metodo_pago"
+      },
+      {
+        "column_name": "monto",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "moneda",
+        "data_type": "moneda_tipo",
+        "not_null": false,
+        "default_value": "'PESOS'::moneda_tipo"
+      },
+      {
+        "column_name": "pagado",
+        "data_type": "boolean",
+        "not_null": false,
+        "default_value": "false"
+      },
+      {
+        "column_name": "fecha_pago",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "folio",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "subtotal_consulta",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "subtotal_lentes",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "subtotal_estudios",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "subtotal_procedimientos",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "descuento",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "iva",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "estado",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": "'PENDIENTE'::character varying"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "cobros_pkey",
+        "indexdef": "CREATE UNIQUE INDEX cobros_pkey ON public.cobros USING btree (id)"
+      },
+      {
+        "indexname": "idx_cobros_fecha",
+        "indexdef": "CREATE INDEX idx_cobros_fecha ON public.cobros USING btree (fecha_pago)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "aseguranza_id",
+        "foreign_table": "aseguranzas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "paciente_id",
+        "foreign_table": "pacientes",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "concepto_doctores",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "consulta_concepto_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "rol",
+        "data_type": "rol_doctor_concepto",
+        "not_null": true,
+        "default_value": "'PRINCIPAL'::rol_doctor_concepto"
+      },
+      {
+        "column_name": "porcentaje_participacion",
+        "data_type": "numeric(5,2)",
+        "not_null": true,
+        "default_value": "100.00"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "concepto_doctores_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "concepto_doctores_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "concepto_doctores_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "concepto_doctores_pkey",
+        "indexdef": "CREATE UNIQUE INDEX concepto_doctores_pkey ON public.concepto_doctores USING btree (id)"
+      },
+      {
+        "indexname": "idx_concepto_doctores_consulta_concepto_id",
+        "indexdef": "CREATE INDEX idx_concepto_doctores_consulta_concepto_id ON public.concepto_doctores USING btree (consulta_concepto_id)"
+      },
+      {
+        "indexname": "idx_concepto_doctores_doctor_id",
+        "indexdef": "CREATE INDEX idx_concepto_doctores_doctor_id ON public.concepto_doctores USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_concepto_doctores_unique",
+        "indexdef": "CREATE UNIQUE INDEX idx_concepto_doctores_unique ON public.concepto_doctores USING btree (consulta_concepto_id, doctor_id, rol)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_concepto_id",
+        "foreign_table": "consulta_conceptos",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "configuracion_sistema",
+    "columns": [
+      {
+        "column_name": "clave",
+        "data_type": "character varying(100)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "valor",
+        "data_type": "jsonb",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "updated_by",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "configuracion_sistema_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "configuracion_sistema_read_all",
+        "cmd": "SELECT",
+        "using_clause": "true"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "configuracion_sistema_pkey",
+        "indexdef": "CREATE UNIQUE INDEX configuracion_sistema_pkey ON public.configuracion_sistema USING btree (clave)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "updated_by",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "consulta_conceptos",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_concepto",
+        "data_type": "tipo_concepto_clinico",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "concepto_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "cantidad",
+        "data_type": "integer",
+        "not_null": true,
+        "default_value": "1"
+      },
+      {
+        "column_name": "precio_aplicado",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "texto_original",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "consulta_conceptos_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "consulta_conceptos_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "consulta_conceptos_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "consulta_conceptos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX consulta_conceptos_pkey ON public.consulta_conceptos USING btree (id)"
+      },
+      {
+        "indexname": "idx_consulta_conceptos_concepto_id",
+        "indexdef": "CREATE INDEX idx_consulta_conceptos_concepto_id ON public.consulta_conceptos USING btree (concepto_id)"
+      },
+      {
+        "indexname": "idx_consulta_conceptos_consulta_id",
+        "indexdef": "CREATE INDEX idx_consulta_conceptos_consulta_id ON public.consulta_conceptos USING btree (consulta_id)"
+      },
+      {
+        "indexname": "idx_consulta_conceptos_doctor_id",
+        "indexdef": "CREATE INDEX idx_consulta_conceptos_doctor_id ON public.consulta_conceptos USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_consulta_conceptos_tipo_concepto",
+        "indexdef": "CREATE INDEX idx_consulta_conceptos_tipo_concepto ON public.consulta_conceptos USING btree (tipo_concepto)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "consulta_doctor_costo",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_costo",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "monto",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "consulta_doctor_costo_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "consulta_doctor_costo_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "consulta_doctor_costo_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "consulta_doctor_costo_pkey",
+        "indexdef": "CREATE UNIQUE INDEX consulta_doctor_costo_pkey ON public.consulta_doctor_costo USING btree (id)"
+      },
+      {
+        "indexname": "idx_consulta_doctor_costo_consulta_id",
+        "indexdef": "CREATE INDEX idx_consulta_doctor_costo_consulta_id ON public.consulta_doctor_costo USING btree (consulta_id)"
+      },
+      {
+        "indexname": "idx_consulta_doctor_costo_doctor_id",
+        "indexdef": "CREATE INDEX idx_consulta_doctor_costo_doctor_id ON public.consulta_doctor_costo USING btree (doctor_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "consulta_historial",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_evento",
+        "data_type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "payload",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": "'{}'::jsonb"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "Allow all for authenticated",
+        "cmd": "ALL",
+        "using_clause": "true"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "consulta_historial_pkey",
+        "indexdef": "CREATE UNIQUE INDEX consulta_historial_pkey ON public.consulta_historial USING btree (id)"
+      },
+      {
+        "indexname": "idx_consulta_historial_consulta",
+        "indexdef": "CREATE INDEX idx_consulta_historial_consulta ON public.consulta_historial USING btree (consulta_id, created_at DESC)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "usuario_id",
+        "foreign_table": "users",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "consultas",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "paciente_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "hora_inicio",
+        "data_type": "time without time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "hora_fin",
+        "data_type": "time without time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_consulta",
+        "data_type": "tipo_consulta",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_visita",
+        "data_type": "tipo_visita",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "diagnostico",
+        "data_type": "character varying(500)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estudio_1",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estudio_2",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estudio_3",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "procedimiento",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "folio",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "costo_total",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "estado_pago",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": "'PENDIENTE'::character varying"
+      },
+      {
+        "column_name": "monto_pagado",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "fecha_pago",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "metodo_pago",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "moneda",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "aseguradora",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "costo",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "estudio_1_doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estudio_2_doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estudio_3_doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "procedimiento_doctor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estatus",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": "'BORRADOR'::text"
+      },
+      {
+        "column_name": "estatus_pago",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": "'PENDIENTE_PAGO'::text"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "consultas_folio_key",
+        "indexdef": "CREATE UNIQUE INDEX consultas_folio_key ON public.consultas USING btree (folio)"
+      },
+      {
+        "indexname": "consultas_pkey",
+        "indexdef": "CREATE UNIQUE INDEX consultas_pkey ON public.consultas USING btree (id)"
+      },
+      {
+        "indexname": "idx_consultas_doctor",
+        "indexdef": "CREATE INDEX idx_consultas_doctor ON public.consultas USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_consultas_fecha",
+        "indexdef": "CREATE INDEX idx_consultas_fecha ON public.consultas USING btree (fecha)"
+      },
+      {
+        "indexname": "idx_consultas_paciente",
+        "indexdef": "CREATE INDEX idx_consultas_paciente ON public.consultas USING btree (paciente_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "estudio_1_doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "estudio_2_doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "estudio_3_doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "paciente_id",
+        "foreign_table": "pacientes",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "procedimiento_doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "doctores",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "nombre_completo",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "cedula_profesional",
+        "data_type": "character varying(50)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "especialidad",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": "'Oftalmología'::character varying"
+      },
+      {
+        "column_name": "telefono",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "email",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": false,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "honorario_consulta",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "honorario_estudio",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "honorario_procedimiento",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "tipo_relacion",
+        "data_type": "tipo_relacion_doctor",
+        "not_null": true,
+        "default_value": "'HONORARIOS'::tipo_relacion_doctor"
+      },
+      {
+        "column_name": "rfc",
+        "data_type": "character varying(13)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "cuenta_bancaria",
+        "data_type": "character varying(30)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "clabe",
+        "data_type": "character varying(18)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "porcentaje_default",
+        "data_type": "numeric(5,2)",
+        "not_null": true,
+        "default_value": "100.00"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "doctores_cedula_profesional_key",
+        "indexdef": "CREATE UNIQUE INDEX doctores_cedula_profesional_key ON public.doctores USING btree (cedula_profesional)"
+      },
+      {
+        "indexname": "doctores_pkey",
+        "indexdef": "CREATE UNIQUE INDEX doctores_pkey ON public.doctores USING btree (id)"
+      },
+      {
+        "indexname": "idx_doctores_rfc",
+        "indexdef": "CREATE INDEX idx_doctores_rfc ON public.doctores USING btree (rfc) WHERE (rfc IS NOT NULL)"
+      },
+      {
+        "indexname": "idx_doctores_tipo_relacion",
+        "indexdef": "CREATE INDEX idx_doctores_tipo_relacion ON public.doctores USING btree (tipo_relacion)"
+      },
+      {
+        "indexname": "idx_doctores_usuario_id",
+        "indexdef": "CREATE INDEX idx_doctores_usuario_id ON public.doctores USING btree (usuario_id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "usuario_id",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "eventos_honorario",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "origen_tipo",
+        "data_type": "origen_evento_honorario",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "origen_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "rol",
+        "data_type": "rol_doctor_concepto",
+        "not_null": true,
+        "default_value": "'PRINCIPAL'::rol_doctor_concepto"
+      },
+      {
+        "column_name": "paciente_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha_servicio",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "monto_base",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "tarifa_snapshot",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "monto_devengado",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "moneda",
+        "data_type": "character varying(3)",
+        "not_null": true,
+        "default_value": "'PESOS'::character varying"
+      },
+      {
+        "column_name": "estado",
+        "data_type": "estado_evento_honorario",
+        "not_null": true,
+        "default_value": "'PENDIENTE'::estado_evento_honorario"
+      },
+      {
+        "column_name": "periodo_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "cobro_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "eventos_honorario_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "eventos_honorario_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "eventos_honorario_recepcionista_read",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "eventos_honorario_pkey",
+        "indexdef": "CREATE UNIQUE INDEX eventos_honorario_pkey ON public.eventos_honorario USING btree (id)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_doctor_id",
+        "indexdef": "CREATE INDEX idx_eventos_honorario_doctor_id ON public.eventos_honorario USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_estado",
+        "indexdef": "CREATE INDEX idx_eventos_honorario_estado ON public.eventos_honorario USING btree (estado)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_fecha_servicio",
+        "indexdef": "CREATE INDEX idx_eventos_honorario_fecha_servicio ON public.eventos_honorario USING btree (fecha_servicio)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_origen",
+        "indexdef": "CREATE INDEX idx_eventos_honorario_origen ON public.eventos_honorario USING btree (origen_tipo, origen_id)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_periodo_id",
+        "indexdef": "CREATE INDEX idx_eventos_honorario_periodo_id ON public.eventos_honorario USING btree (periodo_id) WHERE (periodo_id IS NOT NULL)"
+      },
+      {
+        "indexname": "idx_eventos_honorario_unique",
+        "indexdef": "CREATE UNIQUE INDEX idx_eventos_honorario_unique ON public.eventos_honorario USING btree (origen_tipo, origen_id, doctor_id, rol)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "cobro_id",
+        "foreign_table": "cobros",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "paciente_id",
+        "foreign_table": "pacientes",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "inventario_items",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "categoria_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "marca",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "modelo",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "codigo_barras",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "grado_esferico",
+        "data_type": "numeric(5,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "grado_cilindrico",
+        "data_type": "numeric(5,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "eje",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "color",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "material",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "stock",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "0"
+      },
+      {
+        "column_name": "stock_minimo",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "5"
+      },
+      {
+        "column_name": "precio_compra",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "precio_venta",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "lote",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha_caducidad",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "proveedor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "estado",
+        "data_type": "estado_lente",
+        "not_null": false,
+        "default_value": "'DISPONIBLE'::estado_lente"
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "tipo",
+        "data_type": "tipo_inventario",
+        "not_null": true,
+        "default_value": "'LENTE_VISION'::tipo_inventario"
+      },
+      {
+        "column_name": "potencia_dioptrias",
+        "data_type": "numeric(5,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_lio",
+        "data_type": "tipo_lio",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "modelo_fabricante",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "inventario_items_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "inventario_items_doctor_view",
+        "cmd": "SELECT",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'doctor'::rol_usuario))))"
+      },
+      {
+        "policyname": "inventario_items_recepcionista_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "idx_inventario_items_tipo",
+        "indexdef": "CREATE INDEX idx_inventario_items_tipo ON public.inventario_items USING btree (tipo)"
+      },
+      {
+        "indexname": "idx_lentes_codigo",
+        "indexdef": "CREATE INDEX idx_lentes_codigo ON public.inventario_items USING btree (codigo_barras)"
+      },
+      {
+        "indexname": "idx_lentes_grado",
+        "indexdef": "CREATE INDEX idx_lentes_grado ON public.inventario_items USING btree (grado_esferico, grado_cilindrico)"
+      },
+      {
+        "indexname": "idx_lentes_stock",
+        "indexdef": "CREATE INDEX idx_lentes_stock ON public.inventario_items USING btree (stock)"
+      },
+      {
+        "indexname": "lentes_codigo_barras_key",
+        "indexdef": "CREATE UNIQUE INDEX lentes_codigo_barras_key ON public.inventario_items USING btree (codigo_barras)"
+      },
+      {
+        "indexname": "lentes_pkey",
+        "indexdef": "CREATE UNIQUE INDEX lentes_pkey ON public.inventario_items USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "categoria_id",
+        "foreign_table": "categorias_lentes",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "proveedor_id",
+        "foreign_table": "proveedores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "inventario_movimientos",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "inventario_item_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo",
+        "data_type": "character varying(30)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "cantidad",
+        "data_type": "integer",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "stock_resultante",
+        "data_type": "integer",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "usuario_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "referencia_tipo",
+        "data_type": "character varying(30)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "referencia_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "motivo",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "costo_unitario",
+        "data_type": "numeric(10,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "proveedor_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "idx_inventario_movimientos_created_at",
+        "indexdef": "CREATE INDEX idx_inventario_movimientos_created_at ON public.inventario_movimientos USING btree (created_at DESC)"
+      },
+      {
+        "indexname": "idx_inventario_movimientos_item_id",
+        "indexdef": "CREATE INDEX idx_inventario_movimientos_item_id ON public.inventario_movimientos USING btree (inventario_item_id)"
+      },
+      {
+        "indexname": "idx_inventario_movimientos_tipo",
+        "indexdef": "CREATE INDEX idx_inventario_movimientos_tipo ON public.inventario_movimientos USING btree (tipo)"
+      },
+      {
+        "indexname": "inventario_movimientos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX inventario_movimientos_pkey ON public.inventario_movimientos USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "inventario_item_id",
+        "foreign_table": "inventario_items",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "usuario_id",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "lentes_x_consulta",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "consulta_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "lente_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "ojo",
+        "data_type": "ojo_paciente",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "grado_aplicado",
+        "data_type": "numeric(5,2)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "cantidad",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": "1"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "lentes_x_consulta_pkey",
+        "indexdef": "CREATE UNIQUE INDEX lentes_x_consulta_pkey ON public.lentes_x_consulta USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "consulta_id",
+        "foreign_table": "consultas",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "lente_id",
+        "foreign_table": "inventario_items",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "liquidaciones_doctor",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "periodo_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "total_devengado",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "total_ajustes",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "total_retenciones",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "neto_pagar",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "moneda",
+        "data_type": "character varying(3)",
+        "not_null": true,
+        "default_value": "'PESOS'::character varying"
+      },
+      {
+        "column_name": "estado",
+        "data_type": "estado_liquidacion",
+        "not_null": true,
+        "default_value": "'BORRADOR'::estado_liquidacion"
+      },
+      {
+        "column_name": "aprobado_por",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "aprobado_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "pagado_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "referencia_pago",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "liquidaciones_doctor_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "liquidaciones_doctor_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "idx_liquidaciones_doctor_doctor_id",
+        "indexdef": "CREATE INDEX idx_liquidaciones_doctor_doctor_id ON public.liquidaciones_doctor USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_liquidaciones_doctor_estado",
+        "indexdef": "CREATE INDEX idx_liquidaciones_doctor_estado ON public.liquidaciones_doctor USING btree (estado)"
+      },
+      {
+        "indexname": "idx_liquidaciones_doctor_periodo_id",
+        "indexdef": "CREATE INDEX idx_liquidaciones_doctor_periodo_id ON public.liquidaciones_doctor USING btree (periodo_id)"
+      },
+      {
+        "indexname": "idx_liquidaciones_doctor_unique",
+        "indexdef": "CREATE UNIQUE INDEX idx_liquidaciones_doctor_unique ON public.liquidaciones_doctor USING btree (periodo_id, doctor_id)"
+      },
+      {
+        "indexname": "liquidaciones_doctor_pkey",
+        "indexdef": "CREATE UNIQUE INDEX liquidaciones_doctor_pkey ON public.liquidaciones_doctor USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "aprobado_por",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "periodo_id",
+        "foreign_table": "periodos_pago",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "matriz_costos",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "tipo_consulta",
+        "data_type": "tipo_consulta_costo",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_visita",
+        "data_type": "tipo_visita_costo",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "costo",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "descripcion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "matriz_costos_pkey",
+        "indexdef": "CREATE UNIQUE INDEX matriz_costos_pkey ON public.matriz_costos USING btree (id)"
+      },
+      {
+        "indexname": "matriz_costos_tipo_consulta_tipo_visita_key",
+        "indexdef": "CREATE UNIQUE INDEX matriz_costos_tipo_consulta_tipo_visita_key ON public.matriz_costos USING btree (tipo_consulta, tipo_visita)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "notificacion_preferencias",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "user_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_evento",
+        "data_type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "canal",
+        "data_type": "text",
+        "not_null": true,
+        "default_value": "'IN_APP'::text"
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": true,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "Users manage own preferences",
+        "cmd": "ALL",
+        "using_clause": "(user_id = auth.uid())"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "idx_notif_pref_user",
+        "indexdef": "CREATE INDEX idx_notif_pref_user ON public.notificacion_preferencias USING btree (user_id)"
+      },
+      {
+        "indexname": "notificacion_preferencias_pkey",
+        "indexdef": "CREATE UNIQUE INDEX notificacion_preferencias_pkey ON public.notificacion_preferencias USING btree (id)"
+      },
+      {
+        "indexname": "notificacion_preferencias_user_id_tipo_evento_canal_key",
+        "indexdef": "CREATE UNIQUE INDEX notificacion_preferencias_user_id_tipo_evento_canal_key ON public.notificacion_preferencias USING btree (user_id, tipo_evento, canal)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "user_id",
+        "foreign_table": "users",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "pacientes",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre_completo",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "sexo",
+        "data_type": "sexo_paciente",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha_nacimiento",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "edad",
+        "data_type": "integer",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "telefono",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "email",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "direccion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "contacto_emergencia",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "tel_emergencia",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "numero_poliza",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "numero_afiliacion",
+        "data_type": "character varying(100)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "aseguranza_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "idx_pacientes_aseguranza_id",
+        "indexdef": "CREATE INDEX idx_pacientes_aseguranza_id ON public.pacientes USING btree (aseguranza_id) WHERE (aseguranza_id IS NOT NULL)"
+      },
+      {
+        "indexname": "idx_pacientes_nombre",
+        "indexdef": "CREATE INDEX idx_pacientes_nombre ON public.pacientes USING btree (nombre_completo)"
+      },
+      {
+        "indexname": "idx_pacientes_telefono",
+        "indexdef": "CREATE INDEX idx_pacientes_telefono ON public.pacientes USING btree (telefono)"
+      },
+      {
+        "indexname": "pacientes_pkey",
+        "indexdef": "CREATE UNIQUE INDEX pacientes_pkey ON public.pacientes USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "aseguranza_id",
+        "foreign_table": "aseguranzas",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "periodos_pago",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "codigo",
+        "data_type": "character varying(20)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha_desde",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "fecha_hasta",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "estado",
+        "data_type": "estado_periodo_pago",
+        "not_null": true,
+        "default_value": "'ABIERTO'::estado_periodo_pago"
+      },
+      {
+        "column_name": "cerrado_por",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "cerrado_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "notas",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "periodos_pago_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "periodos_pago_doctor_read",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'doctor'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "idx_periodos_pago_estado",
+        "indexdef": "CREATE INDEX idx_periodos_pago_estado ON public.periodos_pago USING btree (estado)"
+      },
+      {
+        "indexname": "idx_periodos_pago_fechas",
+        "indexdef": "CREATE INDEX idx_periodos_pago_fechas ON public.periodos_pago USING btree (fecha_desde, fecha_hasta)"
+      },
+      {
+        "indexname": "periodos_pago_codigo_key",
+        "indexdef": "CREATE UNIQUE INDEX periodos_pago_codigo_key ON public.periodos_pago USING btree (codigo)"
+      },
+      {
+        "indexname": "periodos_pago_pkey",
+        "indexdef": "CREATE UNIQUE INDEX periodos_pago_pkey ON public.periodos_pago USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "cerrado_por",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "proveedores",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "telefono",
+        "data_type": "character varying(20)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "email",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "direccion",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "contacto",
+        "data_type": "character varying(255)",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": false,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [],
+    "indexes": [
+      {
+        "indexname": "proveedores_pkey",
+        "indexdef": "CREATE UNIQUE INDEX proveedores_pkey ON public.proveedores USING btree (id)"
+      }
+    ],
+    "foreignKeys": []
+  },
+  {
+    "table": "tarifas_doctor",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "doctor_id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "tipo_concepto",
+        "data_type": "tipo_concepto_clinico",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "concepto_id",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "rol",
+        "data_type": "rol_doctor_concepto",
+        "not_null": true,
+        "default_value": "'PRINCIPAL'::rol_doctor_concepto"
+      },
+      {
+        "column_name": "tipo_calculo",
+        "data_type": "tipo_calculo_tarifa",
+        "not_null": true,
+        "default_value": "'FIJO'::tipo_calculo_tarifa"
+      },
+      {
+        "column_name": "valor",
+        "data_type": "numeric(10,2)",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "column_name": "moneda",
+        "data_type": "character varying(3)",
+        "not_null": true,
+        "default_value": "'PESOS'::character varying"
+      },
+      {
+        "column_name": "vigente_desde",
+        "data_type": "date",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "vigente_hasta",
+        "data_type": "date",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "creado_por",
+        "data_type": "uuid",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": "now()"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "tarifas_doctor_admin_all",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'admin'::rol_usuario))))"
+      },
+      {
+        "policyname": "tarifas_doctor_doctor_own",
+        "cmd": "ALL",
+        "using_clause": "(doctor_id IN ( SELECT doctores.id\n   FROM doctores\n  WHERE (doctores.usuario_id = auth.uid())))"
+      },
+      {
+        "policyname": "tarifas_doctor_recepcionista_read",
+        "cmd": "ALL",
+        "using_clause": "(EXISTS ( SELECT 1\n   FROM usuarios\n  WHERE ((usuarios.id = auth.uid()) AND (usuarios.rol = 'recepcionista'::rol_usuario))))"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "idx_tarifas_doctor_doctor_concepto",
+        "indexdef": "CREATE INDEX idx_tarifas_doctor_doctor_concepto ON public.tarifas_doctor USING btree (doctor_id, tipo_concepto, concepto_id)"
+      },
+      {
+        "indexname": "idx_tarifas_doctor_doctor_id",
+        "indexdef": "CREATE INDEX idx_tarifas_doctor_doctor_id ON public.tarifas_doctor USING btree (doctor_id)"
+      },
+      {
+        "indexname": "idx_tarifas_doctor_tipo_concepto",
+        "indexdef": "CREATE INDEX idx_tarifas_doctor_tipo_concepto ON public.tarifas_doctor USING btree (tipo_concepto)"
+      },
+      {
+        "indexname": "idx_tarifas_doctor_vigencia",
+        "indexdef": "CREATE INDEX idx_tarifas_doctor_vigencia ON public.tarifas_doctor USING btree (vigente_desde, vigente_hasta)"
+      },
+      {
+        "indexname": "idx_tarifas_doctor_vigente",
+        "indexdef": "CREATE UNIQUE INDEX idx_tarifas_doctor_vigente ON public.tarifas_doctor USING btree (doctor_id, tipo_concepto, concepto_id, rol) WHERE (vigente_hasta IS NULL)"
+      },
+      {
+        "indexname": "tarifas_doctor_pkey",
+        "indexdef": "CREATE UNIQUE INDEX tarifas_doctor_pkey ON public.tarifas_doctor USING btree (id)"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "column_name": "creado_por",
+        "foreign_table": "usuarios",
+        "foreign_column": "id"
+      },
+      {
+        "column_name": "doctor_id",
+        "foreign_table": "doctores",
+        "foreign_column": "id"
+      }
+    ]
+  },
+  {
+    "table": "usuarios",
+    "columns": [
+      {
+        "column_name": "id",
+        "data_type": "uuid",
+        "not_null": true,
+        "default_value": "gen_random_uuid()"
+      },
+      {
+        "column_name": "email",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "password_hash",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "nombre",
+        "data_type": "character varying(255)",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "column_name": "rol",
+        "data_type": "rol_usuario",
+        "not_null": false,
+        "default_value": "'recepcionista'::rol_usuario"
+      },
+      {
+        "column_name": "activo",
+        "data_type": "boolean",
+        "not_null": false,
+        "default_value": "true"
+      },
+      {
+        "column_name": "created_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": "now()"
+      },
+      {
+        "column_name": "avatar_url",
+        "data_type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "column_name": "preferencias",
+        "data_type": "jsonb",
+        "not_null": false,
+        "default_value": "'{}'::jsonb"
+      }
+    ],
+    "rls": true,
+    "policies": [
+      {
+        "policyname": "Users can read own profile",
+        "cmd": "SELECT",
+        "using_clause": "(auth.uid() = id)"
+      }
+    ],
+    "indexes": [
+      {
+        "indexname": "usuarios_email_key",
+        "indexdef": "CREATE UNIQUE INDEX usuarios_email_key ON public.usuarios USING btree (email)"
+      },
+      {
+        "indexname": "usuarios_pkey",
+        "indexdef": "CREATE UNIQUE INDEX usuarios_pkey ON public.usuarios USING btree (id)"
+      }
+    ],
+    "foreignKeys": []
+  }
+]
