@@ -31,6 +31,7 @@ const MIGRATION_ORDER = [
   '1800000000120-AddUsuarioIdToDoctores.ts',
   '1800000000130-SeedDoctorPilotoHonorarios.ts',
   '1800000000140-AddConstraintsAndIndices.ts',
+  '1800000000150-CreateAseguranzaServicios.ts',
 ];
 
 if (!process.env.DATABASE_URL) {
