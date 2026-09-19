@@ -133,10 +133,17 @@ export default function DoctorHonorariosPage() {
     } catch { /* silent */ }
   }
 
+  function sanitizeCSV(v: string): string {
+    if (!v) return '';
+    if (/^[=+\-@\t\r\n]/.test(v)) return `'${v.replace(/"/g, '""')}'`;
+    if (v.includes(',') || v.includes('"') || v.includes('\n')) return `"${v.replace(/"/g, '""')}"`;
+    return v;
+  }
+
   function exportCSV(data: EventoFila[], filename: string) {
     if (data.length === 0) return;
     const header = 'Fecha,Paciente,Concepto,Rol,Monto,Estado\n';
-    const rows = data.map(e => `"${e.fecha_servicio}","${e.paciente_nombre || ''}","${e.origen_tipo}","${e.rol}",${e.monto_devengado},"${e.estado}"`).join('\n');
+    const rows = data.map(e => [e.fecha_servicio, e.paciente_nombre || '', e.origen_tipo, e.rol, String(e.monto_devengado), e.estado].map(sanitizeCSV).join(',')).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click();

@@ -16,17 +16,13 @@ export async function GET(
   const supabase = getSupabaseAdmin();
 
   // RBAC: doctor solo ve sus propios honorarios
-  if (auth.user.role === 'doctor') {
-    const { data: profile } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('id', auth.user.id)
-      .maybeSingle();
+  const { data: userProfile } = await supabase
+    .from('usuarios')
+    .select('rol')
+    .eq('id', auth.user.id)
+    .maybeSingle();
 
-    if (!profile) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-    }
-
+  if (userProfile?.rol === 'doctor') {
     const { data: doctor } = await supabase
       .from('doctores')
       .select('id')

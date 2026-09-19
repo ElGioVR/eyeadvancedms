@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { z } from "zod";
+import { checkRateLimit, recordFailedAttempt, recordSuccessfulLogin } from "@/lib/rate-limit";
 
 const loginSchema = z
   .object({
@@ -8,6 +9,12 @@ const loginSchema = z
     password: z.string().min(1),
   })
   .strict();
+
+function getClientIP(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown';
+}
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -26,6 +33,16 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, password } = validation.data;
+  const clientIP = getClientIP(request);
+  const rateKey = `${clientIP}:${email.trim().toLowerCase()}`;
+
+  const rateCheck = checkRateLimit(rateKey);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: `Demasiados intentos. Intenta de nuevo en ${rateCheck.retryAfter} segundos.` },
+      { status: 429 },
+    );
+  }
 
   let response = NextResponse.json({ success: true });
 
@@ -78,11 +95,20 @@ export async function POST(request: NextRequest) {
       code: error.code,
     });
 
+    const result = recordFailedAttempt(rateKey);
+    if (result.blocked) {
+      return NextResponse.json(
+        { error: `Cuenta bloqueada temporalmente. Intenta de nuevo en ${result.retryAfter} segundos.` },
+        { status: 429 },
+      );
+    }
+
     return NextResponse.json(
       { error: "Credenciales inválidas" },
       { status: 401 },
     );
   }
 
+  recordSuccessfulLogin(rateKey);
   return response;
 }

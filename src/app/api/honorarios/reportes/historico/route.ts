@@ -19,8 +19,14 @@ export async function GET(request: Request) {
   }
 
   // RBAC: doctor solo ve su propio histórico
-  if (auth.user.role === 'doctor') {
-    const supabase = getSupabaseAdmin();
+  const supabase = getSupabaseAdmin();
+  const { data: userProfile } = await supabase
+    .from('usuarios')
+    .select('rol')
+    .eq('id', auth.user.id)
+    .maybeSingle();
+
+  if (userProfile?.rol === 'doctor') {
     const { data: doctor } = await supabase
       .from('doctores')
       .select('id')

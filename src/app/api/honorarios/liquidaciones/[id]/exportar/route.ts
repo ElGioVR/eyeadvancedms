@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 
+function sanitizeCSVCell(value: string): string {
+  if (!value) return '';
+  const dangerous = /^[=+\-@\t\r\n]/;
+  if (dangerous.test(value)) {
+    return `'${value.replace(/"/g, '""')}`;
+  }
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -116,7 +128,7 @@ export async function GET(
       }
     }
 
-    const csv = rows.map((r) => r.join(',')).join('\n');
+    const csv = rows.map((r) => r.map(sanitizeCSVCell).join(',')).join('\n');
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
