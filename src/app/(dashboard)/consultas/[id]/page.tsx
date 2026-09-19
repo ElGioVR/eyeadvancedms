@@ -36,16 +36,24 @@ interface ConsultaDetalle {
   tipo_consulta: string | null;
   tipo_visita: string | null;
   diagnostico: string | null;
-  estudios: string | null;
-  estudios_detalle: EstudioDetalle[];
+  estudio_1: string | null;
+  estudio_2: string | null;
+  estudio_3: string | null;
+  est1_doctor: string | null;
+  est2_doctor: string | null;
+  est3_doctor: string | null;
   procedimiento: string | null;
-  procedimiento_doctor: string | null;
+  proc_doctor: string | null;
   notas: string | null;
   estatus: string;
   estatus_pago: string;
   costo_total: number;
   monto_pagado: number;
   metodo_pago: string | null;
+  paciente_sexo: string | null;
+  paciente_telefono: string | null;
+  paciente_fecha_nacimiento: string | null;
+  paciente_email: string | null;
   created_at: string;
   pacientes?: PacienteInfo | null;
 }
@@ -87,6 +95,24 @@ const eventoLabels: Record<string, string> = {
   REAGENDADO: 'Reagendado',
   PAGADO: 'Pago registrado',
   FINALIZADO: 'Consulta finalizada',
+};
+
+const estatusLabels: Record<string, string> = {
+  BORRADOR: 'Borrador',
+  PROCESADA: 'Procesada',
+  PENDIENTE_ESTUDIO: 'Pendiente Estudio',
+  PENDIENTE_CIRUGIA: 'Pendiente Cirugía',
+  FINALIZADA: 'Finalizada',
+};
+
+const estatusPagoLabels: Record<string, string> = {
+  PENDIENTE_PAGO: 'Pendiente de Pago',
+  PAGADO: 'Pagado',
+};
+
+const tipoVisitaLabels: Record<string, string> = {
+  PRIMERA_VEZ: 'Primera Vez',
+  SUBSECUENTE: 'Subsecuente',
 };
 
 function Field({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
@@ -165,7 +191,7 @@ export default function ConsultaDetailPage() {
     <div className="print-page">
       <PageHeader
         title={`Consulta ${consulta.folio || consulta.id.slice(0, 8)}`}
-        subtitle={`${consulta.paciente} — ${consulta.fecha}`}
+        subtitle={`${consulta.paciente || 'Sin paciente'} — ${consulta.fecha}`}
         backLink={{ href: '/consultas', label: 'Consultas' }}
         action={
           <div className="flex items-center gap-3">
@@ -201,7 +227,7 @@ export default function ConsultaDetailPage() {
       </div>
 
       {/* Patient summary */}
-      {consulta.pacientes && (
+      {(consulta.paciente || consulta.paciente_sexo) && (
         <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6">
           <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
             <User className="h-4 w-4 text-primary-600" /> Resumen del Paciente
@@ -209,35 +235,35 @@ export default function ConsultaDetailPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nombre</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.nombre_completo}</p>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente || '—'}</p>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Edad</span>
               <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">
-                {consulta.pacientes.fecha_nacimiento
-                  ? `${Math.floor((Date.now() - new Date(consulta.pacientes.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} años`
+                {consulta.paciente_fecha_nacimiento
+                  ? `${Math.floor((Date.now() - new Date(consulta.paciente_fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} años`
                   : '—'}
               </p>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Sexo</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.sexo === 'H' ? 'Masculino' : consulta.pacientes.sexo === 'M' ? 'Femenino' : '—'}</p>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_sexo === 'H' ? 'Masculino' : consulta.paciente_sexo === 'M' ? 'Femenino' : consulta.paciente_sexo || '—'}</p>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Teléfono</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.telefono || '—'}</p>
+              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_telefono || '—'}</p>
             </div>
           </div>
           {showPatientDetails && (
             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#2F3336] grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Aseguradora</span>
-                <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.aseguradora || '—'}</p>
+                <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData?.aseguradora?.nombre || '—'}</p>
               </div>
-              {consulta.pacientes.email && (
+              {consulta.paciente_email && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Email</span>
-                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.pacientes.email}</p>
+                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_email}</p>
                 </div>
               )}
             </div>
@@ -260,12 +286,12 @@ export default function ConsultaDetailPage() {
               <FileText className="h-4 w-4 text-primary-600" /> Datos de Consulta
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <Field label="Doctor" value={consulta.doctor} />
-              <Field label="Tipo" value={consulta.tipo_consulta} />
-              <Field label="Fecha y Hora" value={`${consulta.fecha} ${consulta.hora_inicio}`} />
-              <Field label="Hora Fin" value={consulta.hora_fin} />
-              <Field label="Tipo de Visita" value={consulta.tipo_visita} />
-              <Field label="Método de Pago" value={consulta.metodo_pago} />
+              <Field label="Doctor" value={consulta.doctor || '—'} />
+              <Field label="Tipo" value={consulta.tipo_consulta || '—'} />
+              <Field label="Fecha y Hora" value={consulta.fecha && consulta.hora_inicio ? `${consulta.fecha} ${consulta.hora_inicio.slice(0, 5)}` : '—'} />
+              <Field label="Hora Fin" value={consulta.hora_fin ? consulta.hora_fin.slice(0, 5) : '—'} />
+              <Field label="Tipo de Visita" value={tipoVisitaLabels[consulta.tipo_visita || ''] || consulta.tipo_visita || '—'} />
+              <Field label="Método de Pago" value={consulta.metodo_pago || '—'} />
               <Field label="Diagnóstico" value={consulta.diagnostico} full />
             </div>
           </div>
@@ -276,30 +302,38 @@ export default function ConsultaDetailPage() {
               <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
             </h3>
             <div className="space-y-3 text-sm">
-              {consulta.estudios_detalle && consulta.estudios_detalle.length > 0 ? (
+              {(consulta.estudio_1 || consulta.estudio_2 || consulta.estudio_3) && (
                 <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-3">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios</span>
                   <div className="mt-1.5 space-y-1.5">
-                    {consulta.estudios_detalle.map((e, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{e.nombre}</span>
-                        {e.doctor && (
-                          <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {e.doctor}</span>
-                        )}
+                    {consulta.estudio_1 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_1}</span>
+                        {consulta.est1_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est1_doctor}</span>}
                       </div>
-                    ))}
+                    )}
+                    {consulta.estudio_2 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_2}</span>
+                        {consulta.est2_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est2_doctor}</span>}
+                      </div>
+                    )}
+                    {consulta.estudio_3 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_3}</span>
+                        {consulta.est3_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est3_doctor}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <Field label="Estudios" value={consulta.estudios} full />
               )}
               {consulta.procedimiento ? (
                 <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-3">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimiento</span>
                   <div className="mt-1.5 flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.procedimiento}</span>
-                    {consulta.procedimiento_doctor && (
-                      <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.procedimiento_doctor}</span>
+                    {consulta.proc_doctor && (
+                      <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.proc_doctor}</span>
                     )}
                   </div>
                 </div>

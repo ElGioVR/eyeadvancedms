@@ -102,7 +102,20 @@ export async function GET(
   ]);
 
   return NextResponse.json({
-    consulta,
+    consulta: {
+      ...consulta,
+      paciente: (consulta.pacientes as any)?.nombre_completo || null,
+      iniciales: ((consulta.pacientes as any)?.nombre_completo || '?').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
+      doctor: (consulta.doctores as any)?.nombre_completo || null,
+      est1_doctor: (consulta as any).est1_doc?.nombre_completo || null,
+      est2_doctor: (consulta as any).est2_doc?.nombre_completo || null,
+      est3_doctor: (consulta as any).est3_doc?.nombre_completo || null,
+      proc_doctor: (consulta as any).proc_doc?.nombre_completo || null,
+      paciente_sexo: (consulta.pacientes as any)?.sexo || null,
+      paciente_telefono: (consulta.pacientes as any)?.telefono || null,
+      paciente_fecha_nacimiento: (consulta.pacientes as any)?.fecha_nacimiento || null,
+      paciente_email: null,
+    },
     historial: historialResult.data ?? [],
     conceptos: conceptosResult.data ?? [],
     aseguranza: aseguranzaResult.data ?? null,
