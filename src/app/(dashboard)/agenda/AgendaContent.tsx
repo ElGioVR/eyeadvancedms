@@ -470,17 +470,20 @@ export default function AgendaContent({ userRol, doctores, userId }: Props) {
           </div>
 
           {/* Desktop View Container with transition */}
-          <div className="hidden lg:block relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 flex flex-col">
+          <div className="hidden lg:block relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col">
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
-              <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
+              <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0 h-full">
                 <div className="grid grid-cols-7 border-b border-gray-200 dark:border-[#2F3336]">
                   {DIAS_CORTOS.map(d => (
                     <div key={d} className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] py-2.5 border-r border-gray-100 dark:border-[#2F3336] last:border-r-0">{d}</div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 divide-x divide-gray-100 dark:divide-[#2F3336] flex-1 min-h-0">
+                <div className={cn(
+                  'grid grid-cols-7 divide-x divide-gray-100 dark:divide-[#2F3336] flex-1 min-h-0',
+                  `grid-rows-[repeat(${Math.ceil((firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth()) + daysInMonth(currentDate.getFullYear(), currentDate.getMonth())) / 7)},minmax(0,1fr))]`
+                )}>
                   {Array.from({ length: Math.ceil((firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth()) + daysInMonth(currentDate.getFullYear(), currentDate.getMonth())) / 7) * 7 }).map((_, i) => {
                     const fd = firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
                     const dim = daysInMonth(currentDate.getFullYear(), currentDate.getMonth());
