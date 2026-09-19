@@ -311,9 +311,10 @@ export async function POST(request: Request) {
 
   // Batch insert cirugias
   if (cirugiaBatch.length > 0) {
-    const { error } = await supabase
+    const { data: insertedCirugias, error } = await supabase
       .from('agenda_cirugias')
-      .insert(cirugiaBatch);
+      .insert(cirugiaBatch)
+      .select('id, doctor_id');
     if (error) {
       erroresInsercion += cirugiaBatch.length;
       for (const fila of cirugiaBatch) {
@@ -324,6 +325,14 @@ export async function POST(request: Request) {
       for (const fila of cirugiaBatch) {
         const key = `${(fila.nombre_paciente as string || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
         existingSet.add(key);
+      }
+
+      const doctorRows = (insertedCirugias || [])
+        .filter((r) => r.doctor_id)
+        .map((r) => ({ cirugia_id: r.id, doctor_id: r.doctor_id, rol: 'CIRUJANO_PRINCIPAL', porcentaje_participacion: 100 }));
+
+      if (doctorRows.length > 0) {
+        await supabase.from('agenda_cirugia_doctores').insert(doctorRows);
       }
     }
   }
