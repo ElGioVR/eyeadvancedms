@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 
@@ -32,17 +32,19 @@ interface Props {
   cirugiasPorFecha: Record<string, AgendaCirugia[]>;
   onDateSelect: (date: string) => void;
   onAdd?: (date: string) => void;
+  onSelect?: (cirugia: AgendaCirugia) => void;
   todayStr: string;
 }
 
 type ViewMode = 'month' | 'day';
 
-export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, todayStr }: Props) {
+export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
   const [slideDir, setSlideDir] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedCirugia, setSelectedCirugia] = useState<AgendaCirugia | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
@@ -105,6 +107,15 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
     onDateSelect(ds);
   }, [year, month, onDateSelect]);
 
+  const handleSelectCirugia = useCallback((cirugia: AgendaCirugia) => {
+    setSelectedCirugia(cirugia);
+    onSelect?.(cirugia);
+  }, [onSelect]);
+
+  const closeDetail = useCallback(() => {
+    setSelectedCirugia(null);
+  }, []);
+
   const goToday = useCallback(() => {
     setCurrentDate(new Date());
     setSelectedDay(todayStr);
@@ -127,6 +138,15 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
 
   const selectedDayDate = new Date(selectedDay + 'T00:00:00');
   const dayName = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][selectedDayDate.getDay()];
+
+  useEffect(() => {
+    if (selectedCirugia) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [selectedCirugia]);
 
   return (
     <div className="flex flex-col min-h-0">
@@ -292,10 +312,11 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
           ) : (
             <div className="space-y-2">
               {dayEvents.map((c) => (
-                <div
+                <button
                   key={c.id}
+                  onClick={() => handleSelectCirugia(c)}
                   className={cn(
-                    'rounded-xl border p-3.5 transition-all',
+                    'w-full text-left rounded-xl border p-3.5 transition-all active:scale-[0.98]',
                     estadoBg[c.estado] || 'bg-gray-50 border-gray-200'
                   )}
                 >
@@ -316,10 +337,148 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Detail Slide-up Panel */}
+      {selectedCirugia && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeDetail} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] bg-white dark:bg-[#16181C] rounded-t-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-[#3E4144]" />
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-[#2F3336]">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn(
+                  'flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white shrink-0',
+                  selectedCirugia.estado === 'completada' ? 'bg-emerald-500' :
+                  selectedCirugia.estado === 'cancelada' ? 'bg-red-500' :
+                  selectedCirugia.estado === 'aplazada' ? 'bg-amber-500' : 'bg-primary-600'
+                )}>
+                  {selectedCirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{selectedCirugia.nombre_paciente}</h3>
+                  <span className={cn(
+                    'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
+                    selectedCirugia.estado === 'agendada' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                    selectedCirugia.estado === 'completada' && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                    selectedCirugia.estado === 'cancelada' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+                    selectedCirugia.estado === 'aplazada' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                    selectedCirugia.estado === 'reagendada' && 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                  )}>
+                    <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[selectedCirugia.estado])} />
+                    {selectedCirugia.estado}
+                  </span>
+                </div>
+              </div>
+              <button onClick={closeDetail} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
+                <X className="h-5 w-5 text-gray-500 dark:text-[#71767B]" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-[#202327]">
+                  <Clock className="h-4 w-4 text-primary-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Hora</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.hora || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-[#202327]">
+                  <Eye className="h-4 w-4 text-sky-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Ojo</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.ojo || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-[#202327]">
+                  <Stethoscope className="h-4 w-4 text-violet-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Tiempo</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.tiempo_estimado || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-[#202327]">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Estancia</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.tiempo_estancia || '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 dark:border-[#2F3336] p-4">
+                <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">
+                  <Stethoscope className="h-3.5 w-3.5" /> Procedimiento
+                </h4>
+                <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.procedimiento || '—'}</p>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 dark:border-[#2F3336] p-4">
+                <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">
+                  <FileText className="h-3.5 w-3.5" /> Diagnóstico
+                </h4>
+                <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.diagnostico || '—'}</p>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 dark:border-[#2F3336] p-4">
+                <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">
+                  <Eye className="h-3.5 w-3.5" /> LIO Asignado
+                </h4>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.lio || 'Sin LIO asignado'}</p>
+                  {selectedCirugia.marca_lio && (
+                    <p className="text-xs text-gray-500 dark:text-[#71767B]">Marca: {selectedCirugia.marca_lio}</p>
+                  )}
+                </div>
+              </div>
+
+              {(selectedCirugia.expediente || selectedCirugia.procedencia || selectedCirugia.jornada) && (
+                <div className="rounded-xl border border-gray-100 dark:border-[#2F3336] p-4">
+                  <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">
+                    <FileText className="h-3.5 w-3.5" /> Información Adicional
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedCirugia.expediente && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-[#71767B]">Expediente</span>
+                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.expediente}</span>
+                      </div>
+                    )}
+                    {selectedCirugia.jornada && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-[#71767B]">Jornada</span>
+                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.jornada}</span>
+                      </div>
+                    )}
+                    {selectedCirugia.procedencia && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-[#71767B]">Procedencia</span>
+                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedCirugia.procedencia}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedCirugia.notas && (
+                <div className="rounded-xl border border-gray-100 dark:border-[#2F3336] p-4">
+                  <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-[#71767B] mb-2">
+                    <FileText className="h-3.5 w-3.5" /> Notas
+                  </h4>
+                  <p className="text-sm text-gray-700 dark:text-[#E7E9EA] whitespace-pre-wrap">{selectedCirugia.notas}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

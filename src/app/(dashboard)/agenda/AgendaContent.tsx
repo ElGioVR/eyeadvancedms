@@ -465,6 +465,7 @@ export default function AgendaContent({ userRol, doctores, userId }: Props) {
               cirugiasPorFecha={cirugiasPorFecha}
               onDateSelect={(date) => { setSelectedDate(date); }}
               onAdd={(date) => { setQuickAddDate(date); setShowForm(true); }}
+              onSelect={(cirugia) => { window.location.href = `/agenda/${cirugia.id}`; }}
               todayStr={todayStr}
             />
           </div>
