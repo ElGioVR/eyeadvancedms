@@ -10,6 +10,7 @@ import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 import { useUser } from '@/hooks/useUser';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
+import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
 interface EstudioDetalle {
   nombre: string;
@@ -793,14 +794,35 @@ export default function ConsultaDetailPage() {
                         {(() => {
                           const payload = evento.payload || {};
                           const estudioAgendado = payload.accion === 'estudio_agendado';
+                          const esAplazamiento = payload.accion === 'aplazamiento';
+                          const motivo = typeof payload.motivo === 'string' && payload.motivo
+                            ? payload.motivo
+                            : null;
+                          const titulo = estudioAgendado
+                            ? 'Estudio agendado'
+                            : esAplazamiento
+                              ? 'Aplazado'
+                              : eventoLabels[evento.tipo_evento] || evento.tipo_evento;
+                          const fechaNueva = payload.fecha_nueva ? String(payload.fecha_nueva) : null;
+                          const horaNueva = payload.hora_nueva ? String(payload.hora_nueva).slice(0, 5) : null;
                           return (
                             <>
                               <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
-                                {estudioAgendado ? 'Estudio agendado' : eventoLabels[evento.tipo_evento] || evento.tipo_evento}
+                                {titulo}
                               </p>
                               {estudioAgendado && (
                                 <p className="text-xs text-gray-500 dark:text-[#71767B]">
                                   {String(payload.estudio_nombre || 'Estudio')} · Fecha: {String(payload.fecha_estudio || '—')} {String(payload.hora_estudio || '')} · Asignado a: {String(payload.asignado_a || '—')}
+                                </p>
+                              )}
+                              {fechaNueva && horaNueva && (
+                                <p className="text-xs text-gray-500 dark:text-[#71767B]">
+                                  Nueva cita: {fechaNueva} {horaNueva}
+                                </p>
+                              )}
+                              {motivo && (
+                                <p className="mt-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-400">
+                                  Motivo: {motivo}
                                 </p>
                               )}
                             </>
@@ -839,6 +861,17 @@ export default function ConsultaDetailPage() {
           }}
         />
       )}
+
+      <ConsultaAccionesFab
+        consultaId={consulta.id}
+        fecha={consulta.fecha}
+        horaInicio={consulta.hora_inicio}
+        visible={!editing && consulta.estatus !== 'FINALIZADA'}
+        onDone={() => {
+          fetchConsulta();
+          fetchHistorial();
+        }}
+      />
     </div>
   );
 }
