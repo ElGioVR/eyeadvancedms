@@ -186,6 +186,11 @@ export default function ConsultaDetailPage() {
   } | null>(null);
   const [edadPaciente, setEdadPaciente] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editCosto, setEditCosto] = useState('');
+  const [editNotas, setEditNotas] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchConsulta = useCallback(async () => {
     try {
@@ -283,6 +288,53 @@ export default function ConsultaDetailPage() {
     }
   }
 
+  function startEditing() {
+    setEditCosto(String(consulta?.costo_total ?? 0));
+    setEditNotas(consulta?.notas || '');
+    setEditError(null);
+    setEditing(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!consulta) return;
+    const body: Record<string, unknown> = {};
+    if ((consulta.notas || '') !== editNotas) body.notas = editNotas;
+    if (consulta.estatus_pago !== 'PAGADO') {
+      const costo = Number(editCosto);
+      if (!Number.isFinite(costo) || costo < 0) {
+        setEditError('Costo total inválido');
+        return;
+      }
+      if (costo !== consulta.costo_total) body.costo_total = costo;
+    }
+    if (Object.keys(body).length === 0) {
+      setEditing(false);
+      setEditError(null);
+      return;
+    }
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/consultas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Error al guardar');
+      }
+      const updated = await res.json();
+      setConsulta((current) => (current ? { ...current, ...updated } : current));
+      setEditing(false);
+      await fetchHistorial();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   if (loading) {
     return <ConsultaDetailSkeleton />;
   }
@@ -320,13 +372,32 @@ export default function ConsultaDetailPage() {
                 <Scissors className="h-4 w-4" /> Crear cirugía
               </button>
             )}
-            {user?.rol === 'admin' && (
+            {user?.rol === 'admin' && !editing && (
               <button
-                onClick={() => router.push(`/consultas/${id}/editar`)}
+                onClick={startEditing}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition-colors no-print"
               >
                 <Edit3 className="h-4 w-4" /> Editar
               </button>
+            )}
+            {user?.rol === 'admin' && editing && (
+              <>
+                <button
+                  onClick={() => { setEditing(false); setEditError(null); }}
+                  disabled={savingEdit}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50 no-print"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 no-print"
+                >
+                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {savingEdit ? 'Guardando...' : 'Guardar'}
+                </button>
+              </>
             )}
           </div>
         }
@@ -556,7 +627,20 @@ export default function ConsultaDetailPage() {
               ) : (
                 <Field label="Procedimientos" value="—" full />
               )}
-              <Field label="Notas" value={consulta.notas} full />
+              {editing ? (
+                <div className="col-span-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Notas</span>
+                  <textarea
+                    value={editNotas}
+                    onChange={(e) => setEditNotas(e.target.value)}
+                    rows={4}
+                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                  />
+                  {editError && <p className="mt-1 text-xs font-bold text-red-600">{editError}</p>}
+                </div>
+              ) : (
+                <Field label="Notas" value={consulta.notas} full />
+              )}
             </div>
           </div>
         </div>
@@ -569,10 +653,27 @@ export default function ConsultaDetailPage() {
               <CreditCard className="h-4 w-4 text-emerald-600" /> Pago
             </h3>
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-gray-500 dark:text-[#71767B]">Costo total</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.costo_total.toLocaleString('es-MX')}</span>
+                {editing ? (
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editCosto}
+                    onChange={(e) => setEditCosto(e.target.value)}
+                    disabled={consulta.estatus_pago === 'PAGADO'}
+                    className="w-28 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-2 py-1 text-right text-sm font-bold text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none disabled:opacity-50"
+                  />
+                ) : (
+                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.costo_total.toLocaleString('es-MX')}</span>
+                )}
               </div>
+              {consulta.estatus_pago === 'PAGADO' && (
+                <p className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-400">
+                  Esta consulta ya fue pagada, no puede ser editado el monto.
+                </p>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-[#71767B]">Monto pagado</span>
                 <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.monto_pagado.toLocaleString('es-MX')}</span>
