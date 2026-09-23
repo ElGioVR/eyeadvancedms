@@ -815,9 +815,9 @@ export default function ConsultaDetailPage() {
                                   {String(payload.estudio_nombre || 'Estudio')} · Fecha: {String(payload.fecha_estudio || '—')} {String(payload.hora_estudio || '')} · Asignado a: {String(payload.asignado_a || '—')}
                                 </p>
                               )}
-                              {fechaNueva && horaNueva && (
+                              {(fechaNueva || horaNueva) && (
                                 <p className="text-xs text-gray-500 dark:text-[#71767B]">
-                                  Nueva cita: {fechaNueva} {horaNueva}
+                                  Nueva cita: {fechaNueva || String(payload.fecha_anterior || '')} {horaNueva || ''}
                                 </p>
                               )}
                               {motivo && (

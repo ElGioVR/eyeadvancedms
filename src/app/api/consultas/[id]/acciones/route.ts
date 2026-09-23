@@ -59,6 +59,42 @@ export async function POST(
   }
 
   if (data.accion === 'aplazar') {
+    if (!data.hora_inicio) {
+      return NextResponse.json({ error: 'Selecciona la nueva hora del día' }, { status: 400 });
+    }
+
+    const nuevaHora = data.hora_inicio;
+    const duracionMin = existing.hora_fin
+      ? Math.max(toMin(existing.hora_fin) - toMin(existing.hora_inicio), 15)
+      : 60;
+    const [h, m] = nuevaHora.split(':');
+    const finTotal = parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10) + duracionMin;
+    const nuevaHoraFin = `${String(Math.floor(finTotal / 60) % 24).padStart(2, '0')}:${String(finTotal % 60).padStart(2, '0')}:00`;
+
+    if (existing.doctor_id) {
+      const conflictos = await detectarConflictosAgenda({
+        fecha: existing.fecha,
+        hora: nuevaHora,
+        duracion_min: duracionMin,
+        medicos: [existing.doctor_id],
+      });
+      const relevantes = conflictos.filter((c) => c.entidad_id !== id);
+      if (relevantes.length > 0) {
+        return NextResponse.json(
+          { error: 'Conflicto de agenda', conflictos: relevantes },
+          { status: 409 }
+        );
+      }
+    }
+
+    const { error: updError } = await supabase
+      .from('consultas')
+      .update({ hora_inicio: nuevaHora, hora_fin: nuevaHoraFin })
+      .eq('id', id);
+    if (updError) {
+      return NextResponse.json({ error: 'Error al aplazar la consulta' }, { status: 500 });
+    }
+
     const { error } = await supabase.from('consulta_historial').insert({
       consulta_id: id,
       tipo_evento: 'REAGENDADO',
@@ -68,12 +104,21 @@ export async function POST(
         motivo: data.motivo,
         fecha_anterior: existing.fecha,
         hora_anterior: existing.hora_inicio,
+        fecha_nueva: existing.fecha,
+        hora_nueva: nuevaHora,
+        hora_fin_nueva: nuevaHoraFin,
       },
     });
     if (error) {
       return NextResponse.json({ error: 'Error al registrar el aplazamiento' }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, accion: 'aplazar' });
+    return NextResponse.json({
+      ok: true,
+      accion: 'aplazar',
+      fecha: existing.fecha,
+      hora_inicio: nuevaHora,
+      hora_fin: nuevaHoraFin,
+    });
   }
 
   if (data.accion === 'cancelar') {

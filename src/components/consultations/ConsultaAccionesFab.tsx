@@ -75,12 +75,19 @@ export default function ConsultaAccionesFab({
       setError('Selecciona fecha y hora nueva');
       return;
     }
+    if (accion === 'aplazar' && !nuevaHora) {
+      setError('Selecciona la nueva hora del día');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const payload: Record<string, unknown> = { accion, motivo: motivoLimpio };
       if (accion === 'reagendar') {
         payload.fecha = nuevaFecha;
+        payload.hora_inicio = nuevaHora;
+      }
+      if (accion === 'aplazar') {
         payload.hora_inicio = nuevaHora;
       }
       const res = await fetch(`/api/consultas/${consultaId}/acciones`, {
@@ -159,11 +166,28 @@ export default function ConsultaAccionesFab({
               </div>
             )}
 
+            {accion === 'aplazar' && (
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+                  Nueva hora (mismo día) <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="time"
+                  value={nuevaHora}
+                  onChange={(e) => setNuevaHora(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                />
+              </label>
+            )}
+
             {(accion === 'aplazar' || accion === 'reagendar') && (
               <div className="flex items-start gap-2 rounded-lg bg-gray-50 dark:bg-[#1D1F23] px-3 py-2 text-xs text-gray-600 dark:text-[#71767B]">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   Actual: {fecha} {horaInicio.slice(0, 5)}
+                  {accion === 'aplazar' && nuevaHora && nuevaHora !== horaInicio.slice(0, 5) && (
+                    <> → {fecha} {nuevaHora}</>
+                  )}
                 </span>
               </div>
             )}
