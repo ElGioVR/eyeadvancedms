@@ -23,7 +23,7 @@ import type { AgendaCirugia, AgendaCirugiaEstado, AgendaCirugiaImportRow } from 
 interface Doctor { id: string; nombre_completo: string; usuario_id?: string | null; }
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
-const HOUR_START = 5;
+const HOUR_START = 9;
 const HOUR_END = 22;
 const HOUR_HEIGHT = 64;
 
@@ -983,8 +983,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     {/* Hour Labels */}
                     <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-0" style={{ height: HOUR_HEIGHT }}>
-                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none -mt-[5px]">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -1105,8 +1105,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     {/* Hour Labels */}
                     <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-0" style={{ height: HOUR_HEIGHT }}>
-                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none -mt-[5px]">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
