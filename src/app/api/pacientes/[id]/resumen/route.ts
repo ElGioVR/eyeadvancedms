@@ -46,6 +46,7 @@ export async function GET(
       edad: paciente.edad,
       telefono: paciente.telefono,
       email: paciente.email,
+      aseguranza_id: paciente.aseguranza_id || null,
       numero_poliza: paciente.numero_poliza,
       numero_afiliacion: paciente.numero_afiliacion,
       created_at: paciente.created_at,

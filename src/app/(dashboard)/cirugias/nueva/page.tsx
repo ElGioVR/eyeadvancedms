@@ -168,14 +168,14 @@ function NuevaCirugiaContent() {
     setPacienteSeleccionado(paciente);
     setQueryPaciente(paciente.nombre_completo);
     setMostrarPacientes(false);
+    if (paciente.aseguranza_id) setOrigenId(paciente.aseguranza_id);
     // Cargar resumen del paciente (expediente, última consulta, previas)
     fetch(`/api/pacientes/${paciente.id}/resumen`)
       .then((r) => (r.ok ? r.json() : null))
       .then((resumen) => {
         setResumenPaciente(resumen);
-        if (resumen?.paciente?.aseguranza_id) {
-          setOrigenId(resumen.paciente.aseguranza_id);
-        }
+        const aseguranzaId = resumen?.paciente?.aseguranza_id || resumen?.aseguranza?.id || paciente.aseguranza_id;
+        if (aseguranzaId) setOrigenId(aseguranzaId);
       })
       .catch(() => {});
   }, []);
@@ -363,9 +363,19 @@ function NuevaCirugiaContent() {
     setError(null);
 
     try {
+      const origenFinal = origenId
+        || pacienteSeleccionado!.aseguranza_id
+        || resumenPaciente?.paciente?.aseguranza_id
+        || resumenPaciente?.aseguranza?.id
+        || null;
+      if (!origenFinal) {
+        setError('Debe seleccionar un origen / aseguradora');
+        setGuardando(false);
+        return;
+      }
       const body = {
         paciente_id: pacienteSeleccionado!.id,
-        origen_id: origenId || resumenPaciente?.paciente?.aseguranza_id || null,
+        origen_id: origenFinal,
         servicio_id: servicioId,
         fecha,
         hora,
