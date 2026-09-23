@@ -1450,6 +1450,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
   cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
   onEdit: () => void; onClose: () => void; onRefetch: () => void;
 }) {
+  const router = useRouter();
   const [updating, setUpdating] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState(position);
@@ -1594,30 +1595,37 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
       </div>
 
       {/* Status + Actions */}
-      <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-[#2F3336] flex items-center gap-2">
-        <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-          <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
-          {estadoLabels[cirugia.estado]}
-        </span>
-        <div className="flex-1" />
-        {userRol !== 'doctor' && cirugia.estado === 'agendada' && (
-          <>
-            <button onClick={() => updateEstado('completada')} disabled={updating}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
-              Completar
+      <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-[#2F3336] space-y-2">
+        <div className="flex items-center gap-2">
+          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
+            {estadoLabels[cirugia.estado]}
+          </span>
+          <div className="flex-1" />
+          {userRol !== 'doctor' && cirugia.estado === 'agendada' && (
+            <>
+              <button onClick={() => updateEstado('completada')} disabled={updating}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
+                Completar
+              </button>
+              <button onClick={() => updateEstado('cancelada')} disabled={updating}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+            </>
+          )}
+          {userRol !== 'doctor' && (
+            <button onClick={onEdit}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+              Editar
             </button>
-            <button onClick={() => updateEstado('cancelada')} disabled={updating}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
-              Cancelar
-            </button>
-          </>
-        )}
-        {userRol !== 'doctor' && (
-          <button onClick={onEdit}
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-            Editar
-          </button>
-        )}
+          )}
+        </div>
+        <button
+          onClick={() => { onClose(); router.push(`/cirugias/${cirugia.id}`); }}
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors">
+          Ver detalle completo
+        </button>
       </div>
     </div>
   );
