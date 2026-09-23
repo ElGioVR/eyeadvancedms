@@ -95,6 +95,9 @@ export interface ReporteDoctorFila {
   diagnostico: string | null;
   procedimiento: string | null;
   aseguranza: string | null;
+  servicio_nombre: string | null;
+  precio_servicio: number;
+  porcentaje_cobertura: number | null;
   metodo_pago: string | null;
   moneda: string;
   monto_cobrado: number;

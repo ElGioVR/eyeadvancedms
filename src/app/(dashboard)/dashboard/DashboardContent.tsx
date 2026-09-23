@@ -43,9 +43,7 @@ const formatMoneyFull = (value: number): string =>
 export default function DashboardContent({ data, userNombre, userIniciales, userAvatarUrl, userRol }: DashboardContentProps) {
   const router = useRouter();
   const firstName = userNombre.split(' ')[0] || 'Usuario';
-  const now = new Date();
-  const tijuanaHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/Tijuana' })).getHours();
-  const greeting = tijuanaHour < 12 ? 'Buenos días' : tijuanaHour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const [greeting, setGreeting] = useState('Buenos días');
   const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
   const [chartData, setChartData] = useState<{
     consultasPorEstatus: Record<string, number>;
@@ -58,6 +56,11 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
     pendiente: number;
     pagado: number;
   } | null>(null);
+
+  useEffect(() => {
+    const tijuanaHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Tijuana' })).getHours();
+    setGreeting(tijuanaHour < 12 ? 'Buenos días' : tijuanaHour < 19 ? 'Buenas tardes' : 'Buenas noches');
+  }, []);
 
   useEffect(() => {
     fetch('/api/dashboard/charts')
@@ -233,7 +236,7 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
                 {data.citas.length}
               </span>
             </div>
-            <Link href="/consultas" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-500 transition-colors hover:text-primary-700">
+            <Link href="/agenda" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-500 transition-colors hover:text-primary-700">
               Ver agenda completa
               <ArrowRight className="h-4 w-4" />
             </Link>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus,
   Eye,
@@ -46,10 +46,9 @@ function getAvatarColor(id: string): string {
   return avatarColors[hash % avatarColors.length];
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null, now: Date): string {
   if (!dateStr) return 'Nunca';
   const d = new Date(dateStr);
-  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return 'Ahora mismo';
@@ -71,6 +70,10 @@ export default function UsuariosPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setNow(new Date()); setMounted(true); }, []);
 
   // Form state
   const [formNombre, setFormNombre] = useState('');
@@ -288,7 +291,7 @@ export default function UsuariosPage() {
                           {user.activo ? 'ACTIVO' : 'INACTIVO'}
                         </button>
                       </td>
-                      <td className="hidden md:table-cell px-6 py-4 text-sm text-gray-500 dark:text-[#71767B]">{formatDate(user.last_sign_in_at)}</td>
+                      <td className="hidden md:table-cell px-6 py-4 text-sm text-gray-500 dark:text-[#71767B]">{mounted && now ? formatDate(user.last_sign_in_at, now) : '...'}</td>
                       <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEditUser(user)} className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors">Editar</button>

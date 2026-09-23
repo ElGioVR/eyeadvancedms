@@ -30,6 +30,23 @@ const errorTranslations: Record<string, string> = {
   'insert or update on table "agenda_cirugias" violates foreign key constraint "agenda_cirugias_paciente_id_fkey"': 'El paciente seleccionado no existe',
   'insert or update on table "agenda_cirugias" violates foreign key constraint "agenda_cirugias_doctor_id_fkey"': 'El doctor seleccionado no existe',
   'invalid input value for enum agenda_cirugia_estado': 'Estado de cirugía no válido',
+  'El paciente es obligatorio': 'El paciente es obligatorio',
+  'El origen es obligatorio': 'El origen es obligatorio',
+  'El servicio es obligatorio': 'El servicio es obligatorio',
+  'La fecha y hora son obligatorias': 'La fecha y hora son obligatorias',
+  'La duración estimada debe ser mayor a 0 minutos': 'La duración estimada debe ser mayor a 0 minutos',
+  'El ojo debe ser OD, OI o OU': 'El ojo debe ser OD, OI o OU',
+  'El paciente seleccionado no existe': 'El paciente seleccionado no existe',
+  'El origen seleccionado no existe o no está activo': 'El origen seleccionado no existe o no está activo',
+  'El servicio seleccionado no existe o no está activo': 'El servicio seleccionado no existe o no está activo',
+  'El servicio seleccionado no es un procedimiento quirúrgico': 'El servicio seleccionado no es un procedimiento quirúrgico',
+  'El servicio no corresponde al origen seleccionado': 'El servicio no corresponde al origen seleccionado',
+  'Debe asignar al menos un participante': 'Debe asignar al menos un participante',
+  'Cada participante debe tener médico y rol': 'Cada participante debe tener médico y rol',
+  'El médico seleccionado no existe o no está activo': 'El médico seleccionado no existe o no está activo',
+  'El rol seleccionado no existe o no está activo': 'El rol seleccionado no existe o no está activo',
+  'Debe asignar al menos un cirujano': 'Debe asignar al menos un cirujano',
+  'El LIO seleccionado no existe, no está disponible, está caducado o no tiene stock': 'El LIO seleccionado no existe, no está disponible, está caducado o no tiene stock',
 };
 
 function translateError(msg: string): string {

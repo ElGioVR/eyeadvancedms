@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
         id: c.id,
         titulo: `${c.folio} — ${paciente?.nombre_completo ?? 'Sin paciente'}`,
         subtitulo: c.diagnostico ?? 'Sin diagnóstico',
-        href: '/consultas',
+        href: `/consultas/${c.id}`,
       });
     }
   }

@@ -6,7 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:b1": "node scripts/tests/b1-migraciones.test.js",
+    "test:b2": "node scripts/tests/b2-creacion-cirugia.test.js",
+    "test:b3": "node scripts/tests/b3-conflictos-agenda.test.js",
+    "test:b4": "node scripts/tests/b4-estados-cirugia.test.js",
+    "test:b5": "node scripts/tests/b5-archivos-cirugia.test.js",
+    "test:b6": "node scripts/tests/b6-permisos-archivos.test.js",
+    "test:b7": "node scripts/tests/b7-lio.test.js",
+    "test:b8": "node scripts/tests/b8-productividad-cirugia.test.js",
+    "test:b9": "node scripts/tests/b9-ui-formulario.test.js",
+    "test:b10": "node scripts/tests/b10-detalle-y-navegacion.test.js",
+    "test:b11": "node scripts/tests/b11-integracion-agenda.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

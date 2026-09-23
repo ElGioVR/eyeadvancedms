@@ -7,7 +7,6 @@ import { logout } from '@/app/actions/auth';
 import {
   LayoutDashboard,
   Users,
-  Stethoscope,
   Receipt,
   Package,
   BarChart3,
@@ -28,7 +27,6 @@ import Modal from '@/components/ui/Modal';
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Users, label: 'Pacientes', href: '/pacientes' },
-  { icon: Stethoscope, label: 'Consultas', href: '/consultas' },
   { icon: Calendar, label: 'Agenda', href: '/agenda' },
   { icon: Receipt, label: 'Honorarios', href: '/honorarios' },
   { icon: Package, label: 'Inventario', href: '/inventario' },
@@ -44,10 +42,7 @@ interface SidebarProps {
 }
 
 function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.matchMedia('(min-width: 1280px)').matches;
-  });
+  const [isDesktop, setIsDesktop] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)');
     setIsDesktop(mq.matches);
@@ -104,6 +99,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                 width={160}
                 height={40}
                 priority
+                style={{ width: 'auto' }}
               />
             </div>
           ) : (

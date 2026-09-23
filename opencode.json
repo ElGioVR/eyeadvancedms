@@ -1,9 +1,83 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/mimo-v2.5-pro",
-  "compaction": {
-    "auto": true,
-    "prune": true,
-    "reserved": 10000
+  "model": "opencode-go/kimi-k2.7-code",
+  "small_model": "opencode-go/mimo-v2.5",
+  "default_agent": "build",
+  "subagent_depth": 2,
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git tag*": "deny",
+      "git merge*": "deny",
+      "git rebase*": "deny",
+      "git stash*": "deny",
+      "git reset --hard*": "deny",
+      "gh pr*": "deny",
+      "supabase db push*": "deny",
+      "supabase link*": "deny",
+      "supabase*--linked*": "deny",
+      "psql*": "ask"
+    }
+  },
+  "agent": {
+    "build": {
+      "model": "opencode-go/kimi-k2.7-code"
+    },
+    "plan": {
+      "model": "opencode-go/glm-5.2"
+    },
+    "explore": {
+      "model": "opencode-go/mimo-v2.5"
+    },
+    "auditor": {
+      "description": "Descubrimiento, matriz de trazabilidad y auditoría independiente. Solo edita docs/cirugias/.",
+      "mode": "all",
+      "model": "opencode-go/glm-5.2",
+      "prompt": "Eres un auditor técnico riguroso. Trabajas con evidencia: un requisito solo es CUBIERTO si citas archivo:línea, migración, test o comando con su salida. No implementas funcionalidad: solo lees código y editas archivos dentro de docs/cirugias/. Nunca hagas commit ni push. Sé honesto con lo PARCIAL y lo NO CUBIERTO."
+    },
+    "mecanico": {
+      "description": "Escribe pruebas automáticas, documentación y guías de validación manual. Trabajo repetitivo y de bajo riesgo.",
+      "mode": "all",
+      "model": "opencode-go/minimax-m3",
+      "prompt": "Eres un ingeniero que escribe pruebas, documentación y guías con precisión y sin inventar rutas ni datos: verifica en el repo que existan antes de citarlos. No cambies lógica de negocio salvo para arreglar un fallo de prueba que compruebes. Nunca hagas commit ni push."
+    },
+    "orquestador": {
+      "description": "Ejecuta toda la Fase 1 delegando cada tipo de trabajo al modelo adecuado.",
+      "mode": "primary",
+      "model": "opencode-go/kimi-k2.7-code",
+      "prompt": "Eres el orquestador de la Fase 1 de creación de cirugía. Implementas tú el código central (migraciones, API, UI). Delegas: exploración amplia del repo -> @explore; matriz, revisión y auditoría independiente -> @auditor; pruebas, documentación y guía manual -> @mecanico. Pasa a cada subagente instrucciones autocontenidas y rutas de archivo, no historiales largos. Trabajas en ejecución continua sin pedir confirmación."
+    }
+  },
+  "command": {
+    "cx-0-descubrir": {
+      "description": "Fase 0-1 · Descubrir repo y crear matriz de trazabilidad (GLM-5.2)",
+      "agent": "auditor",
+      "template": "Lee COMPLETO `docs/cirugias/fase-1-creacion-cirugia.md`.\n\n1. Delega al subagente `explore` el mapeo amplio del repo: rutas de Agenda/Cirugías, componentes, esquema de BD y migraciones, uso de Storage, sistema de roles/permisos, historial/auditoría existente, inventario (LIO), catálogo de servicios y origen, productividad y conflictos de agenda actuales.\n2. Escribe `docs/cirugias/00-mapa-repo.md` con: qué existe, qué se reutiliza, qué falta y el orden recomendado de implementación (B1..B11).\n3. Crea `docs/cirugias/auditoria-fase-1.md` con UNA fila por cada ID de la especificación (incluye ALC-01..16 y FUE-001): ID | Requisito | Estado (PENDIENTE) | Evidencia | Notas.\n4. Comprueba con un comando (grep/sort/wc) que el número de IDs de la matriz es IGUAL al de la especificación; muestra comando y resultado.\n\nNo modifiques código. No hagas commit ni push. Termina con un resumen de máx. 15 líneas."
+    },
+    "cx-auditar": {
+      "description": "Fase 4 · Auditoría independiente de cobertura (GLM-5.2)",
+      "agent": "auditor",
+      "template": "Audita de forma INDEPENDIENTE lo implementado (no confíes en lo que dice la matriz: verifica en el código).\n\n1. Recorre la especificación ID por ID y verifica la evidencia real. Estados: CUBIERTO / PARCIAL / NO CUBIERTO / NO APLICA (solo con justificación concreta). Corrige la matriz `docs/cirugias/auditoria-fase-1.md`.\n2. Vuelve a ejecutar el comando de conteo de IDs (especificación vs matriz) y confirma 0 faltantes.\n3. Verifica restricciones: `git status --short` y `git log --oneline origin/HEAD..HEAD` (o equivalente) para demostrar que NO hay commits ni push nuevos. Confirma FUE-001 (archivos de cirugía no integrados al expediente general).\n4. Añade a la matriz: \"Decisiones y supuestos\", \"Migraciones pendientes de aplicar\" y \"Riesgos conocidos\".\n5. Entrega final: totales CUBIERTO/PARCIAL/NO CUBIERTO/NO APLICA sobre el total de IDs y la tabla de todos los IDs que no estén en CUBIERTO con su causa.\n\nNo implementes funcionalidad: si algo falta, lístalo. No hagas commit ni push."
+    },
+    "cx-bloque": {
+      "description": "Implementar un bloque B1..B11 de la Fase 1 (Kimi K2.7 Code)",
+      "agent": "build",
+      "template": "Implementa el bloque **$ARGUMENTS** de la Fase 1.\n\nContexto: lee `AGENTS.md`, `docs/cirugias/00-mapa-repo.md` y la matriz `docs/cirugias/auditoria-fase-1.md`. Consulta en la especificación solo los IDs de este bloque.\n\nDefinición de bloques:\n- B1 Datos: migraciones y catálogos (ojo OD/OI/OU, roles de participante, cirugias con origen/servicio/consulta_id/expediente/recurso/LIO, cirugia_participantes, cirugia_productividad, cirugia_archivos con borrado lógico, cirugia_historial). Adaptar al esquema existente.\n- B2 API de creación: VAL-001..008, transacción atómica, servicio↔origen, cirujano obligatorio, código CIR-.\n- B3 Conflictos de agenda: AGE-001..003 (consulta, estudio, procedimiento, cirugía, quirófano/recurso).\n- B4 Estados: EST-001..003, transiciones, motivo e historial.\n- B5 Archivos: Storage privado + metadata en BD, validación extensión/MIME/tamaño/cantidad en backend, ver/descargar con URL firmada o endpoint autenticado, borrado lógico, tipo_documento.\n- B6 Auditoría y permisos: AUD-001..005 y PER-001..004 aplicados en backend.\n- B7 LIO: selección desde inventario, disponibilidad/caducidad, FK sin copiar datos.\n- B8 Productividad base: registro \"Pendiente\" por participante (origen+servicio+rol), sin campo de monto.\n- B9 UI: formulario en 6 secciones y orden del flujo (FLU-001).\n- B10 Detalle de cirugía (DET-001..003), \"+ Agregar archivo\", navegación consulta↔cirugía y creación desde consulta (CON-001..003).\n- B11 Integración con Agenda sin regresiones.\n\nAl terminar:\n1. Delega al subagente `mecanico` las pruebas automáticas de este bloque.\n2. Ejecuta typecheck, lint y las pruebas relacionadas; corrige errores.\n3. Actualiza la matriz (estado + evidencia) solo de los IDs de este bloque.\n4. No hagas commit ni push. Responde con un resumen de máx. 10 líneas."
+    },
+    "cx-guia": {
+      "description": "Fase 5 · Guía de validación manual (MiniMax M3)",
+      "agent": "mecanico",
+      "template": "Crea `docs/cirugias/validacion-manual-fase-1.md` adaptando el Anexo B (CP-01..CP-26) de `docs/cirugias/fase-1-creacion-cirugia.md` a ESTE proyecto:\n- comandos reales para levantar el entorno local y aplicar migraciones SOLO en local,\n- usuarios/roles de prueba (Admin, Doctor, Recepción) y datos semilla necesarios (paciente, origen, servicio quirúrgico, médicos, LIO vigente y caducado, recurso),\n- rutas/URLs reales (verifícalas en el repo antes de citarlas),\n- pasos numerados, resultado esperado, consultas SQL de verificación (historial, metadata de archivos, productividad) y un checkbox por caso con los IDs que valida,\n- tabla final \"Requisito → Casos que lo validan\"; ningún ID funcional sin al menos un caso.\nNo hagas commit ni push."
+    },
+    "cx-run": {
+      "description": "Ejecutar TODA la Fase 1 en modo continuo con enrutamiento automático de modelos",
+      "agent": "orquestador",
+      "template": "Ejecuta la Fase 1 completa de punta a punta, sin pedir confirmación, siguiendo `AGENTS.md`.\n\nOrden y enrutamiento:\n1. Descubrimiento: delega el mapeo del repo a `explore`; pide a `auditor` crear `docs/cirugias/00-mapa-repo.md` y la matriz `docs/cirugias/auditoria-fase-1.md` (una fila por ID, conteo verificado por comando).\n2. Implementación: tú ejecutas los bloques B1..B11 en orden (usa la definición de bloques de `.opencode/commands/cx-bloque.md`). Tras cada bloque: delega pruebas a `mecanico`, corre typecheck/lint/pruebas y actualiza la matriz.\n3. Verificación: lint, typecheck, build y suite completa; corrige fallos.\n4. Auditoría: delega a `auditor` la auditoría independiente (estados con evidencia, conteo 0 faltantes, verificación de que no hay commits ni push).\n5. Guía manual: delega a `mecanico` la creación de `docs/cirugias/validacion-manual-fase-1.md`.\n6. Entrega final: resumen, archivos cambiados (`git status --short`), migraciones sin aplicar, totales de auditoría, pendientes, decisiones/supuestos y confirmación de no-commit/no-push.\n\nNo termines hasta que todos los IDs tengan estado final con evidencia o causa documentada."
+    },
+    "cx-verificar": {
+      "description": "Fase 3 · Verificación técnica completa y corrección de fallos (Kimi K2.7 Code)",
+      "agent": "build",
+      "template": "Ejecuta lint, typecheck, build y la suite de pruebas completa del proyecto. Filtra las salidas largas.\nCorrige los fallos (máx. 3 intentos por fallo). Si algo no se puede arreglar, anótalo en `docs/cirugias/auditoria-fase-1.md` como PARCIAL/NO CUBIERTO con la causa real.\nConfirma que no hubo regresiones en Agenda, consultas y estudios. No hagas commit ni push."
+    }
   }
 }

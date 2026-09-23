@@ -18,6 +18,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 
 const historialTabs = [
@@ -69,12 +70,6 @@ const tipoConsultaColors: Record<string, string> = {
   'REVISION': 'bg-amber-50 text-amber-700 ring-amber-200',
   'PROCEDIMIENTO': 'bg-rose-50 text-rose-700 ring-rose-200',
 };
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
-}
 
 function formatMoney(amount: number, currency: string) {
   if (!amount) return '—';
@@ -286,7 +281,7 @@ export default function HistorialMedicoPage() {
                     <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
                       <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
                         <div className="flex items-center gap-3">
-                          <span className="text-sm font-extrabold text-primary-700">{formatDate(c.fecha)}</span>
+                          <span className="text-sm font-extrabold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
                           <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', tipoConsultaColors[c.tipo_consulta] || 'bg-gray-50 text-gray-700 ring-gray-200 dark:bg-[#202327] dark:text-[#E7E9EA] dark:ring-[#2F3336]')}>
                             {c.tipo_consulta || 'CONSULTA'}
                           </span>
@@ -341,7 +336,7 @@ export default function HistorialMedicoPage() {
                     <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
                       <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
                         <div className="flex items-center gap-3">
-                          <span className="text-sm font-extrabold text-primary-700">{formatDate(c.fecha)}</span>
+                          <span className="text-sm font-extrabold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
                           <span className="text-sm font-semibold text-gray-600 dark:text-[#E7E9EA]">· {c.doctor}</span>
                           {c.folio && <span className="text-xs font-mono text-gray-400 dark:text-[#71767B]">{c.folio}</span>}
                         </div>
@@ -409,7 +404,7 @@ export default function HistorialMedicoPage() {
                       <tbody className="divide-y divide-gray-50">
                         {consultasConProcedimiento.map((c) => (
                           <tr key={c.id} className="group hover:bg-gray-50/60 dark:hover:bg-[#202327]/60 transition-colors">
-                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700">{formatDate(c.fecha)}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.procedimiento}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">{c.doctor}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA] max-w-xs">{c.diagnostico}</td>
@@ -468,7 +463,7 @@ export default function HistorialMedicoPage() {
                           <span className="text-xs text-gray-400 dark:text-[#71767B]">{e.doctor}</span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-[#E7E9EA] mt-1">{e.resultado}</p>
-                        <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1">{formatDate(e.fecha)}</p>
+                        <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1"><ClientDate date={e.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
                       </div>
                     </div>
                   ))}
@@ -508,11 +503,11 @@ export default function HistorialMedicoPage() {
               </div>
               <div className="px-5 py-3">
                 <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Fecha de Nacimiento</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1">{formatDate(paciente.fecha_nacimiento)}</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1"><ClientDate date={paciente.fecha_nacimiento} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
               </div>
               <div className="px-5 py-3">
                 <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Paciente desde</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1">{formatDate(paciente.created_at)}</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1"><ClientDate date={paciente.created_at} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
               </div>
             </div>
           </div>

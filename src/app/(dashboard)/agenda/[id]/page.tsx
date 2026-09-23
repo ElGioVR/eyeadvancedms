@@ -60,12 +60,13 @@ export default function CirugiaDetailPage() {
       const found = data.data?.find((c: CirugiaDetalle) => c.id === id);
       if (!found) throw new Error('Cirugía no encontrada');
       setCirugia(found);
+      // B11: integrar con el detalle homologado de cirugía
+      router.push(`/cirugias/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => { fetchCirugia(); }, [fetchCirugia]);
 

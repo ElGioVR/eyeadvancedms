@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield } from 'lucide-react';
+import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
+import ClientDate from '@/components/ui/ClientDate';
+import Skeleton from '@/components/ui/Skeleton';
 import { useUser } from '@/hooks/useUser';
+import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 
 interface EstudioDetalle {
   nombre: string;
@@ -42,6 +45,9 @@ interface ConsultaDetalle {
   est1_doctor: string | null;
   est2_doctor: string | null;
   est3_doctor: string | null;
+  estudio_1_doctor_id?: string | null;
+  estudio_2_doctor_id?: string | null;
+  estudio_3_doctor_id?: string | null;
   procedimiento: string | null;
   proc_doctor: string | null;
   notas: string | null;
@@ -65,7 +71,7 @@ interface HistorialEvento {
   tipo_evento: string;
   payload: Record<string, unknown>;
   created_at: string;
-  usuarios: { nombre: string } | null;
+  usuario_nombre: string | null;
 }
 
 const estatusConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -82,6 +88,7 @@ const estatusPagoConfig: Record<string, { bg: string; text: string; dot: string 
 };
 
 const eventoIcons: Record<string, typeof CheckCircle2> = {
+  CREACION: FileText,
   CAMBIO_ESTATUS: Clock,
   EDICION: Edit3,
   CANCELACION: AlertCircle,
@@ -91,6 +98,7 @@ const eventoIcons: Record<string, typeof CheckCircle2> = {
 };
 
 const eventoLabels: Record<string, string> = {
+  CREACION: 'Consulta creada',
   CAMBIO_ESTATUS: 'Cambio de estatus',
   EDICION: 'Edición',
   CANCELACION: 'Cancelación',
@@ -126,6 +134,39 @@ function Field({ label, value, full }: { label: string; value: string | null | u
   );
 }
 
+function ConsultaDetailSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+        <Skeleton className="h-14 w-14 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-6 w-24" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+            <Skeleton className="mb-6 h-5 w-44" />
+            <div className="grid grid-cols-2 gap-6">
+              {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+            <Skeleton className="mb-6 h-5 w-40" />
+            <Skeleton className="h-28 w-full" />
+          </div>
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-44 w-full rounded-xl" />
+          <Skeleton className="h-56 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ConsultaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -133,9 +174,18 @@ export default function ConsultaDetailPage() {
   const [consulta, setConsulta] = useState<ConsultaDetalle | null>(null);
   const [historial, setHistorial] = useState<HistorialEvento[]>([]);
   const [aseguradoraData, setAseguradoraData] = useState<{ aseguradora: { id: string; nombre: string } | null; cobertura: { porcentaje_cobertura: number; copago_fijo: number | null; aplica_estudios: boolean; aplica_procedimientos: boolean } | null } | null>(null);
+  const [cirugiasRelacionadas, setCirugiasRelacionadas] = useState<{ id: string; codigo: string | null; estado: string; fecha: string | null; ojo: string | null; servicio?: { nombre?: string } | null }[]>([]);
+  const [estudiosAgendados, setEstudiosAgendados] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPatientDetails, setShowPatientDetails] = useState(false);
+  const [estudioAAgendar, setEstudioAAgendar] = useState<{
+    nombre: string;
+    doctor_id?: string | null;
+    doctor_nombre?: string | null;
+  } | null>(null);
+  const [edadPaciente, setEdadPaciente] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
 
   const fetchConsulta = useCallback(async () => {
     try {
@@ -162,27 +212,86 @@ export default function ConsultaDetailPage() {
     } catch { /* silent */ }
   }, [id]);
 
+  const fetchCirugiasRelacionadas = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cirugias?consulta_id=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCirugiasRelacionadas(data.data || []);
+      }
+    } catch { /* silent */ }
+  }, [id]);
+
+  const fetchEstudiosAgendados = useCallback(async (pacienteId: string) => {
+    try {
+      const res = await fetch(`/api/consultas?paciente_id=${pacienteId}&pageSize=200`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapa = new Map<string, string>();
+        for (const c of data.data || []) {
+          if (c.tipo_consulta?.toUpperCase() === 'ESTUDIO') {
+            if (c.estudio_1) mapa.set(c.estudio_1, c.id);
+            if (c.estudio_2) mapa.set(c.estudio_2, c.id);
+            if (c.estudio_3) mapa.set(c.estudio_3, c.id);
+          }
+        }
+        setEstudiosAgendados(mapa);
+      }
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
-    Promise.all([fetchConsulta(), fetchHistorial()]).finally(() => setLoading(false));
-  }, [fetchConsulta, fetchHistorial]);
+    Promise.all([fetchConsulta(), fetchHistorial(), fetchCirugiasRelacionadas()]).finally(() => setLoading(false));
+  }, [fetchConsulta, fetchHistorial, fetchCirugiasRelacionadas]);
+
+  useEffect(() => {
+    if (consulta?.paciente_id) {
+      fetchEstudiosAgendados(consulta.paciente_id);
+    }
+  }, [consulta?.paciente_id, fetchEstudiosAgendados]);
+
+  useEffect(() => {
+    if (consulta?.paciente_fecha_nacimiento) {
+      const edad = Math.floor((Date.now() - new Date(consulta.paciente_fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      setEdadPaciente(`${edad} años`);
+    }
+  }, [consulta?.paciente_fecha_nacimiento]);
 
   function handlePrint() {
     window.print();
   }
 
+  async function handleMarkPaid() {
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/consultas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estatus_pago: 'PAGADO', monto_pagado: consulta?.costo_total || 0 }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Error al registrar el pago');
+      }
+      const updated = await res.json();
+      setConsulta((current) => current ? { ...current, ...updated } : current);
+      await fetchHistorial();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al registrar el pago');
+    } finally {
+      setPaying(false);
+    }
+  }
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <ConsultaDetailSkeleton />;
   }
 
   if (error || !consulta) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 dark:text-gray-400">{error || 'Consulta no encontrada'}</p>
-        <button onClick={() => router.push('/consultas')} className="mt-4 text-primary-600 hover:text-primary-700 text-sm font-semibold">
+        <button onClick={() => router.push('/agenda')} className="mt-4 text-primary-600 hover:text-primary-700 text-sm font-semibold">
           Volver a Consultas
         </button>
       </div>
@@ -194,7 +303,7 @@ export default function ConsultaDetailPage() {
       <PageHeader
         title={`Consulta ${consulta.folio || consulta.id.slice(0, 8)}`}
         subtitle={`${consulta.paciente || 'Sin paciente'} — ${consulta.fecha}`}
-        backLink={{ href: '/consultas', label: 'Consultas' }}
+        backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex items-center gap-3">
             <button
@@ -203,6 +312,14 @@ export default function ConsultaDetailPage() {
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
+            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
+              <button
+                onClick={() => router.push(`/cirugias/nueva?consulta_id=${id}`)}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors no-print"
+              >
+                <Scissors className="h-4 w-4" /> Crear cirugía
+              </button>
+            )}
             {user?.rol === 'admin' && (
               <button
                 onClick={() => router.push(`/consultas/${id}/editar`)}
@@ -242,9 +359,7 @@ export default function ConsultaDetailPage() {
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Edad</span>
               <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">
-                {consulta.paciente_fecha_nacimiento
-                  ? `${Math.floor((Date.now() - new Date(consulta.paciente_fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} años`
-                  : '—'}
+                {edadPaciente || '—'}
               </p>
             </div>
             <div>
@@ -323,19 +438,106 @@ export default function ConsultaDetailPage() {
                     {consulta.estudio_1 && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_1}</span>
-                        {consulta.est1_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est1_doctor}</span>}
+                        <div className="flex items-center gap-2">
+                          {consulta.est1_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est1_doctor}</span>}
+                          {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
+                            (() => {
+                              const consultaId = estudiosAgendados.get(consulta.estudio_1!);
+                              if (consultaId) {
+                                return (
+                                  <button
+                                    onClick={() => router.push(`/consultas/${consultaId}`)}
+                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                  >
+                                    <Calendar className="h-3 w-3" /> Ver cita
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => setEstudioAAgendar({
+                                nombre: consulta.estudio_1!,
+                                doctor_id: consulta.estudio_1_doctor_id,
+                                    doctor_nombre: consulta.est1_doctor,
+                                  })}
+                                  className="inline-flex items-center gap-1 rounded-md bg-sky-50 dark:bg-sky-900/20 px-2 py-1 text-xs font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30 transition-colors"
+                                >
+                                  <CalendarPlus className="h-3 w-3" /> Agendar
+                                </button>
+                              );
+                            })()
+                          )}
+                        </div>
                       </div>
                     )}
                     {consulta.estudio_2 && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_2}</span>
-                        {consulta.est2_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est2_doctor}</span>}
+                        <div className="flex items-center gap-2">
+                          {consulta.est2_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est2_doctor}</span>}
+                          {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
+                            (() => {
+                              const consultaId = estudiosAgendados.get(consulta.estudio_2!);
+                              if (consultaId) {
+                                return (
+                                  <button
+                                    onClick={() => router.push(`/consultas/${consultaId}`)}
+                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                  >
+                                    <Calendar className="h-3 w-3" /> Ver cita
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => setEstudioAAgendar({
+                                    nombre: consulta.estudio_2!,
+                                    doctor_id: consulta.estudio_2_doctor_id,
+                                    doctor_nombre: consulta.est2_doctor,
+                                  })}
+                                  className="inline-flex items-center gap-1 rounded-md bg-sky-50 dark:bg-sky-900/20 px-2 py-1 text-xs font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30 transition-colors"
+                                >
+                                  <CalendarPlus className="h-3 w-3" /> Agendar
+                                </button>
+                              );
+                            })()
+                          )}
+                        </div>
                       </div>
                     )}
                     {consulta.estudio_3 && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_3}</span>
-                        {consulta.est3_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est3_doctor}</span>}
+                        <div className="flex items-center gap-2">
+                          {consulta.est3_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est3_doctor}</span>}
+                          {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
+                            (() => {
+                              const consultaId = estudiosAgendados.get(consulta.estudio_3!);
+                              if (consultaId) {
+                                return (
+                                  <button
+                                    onClick={() => router.push(`/consultas/${consultaId}`)}
+                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                  >
+                                    <Calendar className="h-3 w-3" /> Ver cita
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => setEstudioAAgendar({
+                                    nombre: consulta.estudio_3!,
+                                    doctor_id: consulta.estudio_3_doctor_id,
+                                    doctor_nombre: consulta.est3_doctor,
+                                  })}
+                                  className="inline-flex items-center gap-1 rounded-md bg-sky-50 dark:bg-sky-900/20 px-2 py-1 text-xs font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/30 transition-colors"
+                                >
+                                  <CalendarPlus className="h-3 w-3" /> Agendar
+                                </button>
+                              );
+                            })()
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -379,6 +581,16 @@ export default function ConsultaDetailPage() {
                 <span className="text-gray-500 dark:text-[#71767B]">Estado</span>
                 <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />
               </div>
+              {(user?.rol === 'admin' || user?.rol === 'recepcionista') && consulta.estatus_pago !== 'PAGADO' && (
+                <button
+                  onClick={handleMarkPaid}
+                  disabled={paying}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {paying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
+                  {paying ? 'Registrando...' : 'Registrar pago'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -433,6 +645,32 @@ export default function ConsultaDetailPage() {
             </div>
           )}
 
+          {/* Cirugías relacionadas */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+              <Scissors className="h-4 w-4 text-rose-600" /> Cirugías relacionadas
+            </h3>
+            {cirugiasRelacionadas.length === 0 ? (
+              <p className="text-sm text-gray-400 dark:text-[#71767B]">No hay cirugías vinculadas a esta consulta.</p>
+            ) : (
+              <div className="space-y-3">
+                {cirugiasRelacionadas.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => router.push(`/cirugias/${c.id}`)}
+                    className="w-full text-left rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-[#25282C] transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.codigo || 'Cirugía'}</span>
+                      <span className="text-xs text-gray-500 dark:text-[#71767B]">{c.estado}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-[#71767B]">{c.servicio?.nombre || '—'} {c.ojo || ''} — {c.fecha || 'Sin fecha'}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Timeline */}
           <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
@@ -451,11 +689,24 @@ export default function ConsultaDetailPage() {
                         <Icon className="h-4 w-4 text-gray-500 dark:text-[#71767B]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
-                          {eventoLabels[evento.tipo_evento] || evento.tipo_evento}
-                        </p>
+                        {(() => {
+                          const payload = evento.payload || {};
+                          const estudioAgendado = payload.accion === 'estudio_agendado';
+                          return (
+                            <>
+                              <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
+                                {estudioAgendado ? 'Estudio agendado' : eventoLabels[evento.tipo_evento] || evento.tipo_evento}
+                              </p>
+                              {estudioAgendado && (
+                                <p className="text-xs text-gray-500 dark:text-[#71767B]">
+                                  {String(payload.estudio_nombre || 'Estudio')} · Fecha: {String(payload.fecha_estudio || '—')} {String(payload.hora_estudio || '')} · Asignado a: {String(payload.asignado_a || '—')}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                         <p className="text-xs text-gray-400 dark:text-[#71767B]">
-                          {evento.usuarios?.nombre || 'Sistema'} — {new Date(evento.created_at).toLocaleString('es-MX')}
+                           {evento.usuario_nombre || 'Sistema'} — <ClientDate date={evento.created_at} dateTime />
                         </p>
                       </div>
                     </div>
@@ -466,6 +717,27 @@ export default function ConsultaDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Agendar Estudio */}
+      {estudioAAgendar && (
+        <AgendarEstudioModal
+          isOpen={!!estudioAAgendar}
+          onClose={() => setEstudioAAgendar(null)}
+          estudio={estudioAAgendar}
+          onScheduled={(consultaId) => {
+            setEstudiosAgendados((current) => new Map(current).set(estudioAAgendar.nombre, consultaId));
+            fetchHistorial();
+          }}
+          consulta={{
+            id: consulta.id,
+            paciente_id: consulta.paciente_id,
+            paciente: consulta.paciente,
+            doctor_id: consulta.doctor_id,
+            doctor: consulta.doctor,
+            aseguranza_id: aseguradoraData?.aseguradora?.id || null,
+          }}
+        />
+      )}
     </div>
   );
 }

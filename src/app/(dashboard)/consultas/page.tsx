@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -110,8 +110,10 @@ export default function ConsultasPage() {
   });
   const [search, setSearch] = useState("");
   const [filterDoctor, setFilterDoctor] = useState("Todos");
-  const [today] = useState(() => new Date().toISOString().split("T")[0]);
+  const [today, setToday] = useState('');
   const [pagoConsulta, setPagoConsulta] = useState<ConsultaAPI | null>(null);
+
+  useEffect(() => { setToday(new Date().toISOString().split('T')[0]); }, []);
   const [pagando, setPagando] = useState(false);
 
   const debouncedSearch = useDebounce(search);

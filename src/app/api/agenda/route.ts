@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
@@ -27,7 +26,17 @@ const cirugiaCreateSchema = z.object({
   inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
 
+const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
+  BORRADOR: 'agendada',
+  PROCESADA: 'completada',
+  PENDIENTE_ESTUDIO: 'aplazada',
+  PENDIENTE_CIRUGIA: 'reagendada',
+  FINALIZADA: 'completada',
+  CANCELADA: 'cancelada',
+};
+
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -35,7 +44,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
+  const pageSize = Math.min(500, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -43,61 +52,117 @@ export async function GET(request: Request) {
   const fechaHasta = searchParams.get('fechaHasta');
   const doctorId = searchParams.get('doctorId');
   const estado = searchParams.get('estado');
+  const tipo = searchParams.get('tipo');
   const search = searchParams.get('search');
 
   const supabase = getSupabaseAdmin();
 
-  let query = supabase
+  // RBAC: resolver perfil y doctor en paralelo; evita tres consultas secuenciales.
+  const [{ data: profile }, { data: doctorProfile }] = await Promise.all([
+    supabase.from('usuarios').select('rol, preferencias').eq('id', auth.user.id).maybeSingle(),
+    supabase.from('doctores').select('id').eq('usuario_id', auth.user.id).maybeSingle(),
+  ]);
+  const userRole = profile?.rol;
+  const sessionDoctorId = doctorProfile?.id ?? null;
+  const focus = userRole === 'admin'
+    && typeof profile?.preferencias === 'object'
+    && profile.preferencias !== null
+    && (profile.preferencias as Record<string, unknown>).modo_focus === true;
+  const filtrarPorDoctor = userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId);
+  const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
+
+  // ── Cirugías ──
+  let queryCirugias = supabase
     .from('agenda_cirugias')
     .select(`
-      *,
+      id, paciente_id, nombre_paciente, fecha, hora, doctor_id, estado,
+      procedimiento, tiempo_estimado,
       doctores:doctor_id (nombre_completo)
-    `, { count: 'exact' });
+    `);
 
-  if (fechaDesde) {
-    query = query.gte('fecha', fechaDesde);
-  }
-  if (fechaHasta) {
-    query = query.lte('fecha', fechaHasta);
-  }
-  if (doctorId) {
-    query = query.eq('doctor_id', doctorId);
-  }
-  if (estado) {
-    query = query.eq('estado', estado);
-  }
-  if (search) {
-    query = query.or(`nombre_paciente.ilike.%${search}%,expediente.ilike.%${search}%`);
+  if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
+  if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
+  if (doctorFiltro) queryCirugias = queryCirugias.eq('doctor_id', doctorFiltro);
+  if (estado) queryCirugias = queryCirugias.eq('estado', estado);
+  if (search) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${search}%,expediente.ilike.%${search}%`);
+
+  // ── Consultas ──
+  let queryConsultas = supabase
+    .from('consultas')
+    .select(`
+      id,
+      paciente_id,
+      doctor_id,
+      fecha,
+      hora_inicio,
+      tipo_consulta,
+      estatus,
+      doctores:doctor_id (nombre_completo),
+      pacientes:paciente_id (nombre_completo)
+    `);
+
+  if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
+  if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
+  if (doctorFiltro) queryConsultas = queryConsultas.eq('doctor_id', doctorFiltro);
+  if (search) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${search}%`, { foreignTable: 'pacientes' });
+
+  const shouldQueryCirugias = !tipo || tipo === 'cirugia';
+  const shouldQueryConsultas = !tipo || tipo === 'consulta' || tipo === 'estudio';
+
+  const [{ data: cirugias, error: errorCirugias }, { data: consultas, error: errorConsultas }] = await Promise.all([
+    shouldQueryCirugias ? queryCirugias.order('fecha', { ascending: true }).order('hora', { ascending: true }) : Promise.resolve({ data: [], error: null }),
+    shouldQueryConsultas ? queryConsultas.order('fecha', { ascending: true }).order('hora_inicio', { ascending: true }) : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (errorCirugias || errorConsultas) {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 
-  // RBAC: doctor solo ve sus cirugías
-  const profileRes = await supabase.from('usuarios').select('rol, preferencias').eq('id', auth.user.id).maybeSingle();
-  const userRole = profileRes.data?.rol;
-  const sessionDoctorId = await resolveDoctorId(auth.user.id);
-  const focus = await isModoFocus(auth.user.id);
-
-  if (userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId)) {
-    query = query.eq('doctor_id', sessionDoctorId);
-  }
-
-  query = query
-    .order('fecha', { ascending: true })
-    .order('hora', { ascending: true })
-    .range(from, to);
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
-  }
-
-  const result = data.map((c) => ({
-    ...c,
+  const eventosCirugias = (cirugias || []).map((c) => ({
+    id: c.id,
+    paciente_id: c.paciente_id,
+    nombre_paciente: c.nombre_paciente,
+    fecha: c.fecha,
+    hora: c.hora,
+    doctor_id: c.doctor_id,
     doctor_nombre: (c as any).doctores?.nombre_completo || null,
-    doctores: undefined,
+    estado: c.estado,
+    procedimiento: c.procedimiento || null,
+    tiempo_estimado: c.tiempo_estimado || null,
+    tipo: 'cirugia' as const,
   }));
 
-  return NextResponse.json({ data: result, total: count || 0, page, pageSize });
+  const eventosConsultas = (consultas || [])
+    .filter(c => {
+      if (tipo === 'estudio') return c.tipo_consulta?.toUpperCase().includes('ESTUDIO');
+      if (tipo === 'consulta') return !c.tipo_consulta?.toUpperCase().includes('ESTUDIO');
+      return true;
+    })
+    .map((c) => ({
+    id: c.id,
+    paciente_id: c.paciente_id,
+    nombre_paciente: (c as any).pacientes?.nombre_completo || '',
+    fecha: c.fecha,
+    hora: c.hora_inicio,
+    procedimiento: c.tipo_consulta || 'Consulta',
+    doctor_id: c.doctor_id,
+    doctor_nombre: (c as any).doctores?.nombre_completo || null,
+    estado: (ESTADO_CONSULTA_A_AGENDA[c.estatus || ''] || 'agendada') as any,
+    tipo: (c.tipo_consulta?.toUpperCase().includes('ESTUDIO') ? 'estudio' : 'consulta') as 'consulta' | 'estudio',
+  }));
+
+  const todos = [...eventosCirugias, ...eventosConsultas].sort((a, b) => {
+    const fa = (a.fecha || '').localeCompare(b.fecha || '');
+    if (fa !== 0) return fa;
+    return (a.hora || '').localeCompare(b.hora || '');
+  });
+
+  const total = todos.length;
+  const result = todos.slice(from, to + 1);
+
+  const response = NextResponse.json({ data: result, total, page, pageSize });
+  response.headers.set('Server-Timing', `agenda;dur=${(performance.now() - startedAt).toFixed(1)}`);
+  return response;
 }
 
 export async function POST(request: Request) {

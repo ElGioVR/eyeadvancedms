@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Stethoscope, Calendar, TrendingUp, User } from 'lucide-react';
+import { LayoutDashboard, Calendar, TrendingUp, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { useState, useEffect } from 'react';
@@ -14,7 +14,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, href: '/dashboard', label: 'Inicio' },
-  { icon: Stethoscope, href: '/consultas', label: 'Consultas' },
   { icon: Calendar, href: '/agenda', label: 'Agenda' },
   { icon: TrendingUp, href: '/mis-honorarios', label: 'Honorarios' },
   { icon: User, href: '/mi-perfil', label: 'Perfil' },

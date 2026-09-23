@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 interface BackLink {
   href: string;
   label: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }
 
 interface PageHeaderProps {
@@ -23,6 +24,7 @@ export default function PageHeader({ title, subtitle, action, backLink }: PageHe
         {backLink && (
           <Link
             href={backLink.href}
+            onClick={backLink.onClick}
             className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-gray-500 dark:text-[#71767B] hover:text-gray-700 dark:hover:text-[#E7E9EA]"
           >
             <ChevronLeft className="h-4 w-4" />

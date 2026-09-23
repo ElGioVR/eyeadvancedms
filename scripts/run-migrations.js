@@ -38,6 +38,10 @@ const MIGRATION_ORDER = [
   '1800000000140-AddConstraintsAndIndices.ts',
   '1800000000150-CreateAseguranzaServicios.ts',
   '1800000000160-CreateCrearConsultaRPC.ts',
+  '1800000000170-CreateCirugiaHomologadaTables.ts',
+  '1800000000180-CreateCrearCirugiaRPC.ts',
+  '1800000000190-CreatePermisosArchivo.ts',
+  '1800000000200-CreateReglasProductividadCirugia.ts',
 ];
 
 if (!process.env.DATABASE_URL) {

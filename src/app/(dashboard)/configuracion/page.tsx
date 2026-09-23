@@ -22,10 +22,9 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function formatTime(dateStr: string | null): string {
+function formatTime(dateStr: string | null, now: Date): string {
   if (!dateStr) return 'Nunca';
   const d = new Date(dateStr);
-  const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return 'Ahora mismo';
@@ -40,6 +39,10 @@ export default function PerfilPage() {
   const { toast } = useToast();
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [notifLoading, setNotifLoading] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setNow(new Date()); setMounted(true); }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -455,11 +458,11 @@ export default function PerfilPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 dark:text-[#71767B]">Fecha de Registro</p>
-                <p className="text-sm font-medium text-gray-700 dark:text-[#E7E9EA]">{formatDate(user.created_at)}</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-[#E7E9EA]">{mounted ? formatDate(user.created_at) : '...'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 dark:text-[#71767B]">Último Acceso</p>
-                <p className="text-sm font-medium text-gray-700 dark:text-[#E7E9EA]">{formatTime(user.last_sign_in_at)}</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-[#E7E9EA]">{mounted && now ? formatTime(user.last_sign_in_at, now) : '...'}</p>
               </div>
             </div>
           </div>

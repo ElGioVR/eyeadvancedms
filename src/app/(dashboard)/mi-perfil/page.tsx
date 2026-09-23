@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 import Avatar from '@/components/ui/Avatar';
+import ClientDate from '@/components/ui/ClientDate';
 import { logout } from '@/app/actions/auth';
 
 interface DoctorInfo {
@@ -121,7 +122,7 @@ export default function MiPerfilPage() {
           <div className="flex items-center gap-3 px-5 py-3.5">
             <Calendar className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
             <span className="text-sm text-gray-700 dark:text-[#E7E9EA]">
-              Miembro desde {new Date(user.created_at).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+               Miembro desde <ClientDate date={user.created_at} options={{ month: 'long', year: 'numeric' }} />
             </span>
           </div>
         </div>

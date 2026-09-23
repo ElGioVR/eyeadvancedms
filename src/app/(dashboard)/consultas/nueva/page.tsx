@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ClipboardList,
   AlertTriangle,
@@ -72,6 +72,14 @@ interface CatalogoProcedimiento {
   activo: boolean;
 }
 
+interface CatalogoConsulta {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  costo: number;
+  activo: boolean;
+}
+
 interface AseguranzaAPI {
   id: string;
   nombre: string;
@@ -107,6 +115,16 @@ const TIPO_VISITA_MAP: Record<string, string> = {
   'Visita de Retorno': 'SUBSECUENTE',
 };
 
+const DRAFT_STORAGE_KEY = 'draft:nueva-consulta';
+
+type ServicioPaciente = {
+  id: string;
+  tipo: string;
+  nombre: string;
+  costo: number;
+  porcentaje_cobertura?: number | null;
+};
+
 function getInitials(name: string | null | undefined): string {
   if (!name) return '??';
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
@@ -116,6 +134,25 @@ function getAvatarColor(id: string): string {
   const colors = ['bg-primary-500', 'bg-purple-500', 'bg-emerald-500', 'bg-rose-500', 'bg-sky-500', 'bg-amber-500'];
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return colors[hash % colors.length];
+}
+
+function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function addMinutesToTime(time: string, minutes: number): string {
+  const [hours, mins] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(mins)) return time;
+  const total = Math.min((hours * 60) + mins + minutes, (23 * 60) + 59);
+  const nextHours = Math.floor(total / 60);
+  const nextMins = total % 60;
+  return `${String(nextHours).padStart(2, '0')}:${String(nextMins).padStart(2, '0')}`;
+}
+
+function timeToMinutes(time: string): number | null {
+  const [hours, mins] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(mins)) return null;
+  return (hours * 60) + mins;
 }
 
 function PreviewField({ label, value, full }: { label: string; value: string; full?: boolean }) {
@@ -133,8 +170,10 @@ export default function NuevaConsultaPage() {
   const { data: pacientes, loading: loadingPacientes } = useFetch<PacienteAPI>('/api/pacientes');
   const { data: doctores, loading: loadingDoctores } = useFetch<DoctorAPI>('/api/configuracion/doctores');
   const [matrizCostos, setMatrizCostos] = useState<MatrizCosto[]>([]);
+  const [catalogoConsultas, setCatalogoConsultas] = useState<CatalogoConsulta[]>([]);
   const [catalogoEstudios, setCatalogoEstudios] = useState<CatalogoEstudio[]>([]);
   const [catalogoProcedimientos, setCatalogoProcedimientos] = useState<CatalogoProcedimiento[]>([]);
+  const [serviciosPaciente, setServiciosPaciente] = useState<ServicioPaciente[]>([]);
   const [estudiosSeleccionados, setEstudiosSeleccionados] = useState<EstudioSeleccionado[]>([]);
   const [procedimientosSeleccionados, setProcedimientosSeleccionados] = useState<ProcedimientoSeleccionado[]>([]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
@@ -144,18 +183,54 @@ export default function NuevaConsultaPage() {
   const [costosEstudiosEdit, setCostosEstudiosEdit] = useState<Record<number, string>>({});
   const [costosProcsEdit, setCostosProcsEdit] = useState<Record<number, string>>({});
 
+  const cargarServiciosOrigen = useCallback(async (origenId: string | null) => {
+    if (!origenId) {
+      setServiciosPaciente([]);
+      setCatalogoConsultas([]);
+      setCatalogoEstudios([]);
+      setCatalogoProcedimientos([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/catalogo-servicios?aseguranza_id=${origenId}`);
+      if (!res.ok) {
+        setServiciosPaciente([]);
+        setCatalogoConsultas([]);
+        setCatalogoEstudios([]);
+        setCatalogoProcedimientos([]);
+        return;
+      }
+      const data = await res.json();
+      const servicios = (Array.isArray(data?.servicios) ? data.servicios : []) as ServicioPaciente[];
+      setServiciosPaciente(servicios);
+      setCatalogoConsultas(
+        servicios
+          .filter((s) => s.tipo === 'CONSULTA')
+          .map((s) => ({ id: s.id, nombre: s.nombre, descripcion: null, costo: s.costo ?? 0, activo: true }))
+      );
+      setCatalogoEstudios(
+        servicios
+          .filter((s) => s.tipo === 'ESTUDIO')
+          .map((s) => ({ id: s.id, nombre: s.nombre, descripcion: null, costo: s.costo ?? 0, bilateral: false, activo: true }))
+      );
+      setCatalogoProcedimientos(
+        servicios
+          .filter((s) => s.tipo === 'PROCEDIMIENTO')
+          .map((s) => ({ id: s.id, nombre: s.nombre, descripcion: null, costo: s.costo ?? 0, por_ojo: false, activo: true }))
+      );
+    } catch {
+      setServiciosPaciente([]);
+      setCatalogoConsultas([]);
+      setCatalogoEstudios([]);
+      setCatalogoProcedimientos([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetch('/api/configuracion/matriz-costos')
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setMatrizCostos(data); })
-      .catch(() => {});
-    fetch('/api/configuracion/catalogo-estudios')
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setCatalogoEstudios(data); })
-      .catch(() => {});
-    fetch('/api/configuracion/catalogo-procedimientos')
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setCatalogoProcedimientos(data); })
       .catch(() => {});
     fetch('https://api.exchangerate-api.com/v4/latest/USD')
       .then((r) => r.json())
@@ -172,8 +247,14 @@ export default function NuevaConsultaPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNewPatientForm, setShowNewPatientForm] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showExitDraftModal, setShowExitDraftModal] = useState(false);
+  const [pendingExitHref, setPendingExitHref] = useState<string | null>(null);
+  const [pendingExitAction, setPendingExitAction] = useState<'navigate' | 'reload'>('navigate');
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const initialDraftSignature = useRef<string | null>(null);
+  const initialDraftState = useRef<Record<string, unknown> | null>(null);
 
   const [newPatient, setNewPatient] = useState({
     nombre_completo: '',
@@ -194,6 +275,8 @@ export default function NuevaConsultaPage() {
     diagnostico: string;
     estudios: string;
     procedimiento: string;
+    origenId: string;
+    consultaServicioId: string;
     aseguradora: string;
     metodoPago: string;
     moneda: string;
@@ -201,22 +284,18 @@ export default function NuevaConsultaPage() {
   }
 
   const defaultConsultation = (): ConsultationForm => {
-    const now = new Date();
-    const h = now.getHours().toString().padStart(2, '0');
-    const m = now.getMinutes().toString().padStart(2, '0');
-    const endTotalMin = now.getHours() * 60 + now.getMinutes() + 30;
-    const eh = Math.floor(endTotalMin / 60).toString().padStart(2, '0');
-    const em = (endTotalMin % 60).toString().padStart(2, '0');
     return {
       doctorId: '',
       fecha: '',
-      horaInicio: `${h}:${m}`,
-      horaFin: `${eh}:${em}`,
+      horaInicio: '',
+      horaFin: '',
       tipo: 'Primera Consulta',
       tipoVisita: 'Primera Vez',
       diagnostico: '',
       estudios: '',
       procedimiento: '',
+      origenId: '',
+      consultaServicioId: '',
       aseguradora: 'Particular',
       metodoPago: 'Efectivo',
       moneda: 'MXN - Peso Mexicano',
@@ -224,16 +303,23 @@ export default function NuevaConsultaPage() {
     };
   };
 
-  // Clear any stale draft from previous sessions
-  useEffect(() => {
-    try { localStorage.removeItem('autosave:nueva-consulta'); } catch {}
-  }, []);
-
   const [consultationData, setConsultationData] = useState<ConsultationForm>(() => defaultConsultation());
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    setConsultationData((prev) => prev.fecha ? prev : { ...prev, fecha: new Date().toISOString().split('T')[0] });
-  }, []);
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    const fechaParam = searchParams.get('fecha');
+    const horaParam = searchParams.get('hora');
+    const horaInicio = horaParam && /^\d{2}:\d{2}$/.test(horaParam) ? horaParam : `${h}:${m}`;
+    setConsultationData(f => ({
+      ...f,
+      fecha: fechaParam && /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : now.toISOString().split('T')[0],
+      horaInicio,
+      horaFin: addMinutesToTime(horaInicio, 30),
+    }));
+  }, [searchParams]);
 
   const esUSD = consultationData.moneda === 'USD - Dólar';
   const convertir = useCallback((montoMXN: number) => {
@@ -246,14 +332,161 @@ export default function NuevaConsultaPage() {
   }, [esUSD, tipoCambio]);
 
   const insuranceOptions = useMemo(() => {
-    const names = aseguranzas.map((a) => a.nombre);
-    return ['Particular', ...names.filter((n) => n !== 'Particular')];
+    return aseguranzas.map((a) => a.id);
   }, [aseguranzas]);
 
+  const insuranceDisplayOptions = useMemo(() => aseguranzas.map((a) => a.nombre), [aseguranzas]);
+
+
   const selectedInsurance = useMemo(
-    () => aseguranzas.find((a) => a.nombre === consultationData.aseguradora),
-    [aseguranzas, consultationData.aseguradora]
+    () => aseguranzas.find((a) => a.id === consultationData.origenId),
+    [aseguranzas, consultationData.origenId]
   );
+
+  const selectedConsultaServicio = useMemo(
+    () => catalogoConsultas.find((c) => c.id === consultationData.consultaServicioId),
+    [catalogoConsultas, consultationData.consultaServicioId]
+  );
+  const doctorSeleccionado = useMemo(
+    () => doctores.find((d) => d.id === consultationData.doctorId),
+    [doctores, consultationData.doctorId]
+  );
+  const [procedimientoMotivo, setProcedimientoMotivo] = useState('');
+
+  const draftState = useMemo(() => ({
+    consultationData,
+    pacienteId: pacienteSeleccionado?.id ?? null,
+    pacienteNombre: pacienteSeleccionado?.nombre_completo ?? null,
+    doctorNombre: doctorSeleccionado?.nombre ?? null,
+    origenNombre: selectedInsurance?.nombre ?? null,
+    consultaNombre: selectedConsultaServicio?.nombre ?? null,
+    searchPaciente: searchPaciente.trim(),
+    estudiosSeleccionados,
+    estudiosNombres: estudiosSeleccionados.map((estudio) => catalogoEstudios.find((c) => c.id === estudio.id)?.nombre || 'Estudio'),
+    procedimientosSeleccionados,
+    procedimientosNombres: procedimientosSeleccionados.map((proc) => catalogoProcedimientos.find((c) => c.id === proc.id)?.nombre || 'Procedimiento'),
+    procedimientoMotivo: procedimientoMotivo.trim(),
+    newPatient,
+    showNewPatientForm,
+  }), [
+    consultationData,
+    pacienteSeleccionado?.id,
+    pacienteSeleccionado?.nombre_completo,
+    doctorSeleccionado?.nombre,
+    selectedInsurance?.nombre,
+    selectedConsultaServicio?.nombre,
+    searchPaciente,
+    estudiosSeleccionados,
+    catalogoEstudios,
+    procedimientosSeleccionados,
+    catalogoProcedimientos,
+    procedimientoMotivo,
+    newPatient,
+    showNewPatientForm,
+  ]);
+
+  const draftSignature = useMemo(() => JSON.stringify(draftState), [draftState]);
+
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft) as {
+          consultationData?: ConsultationForm;
+          pacienteSeleccionado?: PacienteAPI | null;
+          estudiosSeleccionados?: EstudioSeleccionado[];
+          procedimientosSeleccionados?: ProcedimientoSeleccionado[];
+          procedimientoMotivo?: string;
+        };
+
+        if (draft.consultationData) {
+          setConsultationData(draft.consultationData);
+          if (draft.consultationData.origenId) {
+            cargarServiciosOrigen(draft.consultationData.origenId);
+          }
+        }
+        if (draft.pacienteSeleccionado) setPacienteSeleccionado(draft.pacienteSeleccionado);
+        if (Array.isArray(draft.estudiosSeleccionados)) setEstudiosSeleccionados(draft.estudiosSeleccionados);
+        if (Array.isArray(draft.procedimientosSeleccionados)) setProcedimientosSeleccionados(draft.procedimientosSeleccionados);
+        if (typeof draft.procedimientoMotivo === 'string') setProcedimientoMotivo(draft.procedimientoMotivo);
+      }
+    } catch {
+      try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+    } finally {
+      setDraftHydrated(true);
+    }
+  }, [cargarServiciosOrigen]);
+
+  useEffect(() => {
+    if (draftHydrated && initialDraftSignature.current === null) {
+      initialDraftSignature.current = draftSignature;
+      initialDraftState.current = JSON.parse(draftSignature) as Record<string, unknown>;
+    }
+  }, [draftHydrated, draftSignature]);
+
+  const hasDraftChanges = draftHydrated && initialDraftSignature.current !== null && draftSignature !== initialDraftSignature.current;
+
+  const draftChangeSummary = useMemo(() => {
+    const initial = initialDraftState.current as any;
+    if (!hasDraftChanges || !initial) return [];
+
+    const current = draftState as any;
+    const changes: string[] = [];
+    const currentForm = current.consultationData || {};
+    const initialForm = initial.consultationData || {};
+    const addChange = (label: string, value: unknown) => {
+      const text = String(value || 'Sin capturar');
+      changes.push(`${label}: ${text}`);
+    };
+
+    if (current.pacienteId !== initial.pacienteId || current.searchPaciente !== initial.searchPaciente) {
+      addChange('Paciente', current.pacienteNombre || current.searchPaciente);
+    }
+    if (currentForm.doctorId !== initialForm.doctorId) addChange('Doctor', current.doctorNombre);
+    if (currentForm.fecha !== initialForm.fecha) addChange('Fecha', currentForm.fecha);
+    if (currentForm.horaInicio !== initialForm.horaInicio || currentForm.horaFin !== initialForm.horaFin) {
+      addChange('Horario', `${currentForm.horaInicio || '--:--'} - ${currentForm.horaFin || '--:--'}`);
+    }
+    if (currentForm.origenId !== initialForm.origenId) addChange('Origen', current.origenNombre);
+    if (currentForm.consultaServicioId !== initialForm.consultaServicioId) addChange('Consulta', current.consultaNombre);
+    if ((currentForm.diagnostico || '') !== (initialForm.diagnostico || '')) addChange('Diagnóstico', currentForm.diagnostico);
+    if (JSON.stringify(current.estudiosSeleccionados) !== JSON.stringify(initial.estudiosSeleccionados)) {
+      addChange('Estudios', current.estudiosNombres?.length ? current.estudiosNombres.join(', ') : 'Sin estudios');
+    }
+    if (JSON.stringify(current.procedimientosSeleccionados) !== JSON.stringify(initial.procedimientosSeleccionados)) {
+      addChange('Procedimientos', current.procedimientosNombres?.length ? current.procedimientosNombres.join(', ') : 'Sin procedimientos');
+    }
+    if ((current.procedimientoMotivo || '') !== (initial.procedimientoMotivo || '')) addChange('Motivo de procedimiento', current.procedimientoMotivo);
+    if (currentForm.metodoPago !== initialForm.metodoPago) addChange('Método de pago', currentForm.metodoPago);
+    if (currentForm.moneda !== initialForm.moneda) addChange('Moneda', currentForm.moneda);
+    if (JSON.stringify(current.newPatient) !== JSON.stringify(initial.newPatient) || current.showNewPatientForm !== initial.showNewPatientForm) {
+      addChange('Nuevo paciente', current.newPatient?.nombre_completo || 'Datos capturados');
+    }
+
+    return changes;
+  }, [draftState, hasDraftChanges]);
+
+  const dateTimeError = useMemo(() => {
+    if (!consultationData.fecha) return 'Debe seleccionar una fecha de consulta';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(consultationData.fecha)) return 'La fecha de consulta no es válida';
+    const inicio = timeToMinutes(consultationData.horaInicio);
+    const fin = timeToMinutes(consultationData.horaFin);
+    if (inicio === null) return 'La hora de inicio no es válida';
+    if (fin === null) return 'La hora fin no es válida';
+    if (fin <= inicio) return 'La hora fin debe ser mayor a la hora de inicio';
+    return null;
+  }, [consultationData.fecha, consultationData.horaInicio, consultationData.horaFin]);
+
+  useEffect(() => {
+    if (catalogoConsultas.length === 0) {
+      setConsultationData((prev) => prev.consultaServicioId ? { ...prev, consultaServicioId: '' } : prev);
+      return;
+    }
+    setConsultationData((prev) => {
+      if (prev.consultaServicioId && catalogoConsultas.some((c) => c.id === prev.consultaServicioId)) return prev;
+      return { ...prev, consultaServicioId: catalogoConsultas[0].id };
+    });
+  }, [catalogoConsultas]);
 
   const filteredPacientes = useMemo(() => {
     if (!searchPaciente) return pacientes;
@@ -325,11 +558,6 @@ export default function NuevaConsultaPage() {
     }
   }, [showProcedimientoDropdown]);
 
-  const doctorSeleccionado = useMemo(
-    () => doctores.find((d) => d.id === consultationData.doctorId),
-    [doctores, consultationData.doctorId]
-  );
-
   const calcularCosto = useCallback((tipo: string, tipoVisita: string) => {
     const tipoMatrix = TIPO_CONSULTA_MAP[tipo];
     const visitaMatrix = TIPO_VISITA_MAP[tipoVisita];
@@ -340,7 +568,10 @@ export default function NuevaConsultaPage() {
     return match ? match.costo : 0;
   }, [matrizCostos]);
 
-  const costoBaseOriginal = useMemo(() => calcularCosto(consultationData.tipo, consultationData.tipoVisita), [calcularCosto, consultationData.tipo, consultationData.tipoVisita]);
+  const costoBaseOriginal = useMemo(
+    () => selectedConsultaServicio?.costo ?? calcularCosto(consultationData.tipo, consultationData.tipoVisita),
+    [calcularCosto, consultationData.tipo, consultationData.tipoVisita, selectedConsultaServicio]
+  );
 
   const costoBaseFinal = useMemo(() => {
     if (editingMontos && costoBaseEdit !== '') {
@@ -376,7 +607,7 @@ export default function NuevaConsultaPage() {
         : doctorPrincipal.honorario_consulta) || 0
       : 0;
     return costoBaseFinal + costosEstudios + costosProcs + honorario;
-  }, [editingMontos, costoBaseFinal, costosEstudiosEdit, costosProcsEdit, invertir, consultationData.tipo, consultationData.tipoVisita, consultationData.doctorId, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, doctores]);
+  }, [editingMontos, costoBaseFinal, costosEstudiosEdit, costosProcsEdit, invertir, consultationData.tipo, consultationData.doctorId, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, doctores]);
 
   const costoTotal = useMemo(() => {
     return subtotalAntesDescuento;
@@ -426,8 +657,6 @@ export default function NuevaConsultaPage() {
     );
   }, []);
 
-  const [procedimientoMotivo, setProcedimientoMotivo] = useState('');
-
   const addProcedimiento = useCallback((id: string, motivo?: string) => {
     if (procedimientosSeleccionados.find((p) => p.id === id)) return;
     setProcedimientosSeleccionados((prev) => [...prev, { id, motivo, mismoDoctor: true }]);
@@ -467,15 +696,32 @@ export default function NuevaConsultaPage() {
   const [agregarOtroProcedimiento, setAgregarOtroProcedimiento] = useState(false);
 
   const updateConsultation = useCallback((field: string, value: string) => {
-    setConsultationData((prev) => ({ ...prev, [field]: value }));
+    setConsultationData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'horaInicio') {
+        next.horaFin = addMinutesToTime(value, 30);
+      }
+      return next;
+    });
     setFormError(null);
+    if (field === 'origenId') {
+      setEstudiosSeleccionados([]);
+      setProcedimientosSeleccionados([]);
+      setSearchEstudio('');
+      setSearchProcedimiento('');
+      setEditingMontos(false);
+      setCostoBaseEdit('');
+      setCostosEstudiosEdit({});
+      setCostosProcsEdit({});
+      cargarServiciosOrigen(value || null);
+    }
     if (field === 'tipo' || field === 'tipoVisita') {
       setEditingMontos(false);
       setCostoBaseEdit('');
       setCostosEstudiosEdit({});
       setCostosProcsEdit({});
     }
-  }, []);
+  }, [cargarServiciosOrigen]);
 
   useEffect(() => {
     if (matrizCostos.length > 0) {
@@ -497,6 +743,64 @@ export default function NuevaConsultaPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleReloadShortcut = (event: KeyboardEvent) => {
+      if (!hasDraftChanges) return;
+      const isReloadShortcut = event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
+      if (!isReloadShortcut) return;
+      event.preventDefault();
+      setPendingExitHref(null);
+      setPendingExitAction('reload');
+      setShowExitDraftModal(true);
+    };
+    window.addEventListener('keydown', handleReloadShortcut);
+    return () => window.removeEventListener('keydown', handleReloadShortcut);
+  }, [hasDraftChanges]);
+
+  const requestExit = useCallback((href: string) => {
+    if (hasDraftChanges) {
+      setPendingExitHref(href);
+      setPendingExitAction('navigate');
+      setShowExitDraftModal(true);
+      return;
+    }
+    router.push(href);
+  }, [hasDraftChanges, router]);
+
+  const saveDraftAndExit = useCallback(() => {
+    const href = pendingExitHref || '/agenda';
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+        consultationData,
+        pacienteSeleccionado,
+        estudiosSeleccionados,
+        procedimientosSeleccionados,
+        procedimientoMotivo,
+        saved_at: new Date().toISOString(),
+      }));
+      toast('Borrador guardado');
+    } catch {
+      toast('No se pudo guardar el borrador');
+    }
+    setShowExitDraftModal(false);
+    if (pendingExitAction === 'reload') {
+      window.location.reload();
+      return;
+    }
+    router.push(href);
+  }, [consultationData, pacienteSeleccionado, estudiosSeleccionados, procedimientosSeleccionados, procedimientoMotivo, pendingExitAction, pendingExitHref, router, toast]);
+
+  const exitWithoutSaving = useCallback(() => {
+    const href = pendingExitHref || '/agenda';
+    setShowExitDraftModal(false);
+    if (pendingExitAction === 'reload') {
+      try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+      window.location.reload();
+      return;
+    }
+    router.push(href);
+  }, [pendingExitAction, pendingExitHref, router]);
+
   const handleCreate = useCallback(async () => {
     if (!pacienteSeleccionado) {
       setFormError('Debe seleccionar un paciente');
@@ -504,6 +808,10 @@ export default function NuevaConsultaPage() {
     }
     if (!consultationData.doctorId) {
       setFormError('Debe seleccionar un doctor');
+      return;
+    }
+    if (dateTimeError) {
+      setFormError(dateTimeError);
       return;
     }
 
@@ -514,12 +822,13 @@ export default function NuevaConsultaPage() {
       const estudiosData = estudiosSeleccionados.map((e) => {
         const estudio = catalogoEstudios.find((c) => c.id === e.id);
         const doctorId = e.mismoDoctor ? consultationData.doctorId : (e.doctorId || null);
-        return { nombre: estudio?.nombre || '', doctor_id: doctorId };
+        return { id: e.id, nombre: estudio?.nombre || '', doctor_id: doctorId };
       });
 
       const procedimientosData = procedimientosSeleccionados.map((p) => {
         const proc = catalogoProcedimientos.find((c) => c.id === p.id);
-        return proc?.nombre || '';
+        const doctorId = p.mismoDoctor ? consultationData.doctorId : (p.doctorId || null);
+        return { id: p.id, nombre: proc?.nombre || '', doctor_id: doctorId, motivo: p.motivo || null };
       });
 
       const primerProcedimiento = procedimientosSeleccionados[0];
@@ -538,9 +847,12 @@ export default function NuevaConsultaPage() {
           hora_fin: consultationData.horaFin || null,
           tipo_consulta: consultationData.tipo,
           tipo_visita: consultationData.tipoVisita,
+          aseguranza_id: consultationData.origenId || null,
+          consulta_servicio_id: consultationData.consultaServicioId || null,
           diagnostico: consultationData.diagnostico,
           estudios: estudiosData,
-          procedimiento: procedimientosData.length > 0 ? procedimientosData.join(', ') : null,
+          procedimientos: procedimientosData,
+          procedimiento: procedimientosData.length > 0 ? procedimientosData.map((p) => p.nombre).join(', ') : null,
           procedimiento_doctor_id: procDoctorId,
           metodo_pago: consultationData.metodoPago,
           moneda: consultationData.moneda,
@@ -554,20 +866,28 @@ export default function NuevaConsultaPage() {
       }
 
       toast('Consulta creada exitosamente');
-      router.push('/consultas');
+      try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+      router.push('/agenda');
     } catch {
       setFormError('Error de conexión con el servidor');
     } finally {
       setSaving(false);
     }
-  }, [pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, calcularCosto, costoTotal]);
+  }, [pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       <PageHeader
         title="NUEVA CONSULTA"
         subtitle="Complete la información de la consulta oftalmológica."
-        backLink={{ href: '/consultas', label: 'Consultas' }}
+        backLink={{
+          href: '/agenda',
+          label: 'Agenda',
+          onClick: (event) => {
+            event.preventDefault();
+            requestExit('/agenda');
+          },
+        }}
         action={
           <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">
             <Printer className="h-4 w-4" /> Imprimir
@@ -605,10 +925,9 @@ export default function NuevaConsultaPage() {
                               setPacienteSeleccionado(p);
                               setSearchPaciente('');
                               setShowDropdown(false);
-                              // Auto-resolve insurance from patient's FK
-                              if (p.aseguradora) {
-                                updateConsultation('aseguradora', p.aseguradora);
-                              }
+                              setEstudiosSeleccionados([]);
+                              setProcedimientosSeleccionados([]);
+                              updateConsultation('origenId', p.aseguranza_id || '');
                             }}
                             className="flex w-full items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
                           >
@@ -687,6 +1006,9 @@ export default function NuevaConsultaPage() {
                             setPacienteSeleccionado(created);
                             setShowNewPatientForm(false);
                             setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '' });
+                            setEstudiosSeleccionados([]);
+                            setProcedimientosSeleccionados([]);
+                            updateConsultation('origenId', created?.aseguranza_id || '');
                             toast('Paciente creado exitosamente');
                           }
                         } catch {}
@@ -717,7 +1039,7 @@ export default function NuevaConsultaPage() {
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect
-                  label="Doctor"
+                  label="Asignar doctor a la consulta"
                   required
                   value={consultationData.doctorId}
                   onChange={(v) => updateConsultation('doctorId', v)}
@@ -730,9 +1052,26 @@ export default function NuevaConsultaPage() {
                 <FormInput label="Hora Inicio" value={consultationData.horaInicio} onChange={(v) => updateConsultation('horaInicio', v)} type="time" />
                 <FormInput label="Hora Fin" value={consultationData.horaFin} onChange={(v) => updateConsultation('horaFin', v)} type="time" />
               </div>
+              {dateTimeError && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                  {dateTimeError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormSelect label="Tipo de Consulta" value={consultationData.tipo} onChange={(v) => updateConsultation('tipo', v)} options={consultTypeOptions} />
-                <FormSelect label="Tipo de Visita" value={consultationData.tipoVisita} onChange={(v) => updateConsultation('tipoVisita', v)} options={visitTypeOptions} />
+                <FormSelect
+                  label="Origen"
+                  value={consultationData.origenId}
+                  onChange={(v) => updateConsultation('origenId', v)}
+                  options={['', ...insuranceOptions]}
+                  displayOptions={['Seleccionar origen...', ...insuranceDisplayOptions]}
+                />
+                <FormSelect
+                  label="Consulta"
+                  value={consultationData.consultaServicioId}
+                  onChange={(v) => updateConsultation('consultaServicioId', v)}
+                  options={['', ...catalogoConsultas.map((c) => c.id)]}
+                  displayOptions={['Seleccionar consulta...', ...catalogoConsultas.map((c) => c.nombre)]}
+                />
               </div>
               <FormInput label="Diagnóstico" value={consultationData.diagnostico} onChange={(v) => updateConsultation('diagnostico', v)} placeholder="Escriba el diagnóstico del paciente..." />
               <div>
@@ -748,7 +1087,6 @@ export default function NuevaConsultaPage() {
                               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-700">Estudio</span>
                               <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
-                            <span className="text-xs text-gray-500 dark:text-[#71767B]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                           <button
                             type="button"
@@ -759,6 +1097,9 @@ export default function NuevaConsultaPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-[#71767B]">
+                          Indicado por: <span className="font-semibold text-gray-700 dark:text-[#E7E9EA]">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -772,19 +1113,22 @@ export default function NuevaConsultaPage() {
                               <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-[#202327] transition-colors" />
                               <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-[#16181C] transition-transform peer-checked:translate-x-4" />
                             </div>
-                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Mismo doctor de la consulta</span>
+                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Realizado por el mismo doctor de la consulta</span>
                           </label>
                           {!estudio.mismoDoctor && (
-                            <select
-                              value={estudio.doctorId || ''}
-                              onChange={(e) => setEstudioDoctor(index, e.target.value)}
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
-                            >
-                              <option value="">Seleccionar doctor...</option>
-                              {doctores.map((d) => (
-                                <option key={d.id} value={d.id}>{d.nombre}</option>
-                              ))}
-                            </select>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-500 dark:text-[#71767B]">Realizado por:</span>
+                              <select
+                                value={estudio.doctorId || ''}
+                                onChange={(e) => setEstudioDoctor(index, e.target.value)}
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                              >
+                                <option value="">Seleccionar doctor...</option>
+                                {doctores.map((d) => (
+                                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -818,7 +1162,6 @@ export default function NuevaConsultaPage() {
                                   className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
                                 >
                                   <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{e.nombre}</span>
-                                  <span className="ml-2 shrink-0 text-xs font-bold text-gray-500 dark:text-[#71767B]">${convertir(e.costo).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </button>
                               ))
                           ) : (
@@ -855,7 +1198,6 @@ export default function NuevaConsultaPage() {
                               <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">Procedimiento</span>
                               <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
-                            <span className="text-xs text-gray-500 dark:text-[#71767B]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                           <button
                             type="button"
@@ -866,6 +1208,9 @@ export default function NuevaConsultaPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-[#71767B]">
+                          Indicado por: <span className="font-semibold text-gray-700 dark:text-[#E7E9EA]">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -879,19 +1224,22 @@ export default function NuevaConsultaPage() {
                               <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-[#202327] transition-colors" />
                               <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-[#16181C] transition-transform peer-checked:translate-x-4" />
                             </div>
-                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Mismo doctor de la consulta</span>
+                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Realizado por el mismo doctor de la consulta</span>
                           </label>
                           {!proc.mismoDoctor && (
-                            <select
-                              value={proc.doctorId || ''}
-                              onChange={(e) => setProcedimientoDoctor(index, e.target.value)}
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
-                            >
-                              <option value="">Seleccionar doctor...</option>
-                              {doctores.map((d) => (
-                                <option key={d.id} value={d.id}>{d.nombre}</option>
-                              ))}
-                            </select>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-500 dark:text-[#71767B]">Realizado por:</span>
+                              <select
+                                value={proc.doctorId || ''}
+                                onChange={(e) => setProcedimientoDoctor(index, e.target.value)}
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                              >
+                                <option value="">Seleccionar doctor...</option>
+                                {doctores.map((d) => (
+                                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
                           )}
                         </div>
                         {proc.motivo && (
@@ -926,7 +1274,6 @@ export default function NuevaConsultaPage() {
                                 className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
                               >
                                 <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{p.nombre}</span>
-                                <span className="ml-2 shrink-0 text-xs font-bold text-gray-500 dark:text-[#71767B]">${convertir(p.costo).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               </button>
                             ))
                           ) : (
@@ -993,7 +1340,6 @@ export default function NuevaConsultaPage() {
                                       className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
                                     >
                                       <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{p.nombre}</span>
-                                      <span className="ml-2 shrink-0 text-xs font-bold text-gray-500 dark:text-[#71767B]">${convertir(p.costo).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </button>
                                   ))
                               ) : (
@@ -1028,56 +1374,13 @@ export default function NuevaConsultaPage() {
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormSelect label="Aseguradora" value={consultationData.aseguradora} onChange={(v) => updateConsultation('aseguradora', v)} options={insuranceOptions} />
                 <FormSelect label="Método de Pago" value={consultationData.metodoPago} onChange={(v) => updateConsultation('metodoPago', v)} options={paymentMethodOptions} />
+                <FormSelect label="Moneda" value={consultationData.moneda} onChange={(v) => updateConsultation('moneda', v)} options={['MXN - Peso Mexicano', 'USD - Dólar']} />
               </div>
-              <FormSelect label="Moneda" value={consultationData.moneda} onChange={(v) => updateConsultation('moneda', v)} options={['MXN - Peso Mexicano', 'USD - Dólar']} />
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 dark:border-[#2F3336] dark:bg-[#202327]">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editingMontos) {
-                        setEditingMontos(false);
-                      } else {
-                        setCostoBaseEdit(convertir(costoBaseOriginal).toFixed(2));
-                        const estEdit: Record<number, string> = {};
-                        estudiosSeleccionados.forEach((e, idx) => {
-                          const cat = catalogoEstudios.find((c) => c.id === e.id);
-                          estEdit[idx] = convertir(cat?.costo || 0).toFixed(2);
-                        });
-                        setCostosEstudiosEdit(estEdit);
-                        const procEdit: Record<number, string> = {};
-                        procedimientosSeleccionados.forEach((p, idx) => {
-                          const cat = catalogoProcedimientos.find((c) => c.id === p.id);
-                          procEdit[idx] = convertir(cat?.costo || 0).toFixed(2);
-                        });
-                        setCostosProcsEdit(procEdit);
-                        setEditingMontos(true);
-                      }
-                    }}
-                    className="text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors"
-                  >
-                    {editingMontos ? 'GUARDAR MONTOS' : 'EDITAR MONTOS'}
-                  </button>
-                </div>
                 <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-[#71767B]">Costo base (matriz):</span>
-                  {editingMontos ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 dark:text-[#71767B]">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={costoBaseEdit}
-                        onChange={(e) => setCostoBaseEdit(e.target.value)}
-                        className="w-28 text-right font-bold text-gray-900 dark:text-[#E7E9EA] bg-white dark:bg-[#16181C] border border-gray-300 dark:border-[#2F3336] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                    </div>
-                  ) : (
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(costoBaseOriginal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  )}
+                  <span className="text-gray-500 dark:text-[#71767B]">Consulta:</span>
+                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right">{selectedConsultaServicio?.nombre || 'Servicio pendiente'}</span>
                 </div>
                 {estudiosSeleccionados.length > 0 && (
                   <>
@@ -1090,26 +1393,11 @@ export default function NuevaConsultaPage() {
                         ? doctores.find((d) => d.id === consultationData.doctorId)
                         : doctores.find((d) => d.id === estudio.doctorId);
                       return (
-                        <div key={idx} className="flex justify-between text-sm items-center pl-3">
+                        <div key={idx} className="text-sm pl-3">
                           <span className="text-gray-500 dark:text-[#71767B]">
                             {cat?.nombre || 'Desconocido'}
                             {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
                           </span>
-                          {editingMontos ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-400 dark:text-[#71767B]">$</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={costosEstudiosEdit[idx] ?? convertir(cat?.costo || 0).toFixed(2)}
-                                onChange={(e) => setCostosEstudiosEdit((prev) => ({ ...prev, [idx]: e.target.value }))}
-                                className="w-24 text-right font-bold text-gray-900 dark:text-[#E7E9EA] bg-white dark:bg-[#16181C] border border-gray-300 dark:border-[#2F3336] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              />
-                            </div>
-                          ) : (
-                            <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          )}
                         </div>
                       );
                     })}
@@ -1126,26 +1414,11 @@ export default function NuevaConsultaPage() {
                         ? doctores.find((d) => d.id === consultationData.doctorId)
                         : doctores.find((d) => d.id === proc.doctorId);
                       return (
-                        <div key={idx} className="flex justify-between text-sm items-center pl-3">
+                        <div key={idx} className="text-sm pl-3">
                           <span className="text-gray-500 dark:text-[#71767B]">
                             {cat?.nombre || 'Desconocido'}
                             {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
                           </span>
-                          {editingMontos ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-400 dark:text-[#71767B]">$</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={costosProcsEdit[idx] ?? convertir(cat?.costo || 0).toFixed(2)}
-                                onChange={(e) => setCostosProcsEdit((prev) => ({ ...prev, [idx]: e.target.value }))}
-                                className="w-24 text-right font-bold text-gray-900 dark:text-[#E7E9EA] bg-white dark:bg-[#16181C] border border-gray-300 dark:border-[#2F3336] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              />
-                            </div>
-                          ) : (
-                            <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          )}
                         </div>
                       );
                     })}
@@ -1210,13 +1483,13 @@ export default function NuevaConsultaPage() {
               <span className="text-xs text-gray-400 dark:text-[#71767B]">Los campos con <span className="text-red-500">*</span> son obligatorios.</span>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/consultas" className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</Link>
+              <button type="button" onClick={() => requestExit('/agenda')} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
               <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
                 <Eye className="h-4 w-4" /> PREVISUALIZAR
               </button>
               <button
                 onClick={handleCreate}
-                disabled={saving || !pacienteSeleccionado || !consultationData.doctorId}
+                disabled={saving || !pacienteSeleccionado || !consultationData.doctorId || Boolean(dateTimeError)}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : <><CheckCircle2 className="h-4 w-4" /> FINALIZAR CONSULTA</>}
@@ -1226,7 +1499,7 @@ export default function NuevaConsultaPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-[300px] lg:shrink-0 space-y-5 lg:sticky lg:top-6 lg:self-start">
+        <div className="w-full lg:w-[300px] lg:shrink-0 space-y-5 lg:sticky lg:top-24 lg:self-start">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
             <div className="px-6 py-4">
               <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Resumen</h2>
@@ -1249,34 +1522,28 @@ export default function NuevaConsultaPage() {
                 <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{consultationData.horaInicio} - {consultationData.horaFin || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Tipo</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{consultationData.tipo}</span>
+                <span className="text-gray-400 dark:text-[#71767B]">Origen</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedInsurance?.nombre || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400 dark:text-[#71767B]">Consulta</span>
+                <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right truncate max-w-[160px]">{selectedConsultaServicio?.nombre || '—'}</span>
               </div>
               <div className="border-t border-gray-100 dark:border-[#2F3336] pt-2 space-y-1">
                 <div className="flex justify-between">
                   <span className="text-gray-400 dark:text-[#71767B]">Base:</span>
-                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(calcularCosto(consultationData.tipo, consultationData.tipoVisita)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedConsultaServicio?.nombre || '—'}</span>
                 </div>
                 {estudiosSeleccionados.length > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-400 dark:text-[#71767B]">Estudios:</span>
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">
-                      ${convertir(estudiosSeleccionados.reduce((sum, e) => {
-                        const estudio = catalogoEstudios.find((c) => c.id === e.id);
-                        return sum + (estudio ? estudio.costo : 0);
-                      }, 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{estudiosSeleccionados.length}</span>
                   </div>
                 )}
                 {procedimientosSeleccionados.length > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-400 dark:text-[#71767B]">Procs:</span>
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">
-                      ${convertir(procedimientosSeleccionados.reduce((sum, p) => {
-                        const proc = catalogoProcedimientos.find((c) => c.id === p.id);
-                        return sum + (proc ? proc.costo : 0);
-                      }, 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{procedimientosSeleccionados.length}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-gray-100 dark:border-[#2F3336] pt-1">
@@ -1288,6 +1555,52 @@ export default function NuevaConsultaPage() {
           </div>
         </div>
       </div>
+
+      <Modal isOpen={showExitDraftModal} onClose={() => setShowExitDraftModal(false)} maxWidth="max-w-md">
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">Guardar borrador</h2>
+            <p className="mt-2 text-sm text-gray-500 dark:text-[#71767B]">
+              Hay cambios en esta consulta. Revise el resumen antes de {pendingExitAction === 'reload' ? 'recargar' : 'salir'}.
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#2F3336] dark:bg-[#202327]">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Cambios capturados</p>
+            {draftChangeSummary.length > 0 ? (
+              <ul className="max-h-56 space-y-2 overflow-y-auto text-sm text-gray-700 dark:text-[#E7E9EA]">
+                {draftChangeSummary.map((change, index) => (
+                  <li key={index} className="rounded-md bg-white px-3 py-2 dark:bg-[#16181C]">{change}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-[#71767B]">No hay cambios relevantes para guardar.</p>
+            )}
+          </div>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={exitWithoutSaving}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors"
+            >
+              {pendingExitAction === 'reload' ? 'Recargar sin guardar' : 'Salir sin guardar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExitDraftModal(false)}
+              className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors"
+            >
+              Seguir editando
+            </button>
+            <button
+              type="button"
+              onClick={saveDraftAndExit}
+              className="rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+            >
+              Guardar borrador
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Preview Modal */}
       <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} maxWidth="max-w-2xl">
@@ -1323,8 +1636,8 @@ export default function NuevaConsultaPage() {
               <PreviewField label="Fecha" value={consultationData.fecha || '—'} />
               <PreviewField label="Hora Inicio" value={consultationData.horaInicio || '—'} />
               <PreviewField label="Hora Fin" value={consultationData.horaFin || '—'} />
-              <PreviewField label="Tipo de Consulta" value={consultationData.tipo || '—'} />
-              <PreviewField label="Tipo de Visita" value={consultationData.tipoVisita || '—'} />
+              <PreviewField label="Origen" value={selectedInsurance?.nombre || '—'} />
+              <PreviewField label="Consulta" value={selectedConsultaServicio?.nombre || '—'} />
             </div>
             <div className="mt-3 space-y-3">
               <PreviewField label="Diagnóstico" value={consultationData.diagnostico || 'No especificado'} full />
@@ -1340,12 +1653,11 @@ export default function NuevaConsultaPage() {
                         ? doctorSeleccionado?.nombre
                         : doctores.find((d) => d.id === e.doctorId)?.nombre;
                       return (
-                        <li key={index} className="flex items-center justify-between text-sm">
+                        <li key={index} className="text-sm">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre}</span>
                             {doctorName && <span className="text-[10px] text-gray-400 dark:text-[#71767B]">({doctorName})</span>}
                           </div>
-                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </li>
                       );
                     })}
@@ -1361,12 +1673,11 @@ export default function NuevaConsultaPage() {
                     {procedimientosSeleccionados.map((p, index) => {
                       const cat = catalogoProcedimientos.find((c) => c.id === p.id);
                       return (
-                        <li key={index} className="flex justify-between text-sm">
+                        <li key={index} className="text-sm">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre}</span>
                             {p.motivo && <span className="text-[10px] text-gray-400 dark:text-[#71767B] italic">({p.motivo})</span>}
                           </div>
-                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </li>
                       );
                     })}
@@ -1381,7 +1692,6 @@ export default function NuevaConsultaPage() {
               <Banknote className="h-4 w-4 text-amber-600" /> Datos de Cobro
             </h4>
             <div className="space-y-3 text-sm">
-              <PreviewField label="Aseguradora" value={consultationData.aseguradora || '—'} />
               <PreviewField label="Método de Pago" value={consultationData.metodoPago || 'No seleccionado'} />
               <PreviewField label="Moneda" value={consultationData.moneda || '—'} />
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]">
@@ -1390,26 +1700,26 @@ export default function NuevaConsultaPage() {
                   ${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span>
                 </p>
                 <div className="mt-2 space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-[#71767B]">Base:</span>
-                    <span className="text-gray-900 dark:text-[#E7E9EA]">${convertir(calcularCosto(consultationData.tipo, consultationData.tipoVisita)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div>
+                    <span className="text-gray-500 dark:text-[#71767B]">Consulta: </span>
+                    <span className="text-gray-900 dark:text-[#E7E9EA]">{selectedConsultaServicio?.nombre || '—'}</span>
                   </div>
                   {estudiosSeleccionados.map((e, idx) => {
                     const cat = catalogoEstudios.find((c) => c.id === e.id);
                     const doctorName = e.mismoDoctor ? doctorSeleccionado?.nombre : doctores.find((d) => d.id === e.doctorId)?.nombre;
                     return (
-                      <div key={idx} className="flex justify-between">
-                        <span className="text-gray-500 dark:text-[#71767B]">{cat?.nombre || 'Desconocido'}{doctorName ? ` (${doctorName})` : ''}:</span>
-                        <span className="text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <div key={idx}>
+                        <span className="text-gray-500 dark:text-[#71767B]">Estudio: </span>
+                        <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre || 'Desconocido'}{doctorName ? ` (${doctorName})` : ''}</span>
                       </div>
                     );
                   })}
                   {procedimientosSeleccionados.map((p, idx) => {
                     const cat = catalogoProcedimientos.find((c) => c.id === p.id);
                     return (
-                      <div key={idx} className="flex justify-between">
-                        <span className="text-gray-500 dark:text-[#71767B]">{cat?.nombre || 'Desconocido'}:</span>
-                        <span className="text-gray-900 dark:text-[#E7E9EA]">${convertir(cat?.costo || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <div key={idx}>
+                        <span className="text-gray-500 dark:text-[#71767B]">Procedimiento: </span>
+                        <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre || 'Desconocido'}</span>
                       </div>
                     );
                   })}
@@ -1439,7 +1749,7 @@ export default function NuevaConsultaPage() {
           <button onClick={() => setShowPreview(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CERRAR</button>
           <button
             onClick={() => { setShowPreview(false); handleCreate(); }}
-            disabled={saving || !pacienteSeleccionado || !consultationData.doctorId}
+            disabled={saving || !pacienteSeleccionado || !consultationData.doctorId || Boolean(dateTimeError)}
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

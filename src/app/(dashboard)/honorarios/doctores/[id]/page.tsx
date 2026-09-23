@@ -28,6 +28,10 @@ interface EventoFila {
   fecha_servicio: string;
   paciente_nombre: string;
   origen_tipo: string;
+  origen_nombre: string | null;
+  servicio_nombre: string | null;
+  precio_servicio: number;
+  porcentaje_cobertura: number | null;
   rol: string;
   monto_devengado: number;
   estado: string;
@@ -286,8 +290,12 @@ export default function DoctorHonorariosPage() {
                       <tr className="bg-gray-50 dark:bg-[#202327] text-left text-xs text-gray-500 uppercase tracking-wider">
                         <th className="px-4 py-3">Fecha</th>
                         <th className="px-4 py-3">Paciente</th>
+                        <th className="px-4 py-3">Origen</th>
                         <th className="px-4 py-3">Concepto</th>
+                        <th className="px-4 py-3">Servicio</th>
                         <th className="px-4 py-3">Rol</th>
+                        <th className="px-4 py-3 text-right">Precio</th>
+                        <th className="px-4 py-3 text-right">Cobertura</th>
                         <th className="px-4 py-3 text-right">Monto</th>
                         <th className="px-4 py-3">Estado</th>
                       </tr>
@@ -297,10 +305,14 @@ export default function DoctorHonorariosPage() {
                         <tr key={ev.id} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
                           <td className="px-4 py-3 text-gray-900 dark:text-[#E7E9EA]">{ev.fecha_servicio}</td>
                           <td className="px-4 py-3 text-gray-700 dark:text-[#E7E9EA]">{ev.paciente_nombre || '—'}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-[#71767B]">{ev.origen_nombre || '—'}</td>
                           <td className="px-4 py-3">
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-[#202327] text-gray-700 dark:text-[#E7E9EA]">{ev.origen_tipo}</span>
                           </td>
+                          <td className="px-4 py-3 max-w-[220px] truncate text-gray-600 dark:text-[#71767B]">{ev.servicio_nombre || '—'}</td>
                           <td className="px-4 py-3 text-gray-600 dark:text-[#71767B]">{ev.rol}</td>
+                          <td className="px-4 py-3 text-right text-gray-600 dark:text-[#71767B]">{fmtMoney(ev.precio_servicio)}</td>
+                          <td className="px-4 py-3 text-right text-gray-600 dark:text-[#71767B]">{ev.porcentaje_cobertura != null ? `${ev.porcentaje_cobertura}%` : '—'}</td>
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-[#E7E9EA]">{fmtMoney(ev.monto_devengado)}</td>
                           <td className="px-4 py-3">
                             <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', estadoBadge[ev.estado] || 'bg-gray-100 text-gray-700')}>{ev.estado}</span>

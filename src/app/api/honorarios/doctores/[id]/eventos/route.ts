@@ -36,7 +36,7 @@ export async function GET(
     .from('eventos_honorario')
     .select(`
       id, origen_tipo, origen_id, doctor_id, rol, fecha_servicio,
-      monto_base, monto_devengado, moneda, estado, notas, created_at,
+      monto_base, tarifa_snapshot, monto_devengado, moneda, estado, notas, created_at,
       pacientes:paciente_id (nombre_completo)
     `, { count: 'exact' })
     .eq('doctor_id', id)
@@ -55,11 +55,18 @@ export async function GET(
     return NextResponse.json({ error: 'Error al obtener eventos' }, { status: 500 });
   }
 
-  const result = (data || []).map((ev) => ({
-    ...ev,
-    paciente_nombre: (ev.pacientes as unknown as Record<string, unknown>)?.nombre_completo || null,
-    pacientes: undefined,
-  }));
+  const result = (data || []).map((ev) => {
+    const snapshot = (ev.tarifa_snapshot as Record<string, unknown>) || {};
+    return {
+      ...ev,
+      paciente_nombre: (ev.pacientes as unknown as Record<string, unknown>)?.nombre_completo || (snapshot.paciente_nombre as string | null) || null,
+      origen_nombre: (snapshot.origen_nombre as string | null) || null,
+      servicio_nombre: (snapshot.servicio_nombre as string | null) || null,
+      precio_servicio: Number(snapshot.precio_servicio ?? ev.monto_base ?? 0) || 0,
+      porcentaje_cobertura: snapshot.porcentaje_cobertura != null ? Number(snapshot.porcentaje_cobertura) : null,
+      pacientes: undefined,
+    };
+  });
 
   return NextResponse.json({ data: result, total: count || 0, page, pageSize, doctor });
 }

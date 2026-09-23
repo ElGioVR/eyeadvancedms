@@ -162,10 +162,17 @@ export class HonorariosService {
       const montoBase = ev.monto_base ?? 0;
       const tarifaSnapshot = (ev.tarifa_snapshot as Record<string, unknown>) || {};
       const tarifaValor = (tarifaSnapshot.valor as number) || 0;
+      const servicioNombre = (tarifaSnapshot.servicio_nombre as string | null) || null;
+      const origenNombre = (tarifaSnapshot.origen_nombre as string | null) || null;
+      const precioServicio = Number(tarifaSnapshot.precio_servicio ?? montoBase) || 0;
+      const porcentajeCobertura = tarifaSnapshot.porcentaje_cobertura != null
+        ? Number(tarifaSnapshot.porcentaje_cobertura)
+        : null;
       const honorarioDevengado = ev.monto_devengado ?? 0;
 
       const montoCobradoPesos = parseMoneda(montoCobrado, ev.moneda === 'DOLARES' ? 'DOLARES' : 'PESOS', 'PESOS', tipoCambio);
       const honorarioPesos = parseMoneda(honorarioDevengado, ev.moneda === 'DOLARES' ? 'DOLARES' : 'PESOS', 'PESOS', tipoCambio);
+      const precioServicioPesos = parseMoneda(precioServicio, ev.moneda === 'DOLARES' ? 'DOLARES' : 'PESOS', 'PESOS', tipoCambio);
 
       detalles.push({
         fecha: ev.fecha_servicio,
@@ -175,8 +182,11 @@ export class HonorariosService {
         tipo_concepto: ev.origen_tipo,
         tipo_visita: null,
         diagnostico: null,
-        procedimiento: null,
-        aseguranza,
+        procedimiento: servicioNombre,
+        aseguranza: aseguranza || origenNombre,
+        servicio_nombre: servicioNombre,
+        precio_servicio: precioServicioPesos,
+        porcentaje_cobertura: porcentajeCobertura,
         metodo_pago: metodoPago,
         moneda: ev.moneda,
         monto_cobrado: montoCobradoPesos,

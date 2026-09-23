@@ -17,6 +17,9 @@ interface ReporteDoctorFila {
   paciente: string;
   tipo_concepto: string;
   aseguranza: string | null;
+  servicio_nombre: string | null;
+  precio_servicio: number;
+  porcentaje_cobertura: number | null;
   metodo_pago: string | null;
   moneda: string;
   monto_cobrado: number;
@@ -156,9 +159,13 @@ export default function ReporteDoctorPage() {
                       <tr className="bg-gray-50 dark:bg-[#202327]/50">
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Fecha</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Paciente</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Origen</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Tipo</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Servicio</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Folio</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Método</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Precio</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Cobertura</th>
                         <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Cobrado</th>
                         <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Base</th>
                         <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Honorario</th>
@@ -170,13 +177,17 @@ export default function ReporteDoctorPage() {
                         <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-[#E7E9EA] whitespace-nowrap">{fila.fecha}</td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{fila.paciente}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-[#71767B]">{fila.aseguranza || '-'}</td>
                           <td className="px-4 py-3">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#202327] text-gray-600 dark:text-[#71767B]">
                               {fila.tipo_concepto}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-[#71767B] max-w-[220px] truncate">{fila.servicio_nombre || '-'}</td>
                           <td className="px-4 py-3 text-xs text-gray-500 font-mono">{folioText(fila.folio)}</td>
                           <td className="px-4 py-3 text-sm text-gray-600 dark:text-[#71767B]">{fila.metodo_pago || '-'}</td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-[#71767B]">{formatCurrency(fila.precio_servicio)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-[#71767B]">{fila.porcentaje_cobertura != null ? `${fila.porcentaje_cobertura}%` : '-'}</td>
                           <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]">{formatCurrency(fila.monto_cobrado)}</td>
                           <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-[#71767B]">{formatCurrency(fila.base_calculo)}</td>
                           <td className="px-4 py-3 text-right text-sm font-bold text-primary-600">{formatCurrency(fila.honorario_doctor)}</td>
@@ -194,7 +205,7 @@ export default function ReporteDoctorPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 dark:bg-[#202327]/80 font-bold">
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-[#E7E9EA]" colSpan={5}>TOTALES</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-[#E7E9EA]" colSpan={9}>TOTALES</td>
                         <td className="px-4 py-3 text-right text-sm text-gray-900 dark:text-[#E7E9EA]">{formatCurrency(totales.total_cobrado)}</td>
                         <td className="px-4 py-3 text-right text-sm text-gray-900 dark:text-[#E7E9EA]"></td>
                         <td className="px-4 py-3 text-right text-sm text-primary-600">{formatCurrency(totales.total_honorarios)}</td>

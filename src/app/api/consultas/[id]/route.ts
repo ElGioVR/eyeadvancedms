@@ -89,7 +89,7 @@ export async function GET(
   const [historialResult, conceptosResult, aseguranzaResult, coberturaResult] = await Promise.all([
     supabase
       .from('consulta_historial')
-      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at, usuarios:usuario_id(nombre)')
+      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
       .eq('consulta_id', id)
       .order('created_at', { ascending: true }),
     supabase
@@ -103,6 +103,20 @@ export async function GET(
       ? supabase.from('coberturas_aseguranza').select('id, porcentaje_cobertura, monto_maximo, aplica_estudios, aplica_procedimientos').eq('aseguranza_id', consulta.aseguranza_id).eq('activo', true).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+
+  let historial = historialResult.data ?? [];
+  const historialUserIds = [...new Set(historial.map((h: any) => h.usuario_id).filter(Boolean))];
+  if (historialUserIds.length > 0) {
+    const { data: historialUsuarios } = await supabase
+      .from('usuarios')
+      .select('id, nombre')
+      .in('id', historialUserIds);
+    const hUserMap = new Map((historialUsuarios || []).map((u: any) => [u.id, u.nombre]));
+    historial = historial.map((h: any) => ({
+      ...h,
+      usuario_nombre: h.usuario_id ? hUserMap.get(h.usuario_id) || null : null,
+    }));
+  }
 
   interface PacienteJoin { nombre_completo: string; fecha_nacimiento: string | null; telefono: string | null; sexo: string | null; email: string | null; numero_poliza: string | null; numero_afiliacion: string | null }
   interface DoctorJoin { nombre_completo: string }
@@ -131,7 +145,7 @@ export async function GET(
       paciente_poliza: pacienteData?.numero_poliza || null,
       paciente_afiliacion: pacienteData?.numero_afiliacion || null,
     },
-    historial: historialResult.data ?? [],
+    historial,
     conceptos: conceptosResult.data ?? [],
     aseguranza: aseguranzaResult.data ?? null,
     cobertura: coberturaResult.data ?? null,

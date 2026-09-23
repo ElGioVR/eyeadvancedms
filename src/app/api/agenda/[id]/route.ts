@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
+import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { z } from 'zod';
 
 const cirugiaUpdateSchema = z.object({
@@ -20,9 +21,10 @@ const cirugiaUpdateSchema = z.object({
   tiempo_estimado: z.string().max(50).optional().nullable(),
   tiempo_estancia: z.string().max(50).optional().nullable(),
   doctor_id: z.string().uuid().optional().nullable(),
-  estado: z.enum(['agendada', 'aplazada', 'completada', 'cancelada']).optional(),
+  estado: z.enum(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']).optional(),
   procedencia: z.string().max(255).optional().nullable(),
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
+  motivo: z.string().min(1).max(500).optional().nullable(),
   notas: z.string().optional().nullable(),
   notificado: z.boolean().optional(),
   inventario_item_id: z.string().uuid().optional().nullable(),
@@ -92,12 +94,38 @@ export async function PATCH(
   const data = validation.data;
   const updates: Record<string, unknown> = {};
 
-  // Read current state before update (for side-effects)
-  const { data: prev } = await supabase
+  // Read current state before update (for side-effects and state machine)
+  const { data: prev, error: prevError } = await supabase
     .from('agenda_cirugias')
     .select('estado, inventario_item_id')
     .eq('id', id)
     .single();
+
+  if (prevError || !prev) {
+    return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
+  }
+
+  // EST-002 / EST-003: validar transición de estados y requerir motivo
+  const nuevoEstado = data.estado;
+  const estadoAnterior = prev.estado as CirugiaEstado;
+
+  if (nuevoEstado && nuevoEstado !== estadoAnterior) {
+    if (!esTransicionValida(estadoAnterior, nuevoEstado)) {
+      return NextResponse.json(
+        { error: `Transición de estado no permitida: ${estadoAnterior} → ${nuevoEstado}` },
+        { status: 400 }
+      );
+    }
+    if (!data.motivo) {
+      return NextResponse.json(
+        { error: 'El motivo es obligatorio para cambiar el estado de la cirugía' },
+        { status: 400 }
+      );
+    }
+    if (nuevoEstado === 'aplazada' && data.motivo) {
+      updates.motivo_aplazamiento = data.motivo.trim();
+    }
+  }
 
   const fieldMap: Record<string, string> = {
     paciente_id: 'paciente_id',
@@ -143,18 +171,31 @@ export async function PATCH(
     );
   }
 
-  // Side-effects: LIO consumption / release on status change
-  const newEstado = data.estado;
-  const itemId = data.inventario_item_id ?? prev?.inventario_item_id;
+  // EST-003: Registrar cambio de estado en historial
+  if (nuevoEstado && nuevoEstado !== estadoAnterior) {
+    await supabase.from('cirugia_historial').insert({
+      cirugia_id: id,
+      usuario_id: auth.user.id,
+      accion: 'ESTADO_CAMBIADO',
+      detalle: {
+        de: estadoAnterior,
+        a: nuevoEstado,
+        motivo: data.motivo,
+      },
+    });
+  }
 
-  if (itemId && newEstado === 'completada' && prev?.estado !== 'completada') {
+  // Side-effects: LIO consumption / release on status change
+  const itemId = data.inventario_item_id ?? prev.inventario_item_id;
+
+  if (itemId && nuevoEstado === 'completada' && estadoAnterior !== 'completada') {
     const result = await consumirLIO(itemId, id, auth.user.id);
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
   }
 
-  if (itemId && newEstado === 'cancelada' && prev?.estado !== 'cancelada') {
+  if (itemId && nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
     await liberarLIO(itemId, id, auth.user.id);
   }
 

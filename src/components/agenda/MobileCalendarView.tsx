@@ -39,21 +39,26 @@ interface Props {
 type ViewMode = 'month' | 'day';
 
 export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr }: Props) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date('2000-01-01T12:00:00'));
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
   const [slideDir, setSlideDir] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedCirugia, setSelectedCirugia] = useState<AgendaCirugia | null>(null);
+  const [mounted, setMounted] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+
+  useEffect(() => {
+    setCurrentDate(new Date());
+    setMounted(true);
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const days = daysInMonth(year, month);
   const firstDay = firstDayOfMonth(year, month);
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const isCurrentMonth = mounted && new Date().getFullYear() === year && new Date().getMonth() === month;
 
   const dayEvents = useMemo(() => {
     const events = cirugiasPorFecha[selectedDay] || [];

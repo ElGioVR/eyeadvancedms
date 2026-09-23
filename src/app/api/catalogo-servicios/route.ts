@@ -8,21 +8,27 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const pacienteId = searchParams.get('paciente_id');
+  const aseguranzaParam = searchParams.get('aseguranza_id');
+  const tipo = searchParams.get('tipo');
+  const q = searchParams.get('q');
 
-  if (!pacienteId) {
-    return NextResponse.json({ error: 'paciente_id es requerido' }, { status: 400 });
+  if (!pacienteId && !aseguranzaParam) {
+    return NextResponse.json({ error: 'paciente_id o aseguranza_id es requerido' }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
 
-  // Resolve patient's insurance
-  const { data: paciente } = await supabase
-    .from('pacientes')
-    .select('aseguranza_id')
-    .eq('id', pacienteId)
-    .maybeSingle();
+  let aseguranzaId = aseguranzaParam;
 
-  const aseguranzaId = paciente?.aseguranza_id;
+  if (!aseguranzaId && pacienteId) {
+    const { data: paciente } = await supabase
+      .from('pacientes')
+      .select('aseguranza_id')
+      .eq('id', pacienteId)
+      .maybeSingle();
+
+    aseguranzaId = paciente?.aseguranza_id ?? null;
+  }
 
   // Fetch services for patient's insurance + generic (NULL aseguranza_id) as fallback
   let query = supabase
@@ -33,6 +39,14 @@ export async function GET(request: Request) {
 
   if (aseguranzaId) {
     query = query.or(`aseguranza_id.eq.${aseguranzaId},aseguranza_id.is.null`);
+  }
+
+  if (tipo && ['ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA'].includes(tipo)) {
+    query = query.eq('tipo', tipo);
+  }
+
+  if (q && q.trim().length > 0) {
+    query = query.ilike('nombre', `%${q.trim().replace(/[%_]/g, '\\$&')}%`);
   }
 
   const { data: servicios, error } = await query;

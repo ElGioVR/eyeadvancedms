@@ -232,8 +232,17 @@ export interface AgendaCirugia {
   motivo_aplazamiento: string | null;
   notas: string | null;
   notificado: boolean;
+  // Campos añadidos en Fase 1 / B1
+  origen_id: string | null;
+  servicio_id: string | null;
+  codigo: string | null;
+  duracion_min: number | null;
+  recurso_id: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
+  // B11+: Agenda unificada
+  tipo?: 'cirugia' | 'consulta' | 'estudio';
 }
 
 export interface AgendaCirugiaImportRow {

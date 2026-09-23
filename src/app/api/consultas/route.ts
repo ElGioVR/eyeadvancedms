@@ -54,8 +54,16 @@ const metodoPagoMap: Record<string, string> = {
 };
 
 const estudioConDoctorSchema = z.object({
+  id: z.string().uuid().optional().nullable(),
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
+});
+
+const procedimientoConDoctorSchema = z.object({
+  id: z.string().uuid().optional().nullable(),
+  nombre: z.string().max(255),
+  doctor_id: z.string().uuid().optional().nullable(),
+  motivo: z.string().max(500).optional().nullable(),
 });
 
 const consultaCreateSchema = z.object({
@@ -66,9 +74,12 @@ const consultaCreateSchema = z.object({
   hora_fin: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
   tipo_consulta: z.string().optional().nullable(),
   tipo_visita: z.string().optional().nullable(),
+  aseguranza_id: z.string().uuid().optional().nullable(),
+  consulta_servicio_id: z.string().uuid().optional().nullable(),
   diagnostico: z.string().max(500).optional().nullable(),
   estudios: z.array(z.union([z.string().max(255), estudioConDoctorSchema])).max(3).optional().nullable(),
   procedimiento: z.string().optional().nullable(),
+  procedimientos: z.array(procedimientoConDoctorSchema).optional().nullable(),
   procedimiento_doctor_id: z.string().uuid().optional().nullable(),
   notas: z.string().optional().nullable(),
   costo: z.union([z.string(), z.number()]).optional().nullable(),
@@ -133,6 +144,17 @@ export async function GET(request: Request) {
       est3_doc:estudio_3_doctor_id (nombre_completo),
       proc_doc:procedimiento_doctor_id (nombre_completo)
     `, { count: 'exact' });
+
+  // Filtros opcionales
+  const pacienteId = searchParams.get('paciente_id');
+  const tipo = searchParams.get('tipo');
+
+  if (pacienteId) {
+    query = query.eq('paciente_id', pacienteId);
+  }
+  if (tipo) {
+    query = query.eq('tipo_consulta', tipo);
+  }
 
   // RBAC: doctor solo ve sus consultas; doctor_jefe con modo_focus también
   const profileRes = await supabase.from('usuarios').select('rol, preferencias').eq('id', auth.user.id).maybeSingle();
@@ -255,34 +277,68 @@ export async function POST(request: Request) {
   const seq = ((count || 0) + 1).toString().padStart(5, '0');
   const folio = `CON-${year}-${seq}`;
 
-  // Parse estudios - support both string and {nombre, doctor_id} formats
-  const parseEstudio = (e: string | { nombre: string; doctor_id?: string | null }) => {
-    if (typeof e === 'string') return { nombre: e, doctor_id: null };
-    return { nombre: e.nombre, doctor_id: e.doctor_id || null };
+  // Parse estudios - support both string and {id, nombre, doctor_id} formats
+  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null }) => {
+    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null };
+    return { id: 'id' in e ? e.id || null : null, nombre: e.nombre, doctor_id: e.doctor_id || null };
   };
   const est0 = data.estudios?.[0] ? parseEstudio(data.estudios[0]) : null;
   const est1 = data.estudios?.[1] ? parseEstudio(data.estudios[1]) : null;
   const est2 = data.estudios?.[2] ? parseEstudio(data.estudios[2]) : null;
+  const procedimientos = data.procedimientos?.length
+    ? data.procedimientos
+    : data.procedimiento
+      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null }]
+      : [];
 
-  // Resolve patient's insurance and server-side prices
+  // Resolve selected origin and server-side prices
   const { data: pacienteInfo } = await supabase
     .from('pacientes')
     .select('aseguranza_id')
     .eq('id', data.paciente_id)
     .maybeSingle();
-  const aseguranzaId = pacienteInfo?.aseguranza_id || null;
+  const aseguranzaId = data.aseguranza_id || pacienteInfo?.aseguranza_id || null;
 
-  async function resolverCostoServicio(nombre: string, tipo: string): Promise<number> {
-    if (!aseguranzaId) return 0;
-    const { data: svc } = await supabase
-      .from('aseguranza_servicios')
-      .select('costo')
-      .eq('aseguranza_id', aseguranzaId)
-      .eq('tipo', tipo)
-      .ilike('nombre', nombre)
-      .eq('activo', true)
+  if (aseguranzaId) {
+    const { data: aseguranzaCheck } = await supabase
+      .from('aseguranzas')
+      .select('id, activo')
+      .eq('id', aseguranzaId)
       .maybeSingle();
-    return svc?.costo || 0;
+
+    if (!aseguranzaCheck) {
+      return NextResponse.json({ error: 'El origen seleccionado no existe' }, { status: 404 });
+    }
+    if (!aseguranzaCheck.activo) {
+      return NextResponse.json({ error: 'El origen seleccionado no está activo' }, { status: 400 });
+    }
+  }
+
+  async function resolverServicio(
+    tipo: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO',
+    servicioId?: string | null,
+    nombre?: string | null,
+  ): Promise<{ id: string | null; nombre: string | null; costo: number; cobertura: number }> {
+    if (!aseguranzaId) return { id: servicioId || null, nombre: nombre || null, costo: 0, cobertura: 0 };
+
+    let query = supabase
+      .from('aseguranza_servicios')
+      .select('id, nombre, costo, porcentaje_cobertura')
+      .eq('aseguranza_id', aseguranzaId)
+      .eq('activo', true)
+      .eq('tipo', tipo);
+
+    if (servicioId) query = query.eq('id', servicioId);
+    else if (nombre) query = query.ilike('nombre', nombre);
+    else return { id: null, nombre: null, costo: 0, cobertura: 0 };
+
+    const { data: svc } = await query.maybeSingle();
+    return {
+      id: svc?.id || servicioId || null,
+      nombre: svc?.nombre || nombre || null,
+      costo: svc?.costo || 0,
+      cobertura: svc?.porcentaje_cobertura || 0,
+    };
   }
 
   // 1. Create consulta
@@ -324,7 +380,67 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Create doctor cost distribution if provided
+  // 2. Create clinical concepts from selected origin services
+  const conceptosRows: Array<{
+    consulta_id: string;
+    doctor_id: string;
+    tipo_concepto: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO';
+    concepto_id: string | null;
+    texto_original: string | null;
+    precio_aplicado: number;
+  }> = [];
+
+  const servicioConsulta = await resolverServicio('CONSULTA', data.consulta_servicio_id || null, data.tipo_consulta || 'Consulta');
+  if (servicioConsulta.nombre || servicioConsulta.id) {
+    conceptosRows.push({
+      consulta_id: consultaData.id,
+      doctor_id: data.doctor_id,
+      tipo_concepto: 'CONSULTA',
+      concepto_id: servicioConsulta.id,
+      texto_original: servicioConsulta.nombre || data.tipo_consulta || 'Consulta',
+      precio_aplicado: servicioConsulta.costo,
+    });
+  }
+
+  for (const estudio of [est0, est1, est2].filter(Boolean)) {
+    const servicio = await resolverServicio('ESTUDIO', estudio?.id || null, estudio?.nombre || null);
+    conceptosRows.push({
+      consulta_id: consultaData.id,
+      doctor_id: estudio?.doctor_id || data.doctor_id,
+      tipo_concepto: 'ESTUDIO',
+      concepto_id: servicio.id,
+      texto_original: servicio.nombre || estudio?.nombre || null,
+      precio_aplicado: servicio.costo,
+    });
+  }
+
+  for (const procedimiento of procedimientos) {
+    const servicio = await resolverServicio('PROCEDIMIENTO', procedimiento.id || null, procedimiento.nombre || null);
+    conceptosRows.push({
+      consulta_id: consultaData.id,
+      doctor_id: procedimiento.doctor_id || data.doctor_id,
+      tipo_concepto: 'PROCEDIMIENTO',
+      concepto_id: servicio.id,
+      texto_original: servicio.nombre || procedimiento.nombre || null,
+      precio_aplicado: servicio.costo,
+    });
+  }
+
+  if (conceptosRows.length > 0) {
+    const { error: conceptosError } = await supabase
+      .from('consulta_conceptos')
+      .insert(conceptosRows);
+
+    if (conceptosError) {
+      await supabase.from('consultas').delete().eq('id', consultaData.id);
+      return NextResponse.json(
+        { error: errorTranslations[conceptosError.message] || 'Error al registrar los servicios de la consulta' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // 3. Create doctor cost distribution if provided
   if (data.doctor_costos && data.doctor_costos.length > 0) {
     const rows = data.doctor_costos.map((dc) => ({
       consulta_id: consultaData.id,
@@ -343,22 +459,18 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. Calculate total cost from server-side resolved prices
-  let costoTotal = 0;
-  if (est0?.nombre) costoTotal += await resolverCostoServicio(est0.nombre, 'ESTUDIO');
-  if (est1?.nombre) costoTotal += await resolverCostoServicio(est1.nombre, 'ESTUDIO');
-  if (est2?.nombre) costoTotal += await resolverCostoServicio(est2.nombre, 'ESTUDIO');
-  if (data.procedimiento) costoTotal += await resolverCostoServicio(data.procedimiento, 'PROCEDIMIENTO');
+  // 4. Calculate total cost from server-side resolved prices
+  let costoTotal = conceptosRows.reduce((sum, concepto) => sum + concepto.precio_aplicado, 0);
   // Fallback: if no server prices, use client cost (legacy mode)
   if (costoTotal === 0 && data.costo) {
     costoTotal = typeof data.costo === 'string' ? parseFloat(data.costo) || 0 : (data.costo || 0);
   }
 
-  // 4. Determine payment status
+  // 5. Determine payment status
   const pagoInmediato = data.pago_inmediato ?? false;
   const estatusPago = pagoInmediato ? 'PAGADO' : (costoTotal > 0 ? 'PENDIENTE_PAGO' : 'PAGADO');
 
-  // 5. Update consulta with cost and payment status
+  // 6. Update consulta with cost and payment status
   if (costoTotal > 0 || pagoInmediato) {
     await supabase
       .from('consultas')
@@ -379,7 +491,7 @@ export async function POST(request: Request) {
   }
 
   // Register historial event
-  await registrarHistorial(supabase, consultaData.id, 'EDICION', auth.user.id, { motivo: 'Creación de consulta' });
+  await registrarHistorial(supabase, consultaData.id, 'CREACION', auth.user.id, { motivo: 'Creación de consulta' });
   if (pagoInmediato) {
     await registrarHistorial(supabase, consultaData.id, 'PAGADO', auth.user.id, { monto: costoTotal });
   }

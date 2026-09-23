@@ -34,6 +34,7 @@ import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import ClientDate from '@/components/ui/ClientDate';
 
 const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
@@ -605,7 +606,7 @@ export default function InventarioPage() {
                           )}
                           <div className="mt-1.5 flex items-center gap-3 text-[10px] text-gray-400 dark:text-[#71767B]">
                             {mov.usuarios?.nombre_completo && <span>{mov.usuarios.nombre_completo}</span>}
-                            <span>{new Date(mov.created_at).toLocaleString('es-MX')}</span>
+                             <span><ClientDate date={mov.created_at} dateTime /></span>
                           </div>
                         </div>
                       </div>

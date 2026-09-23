@@ -10,6 +10,7 @@ import {
   Loader2,
   Pencil,
 } from 'lucide-react';
+import ClientDate from '@/components/ui/ClientDate';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
 import { useToast } from '@/components/ui/Toast';
@@ -216,7 +217,7 @@ export default function CategoriasLentesPage() {
                           {cat.descripcion || <span className="text-gray-300 dark:text-[#71767B] italic">Sin descripción</span>}
                         </td>
                         <td className="hidden md:table-cell px-6 py-4 text-sm text-gray-500 dark:text-[#71767B]">
-                          {new Date(cat.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                           <ClientDate date={cat.created_at} options={{ day: '2-digit', month: 'short', year: 'numeric' }} />
                         </td>
                         <td className="px-4 sm:px-6 py-4">
                           <div className="flex items-center gap-2">

@@ -45,7 +45,7 @@ export default function TarifasPage() {
     rol: 'PRINCIPAL',
     tipo_calculo: 'FIJO',
     valor: 0,
-    vigente_desde: new Date().toISOString().split('T')[0],
+    vigente_desde: '',
   });
 
   const fetchData = useCallback(async () => {
@@ -67,6 +67,10 @@ export default function TarifasPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    setForm(f => ({ ...f, vigente_desde: new Date().toISOString().split('T')[0] }));
+  }, []);
 
   const handleCrear = async () => {
     if (!form.doctor_id || form.valor <= 0) return;

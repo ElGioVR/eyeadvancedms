@@ -13,6 +13,7 @@ import Avatar from '@/components/ui/Avatar';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import SidebarPanel from '@/components/ui/SidebarPanel';
+import ClientDate from '@/components/ui/ClientDate';
 
 interface PacienteAPI {
   id: string;
@@ -54,12 +55,6 @@ function filterByEdad(edad: number, filter: string): boolean {
   if (filter === '36-50') return edad >= 36 && edad <= 50;
   if (filter === '51+') return edad >= 51;
   return true;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function PacientesPage() {
@@ -240,7 +235,7 @@ export default function PacientesPage() {
 
                   <div className="hidden sm:block text-right min-w-[120px]">
                     <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Última visita</p>
-                    <p className="text-xs font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{formatDate(paciente.ultima_visita)}</p>
+                    <p className="text-xs font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{paciente.ultima_visita ? <ClientDate date={paciente.ultima_visita} options={{ day: '2-digit', month: 'short', year: 'numeric' }} /> : '—'}</p>
                   </div>
 
                   <div className="hidden sm:block text-right min-w-[100px]">

@@ -10,16 +10,19 @@ export async function GET(request: Request) {
   const tipo = searchParams.get('tipo');
 
   const supabase = getSupabaseAdmin();
+  const hoy = new Date().toISOString().slice(0, 10);
+
   let query = supabase
     .from('inventario_items')
     .select(`
       id, marca, modelo, tipo, grado_esferico, grado_cilindrico, eje,
       color, material, stock, precio_venta, categoria_id,
-      potencia_dioptrias, tipo_lio, modelo_fabricante,
+      potencia_dioptrias, tipo_lio, modelo_fabricante, lote, fecha_caducidad,
       categorias_lentes:categoria_id (nombre)
     `)
     .eq('estado', 'DISPONIBLE')
     .gt('stock', 0)
+    .or(`fecha_caducidad.is.null,fecha_caducidad.gt.${hoy}`)
     .order('marca', { ascending: true });
 
   if (tipo) {
@@ -47,6 +50,8 @@ export async function GET(request: Request) {
     potencia_dioptrias: l.potencia_dioptrias,
     tipo_lio: l.tipo_lio,
     modelo_fabricante: l.modelo_fabricante,
+    lote: l.lote,
+    fecha_caducidad: l.fecha_caducidad,
     categoria: (l.categorias_lentes as any)?.nombre || '',
   }));
 

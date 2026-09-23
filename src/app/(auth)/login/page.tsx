@@ -45,6 +45,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [footerYear, setFooterYear] = useState('');
+
+  useEffect(() => {
+    setFooterYear(String(new Date().getFullYear()));
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -237,7 +242,7 @@ export default function LoginPage() {
 
             {/* Footer */}
             <p className="mt-7 text-center text-xs text-slate-400 dark:text-slate-500">
-              EyeAdvanced Medical Solutions &copy; {new Date().getFullYear()}
+               EyeAdvanced Medical Solutions &copy; {footerYear}
             </p>
           </div>
         </div>
@@ -326,7 +331,7 @@ export default function LoginPage() {
               ))}
             </div>
             <p className="text-xs text-white/30 font-medium">
-              EyeAdvanced Medical Solutions &copy; {new Date().getFullYear()}
+               EyeAdvanced Medical Solutions &copy; {footerYear}
             </p>
           </div>
         </div>

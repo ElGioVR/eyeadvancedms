@@ -47,11 +47,20 @@ export class MotorDevengoService {
 
     const { data: consulta, error: e1 } = await this.supabase
       .from('consultas')
-      .select('id, paciente_id, doctor_id, fecha, tipo_consulta, tipo_visita, costo_total, monto_pagado, estatus_pago')
+      .select('id, paciente_id, doctor_id, fecha, tipo_consulta, tipo_visita, costo_total, monto_pagado, estatus_pago, aseguranza_id')
       .eq('id', consultaId)
       .single();
 
     if (e1 || !consulta) throw new Error(`Consulta ${consultaId} no encontrada`);
+
+    const [{ data: paciente }, { data: origen }] = await Promise.all([
+      consulta.paciente_id
+        ? this.supabase.from('pacientes').select('nombre_completo').eq('id', consulta.paciente_id).maybeSingle()
+        : Promise.resolve({ data: null } as { data: null }),
+      consulta.aseguranza_id
+        ? this.supabase.from('aseguranzas').select('nombre').eq('id', consulta.aseguranza_id).maybeSingle()
+        : Promise.resolve({ data: null } as { data: null }),
+    ]);
 
     // Read insurance and coverage from consultas (replaces cobros reference)
     let cobroMonto: number | null = null;
@@ -59,13 +68,7 @@ export class MotorDevengoService {
 
     if (config.aseguranza_afecta_honorarios) {
       cobroMonto = consulta.costo_total || 0;
-      // Resolve aseguranza_id from patient
-      const { data: paciente } = await this.supabase
-        .from('pacientes')
-        .select('aseguranza_id')
-        .eq('id', consulta.paciente_id)
-        .maybeSingle();
-      cobroAseguranzaId = paciente?.aseguranza_id ?? null;
+      cobroAseguranzaId = consulta.aseguranza_id ?? null;
     }
 
     let porcentajeCobertura = 100;
@@ -113,6 +116,19 @@ export class MotorDevengoService {
         }
       }
 
+      let coberturaServicio = porcentajeCobertura;
+      if (consulta.aseguranza_id && concepto.concepto_id) {
+        const { data: servicio } = await this.supabase
+          .from('aseguranza_servicios')
+          .select('porcentaje_cobertura')
+          .eq('id', concepto.concepto_id)
+          .eq('aseguranza_id', consulta.aseguranza_id)
+          .maybeSingle();
+        if (servicio?.porcentaje_cobertura != null) {
+          coberturaServicio = servicio.porcentaje_cobertura;
+        }
+      }
+
       const resultado = await this.crearEvento({
         origen_tipo: concepto.tipo_concepto as OrigenTipo,
         origen_id: concepto.id,
@@ -121,7 +137,15 @@ export class MotorDevengoService {
         paciente_id: consulta.paciente_id,
         fecha_servicio: consulta.fecha,
         monto_base: montoBase,
-        tarifa_snapshot: tarifa ? { ...tarifa } : {},
+        tarifa_snapshot: {
+          ...(tarifa ? { ...tarifa } : {}),
+          paciente_nombre: paciente?.nombre_completo ?? null,
+          origen_nombre: origen?.nombre ?? null,
+          origen_id: consulta.aseguranza_id ?? null,
+          servicio_nombre: concepto.texto_original ?? null,
+          precio_servicio: concepto.precio_aplicado ?? 0,
+          porcentaje_cobertura: coberturaServicio,
+        },
       });
 
       if (resultado) eventosCreados++;

@@ -40,7 +40,7 @@ export class AddEstatusAndHistorialToConsultas1800000000090 implements Migration
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         consulta_id UUID NOT NULL REFERENCES consultas(id) ON DELETE CASCADE,
         tipo_evento TEXT NOT NULL CHECK (tipo_evento IN (
-          'CAMBIO_ESTATUS', 'EDICION', 'CANCELACION', 'REAGENDADO', 'PAGADO', 'FINALIZADO'
+          'CREACION', 'CAMBIO_ESTATUS', 'EDICION', 'CANCELACION', 'REAGENDADO', 'PAGADO', 'FINALIZADO'
         )),
         usuario_id UUID REFERENCES auth.users(id),
         payload JSONB DEFAULT '{}',
