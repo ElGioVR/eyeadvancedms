@@ -98,6 +98,7 @@ function NuevaCirugiaContent() {
   const consultaPrecargaId = searchParams.get('consulta_id');
   const fechaPrecarga = searchParams.get('fecha');
   const horaPrecarga = searchParams.get('hora');
+  const pacientePrecargaId = searchParams.get('paciente_id');
 
   // Carga de catálogos
   const [aseguranzas, setAseguranzas] = useState<Aseguranza[]>([]);
@@ -216,6 +217,24 @@ function NuevaCirugiaContent() {
     if (fechaPrecarga && !fecha) setFecha(fechaPrecarga);
     if (horaPrecarga && !hora) setHora(horaPrecarga);
   }, [fechaPrecarga, horaPrecarga, fecha, hora]);
+
+  // Precarga desde listado de pacientes (?paciente_id=)
+  useEffect(() => {
+    if (!pacientePrecargaId) return;
+    fetch(`/api/pacientes/${pacientePrecargaId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (!p?.id) return;
+        seleccionarPaciente({
+          id: p.id,
+          nombre_completo: p.nombre_completo,
+          telefono: p.telefono,
+          email: p.email,
+          aseguranza_id: p.aseguranza_id,
+        });
+      })
+      .catch(() => {});
+  }, [pacientePrecargaId, seleccionarPaciente]);
 
   // Búsqueda de paciente
   useEffect(() => {

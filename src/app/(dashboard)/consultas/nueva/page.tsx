@@ -322,6 +322,39 @@ function NuevaConsultaContent() {
     }));
   }, [searchParams]);
 
+  const pacienteParamId = searchParams.get('paciente_id');
+  const pacienteParamApplied = useRef(false);
+
+  useEffect(() => {
+    if (!draftHydrated || !pacienteParamId || pacienteParamApplied.current) return;
+    pacienteParamApplied.current = true;
+    fetch(`/api/pacientes/${pacienteParamId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (!p?.id) return;
+        const sexo = p.sexo === 'MASCULINO' ? 'H' : p.sexo === 'FEMENINO' ? 'M' : p.sexo;
+        setPacienteSeleccionado({
+          id: p.id,
+          nombre: p.nombre_completo,
+          nombre_completo: p.nombre_completo,
+          edad: p.edad ?? null,
+          sexo,
+          aseguradora: p.aseguradora ?? null,
+          aseguranza_id: p.aseguranza_id ?? null,
+          telefono: p.telefono ?? null,
+          email: p.email ?? null,
+          direccion: p.direccion ?? null,
+        });
+        setSearchPaciente('');
+        setShowDropdown(false);
+        setEstudiosSeleccionados([]);
+        setProcedimientosSeleccionados([]);
+        setConsultationData(f => ({ ...f, origenId: p.aseguranza_id || '' }));
+        if (p.aseguranza_id) cargarServiciosOrigen(p.aseguranza_id);
+      })
+      .catch(() => {});
+  }, [draftHydrated, pacienteParamId, cargarServiciosOrigen]);
+
   const esUSD = consultationData.moneda === 'USD - Dólar';
   const convertir = useCallback((montoMXN: number) => {
     if (!esUSD || !tipoCambio) return montoMXN;

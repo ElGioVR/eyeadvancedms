@@ -66,6 +66,7 @@ export default function PacientesPage() {
   const [filterEdad, setFilterEdad] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
+  const [agendarMenuId, setAgendarMenuId] = useState<string | null>(null);
   const [filterAseguradora, setFilterAseguradora] = useState('Todas');
   const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
@@ -119,7 +120,7 @@ export default function PacientesPage() {
                         <span className="text-gray-700 dark:text-[#E7E9EA]">Consulta</span>
                       </button>
                       <button
-                        onClick={() => { setShowAgendar(false); router.push('/agenda/nueva'); }}
+                        onClick={() => { setShowAgendar(false); router.push('/cirugias/nueva'); }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
                       >
                         <Scissors className="h-4 w-4 text-emerald-500" />
@@ -251,10 +252,39 @@ export default function PacientesPage() {
                       <FileText className="h-3.5 w-3.5" />
                       Historial
                     </Link>
-                    <button className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Agendar
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setAgendarMenuId(agendarMenuId === paciente.id ? null : paciente.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100 transition-colors"
+                      >
+                        <Calendar className="h-3.5 w-3.5" />
+                        Agendar
+                        <ChevronDown className="h-3 w-3 text-primary-400" />
+                      </button>
+                      {agendarMenuId === paciente.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setAgendarMenuId(null)} />
+                          <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
+                            <div className="p-1">
+                              <button
+                                onClick={() => { setAgendarMenuId(null); router.push(`/consultas/nueva?paciente_id=${paciente.id}`); }}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
+                              >
+                                <Stethoscope className="h-4 w-4 text-primary-500" />
+                                <span className="text-gray-700 dark:text-[#E7E9EA]">Consulta</span>
+                              </button>
+                              <button
+                                onClick={() => { setAgendarMenuId(null); router.push(`/cirugias/nueva?paciente_id=${paciente.id}`); }}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm transition-colors"
+                              >
+                                <Scissors className="h-4 w-4 text-emerald-500" />
+                                <span className="text-gray-700 dark:text-[#E7E9EA]">Cirugía</span>
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
