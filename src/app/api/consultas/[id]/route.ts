@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
+import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { z } from 'zod';
 
 const consultaUpdateSchema = z.object({
@@ -181,12 +182,51 @@ export async function PATCH(
 
   const { data: existing, error: checkError } = await supabase
     .from('consultas')
-    .select('id, estatus, estatus_pago')
+    .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id')
     .eq('id', id)
     .maybeSingle();
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
+  }
+
+  // AGE-001: detectar conflictos de agenda si cambian fecha/hora/doctor
+  const cambiaFecha = data.fecha !== undefined && data.fecha !== existing.fecha;
+  const cambiaHora = (data.hora_inicio !== undefined && data.hora_inicio !== existing.hora_inicio)
+    || (data.hora_fin !== undefined && data.hora_fin !== existing.hora_fin);
+  const cambiaDoctor = data.doctor_id !== undefined && data.doctor_id !== existing.doctor_id;
+
+  if (cambiaFecha || cambiaHora || cambiaDoctor) {
+    const nuevaFecha = data.fecha ?? existing.fecha;
+    const nuevaHoraInicio = data.hora_inicio ?? existing.hora_inicio;
+    const nuevaHoraFin = data.hora_fin ?? existing.hora_fin;
+    const nuevoDoctor = data.doctor_id ?? existing.doctor_id;
+
+    if (nuevaFecha && nuevaHoraInicio && nuevoDoctor) {
+      const toMin = (t: string) => {
+        const [h, m] = t.split(':');
+        return parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10);
+      };
+      const duracionMin = nuevaHoraFin
+        ? Math.max(toMin(nuevaHoraFin) - toMin(nuevaHoraInicio), 15)
+        : 60;
+
+      const conflictos = await detectarConflictosAgenda({
+        fecha: nuevaFecha,
+        hora: nuevaHoraInicio,
+        duracion_min: duracionMin,
+        medicos: [nuevoDoctor],
+      });
+
+      // Excluir la propia consulta de los conflictos
+      const relevantes = conflictos.filter((c) => c.entidad_id !== id);
+      if (relevantes.length > 0) {
+        return NextResponse.json(
+          { error: 'Conflicto de agenda', conflictos: relevantes },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   const updateData: Record<string, unknown> = {};

@@ -24,6 +24,11 @@ interface ConsultaData {
   costo_total: number;
 }
 
+interface Doctor {
+  id: string;
+  nombre_completo: string;
+}
+
 const input = 'w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
 const label = 'block text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5';
 
@@ -35,6 +40,14 @@ export default function EditarConsultaPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<ConsultaData>>({});
   const [patientName, setPatientName] = useState('');
+  const [doctores, setDoctores] = useState<Doctor[]>([]);
+
+  useEffect(() => {
+    fetch('/api/configuracion/doctores')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setDoctores(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   const fetchConsulta = useCallback(async () => {
     try {
@@ -69,14 +82,14 @@ export default function EditarConsultaPage() {
   useEffect(() => { fetchConsulta(); }, [fetchConsulta]);
 
   async function handleSave() {
+    if (form.hora_inicio && form.hora_fin && form.hora_fin <= form.hora_inicio) {
+      toast('La hora fin debe ser mayor que la hora inicio', 'error');
+      return;
+    }
     setSaving(true);
     try {
-      const { paciente, estatus, estatus_pago, costo_total, moneda, ...patchData } = form;
+      const { paciente, ...patchData } = form;
       void paciente;
-      void estatus;
-      void estatus_pago;
-      void costo_total;
-      void moneda;
 
       const res = await fetch(`/api/consultas/${id}`, {
         method: 'PATCH',
@@ -91,8 +104,9 @@ export default function EditarConsultaPage() {
           notas: patchData.notas,
           metodo_pago: patchData.metodo_pago,
           doctor_id: patchData.doctor_id,
-          estatus: estatus,
-          estatus_pago: estatus_pago,
+          costo_total: patchData.costo_total !== undefined ? Number(patchData.costo_total) : undefined,
+          estatus: patchData.estatus,
+          estatus_pago: patchData.estatus_pago,
         }),
       });
       if (!res.ok) {
@@ -130,6 +144,19 @@ export default function EditarConsultaPage() {
       <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 space-y-4">
         <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Datos de Consulta</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={label}>Doctor</label>
+            <select value={form.doctor_id || ''} onChange={(e) => setForm({ ...form, doctor_id: e.target.value })} className={input}>
+              <option value="">Seleccionar</option>
+              {doctores.map((d) => (
+                <option key={d.id} value={d.id}>{d.nombre_completo}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Costo Total</label>
+            <input type="number" min={0} step="0.01" value={form.costo_total ?? ''} onChange={(e) => setForm({ ...form, costo_total: e.target.value === '' ? 0 : Number(e.target.value) })} className={input} />
+          </div>
           <div>
             <label className={label}>Fecha</label>
             <input type="date" value={form.fecha || ''} onChange={(e) => setForm({ ...form, fecha: e.target.value })} className={input} />

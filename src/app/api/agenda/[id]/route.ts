@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
+import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { z } from 'zod';
 
 const cirugiaUpdateSchema = z.object({
@@ -81,11 +82,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  const clean = JSON.parse(JSON.stringify(body), (_key, value) =>
-    value === null ? undefined : value
-  );
-
-  const validation = cirugiaUpdateSchema.safeParse(clean);
+  const validation = cirugiaUpdateSchema.safeParse(body);
   if (!validation.success) {
     const firstError = validation.error.errors[0];
     return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
@@ -97,12 +94,42 @@ export async function PATCH(
   // Read current state before update (for side-effects and state machine)
   const { data: prev, error: prevError } = await supabase
     .from('agenda_cirugias')
-    .select('estado, inventario_item_id')
+    .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, estado')
     .eq('id', id)
     .single();
 
   if (prevError || !prev) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
+  }
+
+  // AGE-001: detectar conflictos si cambian fecha/hora/doctor/recurso
+  const cambiaFecha = data.fecha !== undefined && data.fecha !== prev.fecha;
+  const cambiaHora = data.hora !== undefined && data.hora !== prev.hora;
+  const cambiaDoctor = data.doctor_id !== undefined && data.doctor_id !== prev.doctor_id;
+
+  if (cambiaFecha || cambiaHora || cambiaDoctor) {
+    const nuevaFecha = data.fecha ?? prev.fecha;
+    const nuevaHora = data.hora ?? prev.hora;
+    const nuevoDoctor = data.doctor_id ?? prev.doctor_id;
+    const nuevoRecurso = prev.recurso_id;
+
+    if (nuevaFecha && nuevaHora) {
+      const conflictos = await detectarConflictosAgenda({
+        fecha: nuevaFecha,
+        hora: nuevaHora,
+        duracion_min: prev.duracion_min ?? 60,
+        medicos: nuevoDoctor ? [nuevoDoctor] : [],
+        recurso_id: nuevoRecurso,
+      });
+
+      const relevantes = conflictos.filter((c) => c.entidad_id !== id);
+      if (relevantes.length > 0) {
+        return NextResponse.json(
+          { error: 'Conflicto de agenda', conflictos: relevantes },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   // EST-002 / EST-003: validar transición de estados y requerir motivo

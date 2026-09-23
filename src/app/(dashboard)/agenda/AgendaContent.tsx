@@ -1613,10 +1613,12 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
             </button>
           </>
         )}
-        <button onClick={onEdit}
-          className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-          Editar
-        </button>
+        {userRol !== 'doctor' && (
+          <button onClick={onEdit}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+            Editar
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1672,6 +1674,9 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
           tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
           notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
         });
+        setLoadingCirugia(false);
+      }).catch(() => {
+        setError('Error al cargar la cirugía');
         setLoadingCirugia(false);
       });
     }
@@ -1738,7 +1743,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
       <div className="grid grid-cols-3 gap-3">
         <div><label className={labelCls}>Ojo</label>
           <select value={form.ojo} onChange={e => setForm(f => ({ ...f, ojo: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
-            <option value="">—</option><option value="OD">OD</option><option value="OI">OI</option>
+            <option value="">—</option><option value="OD">OD</option><option value="OI">OI</option><option value="OU">OU</option>
           </select>
         </div>
         <div className="col-span-2"><label className={labelCls}>LIO desde Inventario <span className="font-normal text-gray-400 dark:text-[#71767B]">(opcional)</span></label>
@@ -1750,6 +1755,8 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         <div><label className={labelCls}>Tiempo estancia</label><input type="text" value={form.tiempo_estancia} onChange={e => setForm(f => ({ ...f, tiempo_estancia: e.target.value }))} placeholder="Ej. 3 HR" className={inputCls} /></div>
       </div>
       <div><label className={labelCls}>Notas</label><textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} placeholder="Notas adicionales..." className={cn(inputCls, 'resize-none')} /></div>
+      <div><label className={labelCls}>Procedencia</label><input type="text" value={form.procedencia} onChange={e => setForm(f => ({ ...f, procedencia: e.target.value }))} placeholder="Ej. Derivación externa" className={inputCls} /></div>
+      <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
       <div className="flex gap-3 pt-3 border-t border-gray-100 dark:border-[#2F3336]">
         <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
         <button onClick={handleSubmit} disabled={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
