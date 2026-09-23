@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode-go/kimi-k2.7-code",
+  "model": "opencode-go/mimo-v2.5",
   "small_model": "opencode-go/mimo-v2.5",
   "default_agent": "build",
   "subagent_depth": 2,
@@ -21,7 +21,7 @@
   },
   "agent": {
     "build": {
-      "model": "opencode-go/kimi-k2.7-code"
+      "model": "opencode-go/mimo-v2.5"
     },
     "plan": {
       "model": "opencode-go/glm-5.2"
@@ -44,7 +44,7 @@
     "orquestador": {
       "description": "Ejecuta toda la Fase 1 delegando cada tipo de trabajo al modelo adecuado.",
       "mode": "primary",
-      "model": "opencode-go/kimi-k2.7-code",
+"model": "opencode-go/mimo-v2.5",
       "prompt": "Eres el orquestador de la Fase 1 de creación de cirugía. Implementas tú el código central (migraciones, API, UI). Delegas: exploración amplia del repo -> @explore; matriz, revisión y auditoría independiente -> @auditor; pruebas, documentación y guía manual -> @mecanico. Pasa a cada subagente instrucciones autocontenidas y rutas de archivo, no historiales largos. Trabajas en ejecución continua sin pedir confirmación."
     }
   },
