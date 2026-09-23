@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, DollarSign, Calendar, TrendingUp, FileText } from 'lucide-react';
@@ -49,7 +50,7 @@ interface HistoricoPunto {
   servicios: number;
 }
 
-export default function ReporteDoctorPage() {
+function ReporteDoctorContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -239,6 +240,14 @@ export default function ReporteDoctorPage() {
         <EmptyState icon={DollarSign} title="Sin datos" description="No se pudieron cargar los reportes" />
       )}
     </div>
+  );
+}
+
+export default function ReporteDoctorPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-gray-100 dark:bg-[#202327] rounded-lg" /><div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" /></div>}>
+      <ReporteDoctorContent />
+    </Suspense>
   );
 }
 

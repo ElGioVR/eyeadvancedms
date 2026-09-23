@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle } from 'lucide-react';
@@ -90,7 +91,7 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
 }
 
-export default function NuevaCirugiaPage() {
+function NuevaCirugiaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -767,5 +768,13 @@ export default function NuevaCirugiaPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function NuevaCirugiaPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-gray-100 dark:bg-[#202327] rounded-lg" /><div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" /></div>}>
+      <NuevaCirugiaContent />
+    </Suspense>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
@@ -164,7 +165,7 @@ function PreviewField({ label, value, full }: { label: string; value: string; fu
   );
 }
 
-export default function NuevaConsultaPage() {
+function NuevaConsultaContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: pacientes, loading: loadingPacientes } = useFetch<PacienteAPI>('/api/pacientes');
@@ -1758,5 +1759,13 @@ export default function NuevaConsultaPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function NuevaConsultaPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-gray-100 dark:bg-[#202327] rounded-lg" /><div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" /></div>}>
+      <NuevaConsultaContent />
+    </Suspense>
   );
 }
