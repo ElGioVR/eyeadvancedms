@@ -18,7 +18,7 @@ export async function GET(
     .from('consulta_historial')
     .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
     .eq('consulta_id', id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
