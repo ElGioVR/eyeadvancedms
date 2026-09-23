@@ -34,11 +34,12 @@ interface Props {
   onAdd?: (date: string) => void;
   onSelect?: (cirugia: AgendaCirugia) => void;
   todayStr: string;
+  openDay?: { date: string; key: number } | null;
 }
 
 type ViewMode = 'month' | 'day';
 
-export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr }: Props) {
+export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr, openDay }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date('2000-01-01T12:00:00'));
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
@@ -48,11 +49,22 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
   const [mounted, setMounted] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  const openDayKey = openDay?.key;
+  const openDayDate = openDay?.date;
 
   useEffect(() => {
     setCurrentDate(new Date());
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (openDayKey == null || !openDayDate) return;
+    setSelectedDay(openDayDate);
+    setCurrentDate(new Date(openDayDate + 'T00:00:00'));
+    setViewMode('day');
+    setSlideDir(0);
+    setIsAnimating(false);
+  }, [openDayKey, openDayDate]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();

@@ -165,6 +165,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [dayCreate, setDayCreate] = useState<{ x: number; y: number; date: string; hour?: string } | null>(null);
+  const [mobileOpenDay, setMobileOpenDay] = useState<{ date: string; key: number } | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const stripSelectedRef = useRef<HTMLButtonElement>(null);
 
   // Auto-filter for doctor role: show only own operations
   useEffect(() => {
@@ -299,6 +302,16 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     });
   }, [currentDate, todayStr]);
 
+  const carouselDays = useMemo(() => {
+    const mon = getMonday(currentDate);
+    const start = addDays(mon, -7);
+    return Array.from({ length: 28 }, (_, i) => {
+      const d = addDays(start, i);
+      const ds = toDateStr(d);
+      return { dateStr: ds, day: d.getDate(), dayName: DIAS_CORTOS[(d.getDay() + 6) % 7], isToday: ds === todayStr };
+    });
+  }, [currentDate, todayStr]);
+
   const stats = useMemo(() => {
     const cirugiasItems = cirugias.filter(c => c.tipo === 'cirugia');
     const consultasItems = cirugias.filter(c => c.tipo === 'consulta');
@@ -357,7 +370,16 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     setShowCreateChoice(false);
     setDayCreate(null);
     setCalendarView('day');
+    setMobileOpenDay(prev => ({ date: ds, key: (prev?.key ?? 0) + 1 }));
   }, []);
+
+  useEffect(() => {
+    const container = stripRef.current;
+    const el = stripSelectedRef.current;
+    if (!container || !el) return;
+    const left = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
+    container.scrollTo({ left, behavior: 'smooth' });
+  }, [selectedDate, carouselDays]);
 
   const handleQuickAdd = useCallback((ds: string, hour: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -686,24 +708,36 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         </div>
       </div>
 
-      {/* ─── Mobile Week Strip ─── */}
+      {/* ─── Mobile Day Carousel ─── */}
       <div className="lg:hidden shrink-0 border-b border-gray-200 dark:border-[#2F3336]">
-        <div className="grid grid-cols-7">
-          {weekDays.map(wd => (
-            <button key={wd.dateStr}
-              onClick={() => { setCurrentDate(new Date(wd.dateStr + 'T00:00:00')); setSelectedDate(wd.dateStr); }}
-              className={cn('flex flex-col items-center py-2 transition-colors',
-                wd.dateStr === selectedDate && 'bg-primary-50 dark:bg-primary-900/10'
-              )}>
-              <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">{wd.dayName}</span>
-              <span className={cn('mt-0.5 inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold transition-all',
-                wd.isToday ? 'bg-red-500 text-white' : wd.dateStr === selectedDate ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700' : 'text-gray-900 dark:text-[#E7E9EA]'
-              )}>{wd.day}</span>
-              {(cirugiasPorFecha[wd.dateStr] || []).length > 0 && (
-                <span className={cn('h-1.5 w-1.5 rounded-full mt-1', wd.isToday ? 'bg-red-400' : 'bg-primary-400')} />
-              )}
-            </button>
-          ))}
+        <div
+          ref={stripRef}
+          className="flex gap-1 overflow-x-auto snap-x snap-mandatory px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {carouselDays.map(wd => {
+            const isSelected = wd.dateStr === selectedDate;
+            return (
+              <button
+                key={wd.dateStr}
+                ref={isSelected ? stripSelectedRef : undefined}
+                data-selected={isSelected || undefined}
+                onClick={() => handleDayClick(wd.dateStr)}
+                className={cn(
+                  'shrink-0 snap-center w-[calc((100%-1.5rem)/7)] flex flex-col items-center py-2 rounded-xl transition-colors',
+                  isSelected && 'bg-primary-50 dark:bg-primary-900/10'
+                )}
+              >
+                <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">{wd.dayName}</span>
+                <span className={cn(
+                  'mt-0.5 inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold transition-all',
+                  wd.isToday ? 'bg-red-500 text-white' : isSelected ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700' : 'text-gray-900 dark:text-[#E7E9EA]'
+                )}>{wd.day}</span>
+                {(cirugiasPorFecha[wd.dateStr] || []).length > 0 && (
+                  <span className={cn('h-1.5 w-1.5 rounded-full mt-1', wd.isToday ? 'bg-red-400' : 'bg-primary-400')} />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -857,6 +891,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               onAdd={(_date: string) => { setShowCreateChoice(true); }}
               onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               todayStr={todayStr}
+              openDay={mobileOpenDay}
             />
           </div>
 
