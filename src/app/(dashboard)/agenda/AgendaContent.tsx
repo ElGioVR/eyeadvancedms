@@ -369,7 +369,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
   const handleEventClick = useCallback(async (e: React.MouseEvent, c: AgendaCirugia) => {
     e.stopPropagation();
-    if (c.tipo === 'consulta') {
+    if (c.tipo === 'consulta' || c.tipo === 'estudio') {
       router.push(`/consultas/${c.id}`);
       return;
     }
@@ -855,7 +855,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               cirugiasPorFecha={cirugiasPorFecha}
               onDateSelect={(date) => { setSelectedDate(date); }}
               onAdd={(_date: string) => { setShowCreateChoice(true); }}
-              onSelect={(c) => { window.location.href = c.tipo === 'consulta' ? `/consultas/${c.id}` : `/cirugias/${c.id}`; }}
+              onSelect={(c) => { window.location.href = c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`; }}
               todayStr={todayStr}
             />
           </div>
