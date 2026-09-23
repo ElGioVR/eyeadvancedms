@@ -353,6 +353,8 @@ export default function ConsultaDetailPage() {
     );
   }
 
+  const consultaCerrada = consulta.estatus === 'FINALIZADA' || consulta.estatus === 'CANCELADA';
+
   return (
     <div className="print-page">
       <PageHeader
@@ -367,7 +369,7 @@ export default function ConsultaDetailPage() {
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
-            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
+            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && (
               <button
                 onClick={() => router.push(`/cirugias/nueva?consulta_id=${id}`)}
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors no-print"
@@ -375,7 +377,7 @@ export default function ConsultaDetailPage() {
                 <Scissors className="h-4 w-4" /> Crear cirugía
               </button>
             )}
-            {user?.rol === 'admin' && !editing && (
+            {user?.rol === 'admin' && !editing && !consultaCerrada && (
               <button
                 onClick={startEditing}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition-colors no-print"
@@ -383,7 +385,7 @@ export default function ConsultaDetailPage() {
                 <Edit3 className="h-4 w-4" /> Editar
               </button>
             )}
-            {user?.rol === 'admin' && editing && (
+            {user?.rol === 'admin' && editing && !consultaCerrada && (
               <>
                 <button
                   onClick={() => { setEditing(false); setEditError(null); }}
@@ -527,6 +529,7 @@ export default function ConsultaDetailPage() {
                                   </button>
                                 );
                               }
+                              if (consultaCerrada) return null;
                               return (
                                 <button
                                   onClick={() => setEstudioAAgendar({
@@ -562,6 +565,7 @@ export default function ConsultaDetailPage() {
                                   </button>
                                 );
                               }
+                              if (consultaCerrada) return null;
                               return (
                                 <button
                                   onClick={() => setEstudioAAgendar({
@@ -597,6 +601,7 @@ export default function ConsultaDetailPage() {
                                   </button>
                                 );
                               }
+                              if (consultaCerrada) return null;
                               return (
                                 <button
                                   onClick={() => setEstudioAAgendar({
@@ -869,7 +874,7 @@ export default function ConsultaDetailPage() {
         fecha={consulta.fecha}
         horaInicio={consulta.hora_inicio}
         horaFin={consulta.hora_fin}
-        visible={!editing && consulta.estatus !== 'FINALIZADA' && consulta.estatus !== 'CANCELADA'}
+        visible={!editing && !consultaCerrada}
         onDone={() => {
           fetchConsulta();
           fetchHistorial();
