@@ -349,15 +349,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   }, [todayStr]);
 
   const handleDayClick = useCallback((ds: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelectedDate(ds);
     setCurrentDate(new Date(ds + 'T00:00:00'));
     setDetailCirugia(null);
     setDetailPosition(null);
     setShowCreateChoice(false);
-    if (e) {
-      e.stopPropagation();
-      setDayCreate({ x: e.clientX, y: e.clientY, date: ds });
-    }
+    setDayCreate(null);
+    setCalendarView('day');
   }, []);
 
   const handleQuickAdd = useCallback((ds: string, hour: number, e: React.MouseEvent) => {
@@ -947,7 +946,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             </div>
                           ))}
                           {dayCx.length > 3 && (
-                            <button onClick={e => { e.stopPropagation(); setCalendarView('day'); }}
+                            <button onClick={e => { e.stopPropagation(); setSelectedDate(cellDateStr); setCurrentDate(new Date(cellDateStr + 'T00:00:00')); setCalendarView('day'); }}
                               className="text-[9px] font-bold text-primary-600 hover:text-primary-700 pl-1">
                               +{dayCx.length - 3} más
                             </button>
