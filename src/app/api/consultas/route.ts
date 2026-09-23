@@ -477,7 +477,7 @@ export async function POST(request: Request) {
       .update({
         costo_total: costoTotal,
         estatus_pago: estatusPago,
-        estatus: pagoInmediato ? 'FINALIZADA' : 'PROCESADA',
+        estatus: pagoInmediato ? 'COMPLETADA' : 'PROCESADA',
         monto_pagado: pagoInmediato ? costoTotal : 0,
         fecha_pago: pagoInmediato ? new Date().toISOString() : null,
       })

@@ -80,7 +80,9 @@ const estatusConfig: Record<string, { bg: string; text: string; dot: string }> =
   PROCESADA: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
   PENDIENTE_ESTUDIO: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
   PENDIENTE_CIRUGIA: { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
-  FINALIZADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  APLAZADA: { bg: 'bg-amber-50', text: 'text-amber-800', dot: 'bg-amber-600' },
+  REAGENDADA: { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' },
+  COMPLETADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   CANCELADA: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 };
 
@@ -114,7 +116,9 @@ const estatusLabels: Record<string, string> = {
   PROCESADA: 'Procesada',
   PENDIENTE_ESTUDIO: 'Pendiente Estudio',
   PENDIENTE_CIRUGIA: 'Pendiente Cirugía',
-  FINALIZADA: 'Finalizada',
+  APLAZADA: 'Aplazada',
+  REAGENDADA: 'Reagendada',
+  COMPLETADA: 'Completada',
   CANCELADA: 'Cancelada',
 };
 
@@ -353,7 +357,7 @@ export default function ConsultaDetailPage() {
     );
   }
 
-  const consultaCerrada = consulta.estatus === 'FINALIZADA' || consulta.estatus === 'CANCELADA';
+  const consultaCerrada = consulta.estatus === 'COMPLETADA' || consulta.estatus === 'CANCELADA';
 
   return (
     <div className="print-page">

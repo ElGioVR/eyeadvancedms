@@ -7,7 +7,7 @@ import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { z } from 'zod';
 
 const consultaUpdateSchema = z.object({
-  estatus: z.enum(['BORRADOR', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'FINALIZADA', 'CANCELADA']).optional(),
+  estatus: z.enum(['BORRADOR', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
   estatus_pago: z.enum(['PENDIENTE_PAGO', 'PAGADO']).optional(),
   costo_total: z.number().min(0).optional(),
   monto_pagado: z.number().min(0).optional(),

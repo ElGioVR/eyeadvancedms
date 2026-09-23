@@ -322,7 +322,9 @@ export async function GET(request: Request) {
     PROCESADA: consultas.filter(c => c.estatus === 'PROCESADA').length,
     PENDIENTE_ESTUDIO: consultas.filter(c => c.estatus === 'PENDIENTE_ESTUDIO').length,
     PENDIENTE_CIRUGIA: consultas.filter(c => c.estatus === 'PENDIENTE_CIRUGIA').length,
-    FINALIZADA: consultas.filter(c => c.estatus === 'FINALIZADA').length,
+    APLAZADA: consultas.filter(c => c.estatus === 'APLAZADA').length,
+    REAGENDADA: consultas.filter(c => c.estatus === 'REAGENDADA').length,
+    COMPLETADA: consultas.filter(c => c.estatus === 'COMPLETADA').length,
     CANCELADA: consultas.filter(c => c.estatus === 'CANCELADA').length,
   };
 

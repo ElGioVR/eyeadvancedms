@@ -31,7 +31,9 @@ const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
   PROCESADA: 'completada',
   PENDIENTE_ESTUDIO: 'aplazada',
   PENDIENTE_CIRUGIA: 'reagendada',
-  FINALIZADA: 'completada',
+  APLAZADA: 'aplazada',
+  REAGENDADA: 'reagendada',
+  COMPLETADA: 'completada',
   CANCELADA: 'cancelada',
 };
 

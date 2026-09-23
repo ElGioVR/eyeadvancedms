@@ -54,8 +54,8 @@ export async function POST(
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
 
-  if (existing.estatus === 'FINALIZADA' || existing.estatus === 'CANCELADA') {
-    return NextResponse.json({ error: 'La consulta ya está finalizada o cancelada' }, { status: 400 });
+  if (existing.estatus === 'COMPLETADA' || existing.estatus === 'CANCELADA') {
+    return NextResponse.json({ error: 'La consulta ya está completada o cancelada' }, { status: 400 });
   }
 
   if (data.accion === 'aplazar') {
@@ -99,7 +99,7 @@ export async function POST(
 
     const { error: updError } = await supabase
       .from('consultas')
-      .update({ hora_inicio: nuevaHora, hora_fin: nuevaHoraFin })
+      .update({ hora_inicio: nuevaHora, hora_fin: nuevaHoraFin, estatus: 'APLAZADA' })
       .eq('id', id);
     if (updError) {
       return NextResponse.json({ error: 'Error al aplazar la consulta' }, { status: 500 });
@@ -189,6 +189,7 @@ export async function POST(
       fecha: nuevaFecha,
       hora_inicio: nuevaHora,
       hora_fin: nuevaHoraFin ?? null,
+      estatus: 'REAGENDADA',
     })
     .eq('id', id);
   if (updError) {
