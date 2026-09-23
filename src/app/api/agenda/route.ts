@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
+import { consumirLIO } from '@/lib/inventario';
 import { z } from 'zod';
 
 const cirugiaCreateSchema = z.object({
@@ -252,6 +253,14 @@ export async function POST(request: Request) {
       { error: errorTranslations[error.message] || 'Error interno del servidor' },
       { status: 500 }
     );
+  }
+
+  if (data.inventario_item_id) {
+    const consume = await consumirLIO(data.inventario_item_id, cirugia.id, auth.user.id);
+    if (!consume.success) {
+      await supabase.from('agenda_cirugias').delete().eq('id', cirugia.id);
+      return NextResponse.json({ error: consume.error || 'No se pudo descontar el LIO' }, { status: 400 });
+    }
   }
 
   if (cirugia.doctor_id) {

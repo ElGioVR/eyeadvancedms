@@ -47,8 +47,8 @@ EyeAdvanced Medical Solutions - Sistema de gestión clínica oftalmológica. **E
 ### Agenda / Cirugías
 - Calendario con vistas día/semana/mes, drag-and-drop
 - **LIO desde inventario**: dropdown que auto-rellena potencia/marca
-- **Consumo automático**: al completar cirugía → descuenta 1 LIO (SALIDA_CIRUGIA)
-- **Liberación**: al cancelar cirugía → devuelve 1 LIO (DEVOLUCION)
+- **Consumo automático**: al asignar LIO a la cirugía (alta o PATCH) → descuenta 1 LIO (SALIDA_CIRUGIA); `consumirLIO` es idempotente (el RPC de creación y el PATCH de `completada` no duplican el descuento)
+- **Liberación**: al cancelar la cirugía o al reemplazar el LIO → devuelve 1 LIO (DEVOLUCION)
 - **Import CSV/XLSX**: con mapeo de columnas
 
 ### Honorarios

@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { calcularProductividadCirugia } from '@/lib/productividad-cirugia';
+import { consumirLIO } from '@/lib/inventario';
 import { z } from 'zod';
 
 export async function GET(request: Request) {
@@ -119,9 +120,11 @@ export async function POST(request: Request) {
     );
   }
 
-  // PRD-003: aplicar reglas Origen + Servicio + Rol a la productividad base.
   const cirugiaId = (result as any)?.cirugia_id;
   if (cirugiaId) {
+    if (data.inventario_item_id) {
+      await consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id);
+    }
     try {
       await calcularProductividadCirugia(cirugiaId);
     } catch {

@@ -212,8 +212,31 @@ export async function PATCH(
     });
   }
 
-  // Side-effects: LIO consumption / release on status change
-  const itemId = data.inventario_item_id ?? prev.inventario_item_id;
+  // Side-effects: LIO assign/change consumes stock; status transitions adjust as needed
+  const prevItem = prev.inventario_item_id ?? null;
+  const payloadItem = data.inventario_item_id;
+  let itemId = payloadItem !== undefined ? (payloadItem || null) : prevItem;
+
+  if (payloadItem !== undefined) {
+    const newId = payloadItem || null;
+
+    if (newId && newId !== prevItem && nuevoEstado !== 'cancelada') {
+      const consume = await consumirLIO(newId, id, auth.user.id);
+      if (!consume.success) {
+        await supabase
+          .from('agenda_cirugias')
+          .update({ inventario_item_id: prevItem, updated_at: new Date().toISOString() })
+          .eq('id', id);
+        return NextResponse.json({ error: consume.error || 'No se pudo descontar el LIO' }, { status: 400 });
+      }
+    }
+
+    if (prevItem && prevItem !== newId) {
+      await liberarLIO(prevItem, id, auth.user.id);
+    }
+
+    itemId = newId;
+  }
 
   if (itemId && nuevoEstado === 'completada' && estadoAnterior !== 'completada') {
     const result = await consumirLIO(itemId, id, auth.user.id);

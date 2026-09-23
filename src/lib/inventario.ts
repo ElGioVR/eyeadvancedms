@@ -18,6 +18,24 @@ export async function consumirLIO(
 ): Promise<ConsumirLIOResult> {
   const supabase = getSupabaseAdmin();
 
+  const { data: yaConsumido } = await supabase
+    .from('inventario_movimientos')
+    .select('id')
+    .eq('referencia_tipo', 'CIRUGIA')
+    .eq('referencia_id', cirugiaId)
+    .eq('inventario_item_id', inventarioItemId)
+    .eq('tipo', 'SALIDA_CIRUGIA')
+    .maybeSingle();
+
+  if (yaConsumido) {
+    const { data: actual } = await supabase
+      .from('inventario_items')
+      .select('stock')
+      .eq('id', inventarioItemId)
+      .single();
+    return { success: true, stock_resultante: actual?.stock };
+  }
+
   const { data: item, error: itemError } = await supabase
     .from('inventario_items')
     .select('id, stock, tipo')
