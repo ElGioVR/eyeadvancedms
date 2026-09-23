@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ea-v1';
+const CACHE_NAME = 'ea-v2';
 const STATIC_ASSETS = [
   '/dashboard',
   '/login',
@@ -46,16 +46,15 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
+      fetch(request)
+        .then((response) => {
           if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           }
           return response;
-        });
-      })
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
