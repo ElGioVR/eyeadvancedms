@@ -60,16 +60,26 @@ export async function POST(
 
   if (data.accion === 'aplazar') {
     if (!data.hora_inicio) {
-      return NextResponse.json({ error: 'Selecciona la nueva hora del día' }, { status: 400 });
+      return NextResponse.json({ error: 'Selecciona la nueva hora de inicio' }, { status: 400 });
     }
 
     const nuevaHora = data.hora_inicio;
-    const duracionMin = existing.hora_fin
+    const duracionPrevia = existing.hora_fin
       ? Math.max(toMin(existing.hora_fin) - toMin(existing.hora_inicio), 15)
       : 60;
-    const [h, m] = nuevaHora.split(':');
-    const finTotal = parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10) + duracionMin;
-    const nuevaHoraFin = `${String(Math.floor(finTotal / 60) % 24).padStart(2, '0')}:${String(finTotal % 60).padStart(2, '0')}:00`;
+    let nuevaHoraFin: string;
+    if (data.hora_fin) {
+      if (toMin(data.hora_fin) <= toMin(nuevaHora)) {
+        return NextResponse.json({ error: 'La hora fin debe ser posterior a la hora de inicio' }, { status: 400 });
+      }
+      nuevaHoraFin = data.hora_fin.length === 5 ? `${data.hora_fin}:00` : data.hora_fin;
+    } else {
+      const [h, m] = nuevaHora.split(':');
+      const finTotal = parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10) + duracionPrevia;
+      nuevaHoraFin = `${String(Math.floor(finTotal / 60) % 24).padStart(2, '0')}:${String(finTotal % 60).padStart(2, '0')}:00`;
+    }
+
+    const duracionMin = Math.max(toMin(nuevaHoraFin) - toMin(nuevaHora), 15);
 
     if (existing.doctor_id) {
       const conflictos = await detectarConflictosAgenda({

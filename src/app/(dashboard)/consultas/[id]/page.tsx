@@ -868,6 +868,7 @@ export default function ConsultaDetailPage() {
         consultaId={consulta.id}
         fecha={consulta.fecha}
         horaInicio={consulta.hora_inicio}
+        horaFin={consulta.hora_fin}
         visible={!editing && consulta.estatus !== 'FINALIZADA' && consulta.estatus !== 'CANCELADA'}
         onDone={() => {
           fetchConsulta();

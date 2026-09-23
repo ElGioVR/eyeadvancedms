@@ -10,6 +10,7 @@ interface ConsultaAccionesFabProps {
   consultaId: string;
   fecha: string;
   horaInicio: string;
+  horaFin?: string | null;
   visible?: boolean;
   onDone: () => void;
 }
@@ -36,6 +37,7 @@ export default function ConsultaAccionesFab({
   consultaId,
   fecha,
   horaInicio,
+  horaFin,
   visible = true,
   onDone,
 }: ConsultaAccionesFabProps) {
@@ -44,6 +46,7 @@ export default function ConsultaAccionesFab({
   const [motivo, setMotivo] = useState('');
   const [nuevaFecha, setNuevaFecha] = useState(fecha);
   const [nuevaHora, setNuevaHora] = useState(horaInicio.slice(0, 5));
+  const [nuevaHoraFin, setNuevaHoraFin] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +57,7 @@ export default function ConsultaAccionesFab({
     setMotivo('');
     setNuevaFecha(fecha);
     setNuevaHora(horaInicio.slice(0, 5));
+    setNuevaHoraFin(horaFin ? horaFin.slice(0, 5) : '');
     setError(null);
     setOpen(false);
   }
@@ -79,6 +83,10 @@ export default function ConsultaAccionesFab({
       setError('Selecciona la nueva hora del día');
       return;
     }
+    if (accion === 'aplazar' && nuevaHoraFin && nuevaHoraFin <= nuevaHora) {
+      setError('La hora fin debe ser posterior a la hora de inicio');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -89,6 +97,7 @@ export default function ConsultaAccionesFab({
       }
       if (accion === 'aplazar') {
         payload.hora_inicio = nuevaHora;
+        if (nuevaHoraFin) payload.hora_fin = nuevaHoraFin;
       }
       const res = await fetch(`/api/consultas/${consultaId}/acciones`, {
         method: 'POST',
@@ -167,26 +176,37 @@ export default function ConsultaAccionesFab({
             )}
 
             {accion === 'aplazar' && (
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
-                  Nueva hora (mismo día) <span className="text-red-500">*</span>
-                </span>
-                <input
-                  type="time"
-                  value={nuevaHora}
-                  onChange={(e) => setNuevaHora(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+                    Nueva hora inicio <span className="text-red-500">*</span>
+                  </span>
+                  <input
+                    type="time"
+                    value={nuevaHora}
+                    onChange={(e) => setNuevaHora(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Hora fin</span>
+                  <input
+                    type="time"
+                    value={nuevaHoraFin}
+                    onChange={(e) => setNuevaHoraFin(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                  />
+                </label>
+              </div>
             )}
 
             {(accion === 'aplazar' || accion === 'reagendar') && (
               <div className="flex items-start gap-2 rounded-lg bg-gray-50 dark:bg-[#1D1F23] px-3 py-2 text-xs text-gray-600 dark:text-[#71767B]">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Actual: {fecha} {horaInicio.slice(0, 5)}
+                  Actual: {fecha} {horaInicio.slice(0, 5)}{horaFin ? `–${horaFin.slice(0, 5)}` : ''}
                   {accion === 'aplazar' && nuevaHora && nuevaHora !== horaInicio.slice(0, 5) && (
-                    <> → {fecha} {nuevaHora}</>
+                    <> → {fecha} {nuevaHora}{nuevaHoraFin ? `–${nuevaHoraFin}` : ''}</>
                   )}
                 </span>
               </div>
