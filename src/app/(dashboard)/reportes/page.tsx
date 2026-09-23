@@ -494,6 +494,7 @@ export default function ReportesPage() {
                 { key: 'PENDIENTE_ESTUDIO', label: 'Pend. Estudio', color: 'bg-amber-500' },
                 { key: 'PENDIENTE_CIRUGIA', label: 'Pend. Cirugía', color: 'bg-orange-500' },
                 { key: 'FINALIZADA', label: 'Finalizada', color: 'bg-emerald-500' },
+                { key: 'CANCELADA', label: 'Cancelada', color: 'bg-red-500' },
               ];
               return (
                 <div className="space-y-3">

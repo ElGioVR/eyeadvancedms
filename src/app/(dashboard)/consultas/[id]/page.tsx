@@ -81,6 +81,7 @@ const estatusConfig: Record<string, { bg: string; text: string; dot: string }> =
   PENDIENTE_ESTUDIO: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
   PENDIENTE_CIRUGIA: { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
   FINALIZADA: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  CANCELADA: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 };
 
 const estatusPagoConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -114,6 +115,7 @@ const estatusLabels: Record<string, string> = {
   PENDIENTE_ESTUDIO: 'Pendiente Estudio',
   PENDIENTE_CIRUGIA: 'Pendiente Cirugía',
   FINALIZADA: 'Finalizada',
+  CANCELADA: 'Cancelada',
 };
 
 const estatusPagoLabels: Record<string, string> = {
@@ -866,7 +868,7 @@ export default function ConsultaDetailPage() {
         consultaId={consulta.id}
         fecha={consulta.fecha}
         horaInicio={consulta.hora_inicio}
-        visible={!editing && consulta.estatus !== 'FINALIZADA'}
+        visible={!editing && consulta.estatus !== 'FINALIZADA' && consulta.estatus !== 'CANCELADA'}
         onDone={() => {
           fetchConsulta();
           fetchHistorial();

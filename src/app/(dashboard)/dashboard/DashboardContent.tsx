@@ -422,7 +422,7 @@ export default function DashboardContent({ data, userNombre, userIniciales, user
                   const colors: Record<string, string> = {
                     BORRADOR: 'bg-gray-400', PROCESADA: 'bg-blue-500',
                     PENDIENTE_ESTUDIO: 'bg-amber-500', PENDIENTE_CIRUGIA: 'bg-orange-500',
-                    FINALIZADA: 'bg-emerald-500',
+                    FINALIZADA: 'bg-emerald-500', CANCELADA: 'bg-red-500',
                   };
                   return (
                     <div key={estatus} className="flex items-center gap-3">

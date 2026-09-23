@@ -7,7 +7,7 @@ import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { z } from 'zod';
 
 const consultaUpdateSchema = z.object({
-  estatus: z.enum(['BORRADOR', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'FINALIZADA']).optional(),
+  estatus: z.enum(['BORRADOR', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'FINALIZADA', 'CANCELADA']).optional(),
   estatus_pago: z.enum(['PENDIENTE_PAGO', 'PAGADO']).optional(),
   costo_total: z.number().min(0).optional(),
   monto_pagado: z.number().min(0).optional(),
@@ -336,7 +336,7 @@ export async function DELETE(
 
   await supabase
     .from('consultas')
-    .update({ estatus: 'FINALIZADA' })
+    .update({ estatus: 'CANCELADA' })
     .eq('id', id);
 
   await supabase.from('consulta_historial').insert({
