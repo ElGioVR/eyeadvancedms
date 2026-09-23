@@ -198,6 +198,7 @@ export default function ConsultaDetailPage() {
   const [editNotas, setEditNotas] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   const fetchConsulta = useCallback(async () => {
     try {
@@ -302,6 +303,28 @@ export default function ConsultaDetailPage() {
     setEditing(true);
   }
 
+  async function handleComplete() {
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/consultas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estatus: 'COMPLETADA' }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Error al completar la consulta');
+      }
+      const updated = await res.json();
+      setConsulta((current) => (current ? { ...current, ...updated } : current));
+      await fetchHistorial();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al completar la consulta');
+    } finally {
+      setCompleting(false);
+    }
+  }
+
   async function handleSaveEdit() {
     if (!consulta) return;
     const body: Record<string, unknown> = {};
@@ -379,6 +402,16 @@ export default function ConsultaDetailPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors no-print"
               >
                 <Scissors className="h-4 w-4" /> Crear cirugía
+              </button>
+            )}
+            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && !editing && (
+              <button
+                onClick={handleComplete}
+                disabled={completing}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 no-print"
+              >
+                {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {completing ? 'Completando...' : 'Completar'}
               </button>
             )}
             {user?.rol === 'admin' && !editing && !consultaCerrada && (
