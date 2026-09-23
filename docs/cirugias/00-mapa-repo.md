@@ -131,6 +131,7 @@
 8. **PER-002 "Según permiso"** (Recepción: ver/descargar/eliminar): se asume que exige un mecanismo granular además de los 3 roles fijos; decisión de implementación (por usuario o rol+permiso), alineado con PER-003.
 9. **'reagendada'**: migración aditiva `ALTER TYPE agenda_cirugia_estado ADD VALUE` + ajuste de Zod (`route.ts:23` no lo incluye hoy).
 10. Verificaciones de cierre tipo "no existe X" (FUE-001, ARC-006) se comprueban al final con CP-25; hoy se cumplen por ausencia total.
+11. **Consumo de stock LIO**: se descuenta al **asignar** el LIO (alta o PATCH), no solo al completar; `consumirLIO` es idempotente para no duplicar con el RPC `crear_cirugia` ni con el paso a `completada`. Al reemplazar el LIO se libera el anterior con `liberarLIO`.
 
 ## 6. Orden recomendado de implementación (B1..B11)
 
