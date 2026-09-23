@@ -114,8 +114,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
 
   const handleSelectCirugia = useCallback((cirugia: AgendaCirugia) => {
     setSelectedCirugia(cirugia);
-    onSelect?.(cirugia);
-  }, [onSelect]);
+  }, []);
 
   const closeDetail = useCallback(() => {
     setSelectedCirugia(null);
@@ -482,6 +481,13 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                   <p className="text-sm text-gray-700 dark:text-[#E7E9EA] whitespace-pre-wrap">{selectedCirugia.notas}</p>
                 </div>
               )}
+
+              <button
+                onClick={() => { const c = selectedCirugia; closeDetail(); onSelect?.(c); }}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-4 py-3 text-sm font-bold text-white hover:bg-primary-700 transition-colors"
+              >
+                Ver detalle completo
+              </button>
             </div>
           </div>
         </div>

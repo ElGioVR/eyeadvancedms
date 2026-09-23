@@ -369,7 +369,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
   const handleEventClick = useCallback(async (e: React.MouseEvent, c: AgendaCirugia) => {
     e.stopPropagation();
-    if (c.tipo === 'consulta' || c.tipo === 'estudio') {
+    if (c.tipo === 'consulta') {
       router.push(`/consultas/${c.id}`);
       return;
     }
@@ -377,7 +377,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     setDetailCirugia(cached || c);
     setDetailPosition({ x: e.clientX, y: e.clientY });
 
-    if (cached) return;
+    if (cached || c.tipo === 'estudio') return;
 
     const response = await fetch(`/api/agenda/${c.id}`);
     if (!response.ok) return;
@@ -855,7 +855,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               cirugiasPorFecha={cirugiasPorFecha}
               onDateSelect={(date) => { setSelectedDate(date); }}
               onAdd={(_date: string) => { setShowCreateChoice(true); }}
-              onSelect={(c) => { window.location.href = c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`; }}
+              onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               todayStr={todayStr}
             />
           </div>
@@ -1496,7 +1496,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
           <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{cirugia.nombre_paciente}</h3>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {userRol !== 'doctor' && (
+          {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && (
             <button onClick={() => updateEstado('cancelada')} disabled={updating}
               className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-gray-400 hover:text-red-500"
               title="Eliminar">
@@ -1602,7 +1602,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
             {estadoLabels[cirugia.estado]}
           </span>
           <div className="flex-1" />
-          {userRol !== 'doctor' && cirugia.estado === 'agendada' && (
+          {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && cirugia.estado === 'agendada' && (
             <>
               <button onClick={() => updateEstado('completada')} disabled={updating}
                 className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
@@ -1614,7 +1614,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
               </button>
             </>
           )}
-          {userRol !== 'doctor' && (
+          {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && (
             <button onClick={onEdit}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
               Editar
@@ -1622,7 +1622,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
           )}
         </div>
         <button
-          onClick={() => { onClose(); router.push(`/cirugias/${cirugia.id}`); }}
+          onClick={() => { onClose(); router.push(cirugia.tipo === 'estudio' ? `/consultas/${cirugia.id}` : `/cirugias/${cirugia.id}`); }}
           className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors">
           Ver detalle completo
         </button>
