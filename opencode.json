@@ -36,7 +36,7 @@
     "auditor": {
       "description": "Descubrimiento, matriz de trazabilidad y auditoría independiente. Solo edita docs/cirugias/.",
       "mode": "all",
-      "model": "opencode-go/glm-5.2",
+      "model": "opencode/mimo-v2.6-flash-free",
       "prompt": "Eres un auditor técnico riguroso. Trabajas con evidencia: un requisito solo es CUBIERTO si citas archivo:línea, migración, test o comando con su salida. No implementas funcionalidad: solo lees código y editas archivos dentro de docs/cirugias/. Nunca hagas commit ni push. Sé honesto con lo PARCIAL y lo NO CUBIERTO."
     },
     "mecanico": {
