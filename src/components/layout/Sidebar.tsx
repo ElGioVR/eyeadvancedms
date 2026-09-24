@@ -7,9 +7,7 @@ import { logout } from '@/app/actions/auth';
 import {
   LayoutDashboard,
   Users,
-  Receipt,
   Package,
-  BarChart3,
   Settings,
   LogOut,
   ShieldCheck,
@@ -17,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
+  TrendingUp,
 } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
@@ -28,9 +27,8 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Users, label: 'Pacientes', href: '/pacientes' },
   { icon: Calendar, label: 'Agenda', href: '/agenda' },
-  { icon: Receipt, label: 'Honorarios', href: '/honorarios' },
   { icon: Package, label: 'Inventario', href: '/inventario' },
-  { icon: BarChart3, label: 'Reportes', href: '/reportes' },
+  { icon: TrendingUp, label: 'Productividad', href: '/productividad', adminOnly: true },
   { icon: Settings, label: 'Configuración', href: '/configuracion' },
 ];
 
@@ -120,7 +118,9 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
 
         {/* Menu */}
         <nav className="flex-1 px-4 py-2 space-y-1">
-          {menuItems.map((item) => {
+          {menuItems
+            .filter((item) => !('adminOnly' in item && item.adminOnly) || user?.rol === 'admin')
+            .map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <Link

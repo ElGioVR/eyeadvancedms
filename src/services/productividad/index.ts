@@ -1,0 +1,1 @@
+export { MotorDevengoService } from './MotorDevengoService';

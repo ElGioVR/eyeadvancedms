@@ -53,7 +53,8 @@
 - `eventos_honorario` (`1800000000022`): `origen_tipo` (CONSULTA/ESTUDIO/PROCEDIMIENTO/CITA/OPERACION), `doctor_id`, `rol`, `paciente_id`, `monto_base/devengado`, **`estado` (PENDIENTE/…)**, `periodo_id`, **`cirugia_id`**.
 - `tarifas_doctor` (`1800000000020`): reglas por **doctor + tipo_concepto + concepto + rol** (PORCENTAJE) — sin dimensión origen.
 - **`MotorDevengoService.generarDesdeCirugia()`** (`src/services/honorarios/MotorDevengoService.ts:133`): lee `agenda_cirugia_doctores`, resuelve `tarifas_doctor` (245-260) y crea eventos. **NO se invoca al crear cirugía**. Servicios asociados: CierrePeriodo, Reversion, Honorarios, MetricasDoctor (`src/services/honorarios/`).
-- **NO existe `cirugia_productividad`** (vista base pendiente por participante al crear).
+- **Motor de productividad de cirugía**: `src/lib/productividad-cirugia.ts` (reglas Origen+Servicio+Rol; re-exportado desde `src/lib/productividad/cirugia.ts`). Namespace admin unificado: `src/lib/productividad/` + `GET /api/productividad` + UI `/productividad`.
+- **`cirugia_productividad`** existe (mig 1800000000170+) con base pendiente por participante.
 
 ### 2.8 Historial / auditoría
 - `consulta_historial` (`1800000000090-AddEstatusAndHistorialToConsultas.ts:39-53`): `consulta_id, tipo_evento (ENUM), payload JSONB, usuario_id` + RLS. Helper `registrarHistorial()` en `src/app/api/consultas/route.ts:96-109` y `src/app/api/consultas/[id]/route.ts:34-41`. Endpoint `/api/consultas/[id]/historial`. Timeline renderizada en el detalle de consulta.

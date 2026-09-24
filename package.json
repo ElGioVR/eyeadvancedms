@@ -17,7 +17,12 @@
     "test:b8": "node scripts/tests/b8-productividad-cirugia.test.js",
     "test:b9": "node scripts/tests/b9-ui-formulario.test.js",
     "test:b10": "node scripts/tests/b10-detalle-y-navegacion.test.js",
-    "test:b11": "node scripts/tests/b11-integracion-agenda.test.js"
+    "test:b11": "node scripts/tests/b11-integracion-agenda.test.js",
+    "test:b12": "node scripts/tests/b12-migraciones-productividad.test.js",
+    "test:b13": "node scripts/tests/b13-motor-devengo.test.js",
+    "test:b14": "node scripts/tests/b14-endpoint-productividad.test.js",
+    "test:b15": "node scripts/tests/b15-ui-productividad.test.js",
+    "test:b16": "node scripts/tests/b16-integridad-productividad.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

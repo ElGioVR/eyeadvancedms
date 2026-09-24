@@ -1690,11 +1690,11 @@ function checkCirugiasRoute() {
   );
   if (content === null) return;
 
-  // 1. Importa calcularProductividadCirugia desde @/lib/productividad-cirugia.
+  // 1. Importa calcularProductividadCirugia desde @/lib/productividad.
   assertRegexMatches(
     content,
-    /import\s+\{[^}]*\bcalcularProductividadCirugia\b[^}]*\}\s*from\s*['"]@\/lib\/productividad-cirugia['"]/,
-    "importa calcularProductividadCirugia desde '@/lib/productividad-cirugia'"
+    /import\s+\{[^}]*\bcalcularProductividadCirugia\b[^}]*\}\s*from\s*['"]@\/lib\/productividad['"]/,
+    "importa calcularProductividadCirugia desde '@/lib/productividad'"
   );
 
   // 2. Tras crear la cirugía vía RPC, llama a calcularProductividadCirugia.
@@ -1764,8 +1764,8 @@ function checkProductividadEndpointAndRPC() {
   // 3. Usa listarProductividadCirugia(id)
   assertRegexMatches(
     content,
-    /import\s+\{[^}]*\blistarProductividadCirugia\b[^}]*\}\s*from\s*['"]@\/lib\/productividad-cirugia['"]/,
-    "importa listarProductividadCirugia desde '@/lib/productividad-cirugia'"
+    /import\s+\{[^}]*\blistarProductividadCirugia\b[^}]*\}\s*from\s*['"]@\/lib\/productividad['"]/,
+    "importa listarProductividadCirugia desde '@/lib/productividad'"
   );
   assertRegexMatches(
     content,

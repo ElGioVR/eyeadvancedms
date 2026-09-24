@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/server';
-import { listarProductividadCirugia } from '@/lib/productividad-cirugia';
+import { listarProductividadCirugia } from '@/lib/productividad';
 
 export async function GET(
   request: Request,

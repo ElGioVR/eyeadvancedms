@@ -61,6 +61,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
           tipo_consulta: 'Estudio',
           tipo_visita: 'PRIMERA_VEZ',
           aseguranza_id: consulta.aseguranza_id,
+          consulta_origen_id: consulta.id,
           estudios: [{
             nombre: estudio.nombre,
             doctor_id: estudio.doctor_id || null,

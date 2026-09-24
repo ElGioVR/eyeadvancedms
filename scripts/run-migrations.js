@@ -42,6 +42,11 @@ const MIGRATION_ORDER = [
   '1800000000180-CreateCrearCirugiaRPC.ts',
   '1800000000190-CreatePermisosArchivo.ts',
   '1800000000200-CreateReglasProductividadCirugia.ts',
+  '1800000000210-AddEstatusCanceladaToConsultas.ts',
+  '1800000000220-AddEstatusAplazadaReagendadaCompletada.ts',
+  '1800000000230-AddProductividadColumns.ts',
+  '1800000000240-CreateProductividadHonorariosResumen.ts',
+  '1800000000250-CreateSyncLogTable.ts',
 ];
 
 if (!process.env.DATABASE_URL) {

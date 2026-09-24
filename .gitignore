@@ -36,3 +36,8 @@ tunnel.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local test/lint/tsc outputs
+.test-b*.txt
+.tsc-output.txt
+.lint-output.txt

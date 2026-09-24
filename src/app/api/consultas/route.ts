@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { errorTranslations } from '@/lib/supabase/errors';
-import { MotorDevengoService } from '@/services/honorarios';
+import { MotorDevengoService } from '@/services/productividad';
 import { notificarCancelacion, notificarReagendado, notificarAsignacionServicio } from '@/services/notificaciones';
 import { z } from 'zod';
 
@@ -57,6 +57,8 @@ const estudioConDoctorSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
+  cantidad: z.number().int().min(1).max(99).optional().nullable(),
+  ojo: z.enum(['OD', 'OI', 'OU']).optional().nullable(),
 });
 
 const procedimientoConDoctorSchema = z.object({
@@ -64,6 +66,8 @@ const procedimientoConDoctorSchema = z.object({
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
   motivo: z.string().max(500).optional().nullable(),
+  cantidad: z.number().int().min(1).max(99).optional().nullable(),
+  ojo: z.enum(['OD', 'OI', 'OU']).optional().nullable(),
 });
 
 const consultaCreateSchema = z.object({
@@ -76,6 +80,7 @@ const consultaCreateSchema = z.object({
   tipo_visita: z.string().optional().nullable(),
   aseguranza_id: z.string().uuid().optional().nullable(),
   consulta_servicio_id: z.string().uuid().optional().nullable(),
+  consulta_origen_id: z.string().uuid().optional().nullable(),
   diagnostico: z.string().max(500).optional().nullable(),
   estudios: z.array(z.union([z.string().max(255), estudioConDoctorSchema])).max(3).optional().nullable(),
   procedimiento: z.string().optional().nullable(),
@@ -278,9 +283,15 @@ export async function POST(request: Request) {
   const folio = `CON-${year}-${seq}`;
 
   // Parse estudios - support both string and {id, nombre, doctor_id} formats
-  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null }) => {
-    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null };
-    return { id: 'id' in e ? e.id || null : null, nombre: e.nombre, doctor_id: e.doctor_id || null };
+  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null; cantidad?: number | null; ojo?: 'OD' | 'OI' | 'OU' | null }) => {
+    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null, cantidad: 1, ojo: null };
+    return {
+      id: 'id' in e ? e.id || null : null,
+      nombre: e.nombre,
+      doctor_id: e.doctor_id || null,
+      cantidad: Math.max(1, Number(e.cantidad) || 1),
+      ojo: e.ojo || null,
+    };
   };
   const est0 = data.estudios?.[0] ? parseEstudio(data.estudios[0]) : null;
   const est1 = data.estudios?.[1] ? parseEstudio(data.estudios[1]) : null;
@@ -288,7 +299,7 @@ export async function POST(request: Request) {
   const procedimientos = data.procedimientos?.length
     ? data.procedimientos
     : data.procedimiento
-      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null }]
+      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null, cantidad: 1, ojo: null }]
       : [];
 
   // Resolve selected origin and server-side prices
@@ -298,6 +309,18 @@ export async function POST(request: Request) {
     .eq('id', data.paciente_id)
     .maybeSingle();
   const aseguranzaId = data.aseguranza_id || pacienteInfo?.aseguranza_id || null;
+
+  if (data.consulta_origen_id) {
+    const { data: origenConsulta } = await supabase
+      .from('consultas')
+      .select('id')
+      .eq('id', data.consulta_origen_id)
+      .maybeSingle();
+
+    if (!origenConsulta) {
+      return NextResponse.json({ error: 'La consulta de origen referenciada no existe' }, { status: 404 });
+    }
+  }
 
   if (aseguranzaId) {
     const { data: aseguranzaCheck } = await supabase
@@ -369,6 +392,7 @@ export async function POST(request: Request) {
       estatus: 'BORRADOR',
       estatus_pago: 'PENDIENTE_PAGO',
       aseguranza_id: aseguranzaId,
+      consulta_origen_id: data.consulta_origen_id || null,
     })
     .select()
     .single();
@@ -388,6 +412,8 @@ export async function POST(request: Request) {
     concepto_id: string | null;
     texto_original: string | null;
     precio_aplicado: number;
+    cantidad: number;
+    ojo: string | null;
   }> = [];
 
   const servicioConsulta = await resolverServicio('CONSULTA', data.consulta_servicio_id || null, data.tipo_consulta || 'Consulta');
@@ -399,6 +425,8 @@ export async function POST(request: Request) {
       concepto_id: servicioConsulta.id,
       texto_original: servicioConsulta.nombre || data.tipo_consulta || 'Consulta',
       precio_aplicado: servicioConsulta.costo,
+      cantidad: 1,
+      ojo: null,
     });
   }
 
@@ -411,6 +439,8 @@ export async function POST(request: Request) {
       concepto_id: servicio.id,
       texto_original: servicio.nombre || estudio?.nombre || null,
       precio_aplicado: servicio.costo,
+      cantidad: estudio?.cantidad ?? 1,
+      ojo: estudio?.ojo ?? null,
     });
   }
 
@@ -423,6 +453,8 @@ export async function POST(request: Request) {
       concepto_id: servicio.id,
       texto_original: servicio.nombre || procedimiento.nombre || null,
       precio_aplicado: servicio.costo,
+      cantidad: Math.max(1, Number(procedimiento.cantidad) || 1),
+      ojo: procedimiento.ojo || null,
     });
   }
 
@@ -459,8 +491,11 @@ export async function POST(request: Request) {
     }
   }
 
-  // 4. Calculate total cost from server-side resolved prices
-  let costoTotal = conceptosRows.reduce((sum, concepto) => sum + concepto.precio_aplicado, 0);
+  // 4. Calculate total cost from server-side resolved prices (unit × cantidad)
+  let costoTotal = conceptosRows.reduce(
+    (sum, concepto) => sum + concepto.precio_aplicado * concepto.cantidad,
+    0
+  );
   // Fallback: if no server prices, use client cost (legacy mode)
   if (costoTotal === 0 && data.costo) {
     costoTotal = typeof data.costo === 'string' ? parseFloat(data.costo) || 0 : (data.costo || 0);

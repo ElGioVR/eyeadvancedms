@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
-import { calcularProductividadCirugia } from '@/lib/productividad-cirugia';
+import { calcularProductividadCirugia } from '@/lib/productividad';
 import { consumirLIO } from '@/lib/inventario';
 import { z } from 'zod';
 
