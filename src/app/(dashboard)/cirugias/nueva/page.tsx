@@ -332,7 +332,12 @@ const [error, setError] = useState<string | null>(null);
           toast(`Error al cargar catálogos: ${errors.join(', ')}`, 'error');
         }
         setAseguranzas(Array.isArray(a) ? a : []);
-        setDoctores(Array.isArray(d) ? d : []);
+        // El API devuelve `alias` (nombre de presentación) y `nombre` (nombre real, puede ser null).
+        setDoctores(
+          Array.isArray(d)
+            ? d.map((x: Doctor & { alias?: string | null }) => ({ ...x, nombre: x.alias || x.nombre || x.id }))
+            : [],
+        );
         setRoles(Array.isArray(ro) ? ro : []);
         setRecursos(Array.isArray(re) ? re : []);
 

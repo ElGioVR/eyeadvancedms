@@ -40,6 +40,7 @@ interface PacienteAPI {
 
 interface DoctorAPI {
   id: string;
+  alias?: string | null;
   nombre: string;
   honorario_consulta: number;
   honorario_estudio: number;
@@ -169,7 +170,12 @@ function NuevaConsultaContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: pacientes, loading: loadingPacientes } = useFetch<PacienteAPI>('/api/pacientes');
-  const { data: doctores, loading: loadingDoctores } = useFetch<DoctorAPI>('/api/configuracion/doctores');
+  const { data: doctoresRaw, loading: loadingDoctores } = useFetch<DoctorAPI>('/api/configuracion/doctores');
+  // El API devuelve `alias` (nombre de presentación) y `nombre` (nombre real, puede ser null).
+  const doctores = useMemo(
+    () => doctoresRaw.map((d) => ({ ...d, nombre: d.alias || d.nombre || d.id })),
+    [doctoresRaw],
+  );
   const [matrizCostos, setMatrizCostos] = useState<MatrizCosto[]>([]);
   const [catalogoConsultas, setCatalogoConsultas] = useState<CatalogoConsulta[]>([]);
   const [catalogoEstudios, setCatalogoEstudios] = useState<CatalogoEstudio[]>([]);
