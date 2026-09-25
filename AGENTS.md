@@ -1,7 +1,7 @@
 # Reglas del proyecto (aplican a todos los agentes)
 
 ## Restricciones duras
-- NUNCA hacer commit, push, tag, merge, rebase, stash ni PR. Todo queda en el working tree sin commitear (además está bloqueado en `opencode.json`).
+
 - NUNCA ejecutar migraciones ni escrituras contra Supabase/PostgreSQL remoto o de producción. Las migraciones son archivos SQL; solo se aplican en una BD local desechable identificada.
 - Cambios aditivos: reutilizar tablas y módulos existentes (pacientes, expedientes, consultas, médicos, inventario/LIO, catálogo de servicios, origen, roles, historial). No borrar ni reescribir funcionalidad de Agenda, consultas o estudios salvo que sea imprescindible y se justifique.
 - No imprimir ni escribir secretos; no leer `.env` con datos reales.
@@ -9,12 +9,14 @@
 - Un requisito solo es CUBIERTO con evidencia concreta (archivo:línea, migración, test, o comando con su salida).
 
 ## Fuente de verdad y memoria entre sesiones
+
 - Especificación: `docs/cirugias/fase-1-creacion-cirugia.md` (IDs OBJ-, ORI-, CAT-, PAC-, DAT-, OJO-, MED-, PRD-, EXP-, CON-, LIO-, ARC-, STO-, AUD-, PER-, FLU-, VAL-, AGE-, EST-, DET-, ARQ-, ALC-, FUE-).
 - Mapa del repo: `docs/cirugias/00-mapa-repo.md`
 - Matriz de auditoría: `docs/cirugias/auditoria-fase-1.md`
 - Al iniciar una sesión lee el mapa y la matriz; NO vuelvas a explorar todo el repo. Tras cada bloque actualiza la matriz (estado + evidencia).
 
 ## Economía de tokens
+
 - Usa grep/glob antes de abrir archivos y lee por rango de líneas; no releas lo ya leído.
 - Filtra salidas largas de comandos (`| tail -n 40`, `| grep -i error`).
 - Delega: exploración amplia -> @explore; pruebas/docs/guía -> @mecanico; revisión independiente -> @auditor.
@@ -22,6 +24,7 @@
 - Sin pulido extra ni reescrituras completas de archivos para retoques.
 
 ## Hidratación SSR/CSR (obligatorio)
+
 - No usar `new Date()`, `Date.now()`, `Math.random()`, `window`, `localStorage`, `sessionStorage` ni `matchMedia` para producir HTML durante el render inicial de componentes client.
 - No usar esos valores en inicializadores de `useState`, helpers llamados desde JSX, atributos JSX ni cálculos de etiquetas visibles.
 - Para datos dependientes del cliente, inicializar con un valor determinista igual en servidor y cliente y actualizar en `useEffect`; renderizar un placeholder determinista mientras tanto.
@@ -30,6 +33,7 @@
 - Antes de cerrar una tarea frontend, ejecutar `npx tsc --noEmit` y auditar con `rg` los patrones anteriores en `src/app` y `src/components`.
 
 ## Rendimiento de APIs (obligatorio)
+
 - Endpoints de lectura usados por pantallas interactivas deben responder en <=500 ms objetivo p95 y <=1 s como límite operativo normal.
 - Mutaciones deben responder en <=800 ms objetivo p95 y <=2 s como límite operativo normal.
 - Todo endpoint que supere 1 s debe medirse con `Server-Timing`, optimizar consultas/payload y justificar cualquier excepción.
