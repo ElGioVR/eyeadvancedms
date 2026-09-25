@@ -324,7 +324,7 @@ ARCHIVO CON DEPENDENCIA CRÍTICA (actualizar import):
 
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
-| `mis-honorarios/page.tsx` puede tener usuarios con acceso directo | Error 404 al navegar | No existe link desde Sidebar; se puede añadir middleware redirect |
+| `mis-honorarios/page.tsx` accesible con enlace directo | Sin 404 (la ruta existe desde B22); el middleware de sesión ya redirige a `/login` | Hecho: ruta + endpoint de autoconsulta |
 
 ---
 
@@ -493,4 +493,4 @@ grep -r "honorarios\|reportes" src/components/layout/Sidebar.tsx
 5. **Una cirugía = un honorario por participante**, no múltiples. La relación consulta-cirugía es de navegación, no de duplicación de honorarios.
 6. **"Sync" no es una migración de datos**, es una validación + corrección que puede ejecutarse manualmente o programadamente.
 7. **El módulo Productividad hereda toda la funcionalidad** de Honorarios + Reportes, pero solo expone lo que el admin necesita.
-8. **El doctor ve sus honorarios** a través de `/mis-honorarios` que se redirigirá a `/productividad` con filtro `doctor_id=~`.O se elimina si no es requerido.
+8. **El doctor ve sus honorarios** en `/mis-honorarios` (páginas propias, no redirige a `/productividad`): `GET /api/productividad/mis-honorarios` resuelve su `doctor_id` y devuelve la misma liga que el panel admin (B22).

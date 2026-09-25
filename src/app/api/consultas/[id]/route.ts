@@ -4,10 +4,12 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { MotorDevengoService } from '@/services/productividad';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { z } from 'zod';
 
 const consultaUpdateSchema = z.object({
-  estatus: z.enum(['BORRADOR', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
+  estatus: z.enum(['BORRADOR', 'AGENDADA', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
   estatus_pago: z.enum(['PENDIENTE_PAGO', 'PAGADO']).optional(),
   costo_total: z.number().min(0).optional(),
   monto_pagado: z.number().min(0).optional(),
@@ -64,11 +66,11 @@ export async function GET(
     .select(`
       id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
       pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo, email, numero_poliza, numero_afiliacion),
-      doctores:doctor_id (nombre_completo),
-      est1_doc:estudio_1_doctor_id (nombre_completo),
-      est2_doc:estudio_2_doctor_id (nombre_completo),
-      est3_doc:estudio_3_doctor_id (nombre_completo),
-      proc_doc:procedimiento_doctor_id (nombre_completo)
+      doctores:doctor_id (alias),
+      est1_doc:estudio_1_doctor_id (alias),
+      est2_doc:estudio_2_doctor_id (alias),
+      est3_doc:estudio_3_doctor_id (alias),
+      proc_doc:procedimiento_doctor_id (alias)
     `)
     .eq('id', id)
     .maybeSingle();
@@ -120,7 +122,7 @@ export async function GET(
   }
 
   interface PacienteJoin { nombre_completo: string; fecha_nacimiento: string | null; telefono: string | null; sexo: string | null; email: string | null; numero_poliza: string | null; numero_afiliacion: string | null }
-  interface DoctorJoin { nombre_completo: string }
+  interface DoctorJoin { alias: string }
 
   const pacienteData = (consulta as Record<string, unknown>).pacientes as PacienteJoin | undefined;
   const doctorData = (consulta as Record<string, unknown>).doctores as DoctorJoin | undefined;
@@ -134,11 +136,11 @@ export async function GET(
       ...consulta,
       paciente: pacienteData?.nombre_completo || null,
       iniciales: (pacienteData?.nombre_completo || '?').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
-      doctor: doctorData?.nombre_completo || null,
-      est1_doctor: est1Doc?.nombre_completo || null,
-      est2_doctor: est2Doc?.nombre_completo || null,
-      est3_doctor: est3Doc?.nombre_completo || null,
-      proc_doctor: procDoc?.nombre_completo || null,
+      doctor: doctorData?.alias || null,
+      est1_doctor: est1Doc?.alias || null,
+      est2_doctor: est2Doc?.alias || null,
+      est3_doctor: est3Doc?.alias || null,
+      proc_doctor: procDoc?.alias || null,
       paciente_sexo: pacienteData?.sexo || null,
       paciente_telefono: pacienteData?.telefono || null,
       paciente_fecha_nacimiento: pacienteData?.fecha_nacimiento || null,
@@ -306,7 +308,10 @@ export async function PATCH(
     .single();
 
   if (updateError) {
-    return NextResponse.json({ error: 'Error al actualizar la consulta' }, { status: 500 });
+    return NextResponse.json(
+      { error: handleSupabaseError(updateError, 'consultas.actualizar').mensaje },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json(updated);
@@ -345,6 +350,12 @@ export async function DELETE(
     usuario_id: auth.user.id,
     payload: { estatus_anterior: existing.estatus },
   });
+
+  try {
+    await new MotorDevengoService().cancelarPorConsulta(id);
+  } catch {
+    // best-effort: no bloquea la cancelación de la consulta
+  }
 
   return NextResponse.json({ ok: true });
 }

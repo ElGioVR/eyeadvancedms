@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
-import { generarUrlFirmada } from '@/lib/storage-cirugia';
+import { generarUrlFirmada, eliminarArchivoDeStorage } from '@/lib/storage-cirugia';
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
 
 export async function GET(
@@ -20,7 +20,7 @@ export async function GET(
 
   const { data: archivo, error } = await supabase
     .from('cirugia_archivos')
-    .select('*')
+    .select('id, nombre_original, mime_type, size, tipo_documento, uploaded_by, created_at, storage_path')
     .eq('id', archivoId)
     .eq('cirugia_id', id)
     .is('deleted_at', null)
@@ -35,7 +35,9 @@ export async function GET(
     return NextResponse.json({ error: url.error }, { status: 500 });
   }
 
-  return NextResponse.json({ archivo, signedUrl: url.url });
+  // No exponer storage_path (estructura interna del bucket)
+  const { storage_path: _sp, ...archivoPublico } = archivo;
+  return NextResponse.json({ archivo: archivoPublico, signedUrl: url.url });
 }
 
 export async function DELETE(
@@ -74,6 +76,14 @@ export async function DELETE(
 
   if (updateError) {
     return NextResponse.json({ error: 'Error al eliminar el archivo' }, { status: 500 });
+  }
+
+  // Borrar el binario del bucket (el soft-delete conserva el registro en BD)
+  try {
+    await eliminarArchivoDeStorage(archivo.storage_path);
+  } catch {
+    // El registro ya está eliminado lógicamente; el huérfano se purga manualmente
+    console.error('[archivos.eliminar] No se pudo borrar del storage:', archivo.storage_path);
   }
 
   // AUD-002/003: historial de archivo eliminado (borrado lógico)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Search, X, Loader2, ShieldCheck, Upload } from 'lucide-react';
+import { Search, X, Loader2, ShieldCheck, Upload, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useParams } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
@@ -48,8 +48,33 @@ export default function ServiciosPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ validos: number; duplicados: number; errores: number } | null>(null);
+  const [importPreview, setImportPreview] = useState<{
+    validos: number;
+    duplicados: number;
+    errores: number;
+    total: number;
+    rows: Array<{ nombre: string; tipo: string; costo: number; porcentaje_cobertura: number; errores: string[]; duplicado: boolean }>;
+  } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importModo, setImportModo] = useState<'agregar' | 'reemplazar'>('agregar');
+
+  // Plantilla CSV con las columnas permitidas y filas de ejemplo
+  const handleDescargarPlantilla = useCallback(() => {
+    const bom = '\uFEFF';
+    const csv = [
+      'nombre,tipo,costo,porcentaje_cobertura',
+      'Calculo de Lente Intraocular,ESTUDIO,350,40',
+      'Consulta Primera Vez,CONSULTA,300,50',
+      'Facoemulsificacion Por Ojo,PROCEDIMIENTO,12000,80',
+    ].join('\n');
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla-servicios-aseguranza.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -179,6 +204,7 @@ export default function ServiciosPage() {
       formData.append('file', file);
       formData.append('aseguranza_id', id);
       formData.append('confirm', 'true');
+      formData.append('modo', importModo);
 
       const res = await fetch('/api/configuracion/aseguranzas/servicios/import', {
         method: 'POST',
@@ -189,7 +215,12 @@ export default function ServiciosPage() {
         toast(err.error || 'Error al importar', 'error');
         return;
       }
-      toast('Servicios importados exitosamente');
+      const data = await res.json();
+      if (importModo === 'reemplazar') {
+        toast(`Matriz reemplazada: ${data.insertados ?? 0} servicios cargados${data.errores ? ` · ${data.errores} con error` : ''}`);
+      } else {
+        toast(`Servicios importados: ${data.insertados ?? 0} nuevos${data.omitidos ? ` · ${data.omitidos} duplicados omitidos` : ''}`);
+      }
       setShowImportModal(false);
       setImportPreview(null);
 
@@ -203,7 +234,7 @@ export default function ServiciosPage() {
     } finally {
       setImporting(false);
     }
-  }, [id, toast]);
+  }, [id, toast, importModo]);
 
   const handleCloseImportModal = useCallback(() => {
     setShowImportModal(false);
@@ -227,9 +258,18 @@ export default function ServiciosPage() {
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.csv"
                 onChange={handleFileSelect}
               />
+              <button
+                onClick={handleDescargarPlantilla}
+                disabled={importing}
+                title="Descargar plantilla CSV con el formato permitido"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Plantilla
+              </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing}
@@ -444,19 +484,73 @@ export default function ServiciosPage() {
       <Modal isOpen={showImportModal} onClose={handleCloseImportModal}>
         <h3 className="text-lg font-bold text-gray-900 dark:text-[#E7E9EA] mb-4">Confirmar importación</h3>
         {importPreview && (
-          <div className="space-y-3 mb-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-[#71767B]">Válidos</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{importPreview.validos}</span>
+          <div className="space-y-4 mb-6">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 p-3 text-center">
+                <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{importPreview.validos}</p>
+                <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Nuevos</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-500/10 p-3 text-center">
+                <p className="text-lg font-extrabold text-amber-600 dark:text-amber-400">{importPreview.duplicados}</p>
+                <p className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400">Duplicados</p>
+              </div>
+              <div className="rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-center">
+                <p className="text-lg font-extrabold text-red-600 dark:text-red-400">{importPreview.errores}</p>
+                <p className="text-[10px] font-bold uppercase text-red-700 dark:text-red-400">Con error</p>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-[#71767B]">Duplicados</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">{importPreview.duplicados}</span>
+
+            {/* Modo de importación */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-[#71767B]">Modo de importación</p>
+              <label className={cn(
+                'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
+                importModo === 'agregar' ? 'border-primary-400 bg-primary-50/50 dark:border-primary-500/40 dark:bg-primary-500/5' : 'border-gray-200 dark:border-[#2F3336] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+              )}>
+                <input type="radio" name="modo-import" checked={importModo === 'agregar'} onChange={() => setImportModo('agregar')} className="mt-0.5 h-4 w-4 text-primary-600" />
+                <span>
+                  <span className="block text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Agregar</span>
+                  <span className="block text-xs text-gray-500 dark:text-[#71767B]">Los duplicados se omiten, no se tocan los existentes.</span>
+                </span>
+              </label>
+              <label className={cn(
+                'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
+                importModo === 'reemplazar' ? 'border-red-400 bg-red-50/50 dark:border-red-500/40 dark:bg-red-500/5' : 'border-gray-200 dark:border-[#2F3336] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+              )}>
+                <input type="radio" name="modo-import" checked={importModo === 'reemplazar'} onChange={() => setImportModo('reemplazar')} className="mt-0.5 h-4 w-4 text-red-600" />
+                <span>
+                  <span className="block text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Limpiar todo y volver a cargar</span>
+                  <span className="block text-xs text-red-600 dark:text-red-400">Elimina TODOS los servicios actuales de esta aseguranza y carga solo los del archivo.</span>
+                </span>
+              </label>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-[#71767B]">Errores</span>
-              <span className="font-bold text-red-600 dark:text-red-400">{importPreview.errores}</span>
-            </div>
+
+            {/* Detalle de filas con problema */}
+            {importPreview.rows.length > 0 && importPreview.rows.some((r) => r.duplicado || r.errores.length > 0) && (
+              <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] overflow-hidden">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] px-3 py-2 bg-gray-50 dark:bg-[#202327]">
+                  Detalle ({importPreview.rows.filter((r) => r.duplicado || r.errores.length > 0).length})
+                </p>
+                <div className="max-h-40 overflow-y-auto divide-y divide-gray-50 dark:divide-[#2F3336]">
+                  {importPreview.rows.filter((r) => r.duplicado || r.errores.length > 0).slice(0, 50).map((r, i) => (
+                    <div key={i} className="px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold',
+                          r.errores.length > 0 ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+                        )}>
+                          {r.errores.length > 0 ? 'Error' : 'Duplicado'}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{r.nombre}</span>
+                      </div>
+                      {r.errores.length > 0 && (
+                        <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">{r.errores.join('; ')}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="flex items-center justify-end gap-2">
@@ -468,10 +562,13 @@ export default function ServiciosPage() {
           </button>
           <button
             onClick={handleConfirmImport}
-            disabled={importing || (importPreview?.validos ?? 0) === 0}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+            disabled={importing || !importPreview || (importModo === 'agregar' && (importPreview?.validos ?? 0) - (importPreview?.duplicados ?? 0) <= 0)}
+            className={cn(
+              'rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-50',
+              importModo === 'reemplazar' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
+            )}
           >
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirmar importación'}
+            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : importModo === 'reemplazar' ? 'Limpiar y cargar' : 'Confirmar importación'}
           </button>
         </div>
       </Modal>

@@ -1,9 +1,12 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
+// Dashboard operativo: sólo información de valor del momento.
+// Los costos/ingresos viven en el módulo de Productividad.
+
 export interface DashboardStats {
   totalPacientes: number;
   consultasHoy: number;
-  cobrosDelDia: number;
+  consultasSemana: number;
   lentesBajoStock: number;
 }
 
@@ -23,33 +26,18 @@ export interface LenteBajoStock {
   stock: number;
 }
 
-export interface IngresoDia {
-  dia: string;
-  monto: number;
-}
-
 export interface DoctorDashboard {
   id: string;
   nombre: string;
   especialidad: string;
   iniciales: string;
-  consultas: number;
-}
-
-export interface AseguranzaDashboard {
-  id: string;
-  nombre: string;
-  pacientes: number;
 }
 
 export interface DashboardData {
   stats: DashboardStats;
   citas: Cita[];
   lentesBajoStock: LenteBajoStock[];
-  ingresosSemana: IngresoDia[];
-  totalIngresosSemana: number;
   doctores: DoctorDashboard[];
-  aseguranzas: AseguranzaDashboard[];
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -72,12 +60,9 @@ export async function getDashboardData(): Promise<DashboardData> {
   const [
     pacientesResult,
     consultasHoyResult,
-    cobrosHoyResult,
-    lentesBajoStockResult,
     consultasSemanaResult,
+    lentesBajoStockResult,
     doctoresResult,
-    cobrosSemanaResult,
-    aseguranzasResult,
   ] = await Promise.all([
     supabase
       .from('pacientes')
@@ -88,47 +73,54 @@ export async function getDashboardData(): Promise<DashboardData> {
       .select(`
         id, folio, hora_inicio, tipo_consulta, tipo_visita, diagnostico,
         paciente:paciente_id (nombre_completo),
-        doctor:doctor_id (id, nombre_completo)
+        doctor:doctor_id (id, alias)
       `)
       .eq('fecha', today)
       .order('hora_inicio'),
 
     supabase
-      .from('cobros')
-      .select('monto')
-      .eq('fecha_pago', today)
-      .eq('pagado', true),
-
-    supabase
-      .from('inventario_items')
-      .select('id, marca, modelo, grado_esferico, color, stock')
-      .lte('stock', 5)
-      .order('stock', { ascending: true })
-      .limit(10),
-
-    supabase
       .from('consultas')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .gte('fecha', weekStart)
       .lte('fecha', weekEnd),
 
+    // Bajo stock: sólo LIOs (tipo = 'LENTE_INTRAOCULAR'). Cascada de esquemas:
+    // legacy (marca/modelo) → nuevo (manufacturer/model) → nuevo sin filtro tipo.
+    supabase
+      .from('inventario_items')
+      .select('id, marca, modelo, grado_esferico, color, stock, stock_minimo, tipo')
+      .eq('tipo', 'LENTE_INTRAOCULAR')
+      .gt('stock', 0)
+      .order('stock', { ascending: true })
+      .limit(50),
+
     supabase
       .from('doctores')
-      .select('id, nombre_completo, especialidad')
+      .select('id, alias, especialidad')
       .eq('activo', true),
-
-    supabase
-      .from('cobros')
-      .select('monto, pagado, fecha_pago')
-      .gte('fecha_pago', weekStart)
-      .lte('fecha_pago', weekEnd)
-      .eq('pagado', true),
-
-    supabase
-      .from('cobros')
-      .select('aseguranza_id, paciente_id')
-      .not('aseguranza_id', 'is', null),
   ]);
+
+  let lentesRaw: Record<string, unknown>[] = [];
+  if (!lentesBajoStockResult.error) {
+    lentesRaw = (lentesBajoStockResult.data as Record<string, unknown>[]) ?? [];
+  } else {
+    // Esquema nuevo (manufacturer/model): con filtro tipo; si la columna no
+    // existe, último intento sin filtro (los items del inventario son LIOs).
+    const intentoNuevo = async (conTipo: boolean) => {
+      const q = supabase
+        .from('inventario_items')
+        .select('id, manufacturer, model, product_name, sphere, stock, stock_minimo');
+      const filtered = conTipo ? q.eq('tipo', 'LENTE_INTRAOCULAR') : q;
+      return filtered.gt('stock', 0).order('stock', { ascending: true }).limit(50);
+    };
+    let nueva = await intentoNuevo(true);
+    if (nueva.error && /column|does not exist/i.test(nueva.error.message)) {
+      nueva = await intentoNuevo(false);
+    }
+    if (!nueva.error) {
+      lentesRaw = (nueva.data as unknown as Record<string, unknown>[]) ?? [];
+    }
+  }
 
   const totalPacientes = pacientesResult.count ?? 0;
 
@@ -139,112 +131,56 @@ export async function getDashboardData(): Promise<DashboardData> {
       id: c.id,
       hora: c.hora_inicio?.slice(0, 5) ?? '',
       paciente: paciente?.nombre_completo ?? '',
-      doctor: doctor?.nombre_completo ?? '',
+      doctor: doctor?.alias ?? '',
       diagnostico: c.diagnostico ?? '',
       tipo: c.tipo_visita === 'PRIMERA_VEZ' ? 'Primera Vez' : 'Seguimiento',
     };
   });
 
-  const cobrosDelDia = (cobrosHoyResult.data ?? []).reduce((sum, c) => sum + (Number(c.monto) || 0), 0);
-
-  const lentesBajoStock: LenteBajoStock[] = (lentesBajoStockResult.data ?? [])
-    .filter((l) => l.stock <= 5)
-    .map((l) => ({
-      id: l.id,
-      nombre: `${l.marca} ${l.modelo}`,
-      detalle: [l.grado_esferico ? `Esf. ${l.grado_esferico}` : null, l.color].filter(Boolean).join(' · ') || 'Sin detalle',
-      stock: l.stock,
-    }));
-
-  const ingresosPorDia: Record<string, number> = {};
-  const diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-  for (const d of diasSemana) ingresosPorDia[d] = 0;
-
-  for (const c of cobrosSemanaResult.data ?? []) {
-    if (!c.fecha_pago) continue;
-    const fecha = new Date(c.fecha_pago);
-    const diff = fecha.getTime() - monday.getTime();
-    const idx = Math.floor(diff / 86400000);
-    if (idx >= 0 && idx < 7) {
-      ingresosPorDia[diasSemana[idx]] += Number(c.monto) || 0;
-    }
-  }
-
-  const ingresosSemana = diasSemana.slice(0, 6).map((dia) => ({
-    dia,
-    monto: Math.round(ingresosPorDia[dia]),
-  }));
-
-  const totalIngresosSemana = ingresosSemana.reduce((sum, i) => sum + i.monto, 0);
-
-  const doctorIds = (doctoresResult.data ?? []).map((d) => d.id);
-  let consultasPorDoctor: Record<string, number> = {};
-  const aseguranzaMap: Record<string, { nombre: string; pacientes: Set<string> }> = {};
-  for (const c of aseguranzasResult.data ?? []) {
-    const aid = c.aseguranza_id;
-    if (!aid) continue;
-    if (!aseguranzaMap[aid]) aseguranzaMap[aid] = { nombre: '', pacientes: new Set() };
-    aseguranzaMap[aid].pacientes.add(c.paciente_id);
-  }
-  const aseguranzaIds = Object.keys(aseguranzaMap);
-
-  const [consultasAllResult, asegResult] = await Promise.all([
-    doctorIds.length > 0
-      ? supabase
-          .from('consultas')
-          .select('doctor_id')
-          .in('doctor_id', doctorIds)
-      : Promise.resolve({ data: [] as any[] }),
-    aseguranzaIds.length > 0
-      ? supabase
-          .from('aseguranzas')
-          .select('id, nombre')
-          .in('id', aseguranzaIds)
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
-
-  for (const c of consultasAllResult.data ?? []) {
-    consultasPorDoctor[c.doctor_id] = (consultasPorDoctor[c.doctor_id] ?? 0) + 1;
-  }
-
-  const aseguranzasNombres: Record<string, string> = {};
-  for (const a of asegResult.data ?? []) {
-    aseguranzasNombres[a.id] = a.nombre;
-  }
+  const lentesBajoStock: LenteBajoStock[] = lentesRaw
+    .filter((l) => {
+      const stock = Number(l.stock) || 0;
+      const minimo = Number(l.stock_minimo ?? 5) || 5;
+      return stock > 0 && stock < minimo;
+    })
+    .slice(0, 10)
+    .map((l) => {
+      const esNueva = l.manufacturer !== undefined || l.product_name !== undefined;
+      const nombre = esNueva
+        ? `${l.manufacturer || l.product_name || ''} ${l.model || l.product_name || ''}`.trim()
+        : `${l.marca || ''} ${l.modelo || ''}`.trim();
+      const detalle = esNueva
+        ? l.sphere != null ? `Esf. ${l.sphere}` : 'Sin detalle'
+        : [l.grado_esferico ? `Esf. ${l.grado_esferico}` : null, l.color].filter(Boolean).join(' · ') || 'Sin detalle';
+      return {
+        id: l.id as string,
+        nombre: nombre || 'Ítem de inventario',
+        detalle,
+        stock: Number(l.stock),
+      };
+    });
 
   const doctores: DoctorDashboard[] = (doctoresResult.data ?? []).map((d) => ({
     id: d.id,
-    nombre: d.nombre_completo,
+    nombre: d.alias,
     especialidad: d.especialidad ?? '',
-    iniciales: d.nombre_completo
+    iniciales: d.alias
       .split(' ')
       .map((n: string) => n[0])
       .slice(0, 2)
       .join('')
       .toUpperCase(),
-    consultas: consultasPorDoctor[d.id] ?? 0,
   }));
-
-  const aseguranzas: AseguranzaDashboard[] = aseguranzaIds
-    .map((id) => ({
-      id,
-      nombre: aseguranzasNombres[id] ?? 'Desconocida',
-      pacientes: aseguranzaMap[id].pacientes.size,
-    }))
-    .sort((a, b) => b.pacientes - a.pacientes);
 
   return {
     stats: {
       totalPacientes,
       consultasHoy: consultasHoyResult.data?.length ?? 0,
-      cobrosDelDia,
+      consultasSemana: consultasSemanaResult.count ?? 0,
       lentesBajoStock: lentesBajoStock.length,
     },
     citas,
     lentesBajoStock,
-    ingresosSemana,
-    totalIngresosSemana,
     doctores,
-    aseguranzas,
   };
 }

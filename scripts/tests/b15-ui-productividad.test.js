@@ -64,22 +64,94 @@ assertFileOk(page);
 
 assertContains(page, [
   "'use client'",
-  'Tabs',
-  'Honorarios',
-  'Por doctor',
-  'Cirugías',
-  'Entradas y salidas',
-  'Estudios',
+  'VISTAS',
+  "'Métricas'",
+  "'Honorarios'",
+  "'Doctores'",
+  "'Pagos'",
+  "'Sync'",
   'useUser',
   'rangoMesActual',
   'formatFechaCsv',
   '/api/productividad',
+  '/api/productividad/metricas',
   'formato',
   'csv',
   'AbortController',
   'Acceso restringido',
   "rol === 'admin'",
-], 'page.tsx pestañas + admin + fetch + CSV');
+  '/api/productividad/honorarios',
+  'periodo',
+  'Pagar',
+  'Embudo',
+  'MetricasSeccion',
+  'DoctorDetalle',
+  'PagosHistorial',
+  'ssr: false',
+  "descargarReporte('entradas_salidas'",
+  'ModalRangoFechas',
+  '/api/productividad/reportes/cirugias',
+  'Descargar reporte CSV de entradas y salidas de consultas',
+  'agrupar_por',
+  "pageSize: '10'",
+  'pageSize=10',
+  'líneas del doctor',
+  'const rangoActivo = desde && hasta',
+  'if (abortLigaRef.current === controller) setLoading(false)',
+  'page={page}',
+], 'page.tsx botones de secciones + admin + fetch + CSV + embudo + doctor + pagos + paginación 10');
+
+assertContains('src/components/ui/Pagination.tsx', [
+  'Math.max(1, Math.floor(Number(page) || 1))',
+  'totalPages <= 10',
+  '}–{',
+  'type="button"',
+], 'Pagination.tsx valores numéricos seguros + números hasta 10 páginas + guion');
+
+assertNotContains('src/components/ui/Pagination.tsx', [
+  'â€“',
+], 'Pagination.tsx sin caracteres mal codificados en el rango');
+
+assertNotContains(page, [
+  "tab === 'entradas_salidas'",
+  'tablas.entradas_salidas',
+  'formatHora12',
+  'from \'@/components/ui/Tabs\'',
+], 'page.tsx sin tabla entradas_salidas ni componente Tabs');
+
+const removidas = ['Tarifas', 'Períodos'];
+const pageContent = read(page) || '';
+const presentes = removidas.filter((t) => pageContent.includes(`'${t}'`) || pageContent.includes(`"${t}"`) || pageContent.includes(`: '${t}'`));
+if (presentes.length === 0) ok('sin pestañas Tarifas/Períodos en labels');
+else fail('sin pestañas Tarifas/Períodos', presentes.join(', '));
+
+const sinTabs = !pageContent.includes('from \'@/components/ui/Tabs\'') && !pageContent.includes('<Tabs');
+if (sinTabs) ok('sin componente Tabs (reemplazado por botones de sección)');
+else fail('sin componente Tabs', 'sigue importando/usando Tabs');
+
+assertContains('src/components/productividad/charts.tsx', [
+  'recharts',
+  'h-[360px] max-lg:h-[280px]',
+  'h-[320px] max-lg:h-[260px]',
+  'h-[280px]',
+  'h-[300px] max-lg:h-[240px]',
+  'ResponsiveContainer',
+], 'charts.tsx librería recharts + tamaños de gráficos');
+
+assertContains('package.json', ['"recharts"'], 'dependencia recharts instalada');
+
+assertContains('src/components/productividad/PagosHistorial.tsx', [
+  '/api/productividad/honorarios/pagos',
+  'formato',
+  'fecha_pago',
+], 'historial de pagos consume endpoint propio');
+
+assertContains('src/components/productividad/DoctorDetalle.tsx', [
+  '/api/agenda?',
+  'doctorId',
+  '/api/productividad/metricas',
+  '/api/productividad/honorarios',
+], 'detalle de doctor incluye agenda + métricas + honorarios');
 
 assertNotContains(page, [
   'localStorage',

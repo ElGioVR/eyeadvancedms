@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: 'Error al listar cirugías' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'cirugias.listar').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({ data: data || [] });
@@ -51,10 +52,17 @@ const cirugiaCreateSchema = z.object({
   recurso_id: z.string().uuid().optional().nullable(),
   ojo: z.enum(['OD', 'OI', 'OU']),
   inventario_item_id: z.string().uuid().optional().nullable(),
+  lio: z.string().min(1).max(255).optional().nullable(),
+  marca_lio: z.string().min(1).max(255).optional().nullable(),
   consulta_id: z.string().uuid().optional().nullable(),
   participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante'),
   notas: z.string().max(2000).optional().nullable(),
-}).strict();
+})
+  .strict()
+  .refine(
+    (d) => !(d.inventario_item_id && (d.lio || d.marca_lio)),
+    { message: 'Asigne solo un LIO: de inventario o manual, no ambos' }
+  );
 
 export async function POST(request: Request) {
   const auth = await requireAuth();
@@ -106,6 +114,8 @@ export async function POST(request: Request) {
     p_recurso_id: data.recurso_id,
     p_ojo: data.ojo,
     p_inventario_item_id: data.inventario_item_id,
+    p_lio: data.lio ?? null,
+    p_marca_lio: data.marca_lio ?? null,
     p_consulta_id: data.consulta_id,
     p_participantes: data.participantes,
     p_notas: data.notas,

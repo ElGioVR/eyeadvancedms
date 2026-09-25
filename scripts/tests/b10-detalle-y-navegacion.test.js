@@ -355,7 +355,7 @@ function checkCirugiaDetallePage() {
   );
   assertRegexMatches(
     content,
-    /doctores\??\.nombre_completo|roles\??\.nombre|roles\??\.clave/,
+    /doctores\??\.alias|roles\??\.nombre|roles\??\.clave/,
     'bloque 2 expone el nombre del médico y el rol (DET-002)'
   );
   // Bloque 3 (LIO): muestra marca, modelo, tipo, lote y caducidad (labels

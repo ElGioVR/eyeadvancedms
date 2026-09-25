@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -23,7 +25,7 @@ export async function GET() {
     .order('tipo_evento');
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({ data });

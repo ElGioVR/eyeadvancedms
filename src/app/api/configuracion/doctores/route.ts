@@ -4,8 +4,12 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { z } from 'zod';
 
+// El alias (ej. "DR BAYARDO") es el nombre de presentación usado en toda la app.
+// `nombre`/`apellido` guardan la identidad real del doctor.
 const doctorCreateSchema = z.object({
-  nombre: z.string().min(1).max(255),
+  alias: z.string().min(1).max(255),
+  nombre: z.string().max(255).optional().nullable(),
+  apellido: z.string().max(255).optional().nullable(),
   cedula: z.string().max(50).optional(),
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional(),
@@ -18,7 +22,9 @@ const doctorCreateSchema = z.object({
 
 const doctorUpdateSchema = z.object({
   id: z.string().uuid(),
-  nombre: z.string().min(1).max(255).optional(),
+  alias: z.string().min(1).max(255).optional(),
+  nombre: z.string().max(255).optional().nullable(),
+  apellido: z.string().max(255).optional().nullable(),
   cedula: z.string().max(50).optional().nullable(),
   especialidad: z.string().max(255).optional(),
   telefono: z.string().max(20).optional().nullable(),
@@ -39,9 +45,9 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('doctores')
-    .select('id, nombre_completo, especialidad, cedula_profesional, telefono, email, usuario_id, activo, honorario_consulta, honorario_estudio, honorario_procedimiento, created_at')
+    .select('id, alias, nombre, apellido, especialidad, cedula_profesional, telefono, email, usuario_id, activo, honorario_consulta, honorario_estudio, honorario_procedimiento, created_at')
     .eq('activo', true)
-    .order('nombre_completo');
+    .order('alias');
 
   if (error) {
     return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
@@ -49,7 +55,9 @@ export async function GET() {
 
   const result = data.map((d) => ({
     id: d.id,
-    nombre: d.nombre_completo,
+    alias: d.alias,
+    nombre: d.nombre,
+    apellido: d.apellido,
     especialidad: d.especialidad,
     cedula: d.cedula_profesional,
     telefono: d.telefono,
@@ -88,10 +96,27 @@ export async function POST(request: Request) {
 
   const data = validation.data;
 
+  // Validar vínculo: el usuario debe tener rol doctor o administrador
+  if (data.usuario_id) {
+    const { data: usuario } = await supabase
+      .from('usuarios')
+      .select('rol, activo')
+      .eq('id', data.usuario_id)
+      .maybeSingle();
+    if (!usuario) {
+      return NextResponse.json({ error: 'El usuario a vincular no existe' }, { status: 404 });
+    }
+    if (!['doctor', 'admin'].includes(usuario.rol)) {
+      return NextResponse.json({ error: 'Solo se puede vincular un usuario con rol doctor o administrador' }, { status: 400 });
+    }
+  }
+
   const { data: doctor, error } = await supabase
     .from('doctores')
     .insert({
-      nombre_completo: data.nombre.trim(),
+      alias: data.alias.trim(),
+      nombre: data.nombre?.trim() || null,
+      apellido: data.apellido?.trim() || null,
       cedula_profesional: data.cedula?.trim() || null,
       especialidad: data.especialidad?.trim() || 'Oftalmología',
       telefono: data.telefono?.trim() || null,
@@ -136,7 +161,9 @@ export async function PATCH(request: Request) {
   const { id, ...updates } = data;
 
   const profileUpdates: Record<string, any> = {};
-  if (updates.nombre) profileUpdates.nombre_completo = updates.nombre.trim();
+  if (updates.alias) profileUpdates.alias = updates.alias.trim();
+  if (updates.nombre !== undefined) profileUpdates.nombre = updates.nombre?.trim() || null;
+  if (updates.apellido !== undefined) profileUpdates.apellido = updates.apellido?.trim() || null;
   if (updates.cedula !== undefined) profileUpdates.cedula_profesional = updates.cedula?.trim() || null;
   if (updates.especialidad) profileUpdates.especialidad = updates.especialidad.trim();
   if (updates.telefono !== undefined) profileUpdates.telefono = updates.telefono?.trim() || null;
@@ -149,6 +176,21 @@ export async function PATCH(request: Request) {
 
   if (Object.keys(profileUpdates).length === 0) {
     return NextResponse.json({ error: 'No hay datos para actualizar' }, { status: 400 });
+  }
+
+  // Validar vínculo: el usuario debe tener rol doctor o administrador
+  if (updates.usuario_id) {
+    const { data: usuario } = await supabase
+      .from('usuarios')
+      .select('rol, activo')
+      .eq('id', updates.usuario_id)
+      .maybeSingle();
+    if (!usuario) {
+      return NextResponse.json({ error: 'El usuario a vincular no existe' }, { status: 404 });
+    }
+    if (!['doctor', 'admin'].includes(usuario.rol)) {
+      return NextResponse.json({ error: 'Solo se puede vincular un usuario con rol doctor o administrador' }, { status: 400 });
+    }
   }
 
   const { error: profileError } = await supabase

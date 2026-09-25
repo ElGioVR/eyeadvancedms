@@ -1114,11 +1114,11 @@ function NuevaConsultaContent() {
                   {estudiosSeleccionados.map((estudio, index) => {
                     const cat = catalogoEstudios.find((c) => c.id === estudio.id);
                     return (
-                      <div key={index} className="rounded-lg border border-primary-200 bg-primary-50 p-3 space-y-2">
+                      <div key={index} className="rounded-lg border border-primary-200 bg-primary-50 p-3 space-y-2 dark:border-primary-900/40 dark:bg-primary-900/10">
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-700">Estudio</span>
+                              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Estudio</span>
                               <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
                           </div>
@@ -1225,11 +1225,11 @@ function NuevaConsultaContent() {
                   {procedimientosSeleccionados.map((proc, index) => {
                     const cat = catalogoProcedimientos.find((c) => c.id === proc.id);
                     return (
-                      <div key={index} className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                      <div key={index} className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2 dark:border-emerald-900/40 dark:bg-emerald-900/10">
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">Procedimiento</span>
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Procedimiento</span>
                               <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
                           </div>
@@ -1412,9 +1412,47 @@ function NuevaConsultaContent() {
                 <FormSelect label="Moneda" value={consultationData.moneda} onChange={(v) => updateConsultation('moneda', v)} options={['MXN - Peso Mexicano', 'USD - Dólar']} />
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 dark:border-[#2F3336] dark:bg-[#202327]">
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-[#71767B]">Consulta:</span>
-                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right">{selectedConsultaServicio?.nombre || 'Servicio pendiente'}</span>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editingMontos) {
+                        setEditingMontos(false);
+                        setCostoBaseEdit('');
+                        setCostosEstudiosEdit({});
+                        setCostosProcsEdit({});
+                      } else {
+                        setEditingMontos(true);
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-bold transition-colors',
+                      editingMontos
+                        ? 'bg-primary-600 text-white hover:bg-primary-700'
+                        : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-[#2F3336] dark:text-[#9BA1A6] dark:hover:bg-[#1D1F23]'
+                    )}
+                  >
+                    {editingMontos ? 'Terminar edición' : 'Editar montos'}
+                  </button>
+                </div>
+                <div className="flex justify-between text-sm items-center gap-3">
+                  <span className="text-gray-500 dark:text-[#71767B] shrink-0">Consulta:</span>
+                  {editingMontos ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={costoBaseEdit}
+                        onChange={(e) => setCostoBaseEdit(e.target.value)}
+                        placeholder={selectedConsultaServicio ? convertir(selectedConsultaServicio.costo).toFixed(2) : '0.00'}
+                        className="w-28 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                      />
+                    </div>
+                  ) : (
+                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right">{selectedConsultaServicio?.nombre || 'Servicio pendiente'}</span>
+                  )}
                 </div>
                 {estudiosSeleccionados.length > 0 && (
                   <>
@@ -1427,11 +1465,25 @@ function NuevaConsultaContent() {
                         ? doctores.find((d) => d.id === consultationData.doctorId)
                         : doctores.find((d) => d.id === estudio.doctorId);
                       return (
-                        <div key={idx} className="text-sm pl-3">
+                        <div key={idx} className="text-sm pl-3 flex items-center justify-between gap-3">
                           <span className="text-gray-500 dark:text-[#71767B]">
                             {cat?.nombre || 'Desconocido'}
                             {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
                           </span>
+                          {editingMontos && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={costosEstudiosEdit[idx] ?? ''}
+                                onChange={(e) => setCostosEstudiosEdit((p) => ({ ...p, [idx]: e.target.value }))}
+                                placeholder={cat ? convertir(cat.costo).toFixed(2) : '0.00'}
+                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1448,11 +1500,25 @@ function NuevaConsultaContent() {
                         ? doctores.find((d) => d.id === consultationData.doctorId)
                         : doctores.find((d) => d.id === proc.doctorId);
                       return (
-                        <div key={idx} className="text-sm pl-3">
+                        <div key={idx} className="text-sm pl-3 flex items-center justify-between gap-3">
                           <span className="text-gray-500 dark:text-[#71767B]">
                             {cat?.nombre || 'Desconocido'}
                             {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
                           </span>
+                          {editingMontos && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={costosProcsEdit[idx] ?? ''}
+                                onChange={(e) => setCostosProcsEdit((p) => ({ ...p, [idx]: e.target.value }))}
+                                placeholder={cat ? convertir(cat.costo).toFixed(2) : '0.00'}
+                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1499,7 +1565,7 @@ function NuevaConsultaContent() {
                 )}
                 <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2 flex justify-between">
                   <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Total Clínica:</span>
-                  <span className="text-lg font-extrabold text-primary-700">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
+                  <span className="text-lg font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
                 </div>
               </div>
             </div>
@@ -1582,7 +1648,7 @@ function NuevaConsultaContent() {
                 )}
                 <div className="flex justify-between border-t border-gray-100 dark:border-[#2F3336] pt-1">
                   <span className="text-gray-400 dark:text-[#71767B]">Total:</span>
-                  <span className="font-extrabold text-primary-700">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
+                  <span className="font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
                 </div>
               </div>
             </div>
@@ -1730,7 +1796,7 @@ function NuevaConsultaContent() {
               <PreviewField label="Moneda" value={consultationData.moneda || '—'} />
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Costo Total</span>
-                <p className="mt-1 text-lg font-extrabold text-primary-700">
+                <p className="mt-1 text-lg font-extrabold text-primary-700 dark:text-primary-400">
                   ${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span>
                 </p>
                 <div className="mt-2 space-y-1 text-xs">

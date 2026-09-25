@@ -15,6 +15,8 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
         p_recurso_id UUID DEFAULT NULL,
         p_ojo TEXT DEFAULT NULL,
         p_inventario_item_id UUID DEFAULT NULL,
+        p_lio TEXT DEFAULT NULL,
+        p_marca_lio TEXT DEFAULT NULL,
         p_consulta_id UUID DEFAULT NULL,
         p_participantes JSONB DEFAULT '[]',
         p_notas TEXT DEFAULT NULL,
@@ -152,13 +154,22 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
         END IF;
 
         -- ---------------------------------------------------------------
-        -- VAL-006: LIO (si aplica)
+        -- VAL-006: LIO (si aplica). Exclusivo: LIO de inventario O captura
+        -- manual (lio/marca_lio), nunca ambos.
         -- ---------------------------------------------------------------
+        IF p_inventario_item_id IS NOT NULL AND (p_lio IS NOT NULL OR p_marca_lio IS NOT NULL) THEN
+          RAISE EXCEPTION 'Asigne solo un LIO: de inventario o manual, no ambos';
+        END IF;
+
         IF p_inventario_item_id IS NOT NULL THEN
           IF NOT EXISTS (
             SELECT 1 FROM inventario_items
             WHERE id = p_inventario_item_id
-              AND tipo = 'LENTE_INTRAOCULAR'
+              AND (
+                tipo = 'LENTE_INTRAOCULAR'
+                OR tipo_lio IS NOT NULL
+                OR potencia_dioptrias IS NOT NULL
+              )
               AND estado = 'DISPONIBLE'
               AND stock >= 1
               AND (fecha_caducidad IS NULL OR fecha_caducidad > CURRENT_DATE)
@@ -189,6 +200,8 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
           procedimiento,
           ojo,
           inventario_item_id,
+          lio,
+          marca_lio,
           consulta_id,
           origen_id,
           servicio_id,
@@ -208,6 +221,8 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
           v_servicio_nombre,
           p_ojo,
           p_inventario_item_id,
+          p_lio,
+          p_marca_lio,
           p_consulta_id,
           p_origen_id,
           p_servicio_id,
@@ -259,7 +274,9 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
             'origen_id', p_origen_id,
             'servicio_id', p_servicio_id,
             'fecha', p_fecha,
-            'hora', p_hora
+            'hora', p_hora,
+            'lio', p_lio,
+            'marca_lio', p_marca_lio
           )
         );
 

@@ -13,6 +13,7 @@ interface User {
   last_sign_in_at: string | null;
   created_at: string;
   doctor_id: string | null;
+  modo_focus: boolean;
 }
 
 function getInitials(name: string, email: string): string {
@@ -59,6 +60,7 @@ export function useUser() {
             last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
             created_at: finalAuthUser.created_at,
             doctor_id: meData.doctor_id ?? null,
+            modo_focus: meData.modo_focus === true,
           });
         } else {
           // Fallback without doctor_id
@@ -72,6 +74,7 @@ export function useUser() {
             last_sign_in_at: finalAuthUser.last_sign_in_at ?? null,
             created_at: finalAuthUser.created_at,
             doctor_id: null,
+            modo_focus: false,
           });
         }
       } catch (error) {

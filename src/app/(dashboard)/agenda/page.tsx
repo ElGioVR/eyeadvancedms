@@ -11,21 +11,15 @@ export default async function AgendaPage() {
     redirect('/login');
   }
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('id, nombre, rol')
-    .eq('id', user.id)
-    .single();
+  // Usuario y doctores en paralelo (evita waterfall)
+  const [{ data: usuario }, { data: doctores, error: doctoresError }] = await Promise.all([
+    supabase.from('usuarios').select('id, nombre, rol').eq('id', user.id).single(),
+    getSupabaseAdmin().from('doctores').select('id, alias, usuario_id').eq('activo', true).order('alias'),
+  ]);
 
   if (!usuario || !['admin', 'doctor', 'recepcionista'].includes(usuario.rol)) {
     redirect('/dashboard');
   }
-
-  const { data: doctores, error: doctoresError } = await getSupabaseAdmin()
-    .from('doctores')
-    .select('id, nombre_completo, usuario_id')
-    .eq('activo', true)
-    .order('nombre_completo');
 
   if (doctoresError) {
     console.error('[agenda] error cargando doctores:', doctoresError.message);

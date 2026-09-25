@@ -1,6 +1,68 @@
 export type EstadoLiquidacion = 'BORRADOR' | 'PENDIENTE_APROBACION' | 'APROBADA' | 'PAGADA' | 'RECHAZADA';
 export type EstadoPeriodo = 'ABIERTO' | 'EN_REVISION' | 'CERRADO' | 'PAGADO';
-export type EstadoPago = 'PENDIENTE_CONFIG' | 'POR_PAGAR' | 'PAGADO' | 'PENDIENTE';
+export type EstadoPago = 'PENDIENTE_CONFIG' | 'POR_PAGAR' | 'PAGADO' | 'PENDIENTE' | 'CANCELADO';
+export type TipoPeriodoPago = 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | 'TRIMESTRAL';
+
+export interface HonorarioLigaFila {
+  id: string;
+  fuente: string;
+  doctor_id: string;
+  doctor_nombre: string;
+  fecha: string;
+  monto: number;
+  estado_pago: EstadoPago;
+  estado_db: string;
+  origen: string | null;
+  metricas_ligados: {
+    estudios_ligados: number;
+    procedimientos_ligados: number;
+    cirugias_ligadas: number;
+  };
+  periodo_inicio: string;
+  periodo_fin: string;
+}
+
+export interface HonorariosResumen {
+  por_pagar: number;
+  pagado: number;
+  sin_monto: number;
+  cancelado: number;
+  total_filtrado: number;
+  total_eventos: number;
+}
+
+export interface HonorariosListado {
+  items: HonorarioLigaFila[];
+  total: number;
+  page: number;
+  pageSize: number;
+  resumen: HonorariosResumen;
+  periodo_tipo: TipoPeriodoPago;
+  rango: { desde: string; hasta: string };
+  agrupado?: HonorarioAgrupadoFila[];
+}
+
+export interface HonorarioAgrupadoFila {
+  label: string;
+  eventos: number;
+  monto: number;
+  pagado: number;
+  por_pagar: number;
+}
+
+export type TipoAgrupacionLiga = 'dia' | 'doctor' | 'fuente';
+
+export interface PagoHonorarioFila {
+  id: string;
+  fecha_pago: string | null;
+  fecha_servicio: string;
+  doctor_id: string;
+  doctor_nombre: string;
+  fuente: string;
+  monto: number;
+  pagado_por_nombre: string | null;
+  estado: string;
+}
 export type TipoCalculoTarifa = 'FIJO' | 'PORCENTAJE';
 export type RolDoctor = 'PRINCIPAL' | 'AYUDANTE' | 'ANESTESIOLOGO' | 'INTERPRETACION' | 'REFERIDOR';
 export type TipoConcepto = 'ESTUDIO' | 'PROCEDIMIENTO' | 'CONSULTA';

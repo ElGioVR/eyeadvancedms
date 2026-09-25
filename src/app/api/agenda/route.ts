@@ -29,6 +29,7 @@ const cirugiaCreateSchema = z.object({
 
 const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
   BORRADOR: 'agendada',
+  AGENDADA: 'agendada',
   PROCESADA: 'completada',
   PENDIENTE_ESTUDIO: 'aplazada',
   PENDIENTE_CIRUGIA: 'reagendada',
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
     .select(`
       id, paciente_id, nombre_paciente, fecha, hora, doctor_id, estado,
       procedimiento, tiempo_estimado,
-      doctores:doctor_id (nombre_completo)
+      doctores:doctor_id (alias)
     `);
 
   if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
       hora_inicio,
       tipo_consulta,
       estatus,
-      doctores:doctor_id (nombre_completo),
+      doctores:doctor_id (alias),
       pacientes:paciente_id (nombre_completo)
     `);
 
@@ -128,7 +129,7 @@ export async function GET(request: Request) {
     fecha: c.fecha,
     hora: c.hora,
     doctor_id: c.doctor_id,
-    doctor_nombre: (c as any).doctores?.nombre_completo || null,
+    doctor_nombre: (c as any).doctores?.alias || null,
     estado: c.estado,
     procedimiento: c.procedimiento || null,
     tiempo_estimado: c.tiempo_estimado || null,
@@ -149,7 +150,7 @@ export async function GET(request: Request) {
     hora: c.hora_inicio,
     procedimiento: c.tipo_consulta || 'Consulta',
     doctor_id: c.doctor_id,
-    doctor_nombre: (c as any).doctores?.nombre_completo || null,
+    doctor_nombre: (c as any).doctores?.alias || null,
     estado: (ESTADO_CONSULTA_A_AGENDA[c.estatus || ''] || 'agendada') as any,
     tipo: (c.tipo_consulta?.toUpperCase().includes('ESTUDIO') ? 'estudio' : 'consulta') as 'consulta' | 'estudio',
   }));

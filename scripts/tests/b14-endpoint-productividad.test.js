@@ -62,6 +62,29 @@ assertContains(route, [
   'requireAuth',
 ], 'GET /api/productividad');
 
+const ligaRoute = 'src/app/api/productividad/honorarios/route.ts';
+assertContains(ligaRoute, [
+  'requireRole',
+  "'admin'",
+  'listarHonorariosLiga',
+  'Server-Timing',
+  'page',
+  'pageSize',
+  'requireAuth',
+], 'GET /api/productividad/honorarios');
+
+const patchRoute = 'src/app/api/productividad/honorarios/[id]/route.ts';
+assertContains(patchRoute, ['PATCH', 'monto', 'requireRole'], 'PATCH /api/productividad/honorarios/[id]');
+
+const pagarRoute = 'src/app/api/productividad/honorarios/pagar/route.ts';
+assertContains(pagarRoute, ['POST', 'ids', 'pagarHonorarios'], 'POST /api/productividad/honorarios/pagar');
+
+const configPeriodo = 'src/app/api/productividad/config-periodo/route.ts';
+assertContains(configPeriodo, ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'TRIMESTRAL'], 'config-periodo tipos');
+
+const periodoLib = 'src/lib/productividad/periodo.ts';
+assertContains(periodoLib, ['getPeriodRange', 'SEMANAL', 'TRIMESTRAL'], 'periodo.ts pura');
+
 const rangos = 'src/lib/rangos.ts';
 assertContains(rangos, [
   'America/Tijuana',

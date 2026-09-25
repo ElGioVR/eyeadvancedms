@@ -53,10 +53,12 @@
  *
  *   - Creación de cirugía:
  *       * `src/app/api/cirugias/route.ts` acepta `inventario_item_id`
- *         opcional y lo pasa al RPC `crear_cirugia`
+ *         opcional y lo pasa al RPC `crear_cirugia`; también acepta
+ *         captura manual `lio`/`marca_lio` (excluyentes con la FK)
  *       * `src/migrations/1800000000180-CreateCrearCirugiaRPC.ts`
- *         valida LIO si se envía; inserta solo `inventario_item_id`; no
- *         inserta `lio`/`marca_lio`
+ *         valida LIO si se envía; inserta `inventario_item_id` (FK) y
+ *         admite `lio`/`marca_lio` solo para captura manual (nunca ambos;
+ *         el RPC lo valida con RAISE EXCEPTION)
  *
  *   - Script npm `test:b7` en package.json (sin tocar test:b1..b6).
  *
@@ -1250,7 +1252,8 @@ function checkCirugiasRoute() {
     'rechaza LIO inválido con RAISE EXCEPTION / mensaje de error'
   );
 
-  // 7. INSERT sólo incluye inventario_item_id (no lio / marca_lio)
+  // 7. INSERT admite inventario_item_id (FK) y captura manual (lio/marca_lio);
+  //    mutuamente excluyentes, el RPC valida la exclusividad con RAISE EXCEPTION
   const insertBlock = (migContent.match(
     /INSERT\s+INTO\s+agenda_cirugias[\s\S]*?RETURNING\s+id\s+INTO\s+v_cirugia_id/
   ) || [''])[0];
@@ -1262,20 +1265,15 @@ function checkCirugiasRoute() {
   } else {
     assertContainsAll(
       insertBlock,
-      ['inventario_item_id'],
-      'INSERT incluye la columna inventario_item_id'
-    );
-    assertNotContains(
-      insertBlock,
-      'lio',
-      'INSERT NO incluye columna `lio` (relación sólo por FK)'
-    );
-    assertNotContains(
-      insertBlock,
-      'marca_lio',
-      'INSERT NO incluye columna `marca_lio` (relación sólo por FK)'
+      ['inventario_item_id', 'lio', 'marca_lio'],
+      'INSERT incluye inventario_item_id (FK) y columnas de captura manual lio/marca_lio'
     );
   }
+  assertRegexMatches(
+    migContent,
+    /p_inventario_item_id\s+IS\s+NOT\s+NULL\s+AND\s*\(\s*p_lio\s+IS\s+NOT\s+NULL\s+OR\s+p_marca_lio\s+IS\s+NOT\s+NULL\s*\)/i,
+    'RPC rechaza LIO de inventario + captura manual a la vez (exclusividad)'
+  );
 
   // 8. Historial AUD-004: inserta 'LIO_ASIGNADO' cuando hay inventario_item_id
   assertRegexMatches(

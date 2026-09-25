@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface LIODisponible {
@@ -81,25 +82,32 @@ export default function LIOSelector({
 
   return (
     <div className={cn('space-y-2', className)}>
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        disabled={disabled || loading}
-        className={cn(
-          'w-full rounded-lg border border-gray-200 dark:border-[#2F3336]',
-          'bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm',
-          'text-gray-900 dark:text-[#E7E9EA]',
-          'focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500',
-          'appearance-none disabled:opacity-60'
-        )}
-      >
-        <option value="">{placeholder}</option>
-        {items.map((item) => (
-          <option key={item.id} value={item.id}>
-            {formatearOpcion(item)}
+      <div className="relative">
+        <select
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+          disabled={disabled || loading}
+          className={cn(
+            'w-full rounded-lg border border-gray-200 dark:border-[#2F3336]',
+            'bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm',
+            'text-gray-900 dark:text-[#E7E9EA]',
+            'focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500',
+            'appearance-none disabled:opacity-60 pr-10'
+          )}
+        >
+          <option value="">
+            {loading ? 'Cargando LIOs...' : items.length === 0 ? 'Sin LIOs disponibles en inventario' : placeholder}
           </option>
-        ))}
-      </select>
+          {items.map((item) => (
+            <option key={item.id} value={item.id}>
+              {formatearOpcion(item)}
+            </option>
+          ))}
+        </select>
+        {loading && (
+          <Loader2 className="w-4 h-4 animate-spin text-primary-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        )}
+      </div>
       {selected && (
         <div className="rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/60 px-3 py-2 text-xs text-gray-600 dark:text-[#71767B]">
           {formatearResumen(selected)}

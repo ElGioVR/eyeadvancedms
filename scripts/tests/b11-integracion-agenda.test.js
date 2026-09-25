@@ -279,7 +279,7 @@ function checkAgendaRoute() {
   // cliente (los joins son de solo lectura).
   assertRegexMatches(
     content,
-    /servicio\s*:\s*undefined|doctores\s*:\s*undefined|origen\s*:\s*undefined/,
+    /_cirujano_texto: _c|_doctor_alias: _d|servicio\s*:\s*undefined|doctores\s*:\s*undefined|origen\s*:\s*undefined/,
     'limpia las claves del join antes de responder (no expone estructura cruda)'
   );
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
     .order('nombre');
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'cirugias.recursos').mensaje }, { status: 500 });
   }
 
   return NextResponse.json(data || []);

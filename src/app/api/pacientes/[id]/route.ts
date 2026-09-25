@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 
@@ -31,10 +32,11 @@ export async function GET(
     .select(`
       id, folio, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita,
       diagnostico, estudio_1, estudio_2, estudio_3, procedimiento, notas,
-      doctores:doctor_id (nombre_completo, especialidad)
+      doctores:doctor_id (alias, especialidad)
     `)
     .eq('paciente_id', id)
-    .order('fecha', { ascending: false });
+    .order('fecha', { ascending: false })
+    .limit(200);
 
   // Get cobros for this patient
   const consultaIds = (consultas || []).map((c) => c.id);
@@ -75,7 +77,7 @@ export async function GET(
       estudios,
       procedimiento: c.procedimiento,
       notas: c.notas,
-      doctor: doctor?.nombre_completo || '',
+      doctor: doctor?.alias || '',
       especialidad: doctor?.especialidad || '',
       monto: cobro?.monto || 0,
       moneda: cobro?.moneda || 'PESOS',
@@ -104,4 +106,70 @@ export async function GET(
     consultas: consultasResult,
     total_consultas: consultasResult.length,
   });
+}
+
+/* ─────────── PATCH — edición de paciente ─────────── */
+
+const pacienteUpdateSchema = z
+  .object({
+    nombre_completo: z.string().min(1).max(255).optional(),
+    sexo: z.enum(['H', 'M', 'MASCULINO', 'FEMENINO', 'OTRO']).optional(),
+    fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    telefono: z.string().max(20).optional().nullable(),
+    email: z.string().email().max(255).optional().nullable(),
+    direccion: z.string().max(1000).optional().nullable(),
+    contacto_emergencia: z.string().max(255).optional().nullable(),
+    tel_emergencia: z.string().max(20).optional().nullable(),
+    aseguranza_id: z.string().uuid().optional().nullable(),
+    numero_poliza: z.string().max(100).optional().nullable(),
+    numero_afiliacion: z.string().max(100).optional().nullable(),
+  })
+  .strict();
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  if (roleError) return roleError;
+
+  const { id } = await params;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const validation = pacienteUpdateSchema.safeParse(body);
+  if (!validation.success) {
+    const firstError = validation.error.errors[0];
+    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
+  }
+
+  const data = validation.data;
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (data.nombre_completo !== undefined) updates.nombre_completo = data.nombre_completo.trim();
+  if (data.sexo !== undefined) updates.sexo = data.sexo;
+  if (data.fecha_nacimiento !== undefined) updates.fecha_nacimiento = data.fecha_nacimiento;
+  if (data.telefono !== undefined) updates.telefono = data.telefono?.trim() || null;
+  if (data.email !== undefined) updates.email = data.email?.trim() || null;
+  if (data.direccion !== undefined) updates.direccion = data.direccion?.trim() || null;
+  if (data.contacto_emergencia !== undefined) updates.contacto_emergencia = data.contacto_emergencia?.trim() || null;
+  if (data.tel_emergencia !== undefined) updates.tel_emergencia = data.tel_emergencia?.trim() || null;
+  if (data.aseguranza_id !== undefined) updates.aseguranza_id = data.aseguranza_id || null;
+  if (data.numero_poliza !== undefined) updates.numero_poliza = data.numero_poliza?.trim() || null;
+  if (data.numero_afiliacion !== undefined) updates.numero_afiliacion = data.numero_afiliacion?.trim() || null;
+
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.from('pacientes').update(updates).eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: 'Error al actualizar el paciente' }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

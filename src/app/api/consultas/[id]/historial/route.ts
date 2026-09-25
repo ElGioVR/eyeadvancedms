@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 
 export async function GET(
@@ -51,24 +52,49 @@ export async function POST(
   if (roleError) return roleError;
 
   const { id } = await params;
-  const body = await request.json();
-  const { tipo_evento, payload } = body;
+  let body: { tipo_evento?: unknown; payload?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+  const tipo_evento = typeof body.tipo_evento === 'string' ? body.tipo_evento.trim() : '';
+  const payload = body.payload;
 
   if (!tipo_evento) {
     return NextResponse.json({ error: 'tipo_evento es requerido' }, { status: 400 });
   }
+  if (tipo_evento.length > 60) {
+    return NextResponse.json({ error: 'tipo_evento demasiado largo' }, { status: 400 });
+  }
+  if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) {
+    return NextResponse.json({ error: 'payload debe ser un objeto' }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
+
+  // Verificar que la consulta exista antes de registrar el evento
+  const { data: consulta, error: consultaError } = await supabase
+    .from('consultas')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+  if (consultaError || !consulta) {
+    return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
+  }
 
   const { error } = await supabase.from('consulta_historial').insert({
     consulta_id: id,
     tipo_evento,
     usuario_id: auth.user.id,
-    payload: payload ?? {},
+    payload: (payload as Record<string, unknown>) ?? {},
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: errorTranslations[error.message] || 'Error al registrar el evento' },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true });

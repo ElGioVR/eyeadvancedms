@@ -143,11 +143,11 @@ export async function GET(request: Request) {
     .select(`
       *,
       pacientes:paciente_id (nombre_completo),
-      doctores:doctor_id (nombre_completo),
-      est1_doc:estudio_1_doctor_id (nombre_completo),
-      est2_doc:estudio_2_doctor_id (nombre_completo),
-      est3_doc:estudio_3_doctor_id (nombre_completo),
-      proc_doc:procedimiento_doctor_id (nombre_completo)
+      doctores:doctor_id (alias),
+      est1_doc:estudio_1_doctor_id (alias),
+      est2_doc:estudio_2_doctor_id (alias),
+      est3_doc:estudio_3_doctor_id (alias),
+      proc_doc:procedimiento_doctor_id (alias)
     `, { count: 'exact' });
 
   // Filtros opcionales
@@ -182,7 +182,7 @@ export async function GET(request: Request) {
 
   const result = data.map((c) => {
     const nombrePaciente = (c.pacientes as any)?.nombre_completo || '';
-    const nombreDoctor = (c.doctores as any)?.nombre_completo || '';
+    const nombreDoctor = (c.doctores as any)?.alias || '';
     const iniciales = nombrePaciente
       .split(' ')
       .map((n: string) => n[0])
@@ -191,9 +191,9 @@ export async function GET(request: Request) {
       .toUpperCase();
 
     const estudiosDetalle = [
-      c.estudio_1 ? { nombre: c.estudio_1, doctor: (c as any).est1_doc?.nombre_completo || null } : null,
-      c.estudio_2 ? { nombre: c.estudio_2, doctor: (c as any).est2_doc?.nombre_completo || null } : null,
-      c.estudio_3 ? { nombre: c.estudio_3, doctor: (c as any).est3_doc?.nombre_completo || null } : null,
+      c.estudio_1 ? { nombre: c.estudio_1, doctor: (c as any).est1_doc?.alias || null } : null,
+      c.estudio_2 ? { nombre: c.estudio_2, doctor: (c as any).est2_doc?.alias || null } : null,
+      c.estudio_3 ? { nombre: c.estudio_3, doctor: (c as any).est3_doc?.alias || null } : null,
     ].filter(Boolean);
 
     return {
@@ -213,7 +213,7 @@ export async function GET(request: Request) {
       estudios: c.estudios,
       estudios_detalle: estudiosDetalle,
       procedimiento: c.procedimiento,
-      procedimiento_doctor: (c as any).proc_doc?.nombre_completo || null,
+      procedimiento_doctor: (c as any).proc_doc?.alias || null,
       notas: c.notas,
       estatus: c.estatus || 'BORRADOR',
       estatus_pago: (c as any).estatus_pago || 'PENDIENTE_PAGO',
@@ -337,12 +337,19 @@ export async function POST(request: Request) {
     }
   }
 
+  // Cache de resolución de servicios (evita N+1 cuando la consulta repite estudios)
+  const servicioCache = new Map<string, { id: string | null; nombre: string | null; costo: number; cobertura: number }>();
+
   async function resolverServicio(
     tipo: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO',
     servicioId?: string | null,
     nombre?: string | null,
   ): Promise<{ id: string | null; nombre: string | null; costo: number; cobertura: number }> {
     if (!aseguranzaId) return { id: servicioId || null, nombre: nombre || null, costo: 0, cobertura: 0 };
+
+    const clave = `${tipo}|${servicioId || ''}|${nombre || ''}`;
+    const cacheado = servicioCache.get(clave);
+    if (cacheado) return cacheado;
 
     let query = supabase
       .from('aseguranza_servicios')
@@ -356,12 +363,14 @@ export async function POST(request: Request) {
     else return { id: null, nombre: null, costo: 0, cobertura: 0 };
 
     const { data: svc } = await query.maybeSingle();
-    return {
+    const resuelto = {
       id: svc?.id || servicioId || null,
       nombre: svc?.nombre || nombre || null,
       costo: svc?.costo || 0,
       cobertura: svc?.porcentaje_cobertura || 0,
     };
+    servicioCache.set(clave, resuelto);
+    return resuelto;
   }
 
   // 1. Create consulta
@@ -430,8 +439,22 @@ export async function POST(request: Request) {
     });
   }
 
-  for (const estudio of [est0, est1, est2].filter(Boolean)) {
-    const servicio = await resolverServicio('ESTUDIO', estudio?.id || null, estudio?.nombre || null);
+  // Estudios y procedimientos en paralelo (cache interno evita queries repetidas)
+  const [serviciosEstudios, serviciosProcedimientos] = await Promise.all([
+    Promise.all(
+      [est0, est1, est2].filter(Boolean).map((estudio) =>
+        resolverServicio('ESTUDIO', estudio?.id || null, estudio?.nombre || null),
+      )
+    ),
+    Promise.all(
+      procedimientos.map((procedimiento) =>
+        resolverServicio('PROCEDIMIENTO', procedimiento.id || null, procedimiento.nombre || null),
+      )
+    ),
+  ]);
+
+  [est0, est1, est2].filter(Boolean).forEach((estudio, i) => {
+    const servicio = serviciosEstudios[i];
     conceptosRows.push({
       consulta_id: consultaData.id,
       doctor_id: estudio?.doctor_id || data.doctor_id,
@@ -442,10 +465,10 @@ export async function POST(request: Request) {
       cantidad: estudio?.cantidad ?? 1,
       ojo: estudio?.ojo ?? null,
     });
-  }
+  });
 
-  for (const procedimiento of procedimientos) {
-    const servicio = await resolverServicio('PROCEDIMIENTO', procedimiento.id || null, procedimiento.nombre || null);
+  procedimientos.forEach((procedimiento, i) => {
+    const servicio = serviciosProcedimientos[i];
     conceptosRows.push({
       consulta_id: consultaData.id,
       doctor_id: procedimiento.doctor_id || data.doctor_id,
@@ -456,7 +479,7 @@ export async function POST(request: Request) {
       cantidad: Math.max(1, Number(procedimiento.cantidad) || 1),
       ojo: procedimiento.ojo || null,
     });
-  }
+  });
 
   if (conceptosRows.length > 0) {
     const { error: conceptosError } = await supabase
@@ -505,23 +528,25 @@ export async function POST(request: Request) {
   const pagoInmediato = data.pago_inmediato ?? false;
   const estatusPago = pagoInmediato ? 'PAGADO' : (costoTotal > 0 ? 'PENDIENTE_PAGO' : 'PAGADO');
 
-  // 6. Update consulta with cost and payment status
+  // 6. Update consulta with cost and payment status.
+  // Las consultas nacen AGENDADA (visibles como "Agendada" en agenda);
+  // pasan a COMPLETADA manualmente desde el detalle cuando se atienden.
   if (costoTotal > 0 || pagoInmediato) {
     await supabase
       .from('consultas')
       .update({
         costo_total: costoTotal,
         estatus_pago: estatusPago,
-        estatus: pagoInmediato ? 'COMPLETADA' : 'PROCESADA',
+        estatus: 'AGENDADA',
         monto_pagado: pagoInmediato ? costoTotal : 0,
         fecha_pago: pagoInmediato ? new Date().toISOString() : null,
       })
       .eq('id', consultaData.id);
   } else {
-    // No cost: mark as PROCESADA
+    // No cost: born AGENDADA as well
     await supabase
       .from('consultas')
-      .update({ estatus: 'PROCESADA' })
+      .update({ estatus: 'AGENDADA' })
       .eq('id', consultaData.id);
   }
 

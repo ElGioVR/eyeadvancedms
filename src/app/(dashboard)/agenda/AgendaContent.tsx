@@ -20,7 +20,7 @@ import MobileCalendarView from '@/components/agenda/MobileCalendarView';
 import LIOSelector from '@/components/cirugia/LIOSelector';
 import type { AgendaCirugia, AgendaCirugiaEstado, AgendaCirugiaImportRow } from '@/types';
 
-interface Doctor { id: string; nombre_completo: string; usuario_id?: string | null; }
+interface Doctor { id: string; alias: string; usuario_id?: string | null; }
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
 const HOUR_START = 9;
@@ -28,9 +28,9 @@ const HOUR_END = 22;
 const HOUR_HEIGHT = 64;
 
 const tipoConfig: Record<string, { bg: string; text: string }> = {
-  cirugia: { bg: 'bg-violet-50', text: 'text-violet-700' },
-  consulta: { bg: 'bg-amber-50', text: 'text-amber-700' },
-  estudio: { bg: 'bg-sky-50', text: 'text-sky-700' },
+  cirugia: { bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300' },
+  consulta: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300' },
+  estudio: { bg: 'bg-sky-50 dark:bg-sky-500/10', text: 'text-sky-700 dark:text-sky-300' },
 };
 
 const estadoConfig: Record<AgendaCirugiaEstado, { border: string; dot: string; solid: string; lightBg: string }> = {
@@ -122,18 +122,15 @@ function computeOverlapColumns(items: OverlapItem[], HOUR_HEIGHT: number, HOUR_S
       }
     }
     const totalCols = columns.length;
-    const groupStart = group[0].startMin;
-    const groupEndMin = Math.max(...group.map(i => i.endMin));
-    const groupDuration = groupEndMin - groupStart;
-    const slotHeight = Math.max(36, (groupDuration / 60) * HOUR_HEIGHT);
-    const slotTop = ((groupStart - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 
     for (const item of group) {
       const r = result.get(item.id);
       if (r) {
         r.totalColumns = totalCols;
-        r.adjustedTop = slotTop;
-        r.adjustedHeight = slotHeight;
+        // Cada evento se posiciona con su propia hora de inicio/fin; las
+        // columnas solo dividen el ancho cuando hay solapamiento.
+        r.adjustedTop = ((item.startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+        r.adjustedHeight = Math.max(28, ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT - 2);
       }
     }
   }
@@ -152,6 +149,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showImportConsultas, setShowImportConsultas] = useState(false);
   const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [showImportChoice, setShowImportChoice] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -236,10 +234,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     return () => clearInterval(id);
   }, []);
 
-  // On mobile, auto-select today on mount for the week strip
+  // On mobile, auto-select today on mount for the week strip.
+  // todayStr sólo tiene valor después del mount (evita hidración SSR/CSR):
+  // este efecto se re-ejecuta cuando todayStr deja de estar vacío.
   useEffect(() => {
-    if (!selectedDate) setSelectedDate(todayStr);
-  }, []);
+    if (!selectedDate && todayStr) setSelectedDate(todayStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, todayStr]);
 
   useEffect(() => {
     if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current) {
@@ -377,8 +378,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     const container = stripRef.current;
     const el = stripSelectedRef.current;
     if (!container || !el) return;
-    const left = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
-    container.scrollTo({ left, behavior: 'smooth' });
+    // Centrar el día seleccionado en el carrusel móvil. El contenedor es
+    // position:relative, así que offsetLeft es relativo al propio carrusel.
+    // El delay deja que el layout móvil termine de asentarse antes de medir.
+    const id = window.setTimeout(() => {
+      const left = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
+      container.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    }, 80);
+    return () => window.clearTimeout(id);
   }, [selectedDate, carouselDays]);
 
   const handleQuickAdd = useCallback((ds: string, hour: number, e: React.MouseEvent) => {
@@ -496,7 +503,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                           </button>
-                          <button onClick={() => { setShowImportChoice(false); router.push('/consultas/nueva?importar=CONSULTA'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                          <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
                           </button>
                         </div>
@@ -515,9 +522,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Crear</p>
                           <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-                          </button>
-                          <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
-                            <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
                           </button>
                           <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
@@ -627,7 +631,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                       </button>
-                      <button onClick={() => { setShowImportChoice(false); router.push('/consultas/nueva?importar=CONSULTA'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                      <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
                       </button>
                     </div>
@@ -646,9 +650,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Crear</p>
                       <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-                      </button>
-                      <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
-                        <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
                       </button>
                       <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
@@ -694,9 +695,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                       <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
                     </button>
-                    <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
-                      <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
-                    </button>
                     <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
                       <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
                     </button>
@@ -712,7 +710,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       <div className="lg:hidden shrink-0 border-b border-gray-200 dark:border-[#2F3336]">
         <div
           ref={stripRef}
-          className="flex gap-1 overflow-x-auto snap-x snap-mandatory px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative flex gap-1 overflow-x-auto snap-x snap-mandatory px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {carouselDays.map(wd => {
             const isSelected = wd.dateStr === selectedDate;
@@ -789,7 +787,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-2 text-xs font-medium text-gray-700 dark:text-[#E7E9EA] focus:outline-none focus:ring-1 focus:ring-primary-500/30">
                 <option value="">Todos los doctores</option>
-                {doctores.map(d => <option key={d.id} value={d.id}>{d.nombre_completo}</option>)}
+                {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
               </select>
             </div>
 
@@ -1066,10 +1064,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             const colWidth = 100 / totalCols;
                             const leftPct = col * colWidth;
                             const rightPct = 100 - (col + 1) * colWidth;
-                            const isOverlapped = totalCols > 1;
-                            const top = isOverlapped ? ov!.adjustedTop : ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+                            const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
                             const durationMin = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
-                            const height = isOverlapped ? ov!.adjustedHeight : Math.max(28, (durationMin / 60) * HOUR_HEIGHT - 2);
+                            const height = Math.max(28, (durationMin / 60) * HOUR_HEIGHT - 2);
 
                             return (
                               <div key={c.id}
@@ -1181,10 +1178,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         const colWidth = 100 / totalCols;
                         const leftPct = col * colWidth;
                         const rightPct = 100 - (col + 1) * colWidth;
-                        const isOverlapped = totalCols > 1;
-                        const top = isOverlapped ? ov!.adjustedTop : ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+                        const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
                         const durationMin = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
-                        const height = isOverlapped ? ov!.adjustedHeight : Math.max(36, (durationMin / 60) * HOUR_HEIGHT - 2);
+                        const height = Math.max(36, (durationMin / 60) * HOUR_HEIGHT - 2);
 
                         return (
                           <div key={c.id}
@@ -1322,6 +1318,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       <Modal isOpen={showImport} onClose={() => setShowImport(false)}>
         <ImportExcel doctores={doctores} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); refetch(); }} />
       </Modal>
+      <Modal isOpen={showImportConsultas} onClose={() => setShowImportConsultas(false)}>
+        <ImportConsultas onClose={() => setShowImportConsultas(false)} onImported={() => { setShowImportConsultas(false); refetch(); }} />
+      </Modal>
 
       {/* ─── Filters Modal (Fullscreen) ─── */}
       {showFilters && (
@@ -1344,7 +1343,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/30">
                   <option value="">Todos los doctores</option>
-                  {doctores.map(d => <option key={d.id} value={d.id}>{d.nombre_completo}</option>)}
+                  {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
                 </select>
               </div>
               <div>
@@ -1640,11 +1639,11 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
           {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && cirugia.estado === 'agendada' && (
             <>
               <button onClick={() => updateEstado('completada')} disabled={updating}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50">
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
                 Completar
               </button>
               <button onClick={() => updateEstado('cancelada')} disabled={updating}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20 transition-colors disabled:opacity-50">
                 Cancelar
               </button>
             </>
@@ -1776,7 +1775,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         <div><label className={labelCls}>Doctor / Cirujano</label>
           <select value={form.doctor_id} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
             <option value="">Sin asignar</option>
-            {doctores.map(d => <option key={d.id} value={d.id}>{d.nombre_completo}</option>)}
+            {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
           </select>
         </div>
       )}
@@ -1818,10 +1817,25 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ importadas: number; aplazadasImportadas: number; errores: number; doctorNoEncontrado: number; yaExistentes?: Array<{ fila: number; nombre: string; fecha?: string }> } | null>(null);
 
+  const descargarPlantilla = () => {
+    const csv = [
+      'FECHA,NOMBRE PX,No. Expediente,HORA CX,JORNADA,FECHA NAC.,SEXO,EDAD,DIAGNOSTICO,PROCEDIMIENTO,OJO,LIO,MARCA,OJO,LIO,MARCA,TIEMPO ESTIMADO CX,TIEMPO DE ESTANCIA,CIRUJANO,NOTAS',
+      '2026-07-22,MARIA LOURDES RUIZ,776,06:00:00,TIJUANA,1969-09-20,F,56,RETINOPATIA DIABETICA,FACO-VITRECTOMIA,OI,23.00 CLAREON,,,,,2 HR,3 HR,BAYARDO/IRINA,',
+      '2026-07-27,MARIA ELENA LOPEZ,799,07:00:00,ENSENADA,1965-08-18,F,60,CATARATA,FACO + LIO,OD,25.5,,,,,1 HR,,FELIX,',
+    ].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla-cirugias.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleUpload = async () => {
     if (!file) return; setLoading(true); setError(null);
     try {
-      const fd = new FormData(); fd.append('file', file);
+      const fd = new FormData(); fd.append('file', file); fd.append('tipo', 'cirugias');
       const res = await fetch('/api/agenda/import', { method: 'POST', body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       const data = await res.json(); if (data.preview) { setPreview(data); setStep('preview'); }
@@ -1831,7 +1845,7 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
   const handleConfirm = async () => {
     if (!file) return; setLoading(true); setError(null);
     try {
-      const fd = new FormData(); fd.append('file', file); fd.append('confirmar', 'true');
+      const fd = new FormData(); fd.append('file', file); fd.append('confirmar', 'true'); fd.append('tipo', 'cirugias');
       const res = await fetch('/api/agenda/import', { method: 'POST', body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       const data = await res.json(); setResult(data); if (data.errores === 0) onImported();
@@ -1840,14 +1854,17 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Importar Cirugías desde Excel</h3>
+      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Importar Cirugías</h3>
       {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
       {step === 'upload' && !result && (
         <>
-          <p className="text-sm text-gray-600 dark:text-gray-300">Selecciona un archivo Excel (.xlsx) con las hojas &quot;CIRUGIA&quot; y &quot;APLAZADOS&quot;.</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Archivo .xlsx (hoja &quot;CIRUGIA&quot; y &quot;APLAZADOS&quot;) o .csv (solo cirugías). Las filas sin fecha se importan como <b>aplazadas</b>; con &quot;SUSPENDIDO&quot; en notas como <b>canceladas</b>.</p>
+          <button onClick={descargarPlantilla} className="text-xs font-bold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
+            ⬇ Descargar plantilla CSV
+          </button>
           <div className="border-2 border-dashed border-gray-300 dark:border-[#2F3336] rounded-lg p-6 text-center">
             <FileSpreadsheet className="h-10 w-10 mx-auto text-gray-400 dark:text-[#71767B] mb-3" />
-            <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
+            <input type="file" accept=".xlsx,.csv" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
           </div>
           <div className="flex justify-end gap-3">
             <button onClick={onClose} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Cancelar</button>
@@ -1883,6 +1900,116 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
             {result.yaExistentes && result.yaExistentes.length > 0 && <div className="rounded bg-blue-50 p-2 col-span-2"><span className="font-bold text-blue-700">{result.yaExistentes.length}</span> ya insertadas (omitidas)</div>}
             {result.errores > 0 && <div className="rounded bg-red-50 p-2 col-span-2"><span className="font-bold text-red-700">{result.errores}</span> errores</div>}
           </div>
+          <button onClick={onImported} className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-bold text-white hover:bg-primary-700">Cerrar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Import Consultas (ENTRADA Y SALIDA.csv) ───────── */
+function ImportConsultas({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [step, setStep] = useState<'upload' | 'preview'>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<{ total: number; omitidas: number; doctorNoEncontrado: number; filas: Array<{ fecha: string; hora: string; paciente: string; doctor: string; tipo: string; aseguranza_resuelta: string }> } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ importadas: number; omitidasDuplicadas: number; omitidasSinDatos: number; errores: number; rechazados: Array<{ nombre: string; fecha: string; motivo: string }> } | null>(null);
+
+  const descargarPlantilla = () => {
+    const csv = [
+      'FECHA,HORA DE INGRESO,HORA DE EGRESO,NUMERO DE TELEFONO ,DOCTOR,MEDICO IC,NOMBRE  DE PACIENTE ,SEXO ,FECHA DE NACIMIENTO,EDAD ,CONSULTA,DIAGNOSTICO ,TIPO DE CONSULTA,ESTUDIO 1,ESTUDIO2,ESTUDIO3,OPERADOR ,PROCEDIMIENTO ,ASEGURANZA,METODO DE PAGO , COSTO CONSULTA ,TIPO DE MONEDA ,',
+      '"Tuesday, September 1, 2026",10:00AM,10:30AM,6611073755,DRA IRINA ,,Manuel Escobar Martinez,MASCULINO,1958-06-05,68,ESTUDIO,,PRIMERA VEZ ,Tomografia OCT Macular por ojo,,,,,TARJETA,5100,',
+      '"Tuesday, September 1, 2026",11:30AM,12:00PM,6644388498,DRA IRINA ,,Carlos Gomez Jimenez,MASCULINO,1957-02-16,69,CONSULTA,CATARATA,PRIMERA VEZ ,,,,,,ISSSTECALI,EFECTIVO,800,',
+    ].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla-consultas.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleUpload = async () => {
+    if (!file) return; setLoading(true); setError(null);
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('tipo', 'consultas');
+      const res = await fetch('/api/agenda/import', { method: 'POST', body: fd });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+      const data = await res.json(); if (data.preview) { setPreview(data); setStep('preview'); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error'); } finally { setLoading(false); }
+  };
+
+  const handleConfirm = async () => {
+    if (!file) return; setLoading(true); setError(null);
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('confirmar', 'true'); fd.append('tipo', 'consultas');
+      const res = await fetch('/api/agenda/import', { method: 'POST', body: fd });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+      const data = await res.json(); setResult(data); if (data.errores === 0) onImported();
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error'); } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Importar Consultas</h3>
+      {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
+      {step === 'upload' && !result && (
+        <>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Archivo .csv o .xlsx del registro de entradas y salidas. Los pacientes se crean/reusan por teléfono o nombre; las consultas nacen <b>Agendadas</b>; se ignoran filas sin fecha o nombre y duplicadas.</p>
+          <button onClick={descargarPlantilla} className="text-xs font-bold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
+            ⬇ Descargar plantilla CSV
+          </button>
+          <div className="border-2 border-dashed border-gray-300 dark:border-[#2F3336] rounded-lg p-6 text-center">
+            <FileSpreadsheet className="h-10 w-10 mx-auto text-gray-400 dark:text-[#71767B] mb-3" />
+            <input type="file" accept=".csv,.xlsx" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Cancelar</button>
+            <button onClick={handleUpload} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Procesando...' : 'Previsualizar'}</button>
+          </div>
+        </>
+      )}
+      {step === 'preview' && preview && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded bg-blue-50 p-2 text-center"><p className="text-xs font-bold text-blue-600 uppercase">Consultas</p><p className="text-2xl font-extrabold text-blue-800">{preview.total}</p></div>
+            <div className="rounded bg-orange-50 p-2 text-center"><p className="text-xs font-bold text-orange-600 uppercase">Sin fecha/nombre</p><p className="text-2xl font-extrabold text-orange-800">{preview.omitidas}</p></div>
+            <div className="rounded bg-amber-50 p-2 text-center"><p className="text-xs font-bold text-amber-600 uppercase">Doctor sin match</p><p className="text-2xl font-extrabold text-amber-800">{preview.doctorNoEncontrado}</p></div>
+          </div>
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#2F3336] divide-y divide-gray-100 dark:divide-[#2F3336] text-xs">
+            {preview.filas.slice(0, 50).map((f, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2">
+                <span className="font-bold text-primary-700 w-10">{f.hora || '—'}</span>
+                <span className="font-medium text-gray-900 dark:text-[#E7E9EA] truncate flex-1">{f.paciente}</span>
+                <span className="text-gray-500 dark:text-[#71767B] truncate w-28">{f.doctor}</span>
+                <span className="text-gray-400 dark:text-[#71767B] w-20">{f.tipo}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Atrás</button>
+            <button onClick={handleConfirm} disabled={loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Importando...' : `Importar ${preview.total} consultas`}</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-gray-100">Resultado</h4>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded bg-emerald-50 p-2"><span className="font-bold text-emerald-700">{result.importadas}</span> consultas importadas</div>
+            <div className="rounded bg-blue-50 p-2"><span className="font-bold text-blue-700">{result.omitidasDuplicadas}</span> duplicadas omitidas</div>
+            <div className="rounded bg-orange-50 p-2"><span className="font-bold text-orange-700">{result.omitidasSinDatos}</span> sin fecha/nombre</div>
+            <div className="rounded bg-red-50 p-2"><span className="font-bold text-red-700">{result.errores}</span> errores</div>
+          </div>
+          {result.rechazados.length > 0 && (
+            <div className="max-h-32 overflow-y-auto rounded-lg border border-red-200 divide-y divide-red-100 text-xs">
+              {result.rechazados.slice(0, 30).map((r, i) => (
+                <div key={i} className="px-3 py-1.5"><b>{r.nombre}</b> ({r.fecha}): {r.motivo}</div>
+              ))}
+            </div>
+          )}
           <button onClick={onImported} className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-bold text-white hover:bg-primary-700">Cerrar</button>
         </div>
       )}

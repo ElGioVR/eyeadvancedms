@@ -65,10 +65,10 @@ interface ConsultaData {
 }
 
 const tipoConsultaColors: Record<string, string> = {
-  'CONSULTA': 'bg-sky-50 text-sky-700 ring-sky-200',
-  'ESTUDIO': 'bg-purple-50 text-purple-700 ring-purple-200',
-  'REVISION': 'bg-amber-50 text-amber-700 ring-amber-200',
-  'PROCEDIMIENTO': 'bg-rose-50 text-rose-700 ring-rose-200',
+  'CONSULTA': 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30',
+  'ESTUDIO': 'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-purple-500/30',
+  'REVISION': 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30',
+  'PROCEDIMIENTO': 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30',
 };
 
 function formatMoney(amount: number, currency: string) {
@@ -105,23 +105,23 @@ export default function HistorialMedicoPage() {
       <div className="mx-auto max-w-[1440px] space-y-6">
         <div className="flex items-center gap-4">
           <Skeleton className="h-10 w-24 rounded-lg" />
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-80" />
-            <Skeleton className="h-4 w-64" />
+          <div className="space-y-2 min-w-0">
+            <Skeleton className="h-7 w-64 sm:w-80 max-w-full" />
+            <Skeleton className="h-4 w-48 sm:w-64 max-w-full" />
           </div>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#2F3336] dark:bg-[#16181C]">
           <div className="flex items-center gap-6">
             <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-3 w-64" />
+            <div className="flex-1 space-y-2 min-w-0">
+              <Skeleton className="h-5 w-48 max-w-full" />
+              <Skeleton className="h-3 w-64 max-w-full" />
             </div>
           </div>
         </div>
-        <div className="flex gap-1 border-b border-gray-200 dark:border-[#2F3336]">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-[#2F3336] overflow-x-auto">
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-10 w-24 rounded-t-lg" />
+            <Skeleton key={i} className="h-10 w-24 rounded-t-lg shrink-0" />
           ))}
         </div>
         <div className="flex flex-col lg:flex-row gap-6">
@@ -132,11 +132,11 @@ export default function HistorialMedicoPage() {
                   <Skeleton className="h-3 w-24" />
                   <Skeleton className="h-5 w-20 rounded-full" />
                 </div>
-                <div className="grid grid-cols-4 gap-4 px-6 py-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-6 py-4">
                   {[1, 2, 3, 4].map((j) => (
                     <div key={j} className="space-y-1">
                       <Skeleton className="h-2.5 w-16" />
-                      <Skeleton className="h-3.5 w-28" />
+                      <Skeleton className="h-3.5 w-28 max-w-full" />
                     </div>
                   ))}
                 </div>
@@ -194,7 +194,7 @@ export default function HistorialMedicoPage() {
           Volver
         </Link>
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA]">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA] break-words">
             HISTORIAL MÉDICO - {paciente.nombre_completo}
           </h1>
           <p className="mt-0.5 text-sm text-gray-400 dark:text-[#71767B]">
@@ -244,7 +244,7 @@ export default function HistorialMedicoPage() {
                 key={tab.label}
                 onClick={() => setActiveTab(tab.label)}
                 className={cn(
-                  'inline-flex items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-semibold border-b-2 transition-colors',
+                  'inline-flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-3 text-sm font-semibold border-b-2 transition-colors',
                   isActive
                     ? 'border-primary-600 text-primary-700'
                     : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:text-[#71767B] dark:hover:text-[#E7E9EA] dark:hover:border-[#536471]'
@@ -279,9 +279,9 @@ export default function HistorialMedicoPage() {
                 <div className="space-y-4">
                   {consultas.map((c) => (
                     <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
-                      <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-extrabold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <span className="text-sm font-extrabold text-primary-700 dark:text-primary-400"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
                           <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', tipoConsultaColors[c.tipo_consulta] || 'bg-gray-50 text-gray-700 ring-gray-200 dark:bg-[#202327] dark:text-[#E7E9EA] dark:ring-[#2F3336]')}>
                             {c.tipo_consulta || 'CONSULTA'}
                           </span>
@@ -334,15 +334,15 @@ export default function HistorialMedicoPage() {
                 <div className="space-y-4">
                   {consultas.map((c) => (
                     <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-                      <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-extrabold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <span className="text-sm font-extrabold text-primary-700 dark:text-primary-400"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
                           <span className="text-sm font-semibold text-gray-600 dark:text-[#E7E9EA]">· {c.doctor}</span>
                           {c.folio && <span className="text-xs font-mono text-gray-400 dark:text-[#71767B]">{c.folio}</span>}
                         </div>
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
-                          c.pagado ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'
+                          c.pagado ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30'
                         )}>
                           {c.pagado ? <><CheckCircle className="h-3 w-3" />Pagado</> : 'Pendiente'}
                         </span>
@@ -391,7 +391,7 @@ export default function HistorialMedicoPage() {
               ) : (
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[640px]">
                       <thead>
                         <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50">
                           <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Fecha</th>
@@ -401,15 +401,15 @@ export default function HistorialMedicoPage() {
                           <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Estado</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50">
+                      <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
                         {consultasConProcedimiento.map((c) => (
                           <tr key={c.id} className="group hover:bg-gray-50/60 dark:hover:bg-[#202327]/60 transition-colors">
-                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700 dark:text-primary-400 whitespace-nowrap"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.procedimiento}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">{c.doctor}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA] max-w-xs">{c.diagnostico}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
                                 <CheckCircle className="h-3 w-3" />Completado
                               </span>
                             </td>
@@ -452,12 +452,12 @@ export default function HistorialMedicoPage() {
               ) : (
                 <div className="space-y-3">
                   {estudiosFromConsultas.map((e) => (
-                    <div key={e.id} className="flex items-center gap-5 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100">
-                        <Eye className="h-5 w-5 text-sky-600" />
+                    <div key={e.id} className="flex items-center gap-3 sm:gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100 dark:bg-sky-500/10 dark:ring-sky-500/30">
+                        <Eye className="h-5 w-5 text-sky-600 dark:text-sky-400" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{e.estudio}</h3>
                           <span className="text-xs text-gray-400 dark:text-[#71767B]">·</span>
                           <span className="text-xs text-gray-400 dark:text-[#71767B]">{e.doctor}</span>
@@ -484,7 +484,7 @@ export default function HistorialMedicoPage() {
                 <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin diagnósticos registrados</p>
               ) : (
                 diagnosticos.map((d, idx) => (
-                  <div key={idx} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200">
+                  <div key={idx} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30">
                     <p className="text-sm font-bold leading-snug">{d}</p>
                   </div>
                 ))

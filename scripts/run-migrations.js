@@ -47,6 +47,11 @@ const MIGRATION_ORDER = [
   '1800000000230-AddProductividadColumns.ts',
   '1800000000240-CreateProductividadHonorariosResumen.ts',
   '1800000000250-CreateSyncLogTable.ts',
+  '1800000000260-AddHonorariosSimplificados.ts',
+  '1800000000261-AddDeployedToPerformance.ts',
+  '1800000000262-WidenMonedaHonorarios.ts',
+  '1800000000270-AddIndiceHistorialPagos.ts',
+  '1800000000280-AddLioLabelFields.ts',
 ];
 
 if (!process.env.DATABASE_URL) {

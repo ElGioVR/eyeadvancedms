@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Calendar, TrendingUp, User } from 'lucide-react';
+import { LayoutDashboard, Calendar, Package, TrendingUp, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { useState, useEffect } from 'react';
@@ -15,6 +15,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, href: '/dashboard', label: 'Inicio' },
   { icon: Calendar, href: '/agenda', label: 'Agenda' },
+  { icon: Package, href: '/inventario', label: 'Inventario' },
   { icon: TrendingUp, href: '/mis-honorarios', label: 'Honorarios' },
   { icon: User, href: '/mi-perfil', label: 'Perfil' },
 ];
@@ -24,6 +25,8 @@ export default function DoctorBottomNav() {
   const router = useRouter();
   const { user } = useUser();
   const [isMobile, setIsMobile] = useState(false);
+  // Admin con doctor ligado + Modo Focus activo → interfaz de doctor en móvil
+  const [focusOverride, setFocusOverride] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px)');
@@ -33,7 +36,17 @@ export default function DoctorBottomNav() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  if (!isMobile || !user || user.rol !== 'doctor') return null;
+  useEffect(() => {
+    const handler = (e: Event) => setFocusOverride((e as CustomEvent<boolean>).detail === true);
+    window.addEventListener('modo-focus-changed', handler);
+    return () => window.removeEventListener('modo-focus-changed', handler);
+  }, []);
+
+  if (!isMobile || !user) return null;
+
+  const esDoctor = user.rol === 'doctor';
+  const adminEnFocus = user.rol === 'admin' && !!user.doctor_id && (focusOverride || user.modo_focus === true);
+  if (!esDoctor && !adminEnFocus) return null;
 
   return (
     <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 lg:hidden">

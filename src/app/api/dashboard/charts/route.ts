@@ -23,7 +23,7 @@ export async function GET() {
 
     supabase
       .from('agenda_cirugias')
-      .select('fecha, doctor_id, doctores:doctor_id (nombre_completo)')
+      .select('fecha, doctor_id, doctores:doctor_id (alias)')
       .gte('fecha', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10))
       .lte('fecha', new Date().toISOString().slice(0, 10)),
   ]);
@@ -47,7 +47,7 @@ export async function GET() {
   const agendaPorDoctor: Record<string, { nombre: string; cantidad: number }> = {};
   for (const a of agendaOcupacion.data ?? []) {
     const doctor = Array.isArray(a.doctores) ? a.doctores[0] : a.doctores;
-    const nombre = doctor?.nombre_completo || 'Sin asignar';
+    const nombre = doctor?.alias || 'Sin asignar';
     if (!agendaPorDoctor[a.doctor_id]) agendaPorDoctor[a.doctor_id] = { nombre, cantidad: 0 };
     agendaPorDoctor[a.doctor_id].cantidad++;
   }

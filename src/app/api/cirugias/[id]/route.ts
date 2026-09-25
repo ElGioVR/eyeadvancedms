@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 
 export async function GET(
@@ -12,39 +13,78 @@ export async function GET(
   const { id } = params;
   const supabase = getSupabaseAdmin();
 
-  const { data: cirugia, error } = await supabase
+  const BASE_COLUMNS = `
+    id,
+    codigo,
+    paciente_id,
+    nombre_paciente,
+    fecha,
+    hora,
+    estado,
+    ojo,
+    duracion_min,
+    notas,
+    origen_id,
+    servicio_id,
+    recurso_id,
+    inventario_item_id,
+    consulta_id,
+    created_by,
+    created_at,
+    pacientes:paciente_id (nombre_completo),
+    origen:origen_id (nombre),
+    servicio:servicio_id (nombre),
+    recurso:recurso_id (nombre, ubicacion)
+  `;
+
+  // 1er intento: con embed de LIO; si el esquema de inventario no tiene esas
+  // columnas, se reintenta sin él y el LIO se resuelve aparte (best-effort).
+  let cirugia: Record<string, unknown> | null = null;
+  let error: { message: string } | null = null;
+
+  const primero = await supabase
     .from('agenda_cirugias')
     .select(
-      `
-      id,
-      codigo,
-      paciente_id,
-      nombre_paciente,
-      fecha,
-      hora,
-      estado,
-      ojo,
-      duracion_min,
-      notas,
-      origen_id,
-      servicio_id,
-      recurso_id,
-      inventario_item_id,
-      consulta_id,
-      created_by,
-      created_at,
-      pacientes:paciente_id (nombre_completo),
-      origen:origen_id (nombre),
-      servicio:servicio_id (nombre),
-      recurso:recurso_id (nombre, ubicacion),
+      `${BASE_COLUMNS},
       lio:inventario_item_id (marca, modelo, tipo_lio, lote, fecha_caducidad)
     `
     )
     .eq('id', id)
     .maybeSingle();
+  cirugia = (primero.data as Record<string, unknown> | null) ?? null;
+  error = primero.error;
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    const retry = await supabase
+      .from('agenda_cirugias')
+      .select(BASE_COLUMNS)
+      .eq('id', id)
+      .maybeSingle();
+    cirugia = (retry.data as Record<string, unknown> | null) ?? null;
+    error = retry.error;
+
+    if (!error && cirugia) {
+      const itemId = cirugia.inventario_item_id as string | null;
+      if (itemId) {
+        let lioQuery = await supabase
+          .from('inventario_items')
+          .select('marca, modelo, tipo_lio, lote, fecha_caducidad')
+          .eq('id', itemId)
+          .maybeSingle();
+        if (lioQuery.error) {
+          lioQuery = await supabase
+            .from('inventario_items')
+            .select('manufacturer AS marca, model AS modelo, lote, expiration_date AS fecha_caducidad')
+            .eq('id', itemId)
+            .maybeSingle();
+        }
+        cirugia.lio = lioQuery.data ?? null;
+      }
+    }
+  }
+
+  if (error) {
+    return NextResponse.json({ error: handleSupabaseError(error, 'cirugias/[id]').mensaje }, { status: 500 });
   }
   if (!cirugia) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
@@ -53,7 +93,7 @@ export async function GET(
   const [participantes, archivos, productividad, historial] = await Promise.all([
     supabase
       .from('cirugia_participantes')
-      .select('id, medico_id, rol_id, doctores:medico_id(nombre_completo), roles:rol_id(nombre, clave)')
+      .select('id, medico_id, rol_id, doctores:medico_id(alias), roles:rol_id(nombre, clave)')
       .eq('cirugia_id', id),
     supabase
       .from('cirugia_archivos')

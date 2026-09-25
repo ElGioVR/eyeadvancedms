@@ -22,7 +22,14 @@
     "test:b13": "node scripts/tests/b13-motor-devengo.test.js",
     "test:b14": "node scripts/tests/b14-endpoint-productividad.test.js",
     "test:b15": "node scripts/tests/b15-ui-productividad.test.js",
-    "test:b16": "node scripts/tests/b16-integridad-productividad.test.js"
+    "test:b16": "node scripts/tests/b16-integridad-productividad.test.js",
+    "test:b17": "node scripts/tests/b17-honorarios-liga.test.js",
+    "test:b18": "node scripts/tests/b18-metricas-productividad.test.js",
+    "test:b19": "node scripts/tests/b19-mis-honorarios.test.js",
+    "test:b20": "node scripts/tests/b20-inventario-doctor-movil.test.js",
+    "test:b21": "node scripts/tests/b21-parse-label-lio.test.js",
+    "test:unit": "node --import tsx --test src/lib/__tests__/*.test.ts",
+    "test:cobertura": "node --import tsx --test --experimental-test-coverage src/lib/__tests__/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
@@ -32,14 +39,13 @@
     "date-fns": "^3.6.0",
     "exceljs": "^4.4.0",
     "html5-qrcode": "^2.3.8",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.400.0",
     "next": "^14.2.35",
     "next-themes": "^0.4.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-image-crop": "^11.1.2",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.4.0",
     "tesseract.js": "^7.0.0",
@@ -58,6 +64,7 @@
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
     "ts-node": "^10.9.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.5.0",
     "typescript-transform-paths": "^3.0.0"
   }

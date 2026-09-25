@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -23,7 +24,7 @@ export async function GET() {
     .limit(50);
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'notificaciones').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({ data });
@@ -61,7 +62,7 @@ export async function PATCH(request: NextRequest) {
   const { error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'notificaciones').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

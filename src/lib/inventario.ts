@@ -36,17 +36,47 @@ export async function consumirLIO(
     return { success: true, stock_resultante: actual?.stock };
   }
 
-  const { data: item, error: itemError } = await supabase
-    .from('inventario_items')
-    .select('id, stock, tipo')
-    .eq('id', inventarioItemId)
-    .single();
-
-  if (itemError || !item) {
-    return { success: false, error: 'Ítem de inventario no encontrado' };
+  interface ItemLIO {
+    id: string;
+    stock: number;
+    tipo: string;
+    tipo_lio: string | null;
+    potencia_dioptrias: number | null;
   }
 
-  if (item.tipo !== 'LENTE_INTRAOCULAR') {
+  let item: ItemLIO | null = null;
+
+  {
+    const { data: itemLIO, error: itemError } = await supabase
+      .from('inventario_items')
+      .select('id, stock, tipo, tipo_lio, potencia_dioptrias')
+      .eq('id', inventarioItemId)
+      .single();
+
+    if (!itemError && itemLIO) {
+      item = itemLIO as ItemLIO;
+    }
+  }
+
+  if (!item) {
+    // Fallback: esquema sin columnas LIO (tipo_lio/potencia_dioptrias)
+    const { data: itemMin } = await supabase
+      .from('inventario_items')
+      .select('id, stock, tipo')
+      .eq('id', inventarioItemId)
+      .single();
+    if (!itemMin) {
+      return { success: false, error: 'Ítem de inventario no encontrado' };
+    }
+    item = { ...itemMin, tipo_lio: null, potencia_dioptrias: null } as ItemLIO;
+  }
+
+  const esLIO =
+    item.tipo === 'LENTE_INTRAOCULAR' ||
+    item.tipo_lio != null ||
+    item.potencia_dioptrias != null;
+
+  if (!esLIO) {
     return { success: false, error: 'El ítem seleccionado no es un LIO' };
   }
 

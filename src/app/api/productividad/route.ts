@@ -41,6 +41,50 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function consolidarConsultas(filas: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  const mapa = new Map<string, Record<string, unknown>>();
+  for (const row of filas) {
+    const id = String(row.id);
+    const prev = mapa.get(id);
+    if (!prev) {
+      mapa.set(id, row);
+      continue;
+    }
+    const previos = Array.isArray(prev.conceptos) ? (prev.conceptos as unknown[]) : [];
+    const nuevos = Array.isArray(row.conceptos) ? (row.conceptos as unknown[]) : [];
+    prev.conceptos = [...previos, ...nuevos];
+  }
+  return [...mapa.values()];
+}
+
+function calcularEdad(
+  fechaNacimiento: string | null | undefined,
+  fechaRef: string | null | undefined
+): number | null {
+  const n = /^(\d{4})-(\d{2})-(\d{2})/.exec(fechaNacimiento || '');
+  const r = /^(\d{4})-(\d{2})-(\d{2})/.exec(fechaRef || '');
+  if (!n || !r) return null;
+  const ny = Number(n[1]);
+  const nm = Number(n[2]);
+  const nd = Number(n[3]);
+  const ry = Number(r[1]);
+  const rm = Number(r[2]);
+  const rd = Number(r[3]);
+  let edad = ry - ny;
+  if (rm < nm || (rm === nm && rd < nd)) edad -= 1;
+  return edad >= 0 ? edad : null;
+}
+
+function operadorDeConceptos(conceptos: unknown): number | null {
+  if (!Array.isArray(conceptos)) return null;
+  const total = conceptos.reduce((suma, raw) => {
+    const c = raw as { tipo_concepto?: string; cantidad?: number | null };
+    if (c?.tipo_concepto !== 'PROCEDIMIENTO') return suma;
+    return suma + Math.max(1, toNumber(c.cantidad) || 1);
+  }, 0);
+  return total > 1 ? total : null;
+}
+
 function agruparPorDoctor(filas: ResumenFila[], nombres: Map<string, string>) {
   const map = new Map<
     string,
@@ -101,7 +145,7 @@ async function cargarTabs(
             .from('cirugia_productividad')
             .select(
               `id, cirugia_id, monto, estado, regla_id,
-               participante:cirugia_participantes!inner(medico_id, doctores:medico_id(nombre_completo)),
+               participante:cirugia_participantes!inner(medico_id, doctores:medico_id(alias)),
                agenda:agenda_cirugias!inner(fecha, codigo, estado)
               `
             )
@@ -123,9 +167,13 @@ async function cargarTabs(
           let q = supabase
             .from('consultas')
             .select(
-              `id, folio, fecha, tipo_consulta, costo_total, monto_pagado, estatus_pago, estatus,
-               pacientes:paciente_id(nombre_completo),
-               doctores:doctor_id(nombre_completo)
+              `id, folio, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico,
+               estudio_1, estudio_2, estudio_3, procedimiento, metodo_pago, moneda,
+               costo_total, monto_pagado, estatus_pago, estatus, aseguranza_id,
+               pacientes:paciente_id(nombre_completo, telefono, sexo, fecha_nacimiento, edad),
+               doctores:doctor_id(alias),
+               aseguranza:aseguranza_id(nombre),
+               conceptos:consulta_conceptos(tipo_concepto, cantidad)
               `
             )
             .gte('fecha', desde)
@@ -135,7 +183,7 @@ async function cargarTabs(
             .limit(200);
           if (doctorId) q = q.eq('doctor_id', doctorId);
           const { data } = await q;
-          return data || [];
+          return consolidarConsultas((data || []) as Array<Record<string, unknown>>);
         })()
       : Promise.resolve([]),
     need('estudios')
@@ -146,7 +194,7 @@ async function cargarTabs(
               `id, cantidad, precio_aplicado, texto_original, doctor_id, consulta_id,
                consulta:consultas!inner(fecha, folio, paciente_id,
                  pacientes:paciente_id(nombre_completo),
-                 doctores:doctor_id(nombre_completo))
+                 doctores:doctor_id(alias))
               `
             )
             .eq('tipo_concepto', 'ESTUDIO')
@@ -160,12 +208,12 @@ async function cargarTabs(
         })()
       : Promise.resolve([]),
     needNombres
-      ? supabase.from('doctores').select('id, nombre_completo').limit(500)
-      : Promise.resolve({ data: [] as Array<{ id: string; nombre_completo: string }> }),
+      ? supabase.from('doctores').select('id, alias').limit(500)
+      : Promise.resolve({ data: [] as Array<{ id: string; alias: string }> }),
   ]);
 
   const nombres = new Map(
-    (doctoresRes.data || []).map((d) => [d.id as string, d.nombre_completo as string])
+    (doctoresRes.data || []).map((d) => [d.id as string, d.alias as string])
   );
 
   const honorarios = need('honorarios')
@@ -178,7 +226,7 @@ async function cargarTabs(
   const cirugiasTab = need('cirugias')
     ? (cirugias as Array<Record<string, unknown>>).map((row) => {
     const part = row.participante as
-      | { medico_id?: string; doctores?: { nombre_completo?: string } }
+      | { medico_id?: string; doctores?: { alias?: string } }
       | null;
     const agenda = row.agenda as { fecha?: string; codigo?: string } | null;
     const estadoPago =
@@ -193,7 +241,7 @@ async function cargarTabs(
       codigo: agenda?.codigo || null,
       fecha: agenda?.fecha || null,
       doctor_id: part?.medico_id || null,
-      doctor_nombre: part?.doctores?.nombre_completo || nombres.get(part?.medico_id || '') || '—',
+      doctor_nombre: part?.doctores?.alias || nombres.get(part?.medico_id || '') || '—',
       monto: toNumber(row.monto),
       estado: row.estado,
       estado_pago: estadoPago,
@@ -202,19 +250,49 @@ async function cargarTabs(
     : [];
 
   const entradasSalidas = need('entradas_salidas')
-    ? (entradas as Array<Record<string, unknown>>).map((c) => ({
-    id: c.id,
-    folio: c.folio || null,
-    fecha: c.fecha,
-    tipo_consulta: c.tipo_consulta,
-    paciente: ((c.pacientes as { nombre_completo?: string } | null)?.nombre_completo) || '',
-    doctor: ((c.doctores as { nombre_completo?: string } | null)?.nombre_completo) || '',
-    costo_total: toNumber(c.costo_total),
-    monto_pagado: toNumber(c.monto_pagado),
-    saldo: toNumber(c.costo_total) - toNumber(c.monto_pagado),
-    estatus_pago: c.estatus_pago,
-    estatus: c.estatus,
-  }))
+    ? (entradas as Array<Record<string, unknown>>).map((c) => {
+        const pac = c.pacientes as
+          | {
+              nombre_completo?: string;
+              telefono?: string | null;
+              sexo?: string | null;
+              fecha_nacimiento?: string | null;
+              edad?: number | null;
+            }
+          | null;
+        const doc = c.doctores as { alias?: string } | null;
+        const aseg = c.aseguranza as { nombre?: string } | null;
+        const edadCalc = calcularEdad(pac?.fecha_nacimiento, c.fecha as string | null);
+        return {
+          id: c.id,
+          folio: c.folio || null,
+          fecha: c.fecha,
+          hora_inicio: (c.hora_inicio as string | null) || null,
+          hora_fin: (c.hora_fin as string | null) || null,
+          tipo_consulta: c.tipo_consulta,
+          tipo_visita: (c.tipo_visita as string | null) || null,
+          diagnostico: (c.diagnostico as string | null) || null,
+          estudio_1: (c.estudio_1 as string | null) || null,
+          estudio_2: (c.estudio_2 as string | null) || null,
+          estudio_3: (c.estudio_3 as string | null) || null,
+          procedimiento: (c.procedimiento as string | null) || null,
+          operador: operadorDeConceptos(c.conceptos),
+          paciente: pac?.nombre_completo || '',
+          telefono: pac?.telefono || null,
+          sexo: pac?.sexo || null,
+          fecha_nacimiento: pac?.fecha_nacimiento || null,
+          edad: edadCalc ?? pac?.edad ?? null,
+          doctor: doc?.alias || '',
+          aseguranza: aseg?.nombre || null,
+          metodo_pago: (c.metodo_pago as string | null) || null,
+          moneda: (c.moneda as string | null) || null,
+          costo_total: toNumber(c.costo_total),
+          monto_pagado: toNumber(c.monto_pagado),
+          saldo: toNumber(c.costo_total) - toNumber(c.monto_pagado),
+          estatus_pago: c.estatus_pago,
+          estatus: c.estatus,
+        };
+      })
     : [];
 
   const estudiosTab = need('estudios')
@@ -224,7 +302,7 @@ async function cargarTabs(
           fecha?: string;
           folio?: string;
           pacientes?: { nombre_completo?: string };
-          doctores?: { nombre_completo?: string };
+          doctores?: { alias?: string };
         }
       | null;
     const cantidad = Math.max(1, toNumber(row.cantidad) || 1);
@@ -236,7 +314,7 @@ async function cargarTabs(
       folio: consulta?.folio || null,
       paciente: consulta?.pacientes?.nombre_completo || '',
       doctor:
-        consulta?.doctores?.nombre_completo ||
+        consulta?.doctores?.alias ||
         nombres.get(typeof row.doctor_id === 'string' ? row.doctor_id : '') ||
         '',
       concepto: typeof row.texto_original === 'string' ? row.texto_original : 'Estudio',
@@ -306,14 +384,56 @@ function csvParaTab(tab: TabId, data: ProductividadData): string {
       );
     case 'entradas_salidas':
       return csvFrom(
-        ['Fecha', 'Folio', 'Paciente', 'Doctor', 'Tipo', 'Costo', 'Pagado', 'Saldo', 'Estatus pago'],
+        [
+          'FECHA',
+          'HORA DE INGRESO',
+          'HORA DE EGRESO',
+          'NUMERO DE TELEFONO',
+          'DOCTOR',
+          'NOMBRE DE PACIENTE',
+          'SEXO',
+          'FECHA DE NACIMIENTO',
+          'EDAD',
+          'CONSULTA',
+          'DIAGNOSTICO',
+          'TIPO DE CONSULTA',
+          'ESTUDIO 1',
+          'ESTUDIO 2',
+          'ESTUDIO 3',
+          'OPERADOR',
+          'PROCEDIMIENTO',
+          'ASEGURANZA',
+          'METODO DE PAGO',
+          'COSTO CONSULTA',
+          'TIPO DE MONEDA',
+          'FOLIO',
+          'PAGADO',
+          'SALDO',
+          'ESTATUS PAGO',
+        ],
         data.entradas_salidas.map((c) => [
           formatFechaCsv(String(c.fecha || '')),
-          csvCell(c.folio as string | null),
-          csvCell(c.paciente),
+          csvCell(typeof c.hora_inicio === 'string' ? c.hora_inicio.slice(0, 5) : null),
+          csvCell(typeof c.hora_fin === 'string' ? c.hora_fin.slice(0, 5) : null),
+          csvCell(c.telefono as string | null),
           csvCell(c.doctor),
+          csvCell(c.paciente),
+          csvCell(c.sexo as string | null),
+          c.fecha_nacimiento ? formatFechaCsv(String(c.fecha_nacimiento)) : '',
+          c.edad == null ? '' : toNumber(c.edad),
           csvCell(c.tipo_consulta as string | null),
+          csvCell(c.diagnostico as string | null),
+          csvCell(c.tipo_visita as string | null),
+          csvCell(c.estudio_1 as string | null),
+          csvCell(c.estudio_2 as string | null),
+          csvCell(c.estudio_3 as string | null),
+          c.operador == null ? '' : toNumber(c.operador),
+          csvCell(c.procedimiento as string | null),
+          csvCell(c.aseguranza as string | null),
+          csvCell(c.metodo_pago as string | null),
           toNumber(c.costo_total),
+          csvCell(c.moneda as string | null),
+          csvCell(c.folio as string | null),
           toNumber(c.monto_pagado),
           toNumber(c.saldo),
           csvCell(c.estatus_pago as string | null),

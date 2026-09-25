@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 
@@ -16,12 +16,36 @@ const estadoDotColors: Record<string, string> = {
   cancelada: 'bg-red-500',
 };
 
-const estadoBg: Record<string, string> = {
-  agendada: 'bg-blue-500/10 border-blue-400/30',
-  aplazada: 'bg-amber-500/10 border-amber-400/30',
-  reagendada: 'bg-violet-500/10 border-violet-400/30',
-  completada: 'bg-emerald-500/10 border-emerald-400/30',
-  cancelada: 'bg-red-500/10 border-red-400/30',
+// Matriz de colores homologada con desktop (AgendaContent):
+// fondo/texto por TIPO del evento + borde/chip por ESTADO.
+const tipoStyles: Record<string, { bg: string; text: string }> = {
+  cirugia: { bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300' },
+  consulta: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300' },
+  estudio: { bg: 'bg-sky-50 dark:bg-sky-500/10', text: 'text-sky-700 dark:text-sky-300' },
+};
+
+const estadoBorderL: Record<string, string> = {
+  agendada: 'border-l-blue-500',
+  aplazada: 'border-l-amber-500',
+  reagendada: 'border-l-violet-500',
+  completada: 'border-l-emerald-500',
+  cancelada: 'border-l-red-500',
+};
+
+const estadoChipBg: Record<string, string> = {
+  agendada: 'bg-blue-500/10',
+  aplazada: 'bg-amber-500/10',
+  reagendada: 'bg-violet-500/10',
+  completada: 'bg-emerald-500/10',
+  cancelada: 'bg-red-500/10',
+};
+
+const estadoLabels: Record<string, string> = {
+  agendada: 'Agendada',
+  aplazada: 'Aplazada',
+  reagendada: 'Reagendada',
+  completada: 'Completada',
+  cancelada: 'Cancelada',
 };
 
 function daysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
@@ -49,6 +73,11 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
   const [mounted, setMounted] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  // Swipe-down del bottom sheet de detalle
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const sheetDragStartY = useRef(0);
+  const sheetDragStartTime = useRef(0);
+  const sheetDraggingRef = useRef(false);
   const openDayKey = openDay?.key;
   const openDayDate = openDay?.date;
 
@@ -158,11 +187,40 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
   useEffect(() => {
     if (selectedCirugia) {
       document.body.style.overflow = 'hidden';
+      setSheetDragY(0);
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
   }, [selectedCirugia]);
+
+  // Gestos del bottom sheet: arrastrar la barra superior hacia abajo cierra
+  const onSheetDragStart = useCallback((e: React.TouchEvent) => {
+    sheetDragStartY.current = e.touches[0].clientY;
+    sheetDragStartTime.current = Date.now();
+    sheetDraggingRef.current = true;
+  }, []);
+
+  const onSheetDragMove = useCallback((e: React.TouchEvent) => {
+    if (!sheetDraggingRef.current) return;
+    const dy = e.touches[0].clientY - sheetDragStartY.current;
+    setSheetDragY(Math.max(0, dy));
+  }, []);
+
+  const onSheetDragEnd = useCallback((e: React.TouchEvent) => {
+    if (!sheetDraggingRef.current) return;
+    sheetDraggingRef.current = false;
+    const dy = e.changedTouches[0].clientY - sheetDragStartY.current;
+    const dt = Math.max(Date.now() - sheetDragStartTime.current, 1);
+    const velocity = dy / dt;
+    // Cierra si arrastró lo suficiente o si el gesto fue rápido hacia abajo
+    if (dy > 96 || velocity > 0.55) {
+      setSheetDragY(0);
+      closeDetail();
+    } else {
+      setSheetDragY(0); // regresa con la transición
+    }
+  }, [closeDetail]);
 
   return (
     <div className="flex flex-col min-h-0">
@@ -332,8 +390,9 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                   key={c.id}
                   onClick={() => handleSelectCirugia(c)}
                   className={cn(
-                    'w-full text-left rounded-xl border p-3.5 transition-all active:scale-[0.98]',
-                    estadoBg[c.estado] || 'bg-gray-50 border-gray-200'
+                    'w-full text-left rounded-xl border border-gray-200 dark:border-[#2F3336] border-l-[3px] p-3.5 transition-all active:scale-[0.98]',
+                    tipoStyles[c.tipo || 'cirugia']?.bg || 'bg-gray-50',
+                    estadoBorderL[c.estado] || 'border-l-gray-400'
                   )}
                 >
                   <div className="flex items-start justify-between">
@@ -364,42 +423,63 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
       {selectedCirugia && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeDetail} />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] bg-white dark:bg-[#16181C] rounded-t-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-[#3E4144]" />
-            </div>
+          <div
+            className={cn(
+              'absolute inset-x-0 bottom-0 max-h-[85dvh] bg-white dark:bg-[#16181C] rounded-t-2xl shadow-2xl overflow-hidden flex flex-col',
+              sheetDragY === 0 && 'transition-transform duration-200 ease-out'
+            )}
+            style={{ transform: `translateY(${sheetDragY}px)` }}
+          >
+            {/* Zona de gesto: arrastrar hacia abajo para cerrar */}
+            <div
+              onTouchStart={onSheetDragStart}
+              onTouchMove={onSheetDragMove}
+              onTouchEnd={onSheetDragEnd}
+              style={{ touchAction: 'none' }}
+            >
+              <div className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+                <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-[#3E4144]" />
+              </div>
 
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-[#2F3336]">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white shrink-0',
-                  selectedCirugia.estado === 'completada' ? 'bg-emerald-500' :
-                  selectedCirugia.estado === 'cancelada' ? 'bg-red-500' :
-                  selectedCirugia.estado === 'aplazada' ? 'bg-amber-500' : 'bg-primary-600'
-                )}>
-                  {selectedCirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{selectedCirugia.nombre_paciente}</h3>
-                  <span className={cn(
-                    'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
-                    selectedCirugia.estado === 'agendada' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                    selectedCirugia.estado === 'completada' && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                    selectedCirugia.estado === 'cancelada' && 'bg-red-500/10 text-red-600 dark:text-red-400',
-                    selectedCirugia.estado === 'aplazada' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                    selectedCirugia.estado === 'reagendada' && 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-[#2F3336]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    'flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white shrink-0',
+                    selectedCirugia.estado === 'completada' ? 'bg-emerald-500' :
+                    selectedCirugia.estado === 'cancelada' ? 'bg-red-500' :
+                    selectedCirugia.estado === 'aplazada' ? 'bg-amber-500' : 'bg-primary-600'
                   )}>
-                    <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[selectedCirugia.estado])} />
-                    {selectedCirugia.estado}
-                  </span>
+                    {selectedCirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{selectedCirugia.nombre_paciente}</h3>
+                    <span className={cn(
+                      'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
+                      estadoChipBg[selectedCirugia.estado] || 'bg-gray-500/10',
+                      tipoStyles[selectedCirugia.tipo || 'cirugia']?.text || 'text-gray-600 dark:text-[#E7E9EA]',
+                    )}>
+                      <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[selectedCirugia.estado])} />
+                      {estadoLabels[selectedCirugia.estado] || selectedCirugia.estado}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => { const c = selectedCirugia; closeDetail(); onSelect?.(c); }}
+                    title="Ver detalle completo"
+                    aria-label="Ver detalle completo"
+                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors"
+                  >
+                    <ExternalLink className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                  </button>
+                  <button onClick={closeDetail} title="Cerrar" aria-label="Cerrar" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
+                    <X className="h-5 w-5 text-gray-500 dark:text-[#71767B]" />
+                  </button>
                 </div>
               </div>
-              <button onClick={closeDetail} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
-                <X className="h-5 w-5 text-gray-500 dark:text-[#71767B]" />
-              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-[#202327]">
                   <Clock className="h-4 w-4 text-primary-500 shrink-0" />
@@ -493,13 +573,6 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                   <p className="text-sm text-gray-700 dark:text-[#E7E9EA] whitespace-pre-wrap">{selectedCirugia.notas}</p>
                 </div>
               )}
-
-              <button
-                onClick={() => { const c = selectedCirugia; closeDetail(); onSelect?.(c); }}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-4 py-3 text-sm font-bold text-white hover:bg-primary-700 transition-colors"
-              >
-                Ver detalle completo
-              </button>
             </div>
           </div>
         </div>

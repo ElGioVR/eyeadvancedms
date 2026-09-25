@@ -5,16 +5,17 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Printer, Calendar, Clock, User, Stethoscope, Eye, FileText,
   Activity, CreditCard, Shield, Upload, X, File, Download, Trash2,
-  AlertTriangle, CheckCircle2, History, Users, Package
+  AlertTriangle, CheckCircle2, History, Users, Package, ExternalLink, Loader2
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import { cn } from '@/lib/utils';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
 
-interface RelacionSimple { nombre_completo?: string; nombre?: string; }
+interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; }
 interface Origen { nombre?: string; }
 interface Servicio { nombre?: string; }
 interface Recurso { nombre?: string; ubicacion?: string; }
@@ -112,6 +113,96 @@ function Field({ label, value, full }: { label: string; value: string | null | u
   );
 }
 
+const SKELETON_BOX = 'bg-gray-100 dark:bg-[#202327] rounded animate-pulse';
+
+function CirugiaDetalleSkeleton() {
+  return (
+    <div className="print-page" aria-busy="true" aria-live="polite">
+      {/* PageHeader skeleton */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className={cn(SKELETON_BOX, 'h-4 w-24')} />
+          <div className={cn(SKELETON_BOX, 'h-7 w-52')} />
+          <div className={cn(SKELETON_BOX, 'h-4 w-72 max-w-full')} />
+        </div>
+        <div className={cn(SKELETON_BOX, 'h-10 w-32 rounded-lg')} />
+      </div>
+
+      {/* Header card */}
+      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
+        <div className={cn(SKELETON_BOX, 'h-12 w-12 rounded-full shrink-0')} />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className={cn(SKELETON_BOX, 'h-5 w-48 max-w-full')} />
+          <div className={cn(SKELETON_BOX, 'h-4 w-72 max-w-full')} />
+        </div>
+        <div className={cn(SKELETON_BOX, 'h-6 w-24 rounded-full shrink-0')} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Información de la cirugía */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-56 mb-4')} />
+            <div className="grid grid-cols-2 gap-4">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className={cn(SKELETON_BOX, 'h-3 w-20')} />
+                  <div className={cn(SKELETON_BOX, 'h-4 w-32 max-w-full')} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Equipo médico */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-40 mb-4')} />
+            <div className="space-y-3">
+              <div className={cn(SKELETON_BOX, 'h-10 w-full rounded-lg')} />
+              <div className={cn(SKELETON_BOX, 'h-10 w-full rounded-lg')} />
+            </div>
+          </div>
+
+          {/* Archivos */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-36 mb-4')} />
+            <div className={cn(SKELETON_BOX, 'h-20 w-full rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2F3336]')} />
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* LIO */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-32 mb-4')} />
+            <div className="space-y-2">
+              <div className={cn(SKELETON_BOX, 'h-4 w-40 max-w-full')} />
+              <div className={cn(SKELETON_BOX, 'h-4 w-28')} />
+            </div>
+          </div>
+
+          {/* Productividad */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-36 mb-4')} />
+            <div className="space-y-3">
+              <div className={cn(SKELETON_BOX, 'h-8 w-full rounded-lg')} />
+              <div className={cn(SKELETON_BOX, 'h-8 w-full rounded-lg')} />
+            </div>
+          </div>
+
+          {/* Historial */}
+          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+            <div className={cn(SKELETON_BOX, 'h-4 w-28 mb-4')} />
+            <div className="space-y-3">
+              <div className={cn(SKELETON_BOX, 'h-4 w-full')} />
+              <div className={cn(SKELETON_BOX, 'h-4 w-3/4')} />
+              <div className={cn(SKELETON_BOX, 'h-4 w-2/3')} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CirugiaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -124,11 +215,16 @@ export default function CirugiaDetailPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [tipoDocumento, setTipoDocumento] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<{ archivo: Archivo; url: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchCirugia = useCallback(async () => {
     try {
       const res = await fetch(`/api/cirugias/${id}`);
-      if (!res.ok) throw new Error('Error al cargar la cirugía');
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error || `Error al cargar la cirugía (${res.status})`);
+      }
       const payload = await res.json();
       setData(payload);
     } catch (err) {
@@ -139,6 +235,39 @@ export default function CirugiaDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchCirugia(); }, [fetchCirugia]);
+
+  // Vista previa de archivos: bloquea scroll de fondo y cierra con Escape
+  useEffect(() => {
+    if (!preview) return;
+    document.body.style.overflow = 'hidden';
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreview(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handler);
+    };
+  }, [preview]);
+
+  async function openPreview(a: Archivo) {
+    setPreview({ archivo: a, url: '' });
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`/api/cirugias/${id}/archivos/${a.id}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || 'Error al obtener archivo');
+      }
+      const { signedUrl } = await res.json();
+      setPreview({ archivo: a, url: signedUrl });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Error al abrir la vista previa', 'error');
+      setPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   function toggleFile(f: File) {
     setFiles((prev) => {
@@ -244,7 +373,7 @@ export default function CirugiaDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
+    return <CirugiaDetalleSkeleton />;
   }
 
   if (error || !data) {
@@ -277,7 +406,7 @@ export default function CirugiaDetailPage() {
       />
 
       {/* Header */}
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6 flex items-center gap-4">
+      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
         <Avatar initials={nombrePaciente.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{nombrePaciente}</h2>
@@ -330,7 +459,7 @@ export default function CirugiaDetailPage() {
               <div className="space-y-2">
                 {participantes.map((p) => (
                   <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
-                    <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{p.doctores?.nombre_completo || '—'}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{p.doctores?.alias || '—'}</span>
                     <span className="text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase">{p.roles?.nombre || p.roles?.clave || '—'}</span>
                   </div>
                 ))}
@@ -413,7 +542,11 @@ export default function CirugiaDetailPage() {
               <div className="space-y-2">
                 {archivos.map((a) => (
                   <div key={a.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="flex items-center gap-3 min-w-0 cursor-pointer hover:opacity-75 transition-opacity"
+                      onClick={() => openPreview(a)}
+                      title="Ver vista previa"
+                    >
                       <File className="h-4 w-4 text-gray-400 flex-shrink-0" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{a.nombre_original}</p>
@@ -421,7 +554,8 @@ export default function CirugiaDetailPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 no-print">
-                      <button onClick={() => downloadFile(a.id)} className="text-primary-600 hover:text-primary-700" title="Descargar/Ver"><Download className="h-4 w-4" /></button>
+                      <button onClick={() => openPreview(a)} className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400" title="Vista previa"><Eye className="h-4 w-4" /></button>
+                      <button onClick={() => downloadFile(a.id)} className="text-primary-600 hover:text-primary-700" title="Descargar"><Download className="h-4 w-4" /></button>
                       <button onClick={() => deleteFile(a.id)} className="text-red-600 hover:text-red-700" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
@@ -442,7 +576,7 @@ export default function CirugiaDetailPage() {
             ) : (
               <div className="space-y-2">
                 {productividad.map((p) => {
-                  const medico = participantes.find((x) => x.id === p.participante_id)?.doctores?.nombre_completo || '—';
+                  const medico = participantes.find((x) => x.id === p.participante_id)?.doctores?.alias || '—';
                   return (
                     <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
                       <div className="min-w-0">
@@ -486,6 +620,75 @@ export default function CirugiaDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Visor de archivos (móvil y desktop) */}
+      {preview && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-black/70 backdrop-blur-sm no-print" onClick={() => setPreview(null)}>
+          <div
+            className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <File className="h-4 w-4 text-gray-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{preview.archivo.nombre_original}</p>
+                <p className="text-xs text-gray-500 dark:text-[#71767B] truncate">{preview.archivo.tipo_documento} — {formatBytes(preview.archivo.size)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {preview.url && (
+                <button
+                  onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] text-primary-600 dark:text-primary-400 transition-colors"
+                  title="Abrir en nueva pestaña"
+                >
+                  <ExternalLink className="h-5 w-5" />
+                </button>
+              )}
+              <button
+                onClick={() => setPreview(null)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] text-gray-500 dark:text-[#71767B] transition-colors"
+                title="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 p-2 sm:p-4" onClick={(e) => e.stopPropagation()}>
+            {previewLoading || !preview.url ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+              </div>
+            ) : preview.archivo.mime_type === 'application/pdf' ? (
+              <iframe
+                src={preview.url}
+                title={preview.archivo.nombre_original}
+                className="h-full w-full rounded-lg bg-white"
+              />
+            ) : preview.archivo.mime_type.startsWith('image/') ? (
+              <div className="flex h-full items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview.url}
+                  alt={preview.archivo.nombre_original}
+                  className="max-h-full max-w-full object-contain rounded-lg"
+                />
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                <File className="h-10 w-10 text-gray-500" />
+                <p className="text-sm text-gray-400 dark:text-[#71767B]">Vista previa no disponible para este formato</p>
+                <button
+                  onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+                  className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+                >
+                  Abrir archivo
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

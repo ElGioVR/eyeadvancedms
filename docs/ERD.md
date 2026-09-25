@@ -186,8 +186,13 @@ USUARIOS ─────── 1:N ─────── NOTIFICACION_PREFERENCI
 | color | VARCHAR(100) | |
 | material | VARCHAR(100) | (solo LENTE_VISION) |
 | potencia_dioptrias | DECIMAL(5,2) | (solo LENTE_INTRAOCULAR) |
-| tipo_lio | ENUM | MONOFOCAL, MULTIFOCAL, TORICA, EDOF, OTRO (solo LENTE_INTRAOCULAR) |
+| tipo_lio | ENUM | MONOFOCAL, MULTIFOCAL, TORICA, MULTIFOCAL_TORICA, EDOF, OTRO (solo LENTE_INTRAOCULAR) |
 | modelo_fabricante | VARCHAR(255) | (solo LENTE_INTRAOCULAR) |
+| cilindro_lio | DECIMAL(5,2) | (solo LENTE_INTRAOCULAR) — añadida por el escáner de etiquetas (migración 1800000000280) |
+| add_intermedia | DECIMAL(5,2) | (solo LENTE_INTRAOCULAR) — primera ADD de la etiqueta |
+| add_cercana | DECIMAL(5,2) | (solo LENTE_INTRAOCULAR) — segunda ADD de la etiqueta |
+| numero_serie | VARCHAR(100) | (solo LENTE_INTRAOCULAR) — `SN` impreso; **nunca** es el código de barras |
+| codigo_barras_tipo | VARCHAR(20) | formato reportado por el decoder (p. ej. CODE_39, EAN_13) |
 | stock | INTEGER | DEFAULT 0 |
 | stock_minimo | INTEGER | DEFAULT 5 |
 | precio_compra | DECIMAL(10,2) | |

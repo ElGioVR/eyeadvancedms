@@ -13,13 +13,16 @@ import {
   Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getInitials } from '@/lib/text';
 import { useFetch } from '@/hooks/useFetch';
 import { useToast } from '@/components/ui/Toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface DoctorAPI {
   id: string;
-  nombre: string;
+  alias: string;
+  nombre: string | null;
+  apellido: string | null;
   especialidad: string;
   cedula: string | null;
   telefono: string | null;
@@ -33,6 +36,7 @@ interface UsuarioOption {
   id: string;
   email: string;
   nombre: string;
+  rol?: string;
 }
 
 const avatarColors = [
@@ -46,14 +50,6 @@ const avatarColors = [
   'bg-violet-500',
 ];
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
 
 function getAvatarColor(id: string): string {
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
@@ -71,7 +67,9 @@ export default function DoctoresPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [formAlias, setFormAlias] = useState('');
   const [formNombre, setFormNombre] = useState('');
+  const [formApellido, setFormApellido] = useState('');
   const [formEspecialidad, setFormEspecialidad] = useState('Oftalmología');
   const [formCedula, setFormCedula] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
@@ -83,7 +81,7 @@ export default function DoctoresPage() {
     () =>
       doctores.filter(
         (d) =>
-          d.nombre.toLowerCase().includes(search.toLowerCase()) ||
+          d.alias.toLowerCase().includes(search.toLowerCase()) ||
           d.especialidad.toLowerCase().includes(search.toLowerCase()) ||
           (d.cedula && d.cedula.toLowerCase().includes(search.toLowerCase()))
       ),
@@ -91,7 +89,9 @@ export default function DoctoresPage() {
   );
 
   const resetForm = useCallback(() => {
+    setFormAlias('');
     setFormNombre('');
+    setFormApellido('');
     setFormEspecialidad('Oftalmología');
     setFormCedula('');
     setFormTelefono('');
@@ -105,7 +105,7 @@ export default function DoctoresPage() {
       if (res.ok) {
         const data = await res.json();
         const all: UsuarioOption[] = Array.isArray(data) ? data : data.data || [];
-        setUsuariosDoctor(all.filter((u) => (u as any).rol === 'doctor'));
+        setUsuariosDoctor(all.filter((u) => ['doctor', 'admin'].includes((u as any).rol)));
       }
     } catch { /* silent */ }
   }, []);
@@ -118,7 +118,9 @@ export default function DoctoresPage() {
   }, [resetForm, fetchUsuariosDoctor]);
 
   const handleEditDoctor = useCallback((doc: DoctorAPI) => {
-    setFormNombre(doc.nombre);
+    setFormAlias(doc.alias);
+    setFormNombre(doc.nombre || '');
+    setFormApellido(doc.apellido || '');
     setFormEspecialidad(doc.especialidad);
     setFormCedula(doc.cedula || '');
     setFormTelefono(doc.telefono || '');
@@ -136,7 +138,7 @@ export default function DoctoresPage() {
   }, [resetForm]);
 
   const handleCreate = useCallback(async () => {
-    if (!formNombre.trim()) return;
+    if (!formAlias.trim()) return;
     setSaving(true);
     setFormError(null);
     try {
@@ -144,7 +146,9 @@ export default function DoctoresPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nombre: formNombre,
+          alias: formAlias,
+          nombre: formNombre || null,
+          apellido: formApellido || null,
           especialidad: formEspecialidad,
           cedula: formCedula,
           telefono: formTelefono,
@@ -163,7 +167,7 @@ export default function DoctoresPage() {
     } finally {
       setSaving(false);
     }
-  }, [formNombre, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
+  }, [formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
 
   const handleUpdate = useCallback(async () => {
     if (!editingDoctor) return;
@@ -175,7 +179,9 @@ export default function DoctoresPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingDoctor.id,
-          nombre: formNombre,
+          alias: formAlias,
+          nombre: formNombre || null,
+          apellido: formApellido || null,
           especialidad: formEspecialidad,
           cedula: formCedula,
           telefono: formTelefono,
@@ -194,7 +200,7 @@ export default function DoctoresPage() {
     } finally {
       setSaving(false);
     }
-  }, [editingDoctor, formNombre, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
+  }, [editingDoctor, formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
 
   const handleDelete = useCallback(async (doctorId: string) => {
     setDeleting(doctorId);
@@ -254,7 +260,7 @@ export default function DoctoresPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((doc) => {
-              const initials = getInitials(doc.nombre);
+              const initials = getInitials(doc.alias);
               const avatarColor = getAvatarColor(doc.id);
               return (
                 <div key={doc.id} className="group overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
@@ -264,13 +270,18 @@ export default function DoctoresPage() {
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{doc.nombre}</h3>
-                        <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] flex items-center gap-1 mt-0.5">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{doc.alias}</h3>
+                        {(doc.nombre || doc.apellido) && (
+                          <p className="text-xs text-gray-500 dark:text-[#71767B] mt-0.5 truncate">
+                            {[doc.nombre, doc.apellido].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 dark:text-[#71767B] flex items-center gap-1 mt-0.5">
                           <Stethoscope className="h-3 w-3" />
                           {doc.especialidad}
                         </p>
                         {doc.cedula && (
-                          <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-0.5">Céd. {doc.cedula}</p>
+                          <p className="text-xs text-gray-400 dark:text-[#71767B] mt-0.5">Céd. {doc.cedula}</p>
                         )}
                       </div>
                     </div>
@@ -336,15 +347,38 @@ export default function DoctoresPage() {
               <div className="p-6 space-y-5">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">
-                    Nombre Completo <span className="text-red-500">*</span>
+                    Alias <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formNombre}
-                    onChange={(e) => setFormNombre(e.target.value)}
-                    placeholder="Ej. Dra. María García"
+                    value={formAlias}
+                    onChange={(e) => setFormAlias(e.target.value)}
+                    placeholder="Ej. DR BAYARDO"
                     className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
+                  <p className="mt-1 text-[11px] text-gray-400 dark:text-[#71767B]">Nombre con el que se muestra en toda la app (agenda, citas, reportes).</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Nombre</label>
+                    <input
+                      type="text"
+                      value={formNombre}
+                      onChange={(e) => setFormNombre(e.target.value)}
+                      placeholder="Bayardo"
+                      className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Apellido</label>
+                    <input
+                      type="text"
+                      value={formApellido}
+                      onChange={(e) => setFormApellido(e.target.value)}
+                      placeholder="Cisneros"
+                      className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider mb-1.5">Especialidad</label>
@@ -404,10 +438,12 @@ export default function DoctoresPage() {
                   >
                     <option value="">Sin vincular</option>
                     {usuariosDoctor.map((u) => (
-                      <option key={u.id} value={u.id}>{u.nombre || u.email}</option>
+                      <option key={u.id} value={u.id}>
+                        {u.nombre || u.email} {(u as any).rol === 'admin' ? '(Admin)' : '(Doctor)'}
+                      </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-[10px] text-gray-400 dark:text-[#71767B]">Selecciona el usuario doctor para vincular al sistema</p>
+                  <p className="mt-1 text-[10px] text-gray-400 dark:text-[#71767B]">Usuarios con rol Doctor o Administrador</p>
                 </div>
                 {formError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -423,7 +459,7 @@ export default function DoctoresPage() {
                   </button>
                   <button
                     onClick={editingDoctor ? handleUpdate : handleCreate}
-                    disabled={saving || !formNombre.trim()}
+                    disabled={saving || !formAlias.trim()}
                     className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
                     {saving ? (

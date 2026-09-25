@@ -45,19 +45,44 @@ function assertContains(rel, needles, label) {
 console.log('\n[B13] Motor devengo D11/D5/D10 + consultas cantidad/ojo\n');
 
 assertContains(
-  'src/services/honorarios/MotorDevengoService.ts',
+  'src/services/productividad/MotorDevengoService.ts',
   [
     'sin_tarifa',
-    'cantidad',
-    'operador',
     'dedupe_key',
-    'PORCENTAJE',
-    'tipo_calculo',
-    'cantidadSafe',
-    'servicio_id',
-    'aseguranza_servicios',
+    'generarDesdeCirugia',
+    'resolverFuenteHonorario',
+    'cancelarPorConsulta',
+    'cancelarPorCirugia',
+    'metricas_ligados',
+    'deployed_to_performance',
+    'marcarDeployed',
+    'listarPendientesDespliegue',
+    'reportar_doctor_distinto',
+    'normalizarMoneda',
+    'normalizarRolEvento',
+    "moneda: normalizarMoneda",
+    'rol: normalizarRolEvento',
   ],
-  'MotorDevengoService (D5/D10b/D11 + generarDesdeCirugia)'
+  'MotorDevengoService (R1/R2 + cancelación + métricas + deployed + moneda + rol)'
+);
+
+assertContains(
+  'src/app/api/productividad/sync/route.ts',
+  [
+    'deployed_to_performance',
+    'solo_pendientes',
+    'consultas_desplegadas',
+    'doctores_sin_evento',
+    'generarDesdeCirugia',
+    'generarDesdeConsulta',
+  ],
+  'Sync: flag deployed + multi-doctor + preview'
+);
+
+assertContains(
+  'src/migrations/1800000000261-AddDeployedToPerformance.ts',
+  ['deployed_to_performance', 'deployed_at', 'consultas', 'agenda_cirugias'],
+  'Migración 261 flag deployed'
 );
 
 assertContains(
@@ -79,7 +104,7 @@ assertContains(
   'AgendarEstudioModal envía consulta_origen_id'
 );
 
-const motor = read('src/services/honorarios/MotorDevengoService.ts') || '';
+const motor = read('src/services/productividad/MotorDevengoService.ts') || '';
 if (motor.includes('dedupe_key')) ok('dedupe_key presente en insert de eventos');
 else fail('dedupe_key presente en insert de eventos');
 

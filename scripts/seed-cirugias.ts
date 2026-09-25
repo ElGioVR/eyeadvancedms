@@ -131,8 +131,8 @@ async function seedCirugias() {
 
   const { data: doctor, error: doctorError } = await supabase
     .from('doctores')
-    .select('id, nombre_completo')
-    .or('nombre_completo.ilike.%piloto%,email.ilike.%piloto%')
+    .select('id, alias')
+    .or('alias.ilike.%piloto%,email.ilike.%piloto%')
     .eq('activo', true)
     .single();
 
@@ -142,7 +142,7 @@ async function seedCirugias() {
     process.exit(1);
   }
 
-  console.log(`Doctor: ${doctor.nombre_completo} (ID: ${doctor.id})\n`);
+  console.log(`Doctor: ${doctor.alias} (ID: ${doctor.id})\n`);
 
   const { data: existingCirugias } = await supabase
     .from('agenda_cirugias')

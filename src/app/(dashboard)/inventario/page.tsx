@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch, useDebounce } from '@/hooks';
+import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchInput from '@/components/ui/SearchInput';
@@ -41,28 +42,27 @@ const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScan
 interface LenteAPI {
   id: string;
   folio: string;
-  tipo: string;
-  marca: string;
-  modelo: string;
-  codigo_barras: string;
-  grado_esferico: number;
-  grado_cilindrico: number;
-  eje: number;
-  color: string;
-  material: string;
+  manufacturer: string;
+  product_name: string | null;
+  model: string;
+  sphere: number | null;
+  cylinder: number | null;
+  add_intermediate: number | null;
+  add_near: number | null;
+  nozzle: string | null;
+  serial_number: string | null;
+  expiration_date: string | null;
+  barcode: string | null;
+  barcode_format: string | null;
   stock: number;
   stock_minimo: number;
   precio_compra: number;
   precio_venta: number;
-  lote: string;
-  fecha_caducidad: string;
+  lote: string | null;
   estado: string;
-  notas: string;
-  categoria: string;
-  proveedor: string;
-  potencia_dioptrias: number | null;
-  tipo_lio: string | null;
-  modelo_fabricante: string | null;
+  notas: string | null;
+  categoria: string | null;
+  proveedor: string | null;
 }
 
 interface KardexMovimiento {
@@ -99,6 +99,7 @@ function getEstadoLente(stock: number, minimo: number): string {
 
 export default function InventarioPage() {
   const [page, setPage] = useState(1);
+  const { user } = useUser();
   const { data: lentes, loading, error, refetch, total, page: currentPage } = useFetch<LenteAPI>('/api/inventario', { page: String(page), pageSize: '15' });
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -129,29 +130,35 @@ export default function InventarioPage() {
   const debouncedSearch = useDebounce(search);
 
   const categorias = useMemo(() => {
-    const unique = [...new Set(lentes.map((l) => l.categoria).filter(Boolean))];
+    const unique = [...new Set(lentes.map((l) => l.categoria).filter((c): c is string => Boolean(c)))];
     return ['Todos', ...unique];
   }, [lentes]);
 
   const proveedores = useMemo(() => {
-    const unique = [...new Set(lentes.map((l) => l.proveedor).filter(Boolean))];
+    const unique = [...new Set(lentes.map((l) => l.proveedor).filter((p): p is string => Boolean(p)))];
     return ['Todos', ...unique];
   }, [lentes]);
 
   const filtered = useMemo(() => {
     const term = debouncedSearch.toLowerCase();
     return lentes.filter((l) => {
-      const matchesSearch = !term || l.folio?.toLowerCase().includes(term) || l.marca.toLowerCase().includes(term) || l.modelo.toLowerCase().includes(term) || l.codigo_barras?.toLowerCase().includes(term);
+      const matchesSearch = !term || 
+        l.folio?.toLowerCase().includes(term) || 
+        l.manufacturer.toLowerCase().includes(term) || 
+        l.product_name?.toLowerCase().includes(term) || 
+        l.model.toLowerCase().includes(term) || 
+        l.barcode?.toLowerCase().includes(term) ||
+        l.serial_number?.toLowerCase().includes(term);
       const matchesCategoria = filterCategoria === 'Todos' || l.categoria === filterCategoria;
       const matchesProveedor = filterProveedor === 'Todos' || l.proveedor === filterProveedor;
-      const matchesTipo = filterTipo === 'Todos' || l.tipo === filterTipo;
+      // Note: tipo is no longer in the schema; all are intraocular now
       let matchesStock = true;
       if (filterStock === 'Suficiente') matchesStock = l.stock >= l.stock_minimo;
       else if (filterStock === 'Bajo') matchesStock = l.stock > 0 && l.stock < l.stock_minimo;
       else if (filterStock === 'Sin Stock') matchesStock = l.stock === 0;
-      return matchesSearch && matchesCategoria && matchesProveedor && matchesStock && matchesTipo;
+      return matchesSearch && matchesCategoria && matchesProveedor && matchesStock;
     });
-  }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock, filterTipo]);
+  }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock]);
 
   const stats = useMemo(() => {
     const conStock = lentes.filter((l) => l.stock > 0).length;
@@ -241,7 +248,7 @@ export default function InventarioPage() {
 
   async function openKardex(lente: LenteAPI) {
     setKardexItemId(lente.id);
-    setKardexItemName(`${lente.marca} ${lente.modelo}`);
+    setKardexItemName(`${lente.manufacturer} ${lente.model}`);
     setKardexLoading(true);
     setKardexData([]);
     try {
@@ -255,14 +262,21 @@ export default function InventarioPage() {
     }
   }
 
+  // Coincide con el RBAC de /api/inventario: crear puede admin/recepcionista/doctor;
+  // ajustar stock, editar y eliminar siguen siendo solo admin/recepcionista.
+  const puedeEscribir = user?.rol === 'admin' || user?.rol === 'recepcionista';
+  const puedeCrear = puedeEscribir || user?.rol === 'doctor';
+
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-3">
       <button onClick={() => setShowScanner(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
         <Camera className="h-4 w-4" /> ESCANEAR
       </button>
-      <Link href="/inventario/nueva" className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-        <PlusIcon className="h-4 w-4" /> Nuevo Ítem
-      </Link>
+      {puedeCrear && (
+        <Link href="/inventario/nueva" className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
+          <PlusIcon className="h-4 w-4" /> Nuevo Ítem
+        </Link>
+      )}
     </div>
   );
 
@@ -292,7 +306,6 @@ export default function InventarioPage() {
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
           <FilterSelect value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
           <FilterSelect value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
-          <FilterSelect value={filterTipo} onChange={setFilterTipo} options={['Todos', 'LENTE_VISION', 'LENTE_INTRAOCULAR']} />
         </div>
       </div>
 
@@ -331,12 +344,12 @@ export default function InventarioPage() {
                     <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold', sinStock ? 'bg-red-50 text-red-600' : stockBajo ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700')}>
                       {lente.folio || lente.id.slice(0, 8)}
                     </span>
-                    <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase', lente.tipo === 'LENTE_INTRAOCULAR' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600')}>
-                      {lente.tipo === 'LENTE_INTRAOCULAR' ? 'LIO' : 'VISIÓN'}
+                    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase bg-purple-50 text-purple-600">
+                      LIO
                     </span>
                     <div>
-                      <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{lente.marca} {lente.modelo}</h3>
-                      <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{lente.categoria || 'Sin categoria'} {lente.color ? `\u00b7 ${lente.color}` : ''}</p>
+                      <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{lente.manufacturer} {lente.model}</h3>
+                      <p className="text-xs text-gray-400 dark:text-[#71767B]">{lente.categoria || 'Sin categoria'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -350,21 +363,19 @@ export default function InventarioPage() {
 
                 <div className="border-t border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/30 dark:bg-[#202327]/30 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-                    {(lente.tipo === 'LENTE_INTRAOCULAR' ? [
-                      { label: 'Potencia', value: lente.potencia_dioptrias?.toString() || '—' },
-                      { label: 'Tipo LIO', value: lente.tipo_lio || '—' },
-                      { label: 'Modelo', value: lente.modelo_fabricante || '—' },
-                    ] : [
-                      { label: 'Esf\u00e9rico (SE)', value: lente.grado_esferico?.toString() || '—' },
-                      { label: 'Cil\u00edndrico (CYL)', value: lente.grado_cilindrico?.toString() || '—' },
-                      { label: 'Eje', value: lente.eje ? `${lente.eje}\u00b0` : '—' },
-                      { label: 'Material', value: lente.material || '—' },
-                    ] as Array<{ label: string; value: string; className?: string }>).concat([
-                      { label: 'Stock Actual', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900 dark:text-[#E7E9EA]' },
+                    {[
+                      { label: 'Esfera (D)', value: lente.sphere?.toString() || '—' },
+                      { label: 'Cilindro (D)', value: lente.cylinder?.toString() || '—' },
+                      { label: 'ADD Int (D)', value: lente.add_intermediate?.toString() || '—' },
+                      { label: 'ADD Cerc (D)', value: lente.add_near?.toString() || '—' },
+                      { label: 'Boquilla', value: lente.nozzle || '—' },
+                      { label: 'N\u00b0 Serie', value: lente.serial_number || '—' },
+                      { label: 'Caducidad', value: lente.expiration_date || '—' },
+                      { label: 'Stock', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900 dark:text-[#E7E9EA]' },
                       { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500 dark:text-[#71767B]' },
-                    ]).map((item) => (
+                    ].map((item) => (
                       <div key={item.label} className="rounded-lg bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] px-4 py-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{item.label}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{item.label}</span>
                         <p className={cn('mt-1 text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]', item.className)}>{item.value}</p>
                       </div>
                     ))}
@@ -373,22 +384,30 @@ export default function InventarioPage() {
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-[#71767B]">
+                    <span>Fabricante: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.manufacturer}</span></span>
+                    <span>Producto: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.product_name || '\u2014'}</span></span>
+                    <span>Modelo: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.model}</span></span>
                     <span>Proveedor: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.proveedor || '\u2014'}</span></span>
-                    <span>Caducidad: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.fecha_caducidad || '\u2014'}</span></span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => openKardex(lente)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
                       <History className="h-3 w-3" /> <span className="hidden sm:inline">Kardex</span>
                     </button>
-                    <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                      <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
-                    </button>
-                    <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                      <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
-                    </Link>
-                    <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-[#1D1F23] transition-colors">
-                      <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">Eliminar</span>
-                    </button>
+                    {puedeEscribir && (
+                      <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                        <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
+                      </button>
+                    )}
+                    {puedeEscribir && (
+                      <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                        <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
+                      </Link>
+                    )}
+                    {puedeEscribir && (
+                      <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-[#1D1F23] transition-colors">
+                        <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">Eliminar</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -482,12 +501,16 @@ export default function InventarioPage() {
               <span className="text-sm font-extrabold text-primary-700">Lente encontrado</span>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Marca:</span> <span className="font-bold">{scanResult.marca}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Modelo:</span> <span className="font-bold">{scanResult.modelo}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">SE:</span> <span className="font-bold">{scanResult.grado_esferico || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">CYL:</span> <span className="font-bold">{scanResult.grado_cilindrico || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{scanResult.stock} pzas</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Fabricante:</span> <span className="font-bold">{scanResult.manufacturer}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Producto:</span> <span className="font-bold">{scanResult.product_name || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Modelo:</span> <span className="font-bold">{scanResult.model}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Esfera:</span> <span className="font-bold">{scanResult.sphere?.toString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Cilindro:</span> <span className="font-bold">{scanResult.cylinder?.toString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">ADD Int:</span> <span className="font-bold">{scanResult.add_intermediate?.toString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">ADD Cerc:</span> <span className="font-bold">{scanResult.add_near?.toString() || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">N\u00b0 Serie:</span> <span className="font-bold">{scanResult.serial_number || '\u2014'}</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{scanResult.stock} pzas</span></div>
+              <div><span className="text-gray-400 dark:text-[#71767B]">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
             </div>
             <div className="flex gap-2 pt-2">
               <Link href={`/inventario/${scanResult.id}/editar`} onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); }} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors text-center">
@@ -512,7 +535,7 @@ export default function InventarioPage() {
             <div className="space-y-4">
               <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA] text-center">Ajustar Stock</h3>
               <div className="rounded-lg bg-gray-50 dark:bg-[#202327] p-3 text-center">
-                <span className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{lente.marca} {lente.modelo}</span>
+                <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{lente.manufacturer} {lente.model}</span>
                 <p className="text-2xl font-extrabold text-gray-900 dark:text-[#E7E9EA] mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
               </div>
               <div className="flex items-center justify-center gap-4">

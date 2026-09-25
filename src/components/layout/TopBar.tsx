@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -162,6 +162,8 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preferencias: { modo_focus: next } }),
       });
+      // Notifica al resto de la UI (nav móvil, vistas) que el modo focus cambió
+      window.dispatchEvent(new CustomEvent("modo-focus-changed", { detail: next }));
     } catch {
       setModoFocus(!next);
     }
@@ -274,13 +276,13 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   );
 
   return (
-    <header className="sticky top-0 z-30 bg-white dark:bg-black border-b border-gray-200 dark:border-[#2F3336] px-4 sm:px-6 py-4">
-      <div className="flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 bg-white dark:bg-black border-b border-gray-200 dark:border-[#2F3336] h-[72px] px-4 sm:px-6 flex items-center">
+      <div className="flex items-center justify-between gap-4 w-full">
         <div className="flex items-center gap-3 flex-1">
-          {onMenuToggle && user?.rol !== "doctor" && (
+          {onMenuToggle && user?.rol !== "doctor" && !modoFocus && (
             <button
               onClick={onMenuToggle}
-              className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+              className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#202327] rounded-md"
               aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
@@ -392,7 +394,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           <div ref={notifRef} className="relative">
             <button
               onClick={toggleNotifPanel}
-              className="relative p-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+              className="relative p-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#202327] rounded-md"
               aria-label="Notificaciones"
             >
               <Bell className="w-5 h-5" />
@@ -404,8 +406,8 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-black border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-black border border-gray-200 dark:border-[#2F3336] rounded-lg shadow-lg z-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
                   <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                     Notificaciones
                   </span>
@@ -440,7 +442,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                       <button
                         key={n.id}
                         onClick={() => handleNotifClick(n)}
-                        className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 ${!n.leido ? "bg-primary-50/30" : ""}`}
+                        className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#202327] transition-colors border-b border-gray-50 dark:border-[#2F3336] ${!n.leido ? "bg-primary-50/30" : ""}`}
                       >
                         <span
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${notifColors[n.tipo] ?? notifColors.info}`}
@@ -523,7 +525,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                       </p>
                     </div>
                     <div
-                      className={`w-8 h-4.5 rounded-full transition-colors relative ${modoFocus ? "bg-primary-500" : "bg-gray-300 dark:bg-gray-600"}`}
+                      className={`w-8 h-4.5 rounded-full transition-colors relative ${modoFocus ? "bg-primary-500" : "bg-gray-300 dark:bg-[#2F3336]"}`}
                     >
                       <div
                         className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${modoFocus ? "left-[18px]" : "left-0.5"}`}

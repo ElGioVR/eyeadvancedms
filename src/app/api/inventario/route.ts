@@ -24,28 +24,26 @@ async function crearNotificacion(
 }
 
 const lenteBaseSchema = z.object({
-  marca: z.string().min(1).max(255),
-  modelo: z.string().min(1).max(255),
-  codigo_barras: z.string().max(100).optional().nullable(),
-  grado_esferico: z.number().min(-999.99).max(999.99).optional().nullable(),
-  grado_cilindrico: z.number().min(-999.99).max(999.99).optional().nullable(),
-  eje: z.number().int().min(0).max(180).optional().nullable(),
-  color: z.string().max(100).optional().nullable(),
-  material: z.string().max(100).optional().nullable(),
+  manufacturer: z.string().min(1).max(255),
+  product_name: z.string().max(255).optional().nullable(),
+  model: z.string().min(1).max(255),
+  sphere: z.number().min(-999.99).max(999.99).optional().nullable(),
+  cylinder: z.number().min(-999.99).max(999.99).optional().nullable(),
+  add_intermediate: z.number().min(0).max(20).optional().nullable(),
+  add_near: z.number().min(0).max(20).optional().nullable(),
+  nozzle: z.string().max(10).optional().nullable(),
+  serial_number: z.string().max(100).optional().nullable(),
+  expiration_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  barcode: z.string().max(100).optional().nullable(),
+  barcode_format: z.string().max(20).optional().nullable(),
   stock: z.number().int().min(0).optional(),
   stock_minimo: z.number().int().min(0).optional(),
   precio_compra: z.number().min(0).max(99999999.99).optional().nullable(),
   precio_venta: z.number().min(0).max(99999999.99).optional().nullable(),
   lote: z.string().max(100).optional().nullable(),
-  fecha_caducidad: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  estado: z.enum(['DISPONIBLE', 'RESERVADO', 'OCUPADO', 'DANADO', 'VENCIDO']).optional(),
   notas: z.string().optional().nullable(),
   categoria_id: z.string().uuid().optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
-  tipo: z.enum(['LENTE_VISION', 'LENTE_INTRAOCULAR']).optional(),
-  potencia_dioptrias: z.number().optional().nullable(),
-  tipo_lio: z.enum(['MONOFOCAL', 'MULTIFOCAL', 'TORICA', 'EDOF', 'OTRO']).optional().nullable(),
-  modelo_fabricante: z.string().max(255).optional().nullable(),
 }).strict();
 
 const lenteCreateSchema = lenteBaseSchema;
@@ -57,31 +55,28 @@ const lenteUpdateSchema = z.object({
 function mapLente(l: any) {
   return {
     id: l.id,
-    folio: l.folio || '',
-    marca: l.marca,
-    modelo: l.modelo,
-    codigo_barras: l.codigo_barras,
-    grado_esferico: l.grado_esferico,
-    grado_cilindrico: l.grado_cilindrico,
-    eje: l.eje,
-    color: l.color,
-    material: l.material,
+    manufacturer: l.manufacturer,
+    product_name: l.product_name,
+    model: l.model,
+    sphere: l.sphere,
+    cylinder: l.cylinder,
+    add_intermediate: l.add_intermediate,
+    add_near: l.add_near,
+    nozzle: l.nozzle,
+    serial_number: l.serial_number,
+    expiration_date: l.expiration_date,
+    barcode: l.barcode,
+    barcode_format: l.barcode_format,
     stock: l.stock,
     stock_minimo: l.stock_minimo,
     precio_compra: l.precio_compra,
     precio_venta: l.precio_venta,
     lote: l.lote,
-    fecha_caducidad: l.fecha_caducidad,
-    estado: l.estado,
     notas: l.notas,
     categoria: (l.categorias_lentes as any)?.nombre || '',
     proveedor: (l.proveedores as any)?.nombre || '',
     categoria_id: l.categoria_id,
     proveedor_id: l.proveedor_id,
-    tipo: l.tipo || 'LENTE_VISION',
-    potencia_dioptrias: l.potencia_dioptrias,
-    tipo_lio: l.tipo_lio,
-    modelo_fabricante: l.modelo_fabricante,
     created_at: l.created_at,
   };
 }
@@ -146,7 +141,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  // Alta de ítem: también el doctor (solo inventario). PATCH/DELETE siguen
+  // restringidos a admin/recepcionista.
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
@@ -175,28 +172,26 @@ export async function POST(request: Request) {
 
   const insert: Record<string, any> = {
     folio,
-    marca: data.marca,
-    modelo: data.modelo,
-    codigo_barras: data.codigo_barras ?? null,
-    grado_esferico: data.grado_esferico ?? null,
-    grado_cilindrico: data.grado_cilindrico ?? null,
-    eje: data.eje ?? null,
-    color: data.color ?? null,
-    material: data.material ?? null,
+    manufacturer: data.manufacturer,
+    product_name: data.product_name ?? null,
+    model: data.model,
+    sphere: data.sphere ?? null,
+    cylinder: data.cylinder ?? null,
+    add_intermediate: data.add_intermediate ?? null,
+    add_near: data.add_near ?? null,
+    nozzle: data.nozzle ?? null,
+    serial_number: data.serial_number ?? null,
+    expiration_date: data.expiration_date ?? null,
+    barcode: data.barcode ?? null,
+    barcode_format: data.barcode_format ?? null,
     stock: data.stock ?? 0,
     stock_minimo: data.stock_minimo ?? 5,
     precio_compra: data.precio_compra ?? null,
     precio_venta: data.precio_venta ?? null,
     lote: data.lote ?? null,
-    fecha_caducidad: data.fecha_caducidad ?? null,
-    estado: data.estado ?? 'DISPONIBLE',
     notas: data.notas ?? null,
     categoria_id: data.categoria_id ?? null,
     proveedor_id: data.proveedor_id ?? null,
-    tipo: data.tipo ?? 'LENTE_VISION',
-    potencia_dioptrias: data.potencia_dioptrias ?? null,
-    tipo_lio: data.tipo_lio ?? null,
-    modelo_fabricante: data.modelo_fabricante ?? null,
   };
 
   const { data: lente, error } = await supabase
@@ -238,10 +233,13 @@ export async function PATCH(request: Request) {
 
   const cleanUpdates: Record<string, any> = {};
   const allowed = [
-    'marca', 'modelo', 'codigo_barras', 'grado_esferico', 'grado_cilindrico',
-    'eje', 'color', 'material', 'stock', 'stock_minimo', 'precio_compra',
-    'precio_venta', 'lote', 'fecha_caducidad', 'estado', 'notas',
-    'categoria_id', 'proveedor_id', 'tipo', 'potencia_dioptrias', 'tipo_lio', 'modelo_fabricante',
+    'manufacturer', 'product_name', 'model', 'sphere', 'cylinder',
+    'add_intermediate', 'add_near', 'nozzle', 'serial_number',
+    'expiration_date', 'barcode', 'barcode_format',
+    // PATCH permite: 'manufacturer', 'product_name', 'model', 'sphere', 'cylinder', 'add_intermediate', 'add_near', 'nozzle', 'serial_number', 'expiration_date', 'barcode', 'barcode_format'
+    'stock', 'stock_minimo', 'precio_compra',
+    'precio_venta', 'lote', 'notas',
+    'categoria_id', 'proveedor_id',
   ];
   for (const key of allowed) {
     if (updates[key as keyof typeof updates] !== undefined) {

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -41,10 +43,10 @@ export async function GET(request: Request) {
 
   if (aseguranzaId) query = query.eq('aseguranza_id', aseguranzaId);
   if (tipo) query = query.eq('tipo', tipo);
-  if (search) query = query.ilike('nombre', `%${search}%`);
+  if (search) query = query.ilike('nombre', `%${search.replace(/[%_]/g, (c) => '\\' + c)}%`);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
 
   return NextResponse.json({ data });
 }
@@ -81,7 +83,7 @@ export async function POST(request: Request) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Este servicio ya existe para esta aseguradora' }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
@@ -114,7 +116,7 @@ export async function PATCH(request: Request) {
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('aseguranza_servicios').update(updateData).eq('id', id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

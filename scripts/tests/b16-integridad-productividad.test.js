@@ -47,6 +47,7 @@ const esperados = {
   'test:b14': 'b14-endpoint-productividad.test.js',
   'test:b15': 'b15-ui-productividad.test.js',
   'test:b16': 'b16-integridad-productividad.test.js',
+  'test:b17': 'b17-honorarios-liga.test.js',
 };
 
 for (const [key, file] of Object.entries(esperados)) {

@@ -86,7 +86,25 @@ assertFile('src/lib/productividad/cirugia.ts');
 assertFile('src/lib/productividad/resumen.ts');
 assertContains('src/lib/productividad/index.ts', ["./cirugia", "./resumen"], 'index re-exporta cirugia+resumen');
 assertContains('src/lib/productividad/cirugia.ts', ['@/lib/productividad-cirugia'], 'cirugia re-exporta motor');
-assertContains('src/lib/productividad/resumen.ts', ['productividad_honorarios_resumen', 'listarResumenHonorarios'], 'resumen → RPC');
+assertContains('src/lib/productividad/resumen.ts', ['listarResumenHonorarios', 'doctor_id'], 'resumen → listarResumenHonorarios con filtro doctor');
+assertContains('src/lib/productividad/liga.ts', ['listarHonorariosLiga', 'getPeriodRange'], 'liga honorarios');
+assertFile('src/migrations/1800000000260-AddHonorariosSimplificados.ts');
+assertContains(
+  'scripts/run-migrations.js',
+  ['1800000000260-AddHonorariosSimplificados.ts'],
+  'MIGRATION_ORDER registra 260'
+);
+assertFile('src/migrations/1800000000262-WidenMonedaHonorarios.ts');
+assertContains(
+  'src/migrations/1800000000262-WidenMonedaHonorarios.ts',
+  ['eventos_honorario', 'VARCHAR(10)', 'MXN', 'information_schema.tables', 'widenMoneda'],
+  'mig 262 moneda ancho + guard existence'
+);
+assertContains(
+  'scripts/run-migrations.js',
+  ['1800000000262-WidenMonedaHonorarios.ts'],
+  'MIGRATION_ORDER registra 262'
+);
 
 assertContains(
   'src/app/api/cirugias/route.ts',

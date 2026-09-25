@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Upload, Loader2, CheckCircle, X, ImageIcon, Circle, SwitchCamera } from 'lucide-react';
 import { parseLensLabel, ParsedLabel } from '@/lib/parseLabel';
+import { preprocessLabelImage } from '@/lib/preprocessImage';
+import { decodeBarcodeFromFile } from '@/lib/barcodeFile';
 
 interface LabelScannerProps {
   onParsed: (data: ParsedLabel) => void;
@@ -127,34 +129,50 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
     e.target.value = '';
   }
 
-  // Process image with OCR
+  // Process image with OCR + decodificación del código de barras
   async function processImage(file: File, previewUrl: string) {
     setRawText('');
     setParsed(null);
     setError('');
 
     try {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('spa+eng', 1, { logger: () => {} });
+      // 1) Preprocesado (escala de grises + autocontraste + reducción)
+      const imagen = await preprocessLabelImage(file);
 
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
+      // 2) OCR y código de barras en paralelo sobre la misma foto
+      const [codigo, texto] = await Promise.all([
+        decodeBarcodeFromFile(imagen),
+        recoerTexto(imagen),
+      ]);
 
-      const text = data.text || '';
-      setRawText(text);
+      setRawText(texto);
 
-      if (!text.trim()) {
-        setError('No se detecto texto en la imagen. Intenta con una foto mas clara.');
+      if (!texto.trim() && !codigo) {
+        setError('No se detecto texto ni codigo de barras en la imagen. Intenta con una foto mas clara.');
         setView('choose');
         return;
       }
 
-      const result = parseLensLabel(text);
+      const result = parseLensLabel(texto, {
+        barcode: codigo?.texto ?? '',
+        barcodeFormat: codigo?.formato ?? '',
+      });
       setParsed(result);
       setView('results');
     } catch {
       setError('Error al procesar la imagen. Intenta de nuevo.');
       setView('choose');
+    }
+  }
+
+  async function recoerTexto(imagen: File): Promise<string> {
+    const { createWorker } = await import('tesseract.js');
+    const worker = await createWorker('spa+eng', 1, { logger: () => {} });
+    try {
+      const { data } = await worker.recognize(imagen);
+      return data.text || '';
+    } finally {
+      await worker.terminate();
     }
   }
 
@@ -297,51 +315,59 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
           </div>
         )}
 
-        {parsed && (
-          <>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-emerald-600" />
-                <span className="text-sm font-extrabold text-emerald-700">Datos detectados</span>
-              </div>
-              <button onClick={handleReset} className="text-xs font-bold text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]">Foto nueva</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {[
-                { label: 'Marca', value: parsed.marca },
-                { label: 'Modelo', value: parsed.modelo },
-                { label: 'Esf\u00e9rico', value: parsed.esferico },
-                { label: 'Cil\u00edndrico', value: parsed.cilindrico },
-                { label: 'Eje', value: parsed.eje },
-                { label: 'Material', value: parsed.material },
-                { label: 'Color', value: parsed.color },
-                { label: 'C\u00f3digo Barras', value: parsed.codigo_barras },
-                { label: 'Lote', value: parsed.lote },
-                { label: 'Caducidad', value: parsed.caducidad },
-                { label: 'Categor\u00eda', value: parsed.categoria },
-              ].filter((f) => f.value).map((f) => (
-                <div key={f.label} className="rounded-lg bg-gray-50 dark:bg-[#202327] px-3 py-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{f.label}</span>
-                  <p className="font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{f.value}</p>
+{parsed && (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm font-extrabold text-emerald-700">Etiqueta detectada</span>
+                  <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-primary-700">
+                    Lente intraocular
+                  </span>
                 </div>
-              ))}
-            </div>
+                <button onClick={handleReset} className="text-xs font-bold text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]">Foto nueva</button>
+              </div>
 
-            <details className="group">
-              <summary className="text-xs font-bold text-gray-400 dark:text-[#71767B] cursor-pointer hover:text-gray-600 dark:hover:text-[#E7E9EA]">
-                Ver texto detectado
-              </summary>
-              <p className="mt-2 text-xs text-gray-500 dark:text-[#71767B] bg-gray-50 dark:bg-[#202327] rounded-lg p-3 max-h-24 overflow-y-auto">
-                {rawText}
-              </p>
-            </details>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { label: 'Fabricante', value: parsed.manufacturer },
+                  { label: 'Producto', value: parsed.product_name },
+                  { label: 'Modelo', value: parsed.model },
+                  { label: 'Esfera (D)', value: parsed.sphere },
+                  { label: 'Cilindro (D)', value: parsed.cylinder },
+                  { label: 'Nozzle', value: parsed.nozzle },
+                  { label: 'ADD Intermedia (D)', value: parsed.add_intermediate },
+                  { label: 'ADD Cercana (D)', value: parsed.add_near },
+                  { label: 'Numero de serie', value: parsed.serial_number },
+                  { label: 'Fecha Caducidad', value: parsed.expiration_date },
+                  {
+                    label: 'Código Barras',
+                    value: parsed.barcode
+                      ? `${parsed.barcode}${parsed.barcode_format ? ` (${parsed.barcode_format})` : ''}`
+                      : '',
+                  },
+                ].filter((f) => f.value).map((f) => (
+                  <div key={f.label} className="rounded-lg bg-gray-50 dark:bg-[#202327] px-3 py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{f.label}</span>
+                    <p className="font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{f.value}</p>
+                  </div>
+                ))}
+              </div>
 
-            <button onClick={handleApply} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors inline-flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4" /> Aplicar Datos al Formulario
-            </button>
-          </>
-        )}
+              <details className="group">
+                <summary className="text-xs font-bold text-gray-400 dark:text-[#71767B] cursor-pointer hover:text-gray-600 dark:hover:text-[#E7E9EA]">
+                  Ver texto detectado
+                </summary>
+                <p className="mt-2 text-xs text-gray-500 dark:text-[#71767B] bg-gray-50 dark:bg-[#202327] rounded-lg p-3 max-h-24 overflow-y-auto">
+                  {rawText}
+                </p>
+              </details>
+
+              <button onClick={handleApply} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors inline-flex items-center justify-center gap-2">
+                <CheckCircle className="h-4 w-4" /> Aplicar Datos al Formulario
+              </button>
+            </>
+          )}
       </div>
     </div>
   );

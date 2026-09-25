@@ -19,8 +19,8 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, subtitle, action, backLink }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex items-start justify-between">
-      <div>
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
         {backLink && (
           <Link
             href={backLink.href}
@@ -31,10 +31,10 @@ export default function PageHeader({ title, subtitle, action, backLink }: PageHe
             {backLink.label}
           </Link>
         )}
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-[#E7E9EA]">{title}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-[#E7E9EA] break-words">{title}</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-[#71767B]">{subtitle}</p>
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="w-full sm:w-auto">{action}</div>}
     </div>
   );
 }

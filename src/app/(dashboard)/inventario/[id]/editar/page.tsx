@@ -7,53 +7,51 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import LenteForm from '@/components/inventario/LenteForm';
 
 interface LenteData {
-  id: string;
-  tipo: string;
-  marca: string;
-  modelo: string;
-  categoria_id: string;
-  proveedor_id: string;
-  codigo_barras: string;
-  grado_esferico: string;
-  grado_cilindrico: string;
-  eje: string;
-  material: string;
-  color: string;
+  id?: string;
+  manufacturer: string;
+  product_name: string;
+  model: string;
+  sphere: string;
+  cylinder: string;
+  add_intermediate: string;
+  add_near: string;
+  nozzle: string;
+  serial_number: string;
+  expiration_date: string;
+  barcode: string;
+  barcode_format: string;
   stock: string;
   stock_minimo: string;
   precio_compra: string;
   precio_venta: string;
   lote: string;
-  fecha_caducidad: string;
   notas: string;
-  potencia_dioptrias: string;
-  tipo_lio: string;
-  modelo_fabricante: string;
+  categoria_id: string;
+  proveedor_id: string;
 }
 
 interface RawLente {
   id: string;
-  tipo: string;
-  marca: string;
-  modelo: string;
-  categoria_id: string | null;
-  proveedor_id: string | null;
-  codigo_barras: string | null;
-  grado_esferico: number | null;
-  grado_cilindrico: number | null;
-  eje: number | null;
-  material: string | null;
-  color: string | null;
+  manufacturer: string;
+  product_name: string;
+  model: string;
+  sphere: number | null;
+  cylinder: number | null;
+  add_intermediate: number | null;
+  add_near: number | null;
+  nozzle: string | null;
+  serial_number: string | null;
+  expiration_date: string | null;
+  barcode: string | null;
+  barcode_format: string | null;
   stock: number;
   stock_minimo: number;
   precio_compra: number | null;
   precio_venta: number | null;
   lote: string | null;
-  fecha_caducidad: string | null;
   notas: string | null;
-  potencia_dioptrias: number | null;
-  tipo_lio: string | null;
-  modelo_fabricante: string | null;
+  categoria_id: string | null;
+  proveedor_id: string | null;
 }
 
 export default function EditarLentePage() {
@@ -72,27 +70,26 @@ export default function EditarLentePage() {
         const found: RawLente = await res.json();
         setLente({
           id: found.id,
-          tipo: found.tipo || 'LENTE_VISION',
-          marca: found.marca || '',
-          modelo: found.modelo || '',
-          categoria_id: found.categoria_id || '',
-          proveedor_id: found.proveedor_id || '',
-          codigo_barras: found.codigo_barras || '',
-          grado_esferico: found.grado_esferico?.toString() || '',
-          grado_cilindrico: found.grado_cilindrico?.toString() || '',
-          eje: found.eje?.toString() || '',
-          material: found.material || '',
-          color: found.color || '',
+          manufacturer: found.manufacturer || '',
+          product_name: found.product_name || '',
+          model: found.model || '',
+          sphere: found.sphere?.toString() || '',
+          cylinder: found.cylinder?.toString() || '',
+          add_intermediate: found.add_intermediate?.toString() || '',
+          add_near: found.add_near?.toString() || '',
+          nozzle: found.nozzle || '',
+          serial_number: found.serial_number || '',
+          expiration_date: found.expiration_date || '',
+          barcode: found.barcode || '',
+          barcode_format: found.barcode_format || '',
           stock: found.stock?.toString() || '0',
           stock_minimo: found.stock_minimo?.toString() || '5',
           precio_compra: found.precio_compra?.toString() || '',
           precio_venta: found.precio_venta?.toString() || '',
           lote: found.lote || '',
-          fecha_caducidad: found.fecha_caducidad || '',
           notas: found.notas || '',
-          potencia_dioptrias: found.potencia_dioptrias?.toString() || '',
-          tipo_lio: found.tipo_lio || '',
-          modelo_fabricante: found.modelo_fabricante || '',
+          categoria_id: found.categoria_id || '',
+          proveedor_id: found.proveedor_id || '',
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar');

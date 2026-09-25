@@ -1,14 +1,101 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchInput from '@/components/ui/SearchInput';
 import LIOSelector from '@/components/cirugia/LIOSelector';
 import { useToast } from '@/components/ui/Toast';
+
+// Custom Skeleton for Cirugía Form - matches actual form layout
+function CirugiaFormSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      {/* PageHeader skeleton */}
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-48 bg-gray-100 dark:bg-[#202327] rounded" />
+        <div className="h-4 w-32 bg-gray-100 dark:bg-[#202327] rounded" />
+      </div>
+      
+      {/* Section 1: Paciente */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="h-8 w-full bg-gray-100 dark:bg-[#202327] rounded mb-3" />
+        <div className="h-8 w-full bg-gray-100 dark:bg-[#202327] rounded mb-3" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+        </div>
+      </div>
+      
+      {/* Section 2: Expediente */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-40 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+        </div>
+      </div>
+      
+      {/* Section 3: Datos de cirugía */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-36 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+        </div>
+      </div>
+      
+      {/* Section 4: Equipo */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 h-10 bg-gray-100 dark:bg-[#202327] rounded px-3" />
+          <div className="flex items-center gap-3 h-10 bg-gray-100 dark:bg-[#202327] rounded px-3" />
+        </div>
+      </div>
+      
+      {/* Section 5: Recursos / Inventario */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+        </div>
+      </div>
+      
+      {/* Section 6: Archivos / Notas */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+        <div className="h-5 w-24 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+        <div className="h-32 bg-gray-100 dark:bg-[#202327] rounded" />
+        <div className="mt-3 h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+      </div>
+      
+      {/* Actions skeleton */}
+      <div className="flex items-center justify-end gap-3 pt-4">
+        <div className="h-10 w-24 bg-gray-100 dark:bg-[#202327] rounded" />
+        <div className="h-10 w-24 bg-gray-100 dark:bg-[#202327] rounded" />
+      </div>
+    </div>
+  );
+}
 
 interface Paciente {
   id: string;
@@ -16,6 +103,44 @@ interface Paciente {
   telefono?: string | null;
   email?: string | null;
   aseguranza_id?: string | null;
+  ojo_operado?: OjoOperado;
+  cirugias_previas?: number;
+}
+
+type OjoOperado = 'sin_cirugias' | 'OD' | 'OI' | 'ambos' | 'desconocido';
+
+type FiltroOjo = 'todos' | 'primer' | 'segundo';
+
+interface HistorialOjo {
+  total: number;
+  od: boolean;
+  oi: boolean;
+  desconocido: boolean;
+}
+
+const ETIQUETA_OJO: Record<OjoOperado, { texto: string; clase: string }> = {
+  sin_cirugias: { texto: 'Sin cirugías previas', clase: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-[#9BA1A6]' },
+  OD: { texto: 'OD ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  OI: { texto: 'OI ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  ambos: { texto: 'Ambos ojos operados', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
+  desconocido: { texto: 'Ojo sin especificar', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
+};
+
+const FILTROS_OJO: Array<{ id: FiltroOjo; label: string }> = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'primer', label: 'Primer ojo' },
+  { id: 'segundo', label: 'Segundo ojo' },
+];
+
+function etiquetaOjo(p: Paciente): { texto: string; clase: string } | null {
+  if (!p.ojo_operado) return null;
+  if (p.ojo_operado === 'sin_cirugias') {
+    return { texto: 'Primer ojo', clase: ETIQUETA_OJO.sin_cirugias.clase };
+  }
+  if (p.ojo_operado === 'ambos') {
+    return { texto: '⚠ Ambos ojos', clase: ETIQUETA_OJO.ambos.clase };
+  }
+  return { texto: ETIQUETA_OJO[p.ojo_operado].texto, clase: ETIQUETA_OJO[p.ojo_operado].clase };
 }
 
 interface Aseguranza {
@@ -99,20 +224,28 @@ function NuevaCirugiaContent() {
   const fechaPrecarga = searchParams.get('fecha');
   const horaPrecarga = searchParams.get('hora');
   const pacientePrecargaId = searchParams.get('paciente_id');
+  const pacienteNombrePrecarga = searchParams.get('paciente_nombre');
+  const procedimientoPrecarga = searchParams.get('procedimiento');
+  const cirujanoIdPrecarga = searchParams.get('cirujano_id');
+  const cirujanoNombrePrecarga = searchParams.get('cirujano_nombre');
 
   // Carga de catálogos
   const [aseguranzas, setAseguranzas] = useState<Aseguranza[]>([]);
   const [doctores, setDoctores] = useState<Doctor[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [recursos, setRecursos] = useState<Recurso[]>([]);
-  const [loadingCatalogos, setLoadingCatalogos] = useState(true);
+  // const [loadingCatalogos, setLoadingCatalogos] = useState(true);
 
   // Paciente
   const [queryPaciente, setQueryPaciente] = useState('');
   const [pacientesResult, setPacientesResult] = useState<Paciente[]>([]);
+  const [buscandoPacientes, setBuscandoPacientes] = useState(false);
   const [mostrarPacientes, setMostrarPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null);
   const [resumenPaciente, setResumenPaciente] = useState<PacienteResumen | null>(null);
+  const [filtroOjo, setFiltroOjo] = useState<FiltroOjo>('todos');
+  const [historialOjo, setHistorialOjo] = useState<HistorialOjo | null>(null);
+  const [avisoOjo, setAvisoOjo] = useState<string | null>(null);
 
   // Servicios (dependen del paciente = origen)
   const [servicios, setServicios] = useState<Servicio[]>([]);
@@ -128,28 +261,73 @@ function NuevaCirugiaContent() {
   const [recursoId, setRecursoId] = useState('');
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [inventarioItemId, setInventarioItemId] = useState<string | null>(null);
+  const [lioManual, setLioManual] = useState(false);
+  const [lioManualMarca, setLioManualMarca] = useState('');
+  const [lioManualModelo, setLioManualModelo] = useState('');
+  const [lioManualPotencia, setLioManualPotencia] = useState('');
+  const [lioManualLote, setLioManualLote] = useState('');
   const [archivos, setArchivos] = useState<ArchivoLocal[]>([]);
   const [notas, setNotas] = useState('');
 
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const [error, setError] = useState<string | null>(null);
 
   // Para auto-fill de procedimiento desde consulta
   const [procedimientoPendiente, setProcedimientoPendiente] = useState<string | null>(null);
+  const [cirujanoPendiente, setCirujanoPendiente] = useState<{ id: string; nombre: string } | null>(null);
+
+// Fast loading: only catalogs block the form; consulta/patient loads in background
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/configuracion/aseguranzas'),
-      fetch('/api/configuracion/doctores'),
-      fetch('/api/cirugias/roles'),
-      fetch('/api/cirugias/recursos'),
-    ])
-      .then(async ([ra, rd, rro, rre]) => {
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const signal = abort.signal;
+
+    let cancelled = false;
+
+    // HARD SAFETY: Force form to render after 10s max, no matter what
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoadingInitial(false);
+      }
+    }, 10000);
+
+    const loadInitialData = async () => {
+      try {
+        // 1. FAST: Load catalogs only (4 parallel) - this is quick
+        const fetchWithTimeout = (url: string, signal: AbortSignal, timeoutMs = 8000) => {
+          const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+          );
+          return Promise.race([fetch(url, { signal }), timeout]);
+        };
+
+        const responses = await Promise.all([
+          fetchWithTimeout('/api/configuracion/aseguranzas', signal),
+          fetchWithTimeout('/api/configuracion/doctores', signal),
+          fetchWithTimeout('/api/cirugias/roles', signal),
+          fetchWithTimeout('/api/cirugias/recursos', signal),
+        ]);
+
+        if (signal.aborted) return;
+
         const errors: string[] = [];
-        const a = ra.ok ? await ra.json() : (errors.push('aseguranzas'), []);
-        const d = rd.ok ? await rd.json() : (errors.push('doctores'), []);
-        const ro = rro.ok ? await rro.json() : (errors.push('roles'), []);
-        const re = rre.ok ? await rre.json() : (errors.push('recursos'), []);
+        const jsons = await Promise.all(
+          responses.map((r, i) => {
+            const names = ['aseguranzas', 'doctores', 'roles', 'recursos'];
+            if (!r.ok) {
+              errors.push(names[i]);
+              return Promise.resolve([]);
+            }
+            return r.json();
+          }),
+        );
+        const [a, d, ro, re] = jsons;
+
+        if (signal.aborted) return;
+
         if (errors.length > 0) {
           toast(`Error al cargar catálogos: ${errors.join(', ')}`, 'error');
         }
@@ -157,84 +335,157 @@ function NuevaCirugiaContent() {
         setDoctores(Array.isArray(d) ? d : []);
         setRoles(Array.isArray(ro) ? ro : []);
         setRecursos(Array.isArray(re) ? re : []);
-      })
-      .catch((err) => {
-        toast(err instanceof Error ? err.message : 'Error al cargar catálogos', 'error');
-      })
-      .finally(() => setLoadingCatalogos(false));
-  }, [toast]);
 
-  const seleccionarPaciente = useCallback((paciente: Paciente) => {
+        // CATALOGS LOADED - Form can now render
+        if (!cancelled) setLoadingInitial(false);
+
+        // 2. BACKGROUND: Load consulta preload data (non-blocking)
+        if (!signal.aborted) {
+          loadConsultaData(signal);
+        }
+
+      } catch (err) {
+        if (signal.aborted || err instanceof DOMException && err.name === 'AbortError') return;
+        if (!cancelled) {
+          toast(err instanceof Error ? err.message : 'Error al cargar catálogos', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInitial(false);
+        }
+      }
+    };
+
+    // Background loading - completely non-blocking
+    const loadConsultaData = async (signal: AbortSignal) => {
+      const hasDirectParams = pacientePrecargaId || procedimientoPrecarga || cirujanoIdPrecarga;
+      if (!consultaPrecargaId && !hasDirectParams) return;
+
+      try {
+        let consultaData = null;
+
+        if (consultaPrecargaId) {
+          const res = await fetch(`/api/consultas/${consultaPrecargaId}`, { signal });
+          if (!res.ok || signal.aborted) return;
+          consultaData = await res.json();
+        }
+
+        // Paciente - priority: direct param > consulta data
+        const pacienteIdDirecto = pacientePrecargaId || consultaData?.consulta?.paciente_id;
+        if (pacienteIdDirecto) {
+          await seleccionarPacienteRef.current?.({
+            id: pacienteIdDirecto,
+            nombre_completo: pacienteNombrePrecarga || consultaData?.consulta?.paciente || 'Paciente',
+          } as Paciente);
+        }
+
+        // Origen
+        if (consultaData?.consulta?.aseguranza_id && !signal.aborted) {
+          setOrigenId(consultaData.consulta.aseguranza_id);
+        }
+
+        // Diagnóstico → notas
+        if (consultaData?.consulta?.diagnostico && !signal.aborted) {
+          setNotas(`Diagnóstico de consulta: ${consultaData.consulta.diagnostico}`);
+        }
+
+        // Procedimiento - priority: direct param > consulta data
+        const proc = procedimientoPrecarga || consultaData?.consulta?.procedimiento;
+        if (proc && !signal.aborted) setProcedimientoPendiente(proc);
+
+        // Cirujano - priority: direct param > consulta doctor
+        const cirujanoId = cirujanoIdPrecarga || consultaData?.consulta?.doctor_id;
+        const cirujanoNombre = cirujanoNombrePrecarga || consultaData?.consulta?.doctor;
+
+        if (cirujanoId && !signal.aborted) {
+          const rolCirujano = rolesRef.current.find((r) => r.clave === 'cirujano');
+          if (rolCirujano) {
+            setParticipantes([{ id: crypto.randomUUID(), medico_id: cirujanoId, rol_id: rolCirujano.id }]);
+            setCirujanoPendiente({ id: cirujanoId, nombre: cirujanoNombre || '' });
+          } else {
+            setCirujanoPendiente({ id: cirujanoId, nombre: cirujanoNombre || '' });
+          }
+        }
+
+      } catch (err) {
+        if (signal.aborted || err instanceof DOMException && err.name === 'AbortError') return;
+        // Silently fail background load - form still works
+      }
+    };
+
+    // Start fast path: catalogs only - store promise to track completion
+    const promise = loadInitialData();
+
+    // Cleanup
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimeout);
+      abortRef.current?.abort();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, consultaPrecargaId, pacientePrecargaId, pacienteNombrePrecarga, procedimientoPrecarga, cirujanoIdPrecarga, cirujanoNombrePrecarga]);
+
+  // Selected function ref - set via layoutEffect to avoid initialization order issues
+  const seleccionarPacienteRef = useRef<((paciente: Paciente) => Promise<unknown>) | null>(null);
+  const rolesRef = useRef<Rol[]>([]);
+  useLayoutEffect(() => {
+    rolesRef.current = roles;
+  }, [roles]);
+
+  const seleccionarPaciente = useCallback(async (paciente: Paciente) => {
     setPacienteSeleccionado(paciente);
     setQueryPaciente(paciente.nombre_completo);
     setMostrarPacientes(false);
     if (paciente.aseguranza_id) setOrigenId(paciente.aseguranza_id);
-    // Cargar resumen del paciente (expediente, última consulta, previas)
-    fetch(`/api/pacientes/${paciente.id}/resumen`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((resumen) => {
-        setResumenPaciente(resumen);
-        const aseguranzaId = resumen?.paciente?.aseguranza_id || resumen?.aseguranza?.id || paciente.aseguranza_id;
-        if (aseguranzaId) setOrigenId(aseguranzaId);
-      })
-      .catch(() => {});
+    setHistorialOjo(null);
+    setAvisoOjo(null);
+    
+    // Return promises so caller can await them
+    const [historialPromise, resumenPromise] = await Promise.all([
+      // Historial de ojos ya operados (primer / segundo ojo)
+      fetch(`/api/cirugias?paciente_id=${encodeURIComponent(paciente.id)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          const previas: Array<{ ojo?: string | null; estado?: string | null }> = Array.isArray(data?.data)
+            ? data.data.filter((c: { estado?: string | null }) => c.estado !== 'cancelada')
+            : [];
+          const h: HistorialOjo = { total: previas.length, od: false, oi: false, desconocido: false };
+          for (const c of previas) {
+            if (c.ojo === 'OD') h.od = true;
+            else if (c.ojo === 'OI') h.oi = true;
+            else if (c.ojo === 'OU') {
+              h.od = true;
+              h.oi = true;
+            } else h.desconocido = true;
+          }
+          setHistorialOjo(h);
+        })
+        .catch(() => setHistorialOjo(null)),
+      
+      // Cargar resumen del paciente (expediente, última consulta, previas)
+      fetch(`/api/pacientes/${paciente.id}/resumen`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((resumen) => {
+          setResumenPaciente(resumen);
+          const aseguranzaId = resumen?.paciente?.aseguranza_id || resumen?.aseguranza?.id || paciente.aseguranza_id;
+          if (aseguranzaId) setOrigenId(aseguranzaId);
+        })
+        .catch(() => {})
+    ]);
+
+return [historialPromise, resumenPromise];
   }, []);
 
-  // Precarga desde consulta (B10)
-  useEffect(() => {
-    if (!consultaPrecargaId) return;
-    fetch(`/api/consultas/${consultaPrecargaId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((consulta) => {
-        if (!consulta) return;
-        if (consulta.paciente_id) {
-          seleccionarPaciente({
-            id: consulta.paciente_id,
-            nombre_completo: consulta.paciente?.nombre_completo || 'Paciente',
-          } as Paciente);
-        }
-        if (consulta.consulta?.aseguranza_id) {
-          setOrigenId(consulta.consulta.aseguranza_id);
-        }
-        if (consulta.consulta?.diagnostico) setNotas(`Diagnóstico de consulta: ${consulta.consulta.diagnostico}`);
-        // Pre-cargar procedimiento para match con catálogo
-        if (consulta.consulta?.procedimiento) {
-          setProcedimientoPendiente(consulta.consulta.procedimiento);
-        }
-        // Pre-cargar doctor como cirujano
-        if (consulta.doctor_id && roles.length > 0) {
-          const rolCirujano = roles.find((r) => r.clave === 'cirujano');
-          if (rolCirujano) {
-            setParticipantes([{ id: crypto.randomUUID(), medico_id: consulta.doctor_id, rol_id: rolCirujano.id }]);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [consultaPrecargaId, seleccionarPaciente, roles]);
+  // Set ref before first paint (before useEffect runs)
+  useLayoutEffect(() => {
+    seleccionarPacienteRef.current = seleccionarPaciente;
+  }, [seleccionarPaciente]);
 
   // Precarga fecha/hora desde Agenda (B11)
-  useEffect(() => {
-    if (fechaPrecarga && !fecha) setFecha(fechaPrecarga);
-    if (horaPrecarga && !hora) setHora(horaPrecarga);
-  }, [fechaPrecarga, horaPrecarga, fecha, hora]);
-
-  // Precarga desde listado de pacientes (?paciente_id=)
-  useEffect(() => {
-    if (!pacientePrecargaId) return;
-    fetch(`/api/pacientes/${pacientePrecargaId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((p) => {
-        if (!p?.id) return;
-        seleccionarPaciente({
-          id: p.id,
-          nombre_completo: p.nombre_completo,
-          telefono: p.telefono,
-          email: p.email,
-          aseguranza_id: p.aseguranza_id,
-        });
-      })
-      .catch(() => {});
-  }, [pacientePrecargaId, seleccionarPaciente]);
+useEffect(() => {
+  if (fechaPrecarga && !fecha) setFecha(fechaPrecarga);
+  if (horaPrecarga && !hora) setHora(horaPrecarga);
+}, [fechaPrecarga, horaPrecarga, fecha, hora]);
 
   // Búsqueda de paciente
   useEffect(() => {
@@ -243,25 +494,64 @@ function NuevaCirugiaContent() {
       setMostrarPacientes(false);
       return;
     }
+    // Si el query corresponde al paciente ya seleccionado (precarga), no buscar ni mostrar dropdown
+    if (pacienteSeleccionado && queryPaciente === pacienteSeleccionado.nombre_completo) {
+      setPacientesResult([]);
+      setMostrarPacientes(false);
+      return;
+    }
     const t = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(queryPaciente)}`)
+      setBuscandoPacientes(true);
+      fetch(`/api/search?q=${encodeURIComponent(queryPaciente)}&cirugia=${filtroOjo}`)
         .then((r) => r.json())
         .then((data) => {
           const pacientes = (data?.results || [])
             .filter((item: any) => item.tipo === 'paciente')
+            .filter((item: any) => item.id !== pacienteSeleccionado?.id)
             .map((item: any) => ({
               id: item.id,
               nombre_completo: item.titulo,
               telefono: item.subtitulo?.split(' · ')[0] || null,
               email: item.subtitulo?.split(' · ')[1] || null,
+              ojo_operado: item.ojo_operado,
+              cirugias_previas: item.cirugias_previas,
             }));
           setPacientesResult(pacientes);
           setMostrarPacientes(true);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setBuscandoPacientes(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [queryPaciente]);
+  }, [queryPaciente, filtroOjo, pacienteSeleccionado]);
+
+  // Ojo: primer / segundo ojo según el historial del paciente seleccionado
+  useEffect(() => {
+    if (!pacienteSeleccionado || !historialOjo) return;
+    const { total, od, oi, desconocido } = historialOjo;
+    if (total === 0) {
+      setAvisoOjo(
+        filtroOjo === 'segundo'
+          ? 'Este paciente no tiene cirugías previas: no aplica "segundo ojo".'
+          : null
+      );
+      return;
+    }
+    const ojoYaOperado = desconocido || (od && oi) ? null : od ? 'OD' : oi ? 'OI' : null;
+    if (!ojoYaOperado) {
+      setAvisoOjo('Ambos ojos operados (o sin especificar): elige el ojo manualmente.');
+      return;
+    }
+    const contrario = ojoYaOperado === 'OD' ? 'OI' : 'OD';
+    if (filtroOjo === 'segundo') {
+      setOjo((prev) => (prev ? prev : contrario));
+      setAvisoOjo(`Segundo ojo: se marcó ${contrario} (ya operó ${ojoYaOperado}).`);
+    } else if (filtroOjo === 'primer') {
+      setAvisoOjo(`Este paciente ya tiene una cirugía en ${ojoYaOperado}.`);
+    } else {
+      setAvisoOjo(`${ojoYaOperado} ya operado · ${total} cirugía(s) previa(s).`);
+    }
+  }, [pacienteSeleccionado, historialOjo, filtroOjo]);
 
   // Cargar servicios cuando cambia el paciente/origen
   useEffect(() => {
@@ -373,6 +663,14 @@ function NuevaCirugiaContent() {
         setGuardando(false);
         return;
       }
+      const lioManualTexto = [
+        lioManualModelo.trim() || null,
+        lioManualPotencia ? `${lioManualPotencia}D` : null,
+        lioManualLote.trim() ? `Lote ${lioManualLote.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || null;
+
       const body = {
         paciente_id: pacienteSeleccionado!.id,
         origen_id: origenFinal,
@@ -382,7 +680,9 @@ function NuevaCirugiaContent() {
         duracion_min: Number(duracionMin),
         recurso_id: recursoId || null,
         ojo,
-        inventario_item_id: inventarioItemId,
+        inventario_item_id: lioManual ? null : inventarioItemId,
+        lio: lioManual ? lioManualTexto : null,
+        marca_lio: lioManual ? lioManualMarca.trim() || null : null,
         consulta_id: consultaPrecargaId,
         participantes: participantes.map((p) => ({
           medico_id: p.medico_id,
@@ -437,11 +737,8 @@ function NuevaCirugiaContent() {
           <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>
         )}
 
-        {loadingCatalogos ? (
-          <div className="space-y-4 animate-pulse">
-            <div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" />
-            <div className="h-48 bg-gray-100 dark:bg-[#202327] rounded-lg" />
-          </div>
+        {loadingInitial ? (
+          <CirugiaFormSkeleton />
         ) : (
           <>
             {/* 1. Paciente */}
@@ -449,6 +746,28 @@ function NuevaCirugiaContent() {
               <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
                 <User className="w-4 h-4 text-primary-500" /> 1. Paciente
               </h2>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  Filtro de ojo
+                </span>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtro de ojo">
+                  {FILTROS_OJO.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFiltroOjo(f.id)}
+                      aria-pressed={filtroOjo === f.id}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        filtroOjo === f.id
+                          ? 'bg-primary-600 border-primary-600 text-white'
+                          : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="relative">
                 <SearchInput
                   value={queryPaciente}
@@ -456,20 +775,47 @@ function NuevaCirugiaContent() {
                   placeholder="Buscar paciente por nombre..."
                   aria-label="Buscar paciente"
                 />
-                {mostrarPacientes && pacientesResult.length > 0 && (
+                {buscandoPacientes && (
+                  <Loader2 className="w-4 h-4 animate-spin text-primary-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                )}
+                {mostrarPacientes && (
                   <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] shadow-lg max-h-60 overflow-auto">
-                    {pacientesResult.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => seleccionarPaciente(p)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-[#1D1F23] border-b border-gray-100 dark:border-[#2F3336] last:border-0"
-                      >
-                        <div className="font-medium text-gray-900 dark:text-[#E7E9EA]">{p.nombre_completo}</div>
-                        <div className="text-xs text-gray-500 dark:text-[#71767B]">
-                          {[p.telefono, p.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
-                        </div>
-                      </button>
-                    ))}
+                    {pacientesResult.length === 0 ? (
+                      <p className="px-4 py-3 text-xs text-gray-500 dark:text-[#71767B]">
+                        {filtroOjo === 'primer'
+                          ? 'Sin pacientes sin cirugías previas para esta búsqueda.'
+                          : filtroOjo === 'segundo'
+                            ? 'Sin pacientes con cirugía previa (segundo ojo) para esta búsqueda.'
+                            : 'Sin coincidencias para esta búsqueda.'}
+                      </p>
+                    ) : (
+                      pacientesResult.map((p) => {
+                        const etiqueta = etiquetaOjo(p);
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => seleccionarPaciente(p)}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-[#1D1F23] border-b border-gray-100 dark:border-[#2F3336] last:border-0"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-gray-900 dark:text-[#E7E9EA]">
+                                {p.nombre_completo}
+                              </span>
+                              {etiqueta && (
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${etiqueta.clase}`}
+                                >
+                                  {etiqueta.texto}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-[#71767B]">
+                              {[p.telefono, p.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 )}
               </div>
@@ -531,6 +877,11 @@ function NuevaCirugiaContent() {
                     </a>
                   </div>
                 </div>
+              ) : pacienteSeleccionado ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-[#71767B]">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
+                  Cargando expediente...
+                </div>
               ) : (
                 <div className="text-sm text-gray-500 dark:text-[#71767B]">
                   Seleccione un paciente para ver su expediente.
@@ -567,19 +918,24 @@ function NuevaCirugiaContent() {
                 </div>
                 <div>
                   <label className={labelCls}>Procedimiento</label>
-                  <select
-                    value={servicioId}
-                    onChange={(e) => setServicioId(e.target.value)}
-                    disabled={!pacienteSeleccionado || loadingServicios}
-                    className={cn(inputCls, 'appearance-none disabled:opacity-60')}
-                  >
-                    <option value="">{loadingServicios ? 'Cargando...' : 'Seleccionar procedimiento'}</option>
-                    {servicios.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={servicioId}
+                      onChange={(e) => setServicioId(e.target.value)}
+                      disabled={!pacienteSeleccionado || loadingServicios}
+                      className={cn(inputCls, 'appearance-none disabled:opacity-60 pr-10')}
+                    >
+                      <option value="">{loadingServicios ? 'Cargando...' : 'Seleccionar procedimiento'}</option>
+                      {servicios.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingServicios && (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    )}
+                  </div>
                   {servicios.length === 0 && pacienteSeleccionado && !loadingServicios && (
                     <div className="text-xs text-amber-600 mt-1">No hay procedimientos para el origen del paciente.</div>
                   )}
@@ -594,6 +950,17 @@ function NuevaCirugiaContent() {
                       </option>
                     ))}
                   </select>
+                  {avisoOjo && (
+                    <p
+                      className={`mt-1 text-xs ${
+                        avisoOjo.startsWith('Segundo ojo:')
+                          ? 'text-emerald-600 dark:text-emerald-300'
+                          : 'text-amber-600 dark:text-amber-300'
+                      }`}
+                    >
+                      {avisoOjo}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Fecha</label>
@@ -633,7 +1000,7 @@ function NuevaCirugiaContent() {
               <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
                 <Users className="w-4 h-4 text-primary-500" /> 4. Asignación médica
               </h2>
-              {!loadingCatalogos && roles.length === 0 && (
+              {!loadingInitial && roles.length === 0 && (
                 <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>No hay roles de participante disponibles. Aplica la migración <code className="font-mono text-xs">1800000000170-CreateCirugiaHomologadaTables.ts</code> en tu BD local para poblar <code className="font-mono text-xs">cat_roles_participante</code>.</span>
@@ -698,10 +1065,88 @@ function NuevaCirugiaContent() {
               <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
                 <Eye className="w-4 h-4 text-primary-500" /> 5. Lente intraocular (LIO)
               </h2>
-              <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
-              <p className="text-xs text-gray-500 dark:text-[#71767B] mt-2">
-                Opcional. Solo se muestran LIOs disponibles y no caducados.
-              </p>
+              {!lioManual ? (
+                <>
+                  <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
+                  <p className="text-xs text-gray-500 dark:text-[#71767B] mt-2">
+                    Opcional. Solo se muestran LIOs disponibles y no caducados.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInventarioItemId(null);
+                      setLioManual(true);
+                    }}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                  >
+                    <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelCls}>Marca</label>
+                      <input
+                        type="text"
+                        value={lioManualMarca}
+                        onChange={(e) => setLioManualMarca(e.target.value)}
+                        placeholder="Ej. Alcon"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Modelo / Descripción</label>
+                      <input
+                        type="text"
+                        value={lioManualModelo}
+                        onChange={(e) => setLioManualModelo(e.target.value)}
+                        placeholder="Ej. Clareon PanOptix Toric"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Potencia (dioptrías)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={-40}
+                        max={60}
+                        value={lioManualPotencia}
+                        onChange={(e) => setLioManualPotencia(e.target.value)}
+                        placeholder="Ej. 22.5"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Lote / Serie</label>
+                      <input
+                        type="text"
+                        value={lioManualLote}
+                        onChange={(e) => setLioManualLote(e.target.value)}
+                        placeholder="Ej. L-2024-001"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    LIO fuera de inventario: se registra en la cirugía sin descontar stock.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLioManual(false);
+                      setLioManualMarca('');
+                      setLioManualModelo('');
+                      setLioManualPotencia('');
+                      setLioManualLote('');
+                    }}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                  >
+                    ← Volver a seleccionar desde inventario
+                  </button>
+                </>
+              )}
             </section>
 
             {/* 6. Archivos de apoyo */}

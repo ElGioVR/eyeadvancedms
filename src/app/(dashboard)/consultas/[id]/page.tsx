@@ -77,6 +77,7 @@ interface HistorialEvento {
 
 const estatusConfig: Record<string, { bg: string; text: string; dot: string }> = {
   BORRADOR: { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' },
+  AGENDADA: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
   PROCESADA: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
   PENDIENTE_ESTUDIO: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
   PENDIENTE_CIRUGIA: { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
@@ -113,6 +114,7 @@ const eventoLabels: Record<string, string> = {
 
 const estatusLabels: Record<string, string> = {
   BORRADOR: 'Borrador',
+  AGENDADA: 'Agendada',
   PROCESADA: 'Procesada',
   PENDIENTE_ESTUDIO: 'Pendiente Estudio',
   PENDIENTE_CIRUGIA: 'Pendiente Cirugía',
@@ -389,17 +391,28 @@ export default function ConsultaDetailPage() {
         subtitle={`${consulta.paciente || 'Sin paciente'} — ${consulta.fecha}`}
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors no-print"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
             {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && !!consulta.procedimiento && (
               <button
-                onClick={() => router.push(`/cirugias/nueva?consulta_id=${id}`)}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors no-print"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  params.set('consulta_id', id);
+                  if (consulta.paciente_id) params.set('paciente_id', consulta.paciente_id);
+                  if (consulta.paciente) params.set('paciente_nombre', consulta.paciente);
+                  if (consulta.procedimiento) params.set('procedimiento', consulta.procedimiento);
+                  if (consulta.doctor_id) params.set('cirujano_id', consulta.doctor_id);
+                  if (consulta.doctor) params.set('cirujano_nombre', consulta.doctor);
+                  if (consulta.fecha) params.set('fecha', consulta.fecha);
+                  if (consulta.hora_inicio) params.set('hora', consulta.hora_inicio.slice(0, 5));
+                  router.push(`/cirugias/nueva?${params.toString()}`);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
               >
                 <Scissors className="h-4 w-4" /> Crear cirugía
               </button>
@@ -408,7 +421,7 @@ export default function ConsultaDetailPage() {
               <button
                 onClick={handleComplete}
                 disabled={completing}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 no-print"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
               >
                 {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 {completing ? 'Completando...' : 'Completar'}
@@ -417,7 +430,7 @@ export default function ConsultaDetailPage() {
             {user?.rol === 'admin' && !editing && !consultaCerrada && (
               <button
                 onClick={startEditing}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition-colors no-print"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
               >
                 <Edit3 className="h-4 w-4" /> Editar
               </button>
@@ -427,14 +440,14 @@ export default function ConsultaDetailPage() {
                 <button
                   onClick={() => { setEditing(false); setEditError(null); }}
                   disabled={savingEdit}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50 no-print"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={savingEdit}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 no-print"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
                 >
                   {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {savingEdit ? 'Guardando...' : 'Guardar'}
@@ -446,7 +459,7 @@ export default function ConsultaDetailPage() {
       />
 
       {/* Header with patient info */}
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6 flex items-center gap-4">
+      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
         <Avatar initials={consulta.iniciales} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{consulta.paciente}</h2>

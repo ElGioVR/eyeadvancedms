@@ -5,6 +5,7 @@ import { errorTranslations } from '@/lib/supabase/errors';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { MotorDevengoService } from '@/services/productividad';
 import { z } from 'zod';
 
 const cirugiaUpdateSchema = z.object({
@@ -47,7 +48,7 @@ export async function GET(
     .from('agenda_cirugias')
     .select(`
       *,
-      doctores:doctor_id (nombre_completo)
+      doctores:doctor_id (alias)
     `)
     .eq('id', id)
     .single();
@@ -58,7 +59,7 @@ export async function GET(
 
   return NextResponse.json({
     ...data,
-    doctor_nombre: (data as any).doctores?.nombre_completo || null,
+    doctor_nombre: (data as any).doctores?.alias || null,
     doctores: undefined,
   });
 }
@@ -247,6 +248,14 @@ export async function PATCH(
 
   if (itemId && nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
     await liberarLIO(itemId, id, auth.user.id);
+  }
+
+  if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
+    try {
+      await new MotorDevengoService().cancelarPorCirugia(id);
+    } catch {
+      // best-effort: no bloquea la cancelación de agenda
+    }
   }
 
   return NextResponse.json({ success: true });

@@ -65,19 +65,19 @@ export default function FiltrosReporte({ onFilter, showDoctor, doctores, loading
       const range = getPresetRange(p);
       setFechaDesde(range.fecha_desde);
       setFechaHasta(range.fecha_hasta);
-      onFilter({ fecha_desde: range.fecha_desde, fecha_hasta: range.fecha_hasta, doctor_id: doctorId || undefined });
+      onFilter({ fecha_desde: range.fecha_desde, fecha_hasta: range.fecha_hasta, doctor_id: doctorId });
     }
   }, [doctorId, onFilter]);
 
   const handleCustomDate = useCallback(() => {
-    onFilter({ fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined, doctor_id: doctorId || undefined });
+    onFilter({ fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined, doctor_id: doctorId });
   }, [fechaDesde, fechaHasta, doctorId, onFilter]);
 
   const handleDoctorChange = useCallback((id: string) => {
     setDoctorId(id);
     const fd = preset !== 'libre' ? getPresetRange(preset).fecha_desde : fechaDesde;
     const fh = preset !== 'libre' ? getPresetRange(preset).fecha_hasta : fechaHasta;
-    onFilter({ fecha_desde: fd || undefined, fecha_hasta: fh || undefined, doctor_id: id || undefined });
+    onFilter({ fecha_desde: fd || undefined, fecha_hasta: fh || undefined, doctor_id: id });
   }, [preset, fechaDesde, fechaHasta, onFilter]);
 
   return (

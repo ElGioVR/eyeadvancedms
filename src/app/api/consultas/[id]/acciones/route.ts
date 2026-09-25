@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { MotorDevengoService } from '@/services/productividad';
 
 const accionesSchema = z.object({
   accion: z.enum(['aplazar', 'reagendar', 'cancelar']),
@@ -151,6 +152,13 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: 'Error al registrar la cancelación' }, { status: 500 });
     }
+
+    try {
+      await new MotorDevengoService().cancelarPorConsulta(id);
+    } catch {
+      // el cancelamiento de honorarios es best-effort y no bloquea la cancelación de consulta
+    }
+
     return NextResponse.json({ ok: true, accion: 'cancelar' });
   }
 

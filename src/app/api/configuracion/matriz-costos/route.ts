@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     if (error.message.includes('duplicate key')) {
       return NextResponse.json({ error: 'Ya existe un costo para esa combinación de tipo y visita' }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/matriz-costos').mensaje }, { status: 500 });
   }
 
   return NextResponse.json(data, { status: 201 });
@@ -99,7 +100,7 @@ export async function PUT(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/matriz-costos').mensaje }, { status: 500 });
   }
 
   return NextResponse.json(data);
@@ -124,7 +125,7 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/matriz-costos').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

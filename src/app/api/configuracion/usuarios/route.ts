@@ -152,46 +152,11 @@ export async function POST(request: Request) {
     console.error('Error al insertar perfil de usuario');
   }
 
-  // 3. If rol is doctor, create or link doctor record
+  // 3. Los doctores NO se crean automáticamente al crear un usuario.
+  // El vínculo usuario↔doctor se gestiona desde la ficha del doctor
+  // (Configuración → Doctores → Vincular usuario), aceptando roles
+  // doctor o administrador.
   let doctorId: string | null = null;
-  if (data.rol === 'doctor') {
-    // Try to find existing doctor by nombre_completo (case-insensitive)
-    const { data: existingDoctor } = await supabase
-      .from('doctores')
-      .select('id')
-      .ilike('nombre_completo', data.nombre)
-      .maybeSingle();
-
-    if (existingDoctor) {
-      // Link existing doctor to this user
-      doctorId = existingDoctor.id;
-      const { error: linkError } = await supabase
-        .from('doctores')
-        .update({ usuario_id: authData.user.id, email: data.email })
-        .eq('id', doctorId);
-      if (linkError) {
-        console.error('Error al vincular doctor existente:', linkError);
-      }
-    } else {
-      // Create new doctor record
-      const { data: newDoctor, error: doctorError } = await supabase
-        .from('doctores')
-        .insert({
-          usuario_id: authData.user.id,
-          nombre_completo: data.nombre,
-          email: data.email,
-          especialidad: 'Oftalmología',
-          activo: true,
-        })
-        .select('id')
-        .maybeSingle();
-      if (doctorError) {
-        console.error('Error al crear doctor:', doctorError);
-      } else if (newDoctor) {
-        doctorId = newDoctor.id;
-      }
-    }
-  }
 
   return NextResponse.json({
     id: authData.user.id,
@@ -296,39 +261,9 @@ export async function PATCH(request: Request) {
       .eq('id', id)
       .maybeSingle();
 
-    if (updates.rol === 'doctor' && currentUser?.rol !== 'doctor') {
-      // Changing TO doctor: create or link doctor record
-      const userNombre = updates.nombre || currentUser?.nombre || '';
-      const { data: existingDoctor } = await supabase
-        .from('doctores')
-        .select('id')
-        .ilike('nombre_completo', userNombre)
-        .maybeSingle();
-
-      if (existingDoctor) {
-        await supabase
-          .from('doctores')
-          .update({ usuario_id: id, email: updates.email })
-          .eq('id', existingDoctor.id);
-      } else {
-        const userEmail = updates.email || '';
-        await supabase
-          .from('doctores')
-          .insert({
-            usuario_id: id,
-            nombre_completo: userNombre,
-            email: userEmail,
-            especialidad: 'Oftalmología',
-            activo: true,
-          });
-      }
-    } else if (updates.rol !== 'doctor' && currentUser?.rol === 'doctor') {
-      // Changing FROM doctor: unlink doctor record
-      await supabase
-        .from('doctores')
-        .update({ usuario_id: null })
-        .eq('usuario_id', id);
-    }
+    // Nota: los doctores NO se crean ni se vinculan automáticamente aquí.
+    // El vínculo usuario↔doctor se gestiona desde Configuración → Doctores.
+    // (Los roles doctor/admin pueden estar ligados a un doctor.)
   }
 
   return NextResponse.json({ success: true });
@@ -345,7 +280,7 @@ export async function DELETE(request: Request) {
   const id = searchParams.get('id');
 
   if (!id) {
-    return NextResponse.json({ error: 'Missing user ID' }, { status: 400 });
+    return NextResponse.json({ error: 'Falta el ID del usuario' }, { status: 400 });
   }
 
   // Reuse last-admin protection (same as PATCH with activo=false)

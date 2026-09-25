@@ -14,6 +14,12 @@ const nextConfig = {
   },
   headers: async () => [
     {
+      source: '/api/(pacientes|consultas|agenda|cirugias|productividad|search|notificaciones)/:path*',
+      headers: [
+        { key: 'Cache-Control', value: 'no-store, max-age=0' },
+      ],
+    },
+    {
       source: '/(.*)',
       headers: [
         { key: 'X-Frame-Options', value: 'DENY' },

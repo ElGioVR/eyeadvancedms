@@ -22,9 +22,9 @@ interface CatProv {
   nombre: string;
 }
 
-// Auto-suggest: when user types a marca, suggest matching categoria/proveedor
-const suggestFromMarca = (marca: string, cats: CatProv[], provs: CatProv[]): { categoriaId?: string; proveedorId?: string } => {
-  const lower = marca.toLowerCase().trim();
+// Auto-suggest: when user types a manufacturer, suggest matching categoria/proveedor
+const suggestFromManufacturer = (manufacturer: string, cats: CatProv[], provs: CatProv[]): { categoriaId?: string; proveedorId?: string } => {
+  const lower = manufacturer.toLowerCase().trim();
   if (!lower) return {};
 
   const catMatch = cats.find((c) => c.nombre.toLowerCase().includes(lower));
@@ -38,36 +38,49 @@ const suggestFromMarca = (marca: string, cats: CatProv[], provs: CatProv[]): { c
 
 interface LenteData {
   id?: string;
-  tipo: string;
-  marca: string;
-  modelo: string;
-  categoria_id: string;
-  proveedor_id: string;
-  codigo_barras: string;
-  grado_esferico: string;
-  grado_cilindrico: string;
-  eje: string;
-  material: string;
-  color: string;
+  manufacturer: string;
+  product_name: string;
+  model: string;
+  sphere: string;
+  cylinder: string;
+  add_intermediate: string;
+  add_near: string;
+  nozzle: string;
+  serial_number: string;
+  expiration_date: string;
+  barcode: string;
+  barcode_format: string;
   stock: string;
   stock_minimo: string;
   precio_compra: string;
   precio_venta: string;
   lote: string;
-  fecha_caducidad: string;
   notas: string;
-  potencia_dioptrias: string;
-  tipo_lio: string;
-  modelo_fabricante: string;
+  categoria_id: string;
+  proveedor_id: string;
 }
 
 const emptyForm: LenteData = {
-  tipo: 'LENTE_VISION',
-  marca: '', modelo: '', categoria_id: '', proveedor_id: '',
-  codigo_barras: '', grado_esferico: '', grado_cilindrico: '', eje: '',
-  material: '', color: '', stock: '', stock_minimo: '',
-  precio_compra: '', precio_venta: '', lote: '', fecha_caducidad: '', notas: '',
-  potencia_dioptrias: '', tipo_lio: '', modelo_fabricante: '',
+  manufacturer: '',
+  product_name: '',
+  model: '',
+  sphere: '',
+  cylinder: '',
+  add_intermediate: '',
+  add_near: '',
+  nozzle: '',
+  serial_number: '',
+  expiration_date: '',
+  barcode: '',
+  barcode_format: '',
+  stock: '',
+  stock_minimo: '',
+  precio_compra: '',
+  precio_venta: '',
+  lote: '',
+  notas: '',
+  categoria_id: '',
+  proveedor_id: '',
 };
 
 interface LenteFormProps {
@@ -90,19 +103,18 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
   }, []);
 
   useEffect(() => {
-    const suggestion = suggestFromMarca(form.marca, cats, provs);
+    const suggestion = suggestFromManufacturer(form.manufacturer, cats, provs);
     setForm((p) => ({
       ...p,
       ...(suggestion.categoriaId ? { categoria_id: suggestion.categoriaId } : {}),
       ...(suggestion.proveedorId ? { proveedor_id: suggestion.proveedorId } : {}),
     }));
-  }, [form.marca, cats, provs]);
+  }, [form.manufacturer, cats, provs]);
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!form.marca.trim()) errs.marca = 'La marca es obligatoria';
-    if (!form.modelo.trim()) errs.modelo = 'El modelo es obligatorio';
-    if (form.eje && (Number(form.eje) < 0 || Number(form.eje) > 180)) errs.eje = 'El eje debe ser entre 0 y 180';
+    if (!form.manufacturer.trim()) errs.manufacturer = 'El fabricante es obligatorio';
+    if (!form.model.trim()) errs.model = 'El modelo es obligatorio';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -110,55 +122,51 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
   const handleLabelParsed = useCallback((data: ParsedLabel) => {
     setForm((prev) => ({
       ...prev,
-      marca: data.marca || prev.marca,
-      modelo: data.modelo || prev.modelo,
-      grado_esferico: data.esferico || prev.grado_esferico,
-      grado_cilindrico: data.cilindrico || prev.grado_cilindrico,
-      eje: data.eje || prev.eje,
-      material: data.material || prev.material,
-      color: data.color || prev.color,
-      codigo_barras: data.codigo_barras || prev.codigo_barras,
-      lote: data.lote || prev.lote,
-      fecha_caducidad: data.caducidad || prev.fecha_caducidad,
+      manufacturer: data.manufacturer || prev.manufacturer,
+      product_name: data.product_name || prev.product_name,
+      model: data.model || prev.model,
+      sphere: data.sphere || prev.sphere,
+      cylinder: data.cylinder || prev.cylinder,
+      add_intermediate: data.add_intermediate || prev.add_intermediate,
+      add_near: data.add_near || prev.add_near,
+      nozzle: data.nozzle || prev.nozzle,
+      serial_number: data.serial_number || prev.serial_number,
+      expiration_date: data.expiration_date || prev.expiration_date,
+      barcode: data.barcode || prev.barcode,
       categoria_id: prev.categoria_id || (() => {
-        if (!data.categoria) return prev.categoria_id;
-        const match = cats.find((c) => c.nombre.toLowerCase() === data.categoria!.toLowerCase());
-        return match?.id || prev.categoria_id;
+        // category is derived, not extracted - we'll set it based on product type
+        return prev.categoria_id;
       })(),
     }));
     toast('Datos de la etiqueta aplicados al formulario');
-  }, [toast, cats]);
+  }, [toast]);
 
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     try {
       const payload: Record<string, any> = {
-        tipo: form.tipo,
-        marca: form.marca.trim(),
-        modelo: form.modelo.trim(),
-        codigo_barras: form.codigo_barras || null,
-        grado_esferico: form.grado_esferico ? Number(form.grado_esferico) : null,
-        grado_cilindrico: form.grado_cilindrico ? Number(form.grado_cilindrico) : null,
-        eje: form.eje ? Number(form.eje) : null,
-        color: form.color || null,
-        material: form.material || null,
+        manufacturer: form.manufacturer.trim(),
+        product_name: form.product_name.trim(),
+        model: form.model.trim(),
+        sphere: form.sphere ? Number(form.sphere) : null,
+        cylinder: form.cylinder ? Number(form.cylinder) : null,
+        add_intermediate: form.add_intermediate ? Number(form.add_intermediate) : null,
+        add_near: form.add_near ? Number(form.add_near) : null,
+        nozzle: form.nozzle || null,
+        serial_number: form.serial_number || null,
+        expiration_date: form.expiration_date || null,
+        barcode: form.barcode || null,
+        barcode_format: form.barcode_format || null,
         stock: form.stock ? Number(form.stock) : 0,
         stock_minimo: form.stock_minimo ? Number(form.stock_minimo) : 5,
         precio_compra: form.precio_compra ? Number(form.precio_compra) : null,
         precio_venta: form.precio_venta ? Number(form.precio_venta) : null,
         lote: form.lote || null,
-        fecha_caducidad: form.fecha_caducidad || null,
         notas: form.notas || null,
         categoria_id: form.categoria_id || null,
         proveedor_id: form.proveedor_id || null,
       };
-
-      if (form.tipo === 'LENTE_INTRAOCULAR') {
-        payload.potencia_dioptrias = form.potencia_dioptrias ? Number(form.potencia_dioptrias) : null;
-        payload.tipo_lio = form.tipo_lio || null;
-        payload.modelo_fabricante = form.modelo_fabricante || null;
-      }
 
       const res = await fetch('/api/inventario', {
         method: mode === 'edit' ? 'PATCH' : 'POST',
@@ -215,7 +223,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         </div>
       )}
 
-      {/* Label Scanner - only show in create mode */}
+{/* Label Scanner - only show in create mode */}
       {mode === 'create' && (
         <LabelScanner onParsed={handleLabelParsed} />
       )}
@@ -223,40 +231,6 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column - main info */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Tipo de inventario */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Tipo de Inventario</h3>
-            </div>
-            <div className="px-6 py-5">
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, tipo: 'LENTE_VISION' }))}
-                  className={cn(
-                    'flex-1 rounded-lg border-2 px-4 py-3 text-sm font-bold transition-all',
-                    form.tipo === 'LENTE_VISION'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
-                      : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:border-gray-300'
-                  )}
-                >
-                  Lente de Visión
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, tipo: 'LENTE_INTRAOCULAR' }))}
-                  className={cn(
-                    'flex-1 rounded-lg border-2 px-4 py-3 text-sm font-bold transition-all',
-                    form.tipo === 'LENTE_INTRAOCULAR'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
-                      : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:border-gray-300'
-                  )}
-                >
-                  Lente Intraocular (LIO)
-                </button>
-              </div>
-            </div>
-          </div>
           {/* Identificacion */}
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
@@ -265,14 +239,18 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Marca <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.marca} onChange={(e) => setForm((p) => ({ ...p, marca: e.target.value }))} placeholder="Ej. Alcon, Zeiss, Essilor" className={errors.marca ? inputErr : input} />
-                  {errors.marca && <p className="text-xs text-red-600 mt-1">{errors.marca}</p>}
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Fabricante <span className="text-red-500">*</span></label>
+                  <input type="text" value={form.manufacturer} onChange={(e) => setForm((p) => ({ ...p, manufacturer: e.target.value }))} placeholder="Ej. Alcon, Zeiss, Essilor" className={errors.manufacturer ? inputErr : input} />
+                  {errors.manufacturer && <p className="text-xs text-red-600 mt-1">{errors.manufacturer}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Producto</label>
+                  <input type="text" value={form.product_name} onChange={(e) => setForm((p) => ({ ...p, product_name: e.target.value }))} placeholder="Ej. Clareon PanOptix Toric IOL" className={input} />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Modelo <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.modelo} onChange={(e) => setForm((p) => ({ ...p, modelo: e.target.value }))} placeholder="Ej. SN60WF, SmartLife" className={errors.modelo ? inputErr : input} />
-                  {errors.modelo && <p className="text-xs text-red-600 mt-1">{errors.modelo}</p>}
+                  <input type="text" value={form.model} onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))} placeholder="Ej. CNATT2" className={errors.model ? inputErr : input} />
+                  {errors.model && <p className="text-xs text-red-600 mt-1">{errors.model}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Categoria</label>
@@ -280,8 +258,8 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                     <option value="">Sin categoria</option>
                     {cats.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
-                  {suggestFromMarca(form.marca, cats, provs).categoriaId && (
-                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {cats.find((c) => c.id === suggestFromMarca(form.marca, cats, provs)?.categoriaId)?.nombre || ''}</p>
+                  {suggestFromManufacturer(form.manufacturer, cats, provs).categoriaId && (
+                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {cats.find((c) => c.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.categoriaId)?.nombre || ''}</p>
                   )}
                 </div>
                 <div>
@@ -290,115 +268,89 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                     <option value="">Sin proveedor</option>
                     {provs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
-                  {suggestFromMarca(form.marca, cats, provs).proveedorId && (
-                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {provs.find((p) => p.id === suggestFromMarca(form.marca, cats, provs)?.proveedorId)?.nombre || ''}</p>
+                  {suggestFromManufacturer(form.manufacturer, cats, provs).proveedorId && (
+                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {provs.find((p) => p.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.proveedorId)?.nombre || ''}</p>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Especificaciones refractivas - solo para LENTE_VISION */}
-          {form.tipo === 'LENTE_VISION' && (
+          {/* Especificaciones Opticas */}
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones Refractivas</h3>
-            </div>
-            <div className="px-6 py-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Esf\u00e9rico (SE)</label>
-                  <input type="number" step="0.25" placeholder="-20.00 a +20.00" value={form.grado_esferico} onChange={(e) => setForm((p) => ({ ...p, grado_esferico: e.target.value }))} className={input} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Cil\u00edndrico (CYL)</label>
-                  <input type="number" step="0.25" placeholder="0 a -6.00" value={form.grado_cilindrico} onChange={(e) => setForm((p) => ({ ...p, grado_cilindrico: e.target.value }))} className={input} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Eje</label>
-                  <input type="number" min="0" max="180" placeholder="0-180" value={form.eje} onChange={(e) => setForm((p) => ({ ...p, eje: e.target.value }))} className={errors.eje ? inputErr : input} />
-                  {errors.eje && <p className="text-xs text-red-600 mt-1">{errors.eje}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Material</label>
-                  <input type="text" placeholder="Acrilico, Policarbonato" value={form.material} onChange={(e) => setForm((p) => ({ ...p, material: e.target.value }))} className={input} />
-                </div>
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* Especificaciones LIO - solo para LENTE_INTRAOCULAR */}
-          {form.tipo === 'LENTE_INTRAOCULAR' && (
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones LIO</h3>
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones Opticas</h3>
             </div>
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Potencia (Dioptrías)</label>
-                  <input type="number" step="0.25" placeholder="Ej. 21.50" value={form.potencia_dioptrias} onChange={(e) => setForm((p) => ({ ...p, potencia_dioptrias: e.target.value }))} className={input} />
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Esfera (D)</label>
+                  <input type="number" step="0.25" placeholder="Ej. +23.50" value={form.sphere} onChange={(e) => setForm((p) => ({ ...p, sphere: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Tipo LIO</label>
-                  <select value={form.tipo_lio} onChange={(e) => setForm((p) => ({ ...p, tipo_lio: e.target.value }))} className={input}>
-                    <option value="">Seleccionar</option>
-                    <option value="MONOFOCAL">Monofocal</option>
-                    <option value="MULTIFOCAL">Multifocal</option>
-                    <option value="TORICA">Tórica</option>
-                    <option value="EDOF">EDOF</option>
-                    <option value="OTRO">Otro</option>
-                  </select>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Cilindro (D)</label>
+                  <input type="number" step="0.25" placeholder="Ej. 1.00" value={form.cylinder} onChange={(e) => setForm((p) => ({ ...p, cylinder: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Modelo Fabricante</label>
-                  <input type="text" placeholder="Ej. Clareon, Panoptic" value={form.modelo_fabricante} onChange={(e) => setForm((p) => ({ ...p, modelo_fabricante: e.target.value }))} className={input} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Lote</label>
-                  <input type="text" placeholder="L-2024-001" value={form.lote} onChange={(e) => setForm((p) => ({ ...p, lote: e.target.value }))} className={input} />
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Nozzle</label>
+                  <input type="text" placeholder="Ej. D" value={form.nozzle} onChange={(e) => setForm((p) => ({ ...p, nozzle: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Caducidad</label>
-                  <input type="date" value={form.fecha_caducidad} onChange={(e) => setForm((p) => ({ ...p, fecha_caducidad: e.target.value }))} className={input} />
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">ADD Intermedia (D)</label>
+                  <input type="number" step="0.25" placeholder="Ej. 2.17" value={form.add_intermediate} onChange={(e) => setForm((p) => ({ ...p, add_intermediate: e.target.value }))} className={input} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">ADD Cercana (D)</label>
+                  <input type="number" step="0.25" placeholder="Ej. 3.25" value={form.add_near} onChange={(e) => setForm((p) => ({ ...p, add_near: e.target.value }))} className={input} />
                 </div>
               </div>
             </div>
           </div>
-          )}
 
-          {/* Detalles */}
+          {/* Trazabilidad */}
           <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
             <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Detalles</h3>
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Trazabilidad</h3>
             </div>
             <div className="px-6 py-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Color</label>
-                  <input type="text" placeholder="Transparente" value={form.color} onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))} className={input} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Codigo de Barras</label>
-                  <input type="text" placeholder="7501234567890" value={form.codigo_barras} onChange={(e) => setForm((p) => ({ ...p, codigo_barras: e.target.value }))} className={input} />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Lote</label>
                   <input type="text" placeholder="L-2024-001" value={form.lote} onChange={(e) => setForm((p) => ({ ...p, lote: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Caducidad</label>
-                  <input type="date" value={form.fecha_caducidad} onChange={(e) => setForm((p) => ({ ...p, fecha_caducidad: e.target.value }))} className={input} />
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Fecha Caducidad</label>
+                  <input type="date" value={form.expiration_date} onChange={(e) => setForm((p) => ({ ...p, expiration_date: e.target.value }))} className={input} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Numero de Serie</label>
+                  <input type="text" placeholder="Ej. 26169559028" value={form.serial_number} onChange={(e) => setForm((p) => ({ ...p, serial_number: e.target.value }))} className={input} />
                 </div>
               </div>
-              <div className="mt-4">
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Notas</label>
-                <textarea value={form.notas} onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))} placeholder="Observaciones adicionales..." rows={3} className={input} />
+            </div>
+          </div>
+
+        {/* Codigo de Barras & Notas */}
+        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+          <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Codigo de Barras & Notas</h3>
+          </div>
+          <div className="px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Codigo de Barras</label>
+                <input type="text" placeholder="7501234567890" value={form.barcode} onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Formato de Codigo</label>
+                <input type="text" placeholder="Ej. CODE_39, EAN_13" value={form.barcode_format} onChange={(e) => setForm((p) => ({ ...p, barcode_format: e.target.value }))} className={input} />
               </div>
             </div>
+            <div className="mt-4">
+              <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Notas</label>
+              <textarea value={form.notas} onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))} placeholder="Observaciones adicionales..." rows={3} className={input} />
+            </div>
+</div>
           </div>
         </div>
 
@@ -451,13 +403,14 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary-700 mb-3">Vista Previa</h3>
               <div className="space-y-2">
                 <p className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
-                  {form.marca || 'Marca'} {form.modelo || 'Modelo'}
+                  {form.manufacturer || 'Fabricante'} {form.model || 'Modelo'}
                 </p>
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-[#71767B]">
-                  {form.grado_esferico && <span>SE: {form.grado_esferico}</span>}
-                  {form.grado_cilindrico && <span>CYL: {form.grado_cilindrico}</span>}
-                  {form.eje && <span>Eje: {form.eje}\u00b0</span>}
-                  {form.material && <span>\u00b7 {form.material}</span>}
+                  {form.sphere && <span>Esfera: {form.sphere} D</span>}
+                  {form.cylinder && <span>Cilindro: {form.cylinder} D</span>}
+                  {form.add_intermediate && <span>ADD Int: {form.add_intermediate} D</span>}
+                  {form.add_near && <span>ADD Cerc: {form.add_near} D</span>}
+                  {form.nozzle && <span>Nozzle: {form.nozzle}</span>}
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                   <div>
