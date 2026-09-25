@@ -2,7 +2,7 @@
 
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { Sun, Moon, Monitor, Check } from 'lucide-react';
+import { Sun, Moon, Monitor, Check, FileText, Download } from 'lucide-react';
 
 const themes = [
   { id: 'light', label: 'Claro', icon: Sun, description: 'Tema claro para uso diurno' },
@@ -70,6 +70,33 @@ export default function SistemaPage() {
                 </button>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+        <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
+          <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Ayuda y documentación</h3>
+        </div>
+        <div className="p-6">
+          <div className="flex flex-col gap-4 rounded-xl border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-4 sm:flex-row sm:items-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Manual de usuario</p>
+              <p className="text-xs text-gray-400 dark:text-[#71767B] mt-0.5">
+                Guía de uso para recepción, doctores y administradores · PDF · v1.0.0
+              </p>
+            </div>
+            <a
+              href="/docs/manual-de-usuario.pdf"
+              download="Manual_de_Usuario_EyeAdvanced.pdf"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 active:scale-[0.98]"
+            >
+              <Download className="h-4 w-4" />
+              Descargar manual
+            </a>
           </div>
         </div>
       </div>
