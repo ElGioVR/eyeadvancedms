@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Upload, Loader2, CheckCircle, X, ImageIcon, Circle, SwitchCamera } from 'lucide-react';
-import { parseLensLabel, ParsedLabel } from '@/lib/parseLabel';
+import { combinarLecturas, ParsedLabel } from '@/lib/parseLabel';
+import { leerEtiqueta } from '@/lib/ocrEtiqueta';
 import { preprocessLabelImage } from '@/lib/preprocessImage';
 import { decodeBarcodeFromFile } from '@/lib/barcodeFile';
 
@@ -18,6 +19,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedLabel | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [progreso, setProgreso] = useState<{ paso: number; total: number; mensaje: string }>({ paso: 0, total: 5, mensaje: 'Preparando…' });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +92,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
+    // Resolución completa del sensor: más detalle para el OCR y el código de barras
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -111,7 +114,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
         processImage(file, url);
       },
       'image/jpeg',
-      0.9
+      0.95
     );
   }
 
@@ -135,16 +138,31 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
     setParsed(null);
     setError('');
 
-    try {
-      // 1) Preprocesado (escala de grises + autocontraste + reducción)
-      const imagen = await preprocessLabelImage(file);
+    setProgreso({ paso: 0, total: 5, mensaje: 'Preparando imagen…' });
 
-      // 2) OCR y código de barras en paralelo sobre la misma foto
-      const [codigo, texto] = await Promise.all([
-        decodeBarcodeFromFile(imagen),
-        recoerTexto(imagen),
+    try {
+      // 1) OCR multipasada (varias versiones de la foto + recorte de la etiqueta)
+      //    y código de barras sobre la foto ORIGINAL (a resolución completa), en paralelo
+      const [codigoOriginal, ocr] = await Promise.all([
+        decodeBarcodeFromFile(file),
+        leerEtiqueta(file, (paso, total, mensaje) => setProgreso({ paso, total, mensaje })).catch(async () => {
+          // Respaldo: una sola lectura sobre la imagen preprocesada
+          const imagen = await preprocessLabelImage(file);
+          const { createWorker } = await import('tesseract.js');
+          const worker = await createWorker('eng', 1, { logger: () => {} });
+          try {
+            const { data } = await worker.recognize(imagen);
+            return { textos: [data.text || ''], recorte: null as File | null };
+          } finally {
+            await worker.terminate();
+          }
+        }),
       ]);
 
+      // 2) Si no se leyó el código en la foto completa, reintenta sobre la etiqueta recortada
+      const codigo = codigoOriginal ?? (ocr.recorte ? await decodeBarcodeFromFile(ocr.recorte) : null);
+
+      const texto = ocr.textos.join('\n');
       setRawText(texto);
 
       if (!texto.trim() && !codigo) {
@@ -153,7 +171,8 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
         return;
       }
 
-      const result = parseLensLabel(texto, {
+      // 3) Cada lectura se analiza por separado y los campos se deciden por votación
+      const result = combinarLecturas(ocr.textos, {
         barcode: codigo?.texto ?? '',
         barcodeFormat: codigo?.formato ?? '',
       });
@@ -162,17 +181,6 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
     } catch {
       setError('Error al procesar la imagen. Intenta de nuevo.');
       setView('choose');
-    }
-  }
-
-  async function recoerTexto(imagen: File): Promise<string> {
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('spa+eng', 1, { logger: () => {} });
-    try {
-      const { data } = await worker.recognize(imagen);
-      return data.text || '';
-    } finally {
-      await worker.terminate();
     }
   }
 
@@ -296,7 +304,13 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
             <div className="text-center space-y-3">
               <Loader2 className="h-10 w-10 text-white animate-spin mx-auto" />
               <p className="text-sm text-white font-bold">Leyendo etiqueta...</p>
-              <p className="text-xs text-muted">Analizando imagen con OCR</p>
+              <p className="text-xs text-white/70">{progreso.mensaje}</p>
+              <div className="mx-auto h-1 w-48 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-cyan-300 transition-all duration-500"
+                  style={{ width: `${Math.max(6, (progreso.paso / progreso.total) * 100)}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>

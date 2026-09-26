@@ -120,19 +120,22 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
   }
 
   const handleLabelParsed = useCallback((data: ParsedLabel) => {
+    // Los <input type="number"> rechazan "+23.5": se quita el signo +
+    const num = (v: string) => (v || '').replace(/^\+/, '');
     setForm((prev) => ({
       ...prev,
       manufacturer: data.manufacturer || prev.manufacturer,
       product_name: data.product_name || prev.product_name,
       model: data.model || prev.model,
-      sphere: data.sphere || prev.sphere,
-      cylinder: data.cylinder || prev.cylinder,
-      add_intermediate: data.add_intermediate || prev.add_intermediate,
-      add_near: data.add_near || prev.add_near,
+      sphere: num(data.sphere) || prev.sphere,
+      cylinder: num(data.cylinder) || prev.cylinder,
+      add_intermediate: num(data.add_intermediate) || prev.add_intermediate,
+      add_near: num(data.add_near) || prev.add_near,
       nozzle: data.nozzle || prev.nozzle,
       serial_number: data.serial_number || prev.serial_number,
       expiration_date: data.expiration_date || prev.expiration_date,
       barcode: data.barcode || prev.barcode,
+      barcode_format: data.barcode_format || prev.barcode_format,
       categoria_id: prev.categoria_id || (() => {
         // category is derived, not extracted - we'll set it based on product type
         return prev.categoria_id;
@@ -366,7 +369,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                 <input type="number" min="0" placeholder="0" value={form.stock} onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))} className={input} />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Stock M\u00ednimo</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Stock mínimo</label>
                 <input type="number" min="0" placeholder="5" value={form.stock_minimo} onChange={(e) => setForm((p) => ({ ...p, stock_minimo: e.target.value }))} className={input} />
                 <p className="text-xs text-muted mt-1">Alerta cuando el stock baje de esta cantidad</p>
               </div>
