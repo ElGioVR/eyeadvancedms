@@ -107,13 +107,13 @@ function formatBytes(bytes: number): string {
 function Field({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
   return (
     <div className={full ? 'col-span-2' : ''}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{label}</span>
-      <p className="mt-0.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{value || '—'}</p>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{label}</span>
+      <p className="mt-0.5 text-sm font-medium text-fg">{value || '—'}</p>
     </div>
   );
 }
 
-const SKELETON_BOX = 'bg-gray-100 dark:bg-[#202327] rounded animate-pulse';
+const SKELETON_BOX = 'bg-surface-2 rounded animate-pulse';
 
 function CirugiaDetalleSkeleton() {
   return (
@@ -129,7 +129,7 @@ function CirugiaDetalleSkeleton() {
       </div>
 
       {/* Header card */}
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
+      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
         <div className={cn(SKELETON_BOX, 'h-12 w-12 rounded-full shrink-0')} />
         <div className="flex-1 min-w-0 space-y-2">
           <div className={cn(SKELETON_BOX, 'h-5 w-48 max-w-full')} />
@@ -141,7 +141,7 @@ function CirugiaDetalleSkeleton() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Información de la cirugía */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-56 mb-4')} />
             <div className="grid grid-cols-2 gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -154,7 +154,7 @@ function CirugiaDetalleSkeleton() {
           </div>
 
           {/* Equipo médico */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-40 mb-4')} />
             <div className="space-y-3">
               <div className={cn(SKELETON_BOX, 'h-10 w-full rounded-lg')} />
@@ -163,15 +163,15 @@ function CirugiaDetalleSkeleton() {
           </div>
 
           {/* Archivos */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-36 mb-4')} />
-            <div className={cn(SKELETON_BOX, 'h-20 w-full rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2F3336]')} />
+            <div className={cn(SKELETON_BOX, 'h-20 w-full rounded-lg border-2 border-dashed border-line')} />
           </div>
         </div>
 
         <div className="space-y-6">
           {/* LIO */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-32 mb-4')} />
             <div className="space-y-2">
               <div className={cn(SKELETON_BOX, 'h-4 w-40 max-w-full')} />
@@ -180,7 +180,7 @@ function CirugiaDetalleSkeleton() {
           </div>
 
           {/* Productividad */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-36 mb-4')} />
             <div className="space-y-3">
               <div className={cn(SKELETON_BOX, 'h-8 w-full rounded-lg')} />
@@ -189,7 +189,7 @@ function CirugiaDetalleSkeleton() {
           </div>
 
           {/* Historial */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className={cn(SKELETON_BOX, 'h-4 w-28 mb-4')} />
             <div className="space-y-3">
               <div className={cn(SKELETON_BOX, 'h-4 w-full')} />
@@ -398,7 +398,7 @@ export default function CirugiaDetailPage() {
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex items-center gap-3">
-            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors no-print">
+            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors no-print">
               <Printer className="h-4 w-4" /> Imprimir
             </button>
           </div>
@@ -406,11 +406,11 @@ export default function CirugiaDetailPage() {
       />
 
       {/* Header */}
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
+      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
         <Avatar initials={nombrePaciente.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{nombrePaciente}</h2>
-          <p className="text-sm text-gray-500 dark:text-[#71767B]">
+          <h2 className="text-lg font-extrabold text-fg truncate">{nombrePaciente}</h2>
+          <p className="text-sm text-muted">
             {procedimientoOjo} — {cirugia.origen?.nombre || 'Sin origen'} — {cirugia.fecha || 'Sin fecha'} {cirugia.hora || ''}
           </p>
         </div>
@@ -420,8 +420,8 @@ export default function CirugiaDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* 1. Información de cirugía */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <FileText className="h-4 w-4 text-primary-600" /> Información de la cirugía
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -436,7 +436,7 @@ export default function CirugiaDetailPage() {
               <Field label="Duración estimada" value={cirugia.duracion_min ? `${cirugia.duracion_min} min` : undefined} />
               {cirugia.consulta_id && (
                 <div className="col-span-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Consulta de origen</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Consulta de origen</span>
                   <p className="mt-0.5 text-sm font-medium">
                     <button onClick={() => router.push(`/consultas/${cirugia.consulta_id}`)} className="text-primary-600 hover:text-primary-700 font-bold">
                       Ver consulta →
@@ -449,18 +449,18 @@ export default function CirugiaDetailPage() {
           </div>
 
           {/* 2. Equipo médico */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Users className="h-4 w-4 text-sky-600" /> Equipo médico
             </h3>
             {participantes.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin participantes registrados</p>
+              <p className="text-sm text-muted">Sin participantes registrados</p>
             ) : (
               <div className="space-y-2">
                 {participantes.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
-                    <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{p.doctores?.alias || '—'}</span>
-                    <span className="text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase">{p.roles?.nombre || p.roles?.clave || '—'}</span>
+                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5">
+                    <span className="text-sm font-medium text-fg">{p.doctores?.alias || '—'}</span>
+                    <span className="text-xs font-bold text-muted uppercase">{p.roles?.nombre || p.roles?.clave || '—'}</span>
                   </div>
                 ))}
               </div>
@@ -468,12 +468,12 @@ export default function CirugiaDetailPage() {
           </div>
 
           {/* 3. LIO */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Eye className="h-4 w-4 text-violet-600" /> Lente Intraocular
             </h3>
             {!cirugia.lio ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B]">No se registró LIO</p>
+              <p className="text-sm text-muted">No se registró LIO</p>
             ) : (
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <Field label="Marca" value={cirugia.lio.marca} />
@@ -486,9 +486,9 @@ export default function CirugiaDetailPage() {
           </div>
 
           {/* 4. Archivos de apoyo */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
+          <div className="bg-surface border border-line rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
                 <Upload className="h-4 w-4 text-emerald-600" /> Archivos de apoyo
               </h3>
               <button onClick={() => setShowUpload((s) => !s)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors no-print">
@@ -497,38 +497,38 @@ export default function CirugiaDetailPage() {
             </div>
 
             {showUpload && (
-              <div className="mb-4 rounded-lg border border-dashed border-gray-300 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] p-4 no-print">
+              <div className="mb-4 rounded-lg border border-dashed border-gray-300 dark:border-line bg-surface-2 p-4 no-print">
                 <input type="file" multiple accept={EXTENSIONES_PERMITIDAS.join(',')} className="hidden" id="archivo-detalle" onChange={handleFileInput} />
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleFilesDrop}
                   onClick={() => document.getElementById('archivo-detalle')?.click()}
-                  className="cursor-pointer rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4 text-center text-sm text-gray-500 dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                  className="cursor-pointer rounded-lg border border-line bg-surface p-4 text-center text-sm text-muted hover:bg-surface-2"
                 >
                   Arrastra archivos aquí o haz clic para seleccionar (PDF, JPG, PNG, WebP, máx. {MAX_SIZE_MB}MB)
                 </div>
                 <div className="mt-3">
-                  <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1">Tipo de documento</label>
+                  <label className="block text-xs font-bold text-muted mb-1">Tipo de documento</label>
                   <input
                     type="text"
                     value={tipoDocumento}
                     onChange={(e) => setTipoDocumento(e.target.value)}
                     placeholder="Ej. Consentimiento informado"
-                    className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA]"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg"
                   />
                 </div>
                 {files.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {files.map((f) => (
-                      <div key={`${f.name}-${f.size}`} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm">
-                        <span className="truncate text-gray-900 dark:text-[#E7E9EA]">{f.name} ({formatBytes(f.size)})</span>
+                      <div key={`${f.name}-${f.size}`} className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-sm">
+                        <span className="truncate text-fg">{f.name} ({formatBytes(f.size)})</span>
                         <button onClick={() => removeFile(f)} className="text-red-600 hover:text-red-700"><X className="h-4 w-4" /></button>
                       </div>
                     ))}
                   </div>
                 )}
                 <div className="mt-3 flex justify-end gap-2">
-                  <button onClick={() => { setShowUpload(false); setFiles([]); setTipoDocumento(''); }} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA]">Cancelar</button>
+                  <button onClick={() => { setShowUpload(false); setFiles([]); setTipoDocumento(''); }} className="rounded-lg border border-line px-3 py-2 text-xs font-bold text-fg-2">Cancelar</button>
                   <button onClick={uploadFiles} disabled={uploading} className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
                     {uploading ? 'Subiendo...' : 'Subir'}
                   </button>
@@ -537,11 +537,11 @@ export default function CirugiaDetailPage() {
             )}
 
             {archivos.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin archivos adjuntos</p>
+              <p className="text-sm text-muted">Sin archivos adjuntos</p>
             ) : (
               <div className="space-y-2">
                 {archivos.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
+                  <div key={a.id} className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5">
                     <div
                       className="flex items-center gap-3 min-w-0 cursor-pointer hover:opacity-75 transition-opacity"
                       onClick={() => openPreview(a)}
@@ -549,8 +549,8 @@ export default function CirugiaDetailPage() {
                     >
                       <File className="h-4 w-4 text-gray-400 flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{a.nombre_original}</p>
-                        <p className="text-xs text-gray-500 dark:text-[#71767B]">{a.tipo_documento} — {formatBytes(a.size)}</p>
+                        <p className="text-sm font-medium text-fg truncate">{a.nombre_original}</p>
+                        <p className="text-xs text-muted">{a.tipo_documento} — {formatBytes(a.size)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 no-print">
@@ -567,21 +567,21 @@ export default function CirugiaDetailPage() {
 
         <div className="space-y-6">
           {/* 5. Productividad */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <CreditCard className="h-4 w-4 text-emerald-600" /> Productividad
             </h3>
             {productividad.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin registros</p>
+              <p className="text-sm text-muted">Sin registros</p>
             ) : (
               <div className="space-y-2">
                 {productividad.map((p) => {
                   const medico = participantes.find((x) => x.id === p.participante_id)?.doctores?.alias || '—';
                   return (
-                    <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5">
+                    <div key={p.id} className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{medico}</p>
-                        <p className="text-xs text-gray-500 dark:text-[#71767B]">{p.roles?.nombre || '—'}</p>
+                        <p className="text-sm font-medium text-fg truncate">{medico}</p>
+                        <p className="text-xs text-muted">{p.roles?.nombre || '—'}</p>
                       </div>
                       <span className={`text-xs font-bold px-2 py-1 rounded-full ${p.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado}</span>
                     </div>
@@ -592,25 +592,25 @@ export default function CirugiaDetailPage() {
           </div>
 
           {/* 6. Historial */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <History className="h-4 w-4 text-violet-600" /> Historial
             </h3>
             {historial.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B] text-center py-4">Sin eventos registrados</p>
+              <p className="text-sm text-muted text-center py-4">Sin eventos registrados</p>
             ) : (
               <div className="relative space-y-4">
-                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-[#2F3336]" />
+                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-surface-3" />
                 {historial.map((h) => {
                   const Icon = h.accion.includes('ARCHIVO') ? Upload : h.accion.includes('ESTADO') ? AlertTriangle : CheckCircle2;
                   return (
                     <div key={h.id} className="relative flex items-start gap-3">
-                      <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336]">
-                        <Icon className="h-4 w-4 text-gray-500 dark:text-[#71767B]" />
+                      <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface border border-line">
+                        <Icon className="h-4 w-4 text-muted" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{h.accion}</p>
-                        <p className="text-xs text-gray-400 dark:text-[#71767B]"><ClientDate date={h.created_at} dateTime /></p>
+                        <p className="text-sm font-medium text-fg">{h.accion}</p>
+                        <p className="text-xs text-muted"><ClientDate date={h.created_at} dateTime /></p>
                       </div>
                     </div>
                   );
@@ -625,21 +625,21 @@ export default function CirugiaDetailPage() {
       {preview && (
         <div className="fixed inset-0 z-[60] flex flex-col bg-black/70 backdrop-blur-sm no-print" onClick={() => setPreview(null)}>
           <div
-            className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3"
+            className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 min-w-0">
               <File className="h-4 w-4 text-gray-400 shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{preview.archivo.nombre_original}</p>
-                <p className="text-xs text-gray-500 dark:text-[#71767B] truncate">{preview.archivo.tipo_documento} — {formatBytes(preview.archivo.size)}</p>
+                <p className="text-sm font-bold text-fg truncate">{preview.archivo.nombre_original}</p>
+                <p className="text-xs text-muted truncate">{preview.archivo.tipo_documento} — {formatBytes(preview.archivo.size)}</p>
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {preview.url && (
                 <button
                   onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] text-primary-600 dark:text-primary-400 transition-colors"
+                  className="p-2 rounded-full hover:bg-surface-2 text-primary-600 dark:text-primary-400 transition-colors"
                   title="Abrir en nueva pestaña"
                 >
                   <ExternalLink className="h-5 w-5" />
@@ -647,7 +647,7 @@ export default function CirugiaDetailPage() {
               )}
               <button
                 onClick={() => setPreview(null)}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327] text-gray-500 dark:text-[#71767B] transition-colors"
+                className="p-2 rounded-full hover:bg-surface-2 text-muted transition-colors"
                 title="Cerrar"
               >
                 <X className="h-5 w-5" />
@@ -677,7 +677,7 @@ export default function CirugiaDetailPage() {
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                 <File className="h-10 w-10 text-gray-500" />
-                <p className="text-sm text-gray-400 dark:text-[#71767B]">Vista previa no disponible para este formato</p>
+                <p className="text-sm text-muted">Vista previa no disponible para este formato</p>
                 <button
                   onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
                   className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"

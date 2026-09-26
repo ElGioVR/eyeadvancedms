@@ -18,8 +18,20 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfter?: nu
   return { allowed: true };
 }
 
-export function recordFailedAttempt(key: string): { blocked: boolean; retryAfter?: number } {
+/** Evita crecimiento ilimitado del Map en procesos de larga vida. */
+function prune(now: number) {
+  if (attempts.size < 5000) return;
+  attempts.forEach((v, k) => {
+    if (v.blockedUntil <= now) attempts.delete(k);
+  });
+}
+
+export function recordFailedAttempt(
+  key: string,
+  maxAttempts: number = MAX_ATTEMPTS,
+): { blocked: boolean; retryAfter?: number } {
   const now = Date.now();
+  prune(now);
   let entry = attempts.get(key);
 
   if (entry && entry.blockedUntil <= now) {
@@ -33,7 +45,7 @@ export function recordFailedAttempt(key: string): { blocked: boolean; retryAfter
 
   entry.count += 1;
 
-  if (entry.count >= MAX_ATTEMPTS) {
+  if (entry.count >= maxAttempts) {
     entry.blockedUntil = now + WINDOW_MS;
     attempts.set(key, entry);
     return { blocked: true, retryAfter: Math.ceil(WINDOW_MS / 1000) };

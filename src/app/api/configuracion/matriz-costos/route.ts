@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -30,7 +30,7 @@ export async function GET() {
 
   if (error) {
     console.error('matriz_costos GET error:', error.message, error.code, error.details);
-    return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: mensajeSeguro(error, 'configuracion.matriz-costos') }, { status: 500 });
   }
 
   return NextResponse.json(data || []);

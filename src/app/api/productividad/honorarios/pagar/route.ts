@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { pagarHonorarios } from '@/lib/productividad';
 import { z } from 'zod';
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const result = await pagarHonorarios(validation.data.ids, auth.user.id);
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'productividad.honorarios.pagar', 'Error interno del servidor');
     const status =
       typeof (err as { status?: number }).status === 'number'
         ? (err as { status: number }).status

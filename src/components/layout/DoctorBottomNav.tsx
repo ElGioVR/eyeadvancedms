@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Calendar, Package, TrendingUp, User } from 'lucide-react';
+import { LayoutDashboard, Calendar, Package, TrendingUp, User, Users, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { useState, useEffect } from 'react';
@@ -12,6 +12,7 @@ interface NavItem {
   label: string;
 }
 
+/** Barra inferior del doctor (y admin en Modo Focus). */
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, href: '/dashboard', label: 'Inicio' },
   { icon: Calendar, href: '/agenda', label: 'Agenda' },
@@ -20,7 +21,19 @@ const navItems: NavItem[] = [
   { icon: User, href: '/mi-perfil', label: 'Perfil' },
 ];
 
-export default function DoctorBottomNav() {
+/** Barra inferior para el resto del personal; "Menú" abre el drawer lateral. */
+const staffItems: NavItem[] = [
+  { icon: LayoutDashboard, href: '/dashboard', label: 'Inicio' },
+  { icon: Users, href: '/pacientes', label: 'Pacientes' },
+  { icon: Calendar, href: '/agenda', label: 'Agenda' },
+  { icon: Package, href: '/inventario', label: 'Inventario' },
+];
+
+interface DoctorBottomNavProps {
+  onMenuOpen?: () => void;
+}
+
+export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useUser();
@@ -46,49 +59,62 @@ export default function DoctorBottomNav() {
 
   const esDoctor = user.rol === 'doctor';
   const adminEnFocus = user.rol === 'admin' && !!user.doctor_id && (focusOverride || user.modo_focus === true);
-  if (!esDoctor && !adminEnFocus) return null;
+  const modoDoctor = esDoctor || adminEnFocus;
+  const items = modoDoctor ? navItems : staffItems;
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
 
   return (
-    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 lg:hidden">
-      <div
-        className="flex items-center gap-1 px-2 py-2 rounded-full
-          bg-black/60 backdrop-blur-xl border border-white/10
-          shadow-[0_8px_32px_rgba(0,0,0,0.4)]
-          supports-[backdrop-filter]:bg-black/50"
-      >
-        {navItems.map((item) => {
-          const isActive =
-            pathname === item.href ||
-            (item.href !== '/dashboard' && pathname.startsWith(item.href));
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line/80 glass pb-safe lg:hidden"
+      aria-label="Navegación principal"
+    >
+      <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-2">
+        {items.map((item) => {
+          const active = isActive(item.href);
           const Icon = item.icon;
-
           return (
             <button
               key={item.href}
               onClick={() => router.push(item.href)}
-              className={cn(
-                'relative flex flex-col items-center justify-center rounded-full transition-all duration-300',
-                isActive
-                  ? 'w-14 h-14 bg-white/20 shadow-[0_0_16px_rgba(255,255,255,0.1)]'
-                  : 'w-12 h-12 hover:bg-white/10'
-              )}
+              className="group relative flex flex-1 flex-col items-center justify-center gap-1 transition-transform active:scale-95"
               aria-label={item.label}
+              aria-current={active ? 'page' : undefined}
             >
-              <Icon
+              <span
                 className={cn(
-                  'transition-all duration-300',
-                  isActive
-                    ? 'w-6 h-6 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]'
-                    : 'w-5 h-5 text-white/60'
+                  'flex h-8 w-14 items-center justify-center rounded-full transition-all duration-300',
+                  active
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-400/15 dark:text-primary-300'
+                    : 'text-muted group-hover:text-fg'
                 )}
-                strokeWidth={isActive ? 2.5 : 1.8}
-              />
-              {isActive && (
-                <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-white/80" />
-              )}
+              >
+                <Icon className="h-5 w-5" strokeWidth={active ? 2.3 : 1.9} />
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] leading-none transition-colors',
+                  active ? 'font-semibold text-primary-700 dark:text-primary-300' : 'font-medium text-muted'
+                )}
+              >
+                {item.label}
+              </span>
             </button>
           );
         })}
+        {!modoDoctor && onMenuOpen && (
+          <button
+            onClick={onMenuOpen}
+            className="group relative flex flex-1 flex-col items-center justify-center gap-1 transition-transform active:scale-95"
+            aria-label="Abrir menú"
+          >
+            <span className="flex h-8 w-14 items-center justify-center rounded-full text-muted transition-colors group-hover:text-fg">
+              <Menu className="h-5 w-5" strokeWidth={1.9} />
+            </span>
+            <span className="text-[11px] font-medium leading-none text-muted">Menú</span>
+          </button>
+        )}
       </div>
     </nav>
   );

@@ -65,9 +65,9 @@ export default function Embudo({ resumen }: { resumen: HonorariosResumen }) {
   let grupoActual: string | null = null;
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+        <h3 className="text-sm font-bold text-fg">
           Embudo de honorarios
         </h3>
         <span className="text-[11px] text-gray-400">
@@ -88,16 +88,16 @@ export default function Embudo({ resumen }: { resumen: HonorariosResumen }) {
                 </p>
               )}
               <div className="flex items-center gap-3">
-                <span className="w-52 shrink-0 text-xs text-gray-600 dark:text-[#9BA1A6]">
+                <span className="w-52 shrink-0 text-xs text-gray-600 dark:text-fg-2">
                   {e.label}
                 </span>
-                <div className="h-6 flex-1 overflow-hidden rounded-md bg-gray-100 dark:bg-[#202327]">
+                <div className="h-6 flex-1 overflow-hidden rounded-md bg-surface-2">
                   <div
                     className="h-6 rounded-md transition-all"
                     style={{ width: `${ancho}%`, backgroundColor: e.color }}
                   />
                 </div>
-                <span className="w-28 shrink-0 text-right text-xs font-bold text-gray-900 dark:text-[#E7E9EA]">
+                <span className="w-28 shrink-0 text-right text-xs font-bold text-fg">
                   {e.formato === 'dinero' ? formatCurrency(e.valor) : e.valor}
                 </span>
                 <span className="w-10 shrink-0 text-right text-[11px] text-gray-400">

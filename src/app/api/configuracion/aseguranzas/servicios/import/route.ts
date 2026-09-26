@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 
@@ -233,7 +234,7 @@ export async function POST(request: Request) {
           activo: true,
         });
       if (error) {
-        rechazados.push({ nombre: row.nombre, motivo: error.message });
+        rechazados.push({ nombre: row.nombre, motivo: mensajeSeguro(error, 'configuracion.aseguranzas.servicios.import', 'No se pudo guardar') });
         failed++;
       } else {
         insertados++;

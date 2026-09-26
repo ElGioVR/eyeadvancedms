@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { clearUserCache } from '@/hooks/useUser';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Activity, Users, FileText } from 'lucide-react';
 
 const MAX_ATTEMPTS = 5;
@@ -49,7 +51,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     setFooterYear(String(new Date().getFullYear()));
-  }, []);
+    // Descarga anticipada de la pantalla de bienvenida: la transición tras login es inmediata
+    router.prefetch('/bienvenida');
+  }, [router]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -101,7 +105,8 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/bienvenida');
+      clearUserCache();
+      router.replace('/bienvenida');
     } catch {
       setError('Error de conexión. Intenta de nuevo.');
       setLoading(false);
@@ -111,10 +116,10 @@ export default function LoginPage() {
   return (
     <>
       {/* Left side — Form */}
-      <div className="w-full lg:w-1/2 flex flex-col min-h-[100dvh] lg:min-h-0 bg-slate-50 dark:bg-[#090B0F]">
+      <div className="w-full lg:w-1/2 flex flex-col min-h-[100dvh] lg:min-h-0 bg-slate-50 dark:bg-canvas">
         <div className="relative flex-1 flex items-center justify-center overflow-y-auto px-4 py-8 sm:p-8 lg:py-12">
           <div className="pointer-events-none absolute left-1/2 top-1/4 h-64 w-64 -translate-x-1/2 rounded-full bg-primary-500/10 blur-3xl dark:bg-primary-500/10" />
-          <div className="relative w-full max-w-md rounded-2xl border border-gray-200/80 bg-white/95 p-5 shadow-xl shadow-slate-900/5 dark:border-white/10 dark:bg-[#11151B]/95 dark:shadow-black/30 sm:p-8">
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200/80 bg-white/95 p-5 shadow-xl shadow-slate-900/5 dark:border-white/10 dark:bg-surface/95 dark:shadow-black/30 sm:p-8">
             {/* Logo */}
             <div className="mb-7 sm:mb-9">
               <img
@@ -131,7 +136,7 @@ export default function LoginPage() {
 
             {/* Heading */}
             <div className="mb-7 sm:mb-8">
-              <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-gray-900 dark:text-[#F4F7FA] tracking-tight">
+              <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-fg tracking-tight">
                 Bienvenido de nuevo
               </h1>
               <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
@@ -155,7 +160,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="usuario@clinica.com"
-                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-[#1A1F26] dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-surface-2 dark:text-slate-100 dark:placeholder:text-slate-500"
                     autoComplete="email"
                     required
                     disabled={loading || isLocked}
@@ -177,7 +182,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-[#1A1F26] dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-surface-2 dark:text-slate-100 dark:placeholder:text-slate-500"
                     autoComplete="current-password"
                     required
                     disabled={loading || isLocked}
@@ -202,7 +207,7 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-white/20 dark:bg-[#1A1F26]"
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-white/20 dark:bg-surface-2"
                     disabled={loading || isLocked}
                   />
                   Recordarme
@@ -251,12 +256,18 @@ export default function LoginPage() {
       {/* Right side — Visual panel (desktop only) */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {/* Carousel images */}
+        {/* next/image: AVIF/WebP redimensionado al 50% del viewport (antes ~2.6 MB en PNG,
+            descargados incluso en móvil donde este panel está oculto) */}
         {loginSlides.map((slide, index) => (
-          <img
+          <Image
             key={slide.image}
             src={slide.image}
             alt=""
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-out ${
+            fill
+            sizes="(min-width: 1024px) 50vw, 1px"
+            priority={index === 0}
+            quality={70}
+            className={`object-cover transition-opacity duration-700 ease-out ${
               index === activeSlide ? 'opacity-100' : 'opacity-0'
             }`}
             style={{ objectPosition: slide.position }}

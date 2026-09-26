@@ -49,10 +49,10 @@ export function ChartCard({
 }) {
   return (
     <div
-      className={`min-w-[360px] rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4 ${className}`}
+      className={`min-w-[360px] rounded-2xl border border-line bg-surface p-4 ${className}`}
     >
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{titulo}</h3>
+        <h3 className="text-sm font-bold text-fg">{titulo}</h3>
         {ayuda ? <span className="text-[11px] text-gray-400">{ayuda}</span> : null}
       </div>
       <div className={alto}>{children}</div>

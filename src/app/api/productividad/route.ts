@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import {
@@ -526,7 +527,7 @@ export async function GET(request: Request) {
     response.headers.set('Server-Timing', `productividad;dur=${dur}`);
     return response;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'productividad', 'Error interno del servidor');
     const response = NextResponse.json({ error: message }, { status: 500 });
     response.headers.set(
       'Server-Timing',

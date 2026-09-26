@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { panelDoctorHonorarios } from '@/lib/productividad';
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
     );
     return response;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'productividad.mis-honorarios', 'Error interno del servidor');
     const status =
       typeof (err as { status?: number }).status === 'number'
         ? (err as { status: number }).status

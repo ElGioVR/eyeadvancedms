@@ -45,13 +45,13 @@ export default function DashboardCharts({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-        <div className="border-b border-gray-100 dark:border-[#2F3336] px-5 py-3.5">
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Consultas por Estatus (30 días)</h2>
+      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+        <div className="border-b border-line/70 px-5 py-3.5">
+          <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Consultas por Estatus (30 días)</h2>
         </div>
         <div className="p-4">
           {estatusChartData.length === 0 ? (
-            <p className="h-[160px] flex items-center justify-center text-sm text-gray-400 dark:text-[#71767B]">Sin datos</p>
+            <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin datos</p>
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={estatusChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
@@ -70,13 +70,13 @@ export default function DashboardCharts({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-        <div className="border-b border-gray-100 dark:border-[#2F3336] px-5 py-3.5">
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Top Procedimientos</h2>
+      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+        <div className="border-b border-line/70 px-5 py-3.5">
+          <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Top Procedimientos</h2>
         </div>
         <div className="p-4">
           {procChartData.length === 0 ? (
-            <p className="h-[160px] flex items-center justify-center text-sm text-gray-400 dark:text-[#71767B]">Sin datos</p>
+            <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin datos</p>
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={procChartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
@@ -91,13 +91,13 @@ export default function DashboardCharts({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-        <div className="border-b border-gray-100 dark:border-[#2F3336] px-5 py-3.5">
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Actividad de Agenda (7 días)</h2>
+      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+        <div className="border-b border-line/70 px-5 py-3.5">
+          <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Actividad de Agenda (7 días)</h2>
         </div>
         <div className="p-4">
           {agendaChartData.length === 0 ? (
-            <p className="h-[160px] flex items-center justify-center text-sm text-gray-400 dark:text-[#71767B]">Sin cirugías programadas</p>
+            <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin cirugías programadas</p>
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={agendaChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>

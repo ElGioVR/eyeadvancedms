@@ -8,55 +8,66 @@ export async function GET() {
   if (auth instanceof NextResponse) return auth;
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('id, email, nombre, rol, avatar_url, preferencias')
-    .eq('id', auth.user.id)
-    .maybeSingle();
+  // Perfil y vínculo doctor por usuario_id en paralelo (antes: 2-3 viajes en serie)
+  const [perfilRes, doctorRes] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('id, email, nombre, rol, avatar_url, preferencias, activo')
+      .eq('id', auth.user.id)
+      .maybeSingle(),
+    supabase
+      .from('doctores')
+      .select('id')
+      .eq('usuario_id', auth.user.id)
+      .maybeSingle(),
+  ]);
+  const { data, error } = perfilRes;
 
   if (error || !data) {
     return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 });
   }
+  if (data.activo === false) {
+    return NextResponse.json({ error: 'Usuario inactivo' }, { status: 403 });
+  }
 
-  // Resolve doctor_id from doctores table (server-side with service_role)
   let doctor_id: string | null = null;
   if (data.rol === 'doctor' || data.rol === 'admin') {
-    // 1. Try by usuario_id
-    const { data: doctorRec } = await supabase
-      .from('doctores')
-      .select('id')
-      .eq('usuario_id', auth.user.id)
-      .maybeSingle();
-
-    if (doctorRec) {
-      doctor_id = doctorRec.id;
-    } else {
-      // 2. Fallback: match by email
+    if (doctorRes.data) {
+      doctor_id = doctorRes.data.id;
+    } else if (data.email) {
+      // Fallback: coincidencia exacta por email (sin comodines de ILIKE)
+      const emailEscapado = data.email.replace(/[\\%_]/g, (c: string) => `\\${c}`);
       const { data: doctorByEmail } = await supabase
         .from('doctores')
         .select('id')
-        .ilike('email', data.email || '')
+        .ilike('email', emailEscapado)
+        .is('usuario_id', null)
         .maybeSingle();
 
       if (doctorByEmail) {
         doctor_id = doctorByEmail.id;
-        // Auto-link server-side (has permission)
+        // Auto-vincula en servidor (solo doctores aún sin usuario)
         await supabase
           .from('doctores')
           .update({ usuario_id: auth.user.id })
-          .eq('id', doctorByEmail.id);
+          .eq('id', doctorByEmail.id)
+          .is('usuario_id', null);
       }
     }
   }
 
+  const { activo: _activo, ...perfil } = data;
+  void _activo;
   return NextResponse.json({
-    ...data,
+    ...perfil,
     doctor_id,
+    created_at: auth.user.created_at,
+    last_sign_in_at: auth.user.last_sign_in_at ?? null,
     modo_focus: ((data.preferencias as Record<string, unknown> | null)?.modo_focus === true),
     iniciales: data.nombre
       ? data.nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
       : '?',
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PATCH(request: Request) {

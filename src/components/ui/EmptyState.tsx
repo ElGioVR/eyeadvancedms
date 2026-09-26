@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,13 +11,13 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon: Icon, title, description }: EmptyStateProps) {
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-6 py-12 text-center shadow-sm">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-[#202327]">
-        <Icon className="h-6 w-6 text-gray-400 dark:text-[#71767B]" />
+    <div className="rounded-2xl border border-dashed border-line-strong/70 bg-surface px-6 py-14 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 ring-8 ring-primary-50/40 dark:bg-primary-400/10 dark:ring-primary-400/5">
+        <Icon className="h-6 w-6 text-primary-600 dark:text-primary-300" />
       </div>
-      <h3 className="text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]">{title}</h3>
+      <h3 className="text-base font-semibold text-fg">{title}</h3>
       {description && (
-        <p className="mt-1 text-sm text-gray-500 dark:text-[#71767B]">{description}</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted">{description}</p>
       )}
     </div>
   );

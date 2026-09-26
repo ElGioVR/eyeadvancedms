@@ -228,10 +228,10 @@ function SyncTab() {
   return (
     <div className="space-y-6">
       <PageHeader title="Sync" subtitle="Desplegar honorarios a productividad (flag deployed_to_performance)" />
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4 space-y-4">
+      <div className="rounded-2xl border border-line bg-surface p-4 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} placeholder="Desde" className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm" />
-          <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} placeholder="Hasta" className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm" />
+          <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} placeholder="Desde" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm" />
+          <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} placeholder="Hasta" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm" />
         </div>
         {preview && (
           <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-sm">
@@ -263,7 +263,7 @@ function SyncTab() {
         </div>
       </div>
       {syncResult && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <h3 className="text-sm font-bold mb-2">Resultado de Sync</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div><p className="text-xs text-gray-500">Consultas verificadas</p><p className="text-lg font-bold">{syncResult.consultas_verificadas}</p></div>
@@ -291,12 +291,12 @@ function SyncTab() {
         </div>
       )}
       {logs.length > 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
-          <h3 className="text-sm font-bold p-4 border-b border-gray-200 dark:border-[#2F3336]">Historial de Sync</h3>
+        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+          <h3 className="text-sm font-bold p-4 border-b border-line">Historial de Sync</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 dark:bg-[#202327]/50">
+                <tr className="bg-gray-50 dark:bg-surface-2/50">
                   <th className={th}>Fecha</th>
                   <th className={th}>Consultas</th>
                   <th className={th}>Cirugías</th>
@@ -305,9 +305,9 @@ function SyncTab() {
                   <th className={th}>Duración</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+              <tbody className="divide-y divide-line/60">
                 {logs.map((l) => (
-                  <tr key={String(l.id)} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
+                  <tr key={String(l.id)} className="hover:bg-surface-2">
                     <td className={td}>{String(l.fecha_inicio)}</td>
                     <td className={td}>{String(l.consultas_verificadas)}</td>
                     <td className={td}>{String(l.cirugias_verificadas)}</td>
@@ -328,8 +328,8 @@ function SyncTab() {
 const th =
   'px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400';
 const thR = 'px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400';
-const td = 'px-4 py-3 text-sm text-gray-700 dark:text-[#E7E9EA]';
-const tdR = 'px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]';
+const td = 'px-4 py-3 text-sm text-fg-2';
+const tdR = 'px-4 py-3 text-right text-sm font-semibold text-fg';
 
 export default function ProductividadPage() {
   const { user, loading: userLoading } = useUser();
@@ -748,7 +748,7 @@ export default function ProductividadPage() {
                   onClick={() => setReporteModal(r.id)}
                   disabled={!desde || !hasta}
                   title={r.title}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-line bg-surface text-fg-2 hover:bg-surface-2 disabled:opacity-50"
                 >
                   <Icon className="w-4 h-4" />
                   {r.label} (CSV)
@@ -776,7 +776,7 @@ export default function ProductividadPage() {
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                   activo
                     ? 'bg-primary-600 border-primary-600 text-white'
-                    : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+                    : 'border-line bg-surface text-fg-2 hover:bg-surface-2'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -791,7 +791,7 @@ export default function ProductividadPage() {
             <select
               value={periodoTipo}
               onChange={(e) => void cambiarPeriodo(e.target.value as TipoPeriodoPago)}
-              className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm"
+              className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm"
             >
               {PERIODOS.map((p) => (
                 <option key={p} value={p}>{p}</option>
@@ -855,15 +855,15 @@ export default function ProductividadPage() {
                   key={d.doctor_id}
                   type="button"
                   onClick={() => setDoctorSel({ id: d.doctor_id, nombre: d.doctor_nombre })}
-                  className="text-left rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4 hover:border-primary-400 dark:hover:border-primary-700 transition-colors"
+                  className="text-left rounded-2xl border border-line bg-surface p-4 hover:border-primary-400 dark:hover:border-primary-700 transition-colors"
                 >
-                  <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+                  <p className="text-sm font-bold text-fg">
                     {d.doctor_nombre}
                   </p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div>
                       <p className="text-[10px] uppercase text-gray-400">Devengado</p>
-                      <p className="text-xs font-bold text-gray-900 dark:text-[#E7E9EA]">
+                      <p className="text-xs font-bold text-fg">
                         {formatCurrency(d.monto)}
                       </p>
                     </div>
@@ -873,7 +873,7 @@ export default function ProductividadPage() {
                     </div>
                     <div>
                       <p className="text-[10px] uppercase text-gray-400">Eventos</p>
-                      <p className="text-xs font-bold text-gray-900 dark:text-[#E7E9EA]">{d.eventos}</p>
+                      <p className="text-xs font-bold text-fg">{d.eventos}</p>
                     </div>
                   </div>
                 </button>
@@ -921,7 +921,7 @@ export default function ProductividadPage() {
                   setPage(1);
                   void fetchLiga(desde, hasta, doctorId, 1, '', estado, vistaAgrup);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!fuente ? 'bg-primary-600 border-primary-600 text-white' : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6]'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!fuente ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
               >
                 Todas
               </button>
@@ -934,7 +934,7 @@ export default function ProductividadPage() {
                     setPage(1);
                     void fetchLiga(desde, hasta, doctorId, 1, f, estado, vistaAgrup);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${fuente === f ? 'bg-primary-600 border-primary-600 text-white' : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6]'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${fuente === f ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
                 >
                   {f}
                 </button>
@@ -950,7 +950,7 @@ export default function ProductividadPage() {
                   setPage(1);
                   void fetchLiga(desde, hasta, doctorId, 1, fuente, '', vistaAgrup);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!estado ? 'bg-primary-600 border-primary-600 text-white' : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6]'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!estado ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
               >
                 Todos
               </button>
@@ -963,7 +963,7 @@ export default function ProductividadPage() {
                     setPage(1);
                     void fetchLiga(desde, hasta, doctorId, 1, fuente, e, vistaAgrup);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${estado === e ? 'bg-primary-600 border-primary-600 text-white' : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6]'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${estado === e ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
                 >
                   {e}
                 </button>
@@ -980,7 +980,7 @@ export default function ProductividadPage() {
                   setPage(1);
                   void fetchLiga(desde, hasta, doctorId, 1, fuente, estado, v);
                 }}
-                className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm"
+                className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm"
               >
                 {AGRUPACIONES.map((a) => (
                   <option key={a.id} value={a.id}>{a.label}</option>
@@ -993,7 +993,7 @@ export default function ProductividadPage() {
             <div className="rounded-xl border border-primary-200 dark:border-primary-900/40 bg-primary-50/40 dark:bg-primary-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-primary-700 dark:text-primary-300 uppercase">Panel doctor</p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]">{panelDoctor.nombre}</p>
+                <p className="text-sm font-semibold text-fg">{panelDoctor.nombre}</p>
                 <p className="text-xs text-gray-500">
                   {panelData
                     ? `${panelData.items.length} de ${panelData.total} líneas · total ${formatCurrency(panelData.resumen.total_filtrado)}`
@@ -1013,7 +1013,7 @@ export default function ProductividadPage() {
                 <button
                   type="button"
                   onClick={cerrarPanel}
-                  className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-[#71767B] hover:text-gray-900"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-muted hover:text-gray-900"
                 >
                   Cerrar
                 </button>
@@ -1021,7 +1021,7 @@ export default function ProductividadPage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
+          <div className="rounded-2xl border border-line bg-surface overflow-hidden">
             {loading && !liga ? (
               <div className="p-6 space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -1035,7 +1035,7 @@ export default function ProductividadPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50 dark:bg-[#202327]/50">
+                      <tr className="bg-gray-50 dark:bg-surface-2/50">
                         <th className={th}>{vistaAgrup === 'dia' ? 'Fecha' : vistaAgrup === 'doctor' ? 'Doctor' : 'Fuente'}</th>
                         <th className={thR}>Eventos</th>
                         <th className={thR}>Devengado</th>
@@ -1043,9 +1043,9 @@ export default function ProductividadPage() {
                         <th className={thR}>Pagado</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+                    <tbody className="divide-y divide-line/60">
                       {agrupado.map((a) => (
-                        <tr key={a.label} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
+                        <tr key={a.label} className="hover:bg-surface-2">
                           <td className={`${td} font-semibold`}>
                             {vistaAgrup === 'dia' ? formatFechaCsv(a.label) : a.label}
                           </td>
@@ -1057,7 +1057,7 @@ export default function ProductividadPage() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-gray-50 dark:bg-[#202327]/60 font-bold">
+                      <tr className="bg-gray-50 dark:bg-surface-2/60 font-bold">
                         <td className={td}>Total</td>
                         <td className={tdR}>{resumen.total_eventos}</td>
                         <td className={tdR}>{formatCurrency(resumen.total_filtrado)}</td>
@@ -1074,7 +1074,7 @@ export default function ProductividadPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50 dark:bg-[#202327]/50">
+                    <tr className="bg-gray-50 dark:bg-surface-2/50">
                       <th className={th}>
                         <span className="sr-only">Sel.</span>
                       </th>
@@ -1088,12 +1088,12 @@ export default function ProductividadPage() {
                       <th className={th}>Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+                  <tbody className="divide-y divide-line/60">
                     {filasLiga.map((f) => {
                       const editable = f.estado_pago !== 'PAGADO' && f.estado_pago !== 'CANCELADO';
                       const seleccionable = f.estado_pago === 'POR_PAGAR';
                       return (
-                        <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
+                        <tr key={f.id} className="hover:bg-surface-2">
                           <td className="px-4 py-3">
                             {seleccionable && (
                               <input
@@ -1127,7 +1127,7 @@ export default function ProductividadPage() {
                                   step="0.01"
                                   value={editMonto}
                                   onChange={(e) => setEditMonto(e.target.value)}
-                                  className="w-28 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-right text-sm"
+                                  className="w-28 rounded-lg border border-line bg-surface-2 px-2 py-1 text-right text-sm"
                                 />
                                 <button
                                   type="button"
@@ -1154,7 +1154,7 @@ export default function ProductividadPage() {
                                 <button
                                   type="button"
                                   onClick={() => iniciarEdicion(f)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-gray-600 hover:bg-gray-100 dark:hover:bg-[#202327]"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-gray-600 hover:bg-surface-2"
                                 >
                                   <Pencil className="w-3 h-3" /> Monto
                                 </button>
@@ -1175,7 +1175,7 @@ export default function ProductividadPage() {
                       );
                     })}
                   </tbody>
-                  <tr className="bg-gray-50 dark:bg-[#202327]/60 font-bold">
+                  <tr className="bg-gray-50 dark:bg-surface-2/60 font-bold">
                     <td className="px-4 py-3" />
                     <td className={`${td} font-bold`} colSpan={5}>Total</td>
                     <td className={tdR}>{formatCurrency(panelDoctor ? panelData?.resumen.total_filtrado || 0 : resumen.total_filtrado)}</td>

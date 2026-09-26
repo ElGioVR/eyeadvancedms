@@ -113,11 +113,11 @@ export default function MisHonorariosPage() {
     return (
       <div className="mx-auto max-w-[600px] py-12 text-center">
         <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-amber-400" />
-        <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{error}</p>
+        <p className="text-sm font-bold text-fg">{error}</p>
         <button
           type="button"
           onClick={() => fetchData()}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-[#2F3336] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23]"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-line dark:text-fg dark:hover:bg-surface-2"
         >
           <RefreshCw className="h-4 w-4" />
           Reintentar
@@ -131,17 +131,17 @@ export default function MisHonorariosPage() {
   return (
     <div className="mx-auto max-w-[600px] space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold text-gray-900 dark:text-[#E7E9EA]">Mis Honorarios</h1>
-        <p className="text-sm text-gray-400 dark:text-[#71767B]">
+        <h1 className="text-xl font-extrabold text-fg">Mis Honorarios</h1>
+        <p className="text-sm text-muted">
           {data?.doctor_nombre || 'Tus ingresos por servicios'}
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2F3336] dark:bg-[#16181C]">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gray-400" />
-            <span className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-fg">
               Periodo
             </span>
           </div>
@@ -156,21 +156,21 @@ export default function MisHonorariosPage() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1">
-            <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B]">Desde</span>
+            <span className="text-[11px] font-bold text-muted">Desde</span>
             <input
               type="date"
               value={desde}
               onChange={(e) => cambiarRango(e.target.value, hasta)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-[#2F3336] dark:bg-[#0F1419] dark:text-[#E7E9EA]"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-line dark:bg-canvas dark:text-fg"
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B]">Hasta</span>
+            <span className="text-[11px] font-bold text-muted">Hasta</span>
             <input
               type="date"
               value={hasta}
               onChange={(e) => cambiarRango(desde, e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-[#2F3336] dark:bg-[#0F1419] dark:text-[#E7E9EA]"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-line dark:bg-canvas dark:text-fg"
             />
           </label>
         </div>
@@ -180,45 +180,45 @@ export default function MisHonorariosPage() {
           </p>
         )}
         {data?.rango && (
-          <p className="mt-2 text-xs text-gray-400 dark:text-[#71767B]">
+          <p className="mt-2 text-xs text-muted">
             Mostrando {fmtFecha(data.rango.desde)} — {fmtFecha(data.rango.hasta)}
           </p>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2F3336] dark:bg-[#16181C]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
           <div className="mb-2 h-8 w-8 rounded-full bg-amber-500/15 flex items-center justify-center">
             <Clock className="h-4 w-4 text-amber-500" />
           </div>
-          <p className="text-2xl font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+          <p className="text-2xl font-extrabold text-fg">
             {fmtMoney(resumen?.por_pagar || 0)}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400 dark:text-[#71767B]">Por pagar</p>
+          <p className="mt-0.5 text-xs text-muted">Por pagar</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2F3336] dark:bg-[#16181C]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
           <div className="mb-2 h-8 w-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="text-2xl font-extrabold text-emerald-600">
             {fmtMoney(resumen?.pagado || 0)}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400 dark:text-[#71767B]">Pagado</p>
+          <p className="mt-0.5 text-xs text-muted">Pagado</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2F3336] dark:bg-[#16181C]">
-          <p className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
+          <p className="text-lg font-extrabold text-fg">
             {fmtMoney(resumen?.total_filtrado || 0)}
           </p>
-          <p className="text-xs text-gray-400 dark:text-[#71767B]">Devengado</p>
+          <p className="text-xs text-muted">Devengado</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2F3336] dark:bg-[#16181C]">
-          <p className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
+          <p className="text-lg font-extrabold text-fg">
             {resumen?.total_eventos ?? 0}
           </p>
-          <p className="text-xs text-gray-400 dark:text-[#71767B]">Servicios</p>
+          <p className="text-xs text-muted">Servicios</p>
         </div>
       </div>
 
@@ -233,18 +233,18 @@ export default function MisHonorariosPage() {
 
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <h2 className="text-sm font-extrabold uppercase tracking-widest text-fg">
             Movimientos
           </h2>
-          <span className="text-xs text-gray-400 dark:text-[#71767B]">
+          <span className="text-xs text-muted">
             {data?.total ?? 0} en el periodo
           </span>
         </div>
 
         {!data || data.items.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white py-12 text-center dark:border-[#2F3336] dark:bg-[#16181C]">
-            <TrendingUp className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-[#2F3336]" />
-            <p className="text-sm text-gray-400 dark:text-[#71767B]">
+          <div className="rounded-2xl border border-gray-200 bg-white py-12 text-center dark:border-line dark:bg-surface">
+            <TrendingUp className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-line-strong" />
+            <p className="text-sm text-muted">
               Sin movimientos en este periodo
             </p>
           </div>
@@ -255,7 +255,7 @@ export default function MisHonorariosPage() {
               return (
                 <div
                   key={ev.id}
-                  className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]"
+                  className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-line dark:bg-surface"
                 >
                   <div
                     className={cn(
@@ -266,10 +266,10 @@ export default function MisHonorariosPage() {
                     <ArrowUpRight className={cn('h-5 w-5', badge.text)} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+                    <p className="truncate text-sm font-bold text-fg">
                       {ev.fuente}
                     </p>
-                    <p className="truncate text-xs text-gray-400 dark:text-[#71767B]">
+                    <p className="truncate text-xs text-muted">
                       {ev.origen || 'Sin origen'} · {fmtFecha(ev.fecha)}
                     </p>
                   </div>
@@ -293,7 +293,7 @@ export default function MisHonorariosPage() {
         )}
 
         {data && data.total > data.pageSize && (
-          <div className="mt-4 rounded-2xl border border-gray-200 bg-white dark:border-[#2F3336] dark:bg-[#16181C]">
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white dark:border-line dark:bg-surface">
             <Pagination
               page={data.page}
               total={data.total}

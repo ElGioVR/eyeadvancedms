@@ -4,7 +4,7 @@
   "description": "Sistema de Gestión Clínica integral para especialistas oftalmológicos",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#090B0F",
+  "background_color": "#0f273d",
   "theme_color": "#174c78",
   "orientation": "portrait-primary",
   "scope": "/",

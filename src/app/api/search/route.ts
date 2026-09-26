@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
 
@@ -50,7 +51,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Escapa wildcards de ILIKE para que el usuario no liste todo con '%' o '_'
-  const qSanitizada = q.replace(/[%_\\]/g, (c) => `\\${c}`);
+  // y quita sintaxis de filtros PostgREST para que no inyecte condiciones en .or()
+  const qSanitizada = sanitizarBusqueda(q);
+  if (qSanitizada.length < 2) {
+    return NextResponse.json({ results: [] });
+  }
   const pattern = `%${qSanitizada}%`;
   const supabase = getSupabaseAdmin();
 

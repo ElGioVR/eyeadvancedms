@@ -159,9 +159,9 @@ function timeToMinutes(time: string): number | null {
 
 function PreviewField({ label, value, full }: { label: string; value: string; full?: boolean }) {
   return (
-    <div className={cn('rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]', full && 'col-span-2')}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{label}</span>
-      <p className={cn('mt-1 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]', full && 'break-words')}>{value}</p>
+    <div className={cn('rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-line dark:bg-surface', full && 'col-span-2')}>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{label}</span>
+      <p className={cn('mt-1 text-sm font-medium text-fg', full && 'break-words')}>{value}</p>
     </div>
   );
 }
@@ -929,16 +929,16 @@ function NuevaConsultaContent() {
           },
         }}
         action={
-          <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">
+          <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">
             <Printer className="h-4 w-4" /> Imprimir
           </button>
         }
       />
 
       {/* Patient Selector */}
-      <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
+      <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
         <div className="px-6 py-5">
-          <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Paciente</label>
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-muted">Paciente</label>
           {loadingPacientes ? (
             <Skeleton className="h-12 w-full rounded-lg" />
           ) : (
@@ -950,10 +950,10 @@ function NuevaConsultaContent() {
                   onChange={(e) => { setSearchPaciente(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Buscar por nombre..."
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#202327] dark:text-[#E7E9EA] dark:placeholder-[#71767B] transition-all"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface-2 dark:text-fg dark:placeholder-muted transition-all"
                 />
                 {showDropdown && (
-                  <div className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2F3336] dark:bg-[#16181C]">
+                  <div className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface">
                     {filteredPacientes.length > 0 ? (
                       filteredPacientes.map((p) => {
                         const initials = getInitials(p.nombre_completo);
@@ -969,18 +969,18 @@ function NuevaConsultaContent() {
                               setProcedimientosSeleccionados([]);
                               updateConsultation('origenId', p.aseguranza_id || '');
                             }}
-                            className="flex w-full items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
+                            className="flex w-full items-center gap-3 px-4 py-3 hover:bg-surface-2 transition-colors text-left"
                           >
                             <Avatar initials={initials} className={color} />
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{p.nombre_completo}</div>
-                              <div className="text-xs text-gray-500 dark:text-[#71767B]">{p.edad ? `${p.edad} años` : ''} {p.sexo ? `• ${p.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''} {p.aseguradora ? `• ${p.aseguradora}` : ''}</div>
+                              <div className="text-sm font-bold text-fg truncate">{p.nombre_completo}</div>
+                              <div className="text-xs text-muted">{p.edad ? `${p.edad} años` : ''} {p.sexo ? `• ${p.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''} {p.aseguradora ? `• ${p.aseguradora}` : ''}</div>
                             </div>
                           </button>
                         );
                       })
                     ) : (
-                      <div className="px-4 py-3 text-sm text-gray-400 dark:text-[#71767B]">No se encontraron pacientes</div>
+                      <div className="px-4 py-3 text-sm text-muted">No se encontraron pacientes</div>
                     )}
                     <button
                       onClick={() => { setShowNewPatientForm(true); setShowDropdown(false); }}
@@ -998,9 +998,9 @@ function NuevaConsultaContent() {
                 )}
               </div>
               {pacienteSeleccionado && !showDropdown && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500 dark:text-[#71767B]">
+                <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-muted">
                   <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="sm" />
-                  <span className="font-medium text-gray-900 dark:text-[#E7E9EA]">{pacienteSeleccionado.nombre_completo}</span>
+                  <span className="font-medium text-fg">{pacienteSeleccionado.nombre_completo}</span>
                   {pacienteSeleccionado.edad && <span className="hidden sm:inline">{pacienteSeleccionado.edad} años</span>}
                   {pacienteSeleccionado.sexo && <span className="hidden sm:inline">{pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}</span>}
                   {pacienteSeleccionado.aseguradora && <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>}
@@ -1009,18 +1009,18 @@ function NuevaConsultaContent() {
 
               {/* New Patient Form — inline below search */}
               {showNewPatientForm && (
-                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-[#2F3336] dark:bg-[#202327]">
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-line dark:bg-surface-2">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
                         <User className="h-5 w-5 text-primary-600" />
                       </div>
                       <div>
-                        <h2 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Nuevo Paciente</h2>
-                        <p className="text-xs text-gray-400 dark:text-[#71767B]">Complete los datos para registrar al paciente</p>
+                        <h2 className="text-sm font-extrabold uppercase tracking-widest text-fg">Nuevo Paciente</h2>
+                        <p className="text-xs text-muted">Complete los datos para registrar al paciente</p>
                       </div>
                     </div>
-                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#71767B] dark:hover:bg-[#1D1F23] transition-colors">Cancelar</button>
+                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-muted dark:hover:bg-surface-2 transition-colors">Cancelar</button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
@@ -1030,8 +1030,8 @@ function NuevaConsultaContent() {
                     <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
                     <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
                   </div>
-                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-[#2F3336]">
-                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
+                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-line">
+                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">CANCELAR</button>
                     <button
                       onClick={async () => {
                         if (!newPatient.nombre_completo.trim()) return;
@@ -1069,12 +1069,12 @@ function NuevaConsultaContent() {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0 space-y-5">
           {/* Consulta Data */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-[#2F3336] dark:bg-[#202327]/50">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-line dark:bg-surface-2/50">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
                 <ClipboardList className="h-4 w-4 text-primary-600" />
               </div>
-              <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Datos de Consulta</h2>
+              <h2 className="text-xs font-extrabold uppercase tracking-widest text-fg">Datos de Consulta</h2>
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1115,7 +1115,7 @@ function NuevaConsultaContent() {
               </div>
               <FormInput label="Diagnóstico" value={consultationData.diagnostico} onChange={(v) => updateConsultation('diagnostico', v)} placeholder="Escriba el diagnóstico del paciente..." />
               <div>
-                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios <span className="normal-case">(Opcional)</span></label>
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-muted">Estudios <span className="normal-case">(Opcional)</span></label>
                 <div className="space-y-3">
                   {estudiosSeleccionados.map((estudio, index) => {
                     const cat = catalogoEstudios.find((c) => c.id === estudio.id);
@@ -1125,21 +1125,21 @@ function NuevaConsultaContent() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Estudio</span>
-                              <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
+                              <span className="text-sm font-bold text-fg truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeEstudio(index)}
-                            className="shrink-0 rounded-md border border-gray-200 bg-white p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#71767B] transition-colors"
+                            className="shrink-0 rounded-md border border-gray-200 bg-white p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:border-line dark:bg-surface dark:text-muted transition-colors"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-[#71767B]">
-                          Indicado por: <span className="font-semibold text-gray-700 dark:text-[#E7E9EA]">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
+                        <div className="text-xs text-muted">
+                          Indicado por: <span className="font-semibold text-fg-2">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -1150,18 +1150,18 @@ function NuevaConsultaContent() {
                                 onChange={() => toggleMismoDoctor(index)}
                                 className="peer sr-only"
                               />
-                              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-[#202327] transition-colors" />
-                              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-[#16181C] transition-transform peer-checked:translate-x-4" />
+                              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-surface-2 transition-colors" />
+                              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-surface transition-transform peer-checked:translate-x-4" />
                             </div>
-                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Realizado por el mismo doctor de la consulta</span>
+                            <span className="text-xs font-medium text-fg-2">Realizado por el mismo doctor de la consulta</span>
                           </label>
                           {!estudio.mismoDoctor && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-500 dark:text-[#71767B]">Realizado por:</span>
+                              <span className="text-xs font-medium text-muted">Realizado por:</span>
                               <select
                                 value={estudio.doctorId || ''}
                                 onChange={(e) => setEstudioDoctor(index, e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               >
                                 <option value="">Seleccionar doctor...</option>
                                 {doctores.map((d) => (
@@ -1183,12 +1183,12 @@ function NuevaConsultaContent() {
                         onChange={(e) => { setSearchEstudio(e.target.value); setShowEstudioDropdown(true); }}
                         onFocus={() => setShowEstudioDropdown(true)}
                         placeholder="Buscar estudio..."
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:placeholder-[#71767B] transition-all"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg dark:placeholder-muted transition-all"
                       />
                       {showEstudioDropdown && createPortal(
                         <div
                           data-estudio-portal
-                          className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2F3336] dark:bg-[#16181C]"
+                          className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface"
                           style={{ top: estudioDropdownPos.top, left: estudioDropdownPos.left, width: estudioDropdownPos.width }}
                         >
                           {filteredEstudios.length > 0 ? (
@@ -1199,18 +1199,18 @@ function NuevaConsultaContent() {
                                   key={e.id}
                                   type="button"
                                   onClick={() => addEstudio(e.id)}
-                                  className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
+                                  className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-surface-2 transition-colors text-left"
                                 >
-                                  <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{e.nombre}</span>
+                                  <span className="text-sm font-medium text-fg truncate">{e.nombre}</span>
                                 </button>
                               ))
                           ) : (
-                            <div className="px-4 py-3 text-sm text-gray-400 dark:text-[#71767B]">No se encontraron resultados</div>
+                            <div className="px-4 py-3 text-sm text-muted">No se encontraron resultados</div>
                           )}
                           <button
                             type="button"
                             onClick={() => { setShowEstudioDropdown(false); setSearchEstudio(''); }}
-                            className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-[#71767B] dark:hover:bg-[#1D1F23]"
+                            className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-muted dark:hover:bg-surface-2"
                           >
                             Cerrar
                           </button>
@@ -1221,12 +1221,12 @@ function NuevaConsultaContent() {
                   )}
 
                   {estudiosSeleccionados.length >= 3 && (
-                    <p className="text-xs text-gray-400 dark:text-[#71767B]">Máximo 3 estudios alcanzado</p>
+                    <p className="text-xs text-muted">Máximo 3 estudios alcanzado</p>
                   )}
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimientos <span className="normal-case">(Opcional)</span></label>
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-muted">Procedimientos <span className="normal-case">(Opcional)</span></label>
                 <div className="space-y-3">
                   {procedimientosSeleccionados.map((proc, index) => {
                     const cat = catalogoProcedimientos.find((c) => c.id === proc.id);
@@ -1236,21 +1236,21 @@ function NuevaConsultaContent() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Procedimiento</span>
-                              <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">{cat?.nombre || 'Desconocido'}</span>
+                              <span className="text-sm font-bold text-fg truncate">{cat?.nombre || 'Desconocido'}</span>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeProcedimiento(index)}
-                            className="shrink-0 rounded-md border border-gray-200 bg-white p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#71767B] transition-colors"
+                            className="shrink-0 rounded-md border border-gray-200 bg-white p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:border-line dark:bg-surface dark:text-muted transition-colors"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-[#71767B]">
-                          Indicado por: <span className="font-semibold text-gray-700 dark:text-[#E7E9EA]">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
+                        <div className="text-xs text-muted">
+                          Indicado por: <span className="font-semibold text-fg-2">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -1261,18 +1261,18 @@ function NuevaConsultaContent() {
                                 onChange={() => toggleMismoDoctorProc(index)}
                                 className="peer sr-only"
                               />
-                              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-[#202327] transition-colors" />
-                              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-[#16181C] transition-transform peer-checked:translate-x-4" />
+                              <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-primary-600 dark:bg-surface-2 transition-colors" />
+                              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm dark:bg-surface transition-transform peer-checked:translate-x-4" />
                             </div>
-                            <span className="text-xs font-medium text-gray-700 dark:text-[#E7E9EA]">Realizado por el mismo doctor de la consulta</span>
+                            <span className="text-xs font-medium text-fg-2">Realizado por el mismo doctor de la consulta</span>
                           </label>
                           {!proc.mismoDoctor && (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-500 dark:text-[#71767B]">Realizado por:</span>
+                              <span className="text-xs font-medium text-muted">Realizado por:</span>
                               <select
                                 value={proc.doctorId || ''}
                                 onChange={(e) => setProcedimientoDoctor(index, e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               >
                                 <option value="">Seleccionar doctor...</option>
                                 {doctores.map((d) => (
@@ -1283,7 +1283,7 @@ function NuevaConsultaContent() {
                           )}
                         </div>
                         {proc.motivo && (
-                          <p className="text-xs text-gray-500 dark:text-[#71767B] italic">Motivo: {proc.motivo}</p>
+                          <p className="text-xs text-muted italic">Motivo: {proc.motivo}</p>
                         )}
                       </div>
                     );
@@ -1297,12 +1297,12 @@ function NuevaConsultaContent() {
                         onChange={(e) => { setSearchProcedimiento(e.target.value); setShowProcedimientoDropdown(true); }}
                         onFocus={() => setShowProcedimientoDropdown(true)}
                         placeholder="Buscar procedimiento..."
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:placeholder-[#71767B] transition-all"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg dark:placeholder-muted transition-all"
                       />
                       {showProcedimientoDropdown && createPortal(
                         <div
                           data-procedimiento-portal
-                          className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2F3336] dark:bg-[#16181C]"
+                          className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface"
                           style={{ top: procDropdownPos.top, left: procDropdownPos.left, width: procDropdownPos.width }}
                         >
                           {filteredProcedimientos.length > 0 ? (
@@ -1311,18 +1311,18 @@ function NuevaConsultaContent() {
                                 key={p.id}
                                 type="button"
                                 onClick={() => addProcedimiento(p.id)}
-                                className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
+                                className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-surface-2 transition-colors text-left"
                               >
-                                <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{p.nombre}</span>
+                                <span className="text-sm font-medium text-fg truncate">{p.nombre}</span>
                               </button>
                             ))
                           ) : (
-                            <div className="px-4 py-3 text-sm text-gray-400 dark:text-[#71767B]">No se encontraron resultados</div>
+                            <div className="px-4 py-3 text-sm text-muted">No se encontraron resultados</div>
                           )}
                           <button
                             type="button"
                             onClick={() => { setShowProcedimientoDropdown(false); setSearchProcedimiento(''); }}
-                            className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-[#71767B] dark:hover:bg-[#1D1F23]"
+                            className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-muted dark:hover:bg-surface-2"
                           >
                             Cerrar
                           </button>
@@ -1340,7 +1340,7 @@ function NuevaConsultaContent() {
                         onChange={(e) => { setAgregarOtroProcedimiento(e.target.checked); if (!e.target.checked) { setSearchProcedimiento(''); setShowProcedimientoDropdown(false); setProcedimientoMotivo(''); } }}
                         className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-[#E7E9EA]">Agregar otro procedimiento</span>
+                      <span className="text-sm font-medium text-fg-2">Agregar otro procedimiento</span>
                     </label>
                   )}
 
@@ -1351,7 +1351,7 @@ function NuevaConsultaContent() {
                         onChange={(e) => setProcedimientoMotivo(e.target.value)}
                         placeholder="Motivo para agregar otro procedimiento..."
                         rows={2}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:placeholder-[#71767B] transition-all resize-none"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg dark:placeholder-muted transition-all resize-none"
                       />
                       {procedimientoMotivo.trim() && (
                         <div className="relative" ref={procedimientoInputRef} data-procedimiento-dropdown>
@@ -1361,12 +1361,12 @@ function NuevaConsultaContent() {
                             onChange={(e) => { setSearchProcedimiento(e.target.value); setShowProcedimientoDropdown(true); }}
                             onFocus={() => setShowProcedimientoDropdown(true)}
                             placeholder="Buscar otro procedimiento..."
-                            className="w-full rounded-lg border border-primary-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-primary-700 dark:bg-[#16181C] dark:text-[#E7E9EA] dark:placeholder-[#71767B] transition-all"
+                            className="w-full rounded-lg border border-primary-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-primary-700 dark:bg-surface dark:text-fg dark:placeholder-muted transition-all"
                           />
                           {showProcedimientoDropdown && createPortal(
                             <div
                               data-procedimiento-portal
-                              className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2F3336] dark:bg-[#16181C]"
+                              className="fixed z-[9999] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface"
                               style={{ top: procDropdownPos.top, left: procDropdownPos.left, width: procDropdownPos.width }}
                             >
                               {filteredProcedimientos.length > 0 ? (
@@ -1377,18 +1377,18 @@ function NuevaConsultaContent() {
                                       key={p.id}
                                       type="button"
                                       onClick={() => addProcedimiento(p.id, procedimientoMotivo.trim())}
-                                      className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-left"
+                                      className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-surface-2 transition-colors text-left"
                                     >
-                                      <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{p.nombre}</span>
+                                      <span className="text-sm font-medium text-fg truncate">{p.nombre}</span>
                                     </button>
                                   ))
                               ) : (
-                                <div className="px-4 py-3 text-sm text-gray-400 dark:text-[#71767B]">No se encontraron resultados</div>
+                                <div className="px-4 py-3 text-sm text-muted">No se encontraron resultados</div>
                               )}
                               <button
                                 type="button"
                                 onClick={() => { setShowProcedimientoDropdown(false); setSearchProcedimiento(''); }}
-                                className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-[#71767B] dark:hover:bg-[#1D1F23]"
+                                className="w-full border-t border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 hover:bg-gray-50 dark:text-muted dark:hover:bg-surface-2"
                               >
                                 Cerrar
                               </button>
@@ -1405,19 +1405,19 @@ function NuevaConsultaContent() {
           </div>
 
           {/* Cobro Data */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-[#2F3336] dark:bg-[#202327]/50">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-line dark:bg-surface-2/50">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 ring-1 ring-amber-100">
                 <Banknote className="h-4 w-4 text-amber-600" />
               </div>
-              <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Datos de Cobro</h2>
+              <h2 className="text-xs font-extrabold uppercase tracking-widest text-fg">Datos de Cobro</h2>
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect label="Método de Pago" value={consultationData.metodoPago} onChange={(v) => updateConsultation('metodoPago', v)} options={paymentMethodOptions} />
                 <FormSelect label="Moneda" value={consultationData.moneda} onChange={(v) => updateConsultation('moneda', v)} options={['MXN - Peso Mexicano', 'USD - Dólar']} />
               </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 dark:border-[#2F3336] dark:bg-[#202327]">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 dark:border-line dark:bg-surface-2">
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -1435,17 +1435,17 @@ function NuevaConsultaContent() {
                       'rounded-lg px-3 py-1.5 text-xs font-bold transition-colors',
                       editingMontos
                         ? 'bg-primary-600 text-white hover:bg-primary-700'
-                        : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-[#2F3336] dark:text-[#9BA1A6] dark:hover:bg-[#1D1F23]'
+                        : 'border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-line dark:text-fg-2 dark:hover:bg-surface-2'
                     )}
                   >
                     {editingMontos ? 'Terminar edición' : 'Editar montos'}
                   </button>
                 </div>
                 <div className="flex justify-between text-sm items-center gap-3">
-                  <span className="text-gray-500 dark:text-[#71767B] shrink-0">Consulta:</span>
+                  <span className="text-muted shrink-0">Consulta:</span>
                   {editingMontos ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                      <span className="text-xs text-muted">$</span>
                       <input
                         type="number"
                         step="0.01"
@@ -1453,17 +1453,17 @@ function NuevaConsultaContent() {
                         value={costoBaseEdit}
                         onChange={(e) => setCostoBaseEdit(e.target.value)}
                         placeholder={selectedConsultaServicio ? convertir(selectedConsultaServicio.costo).toFixed(2) : '0.00'}
-                        className="w-28 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                        className="w-28 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                       />
                     </div>
                   ) : (
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right">{selectedConsultaServicio?.nombre || 'Servicio pendiente'}</span>
+                    <span className="font-bold text-fg text-right">{selectedConsultaServicio?.nombre || 'Servicio pendiente'}</span>
                   )}
                 </div>
                 {estudiosSeleccionados.length > 0 && (
                   <>
-                    <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Estudios ({estudiosSeleccionados.length})</span>
+                    <div className="border-t border-line pt-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted">Estudios ({estudiosSeleccionados.length})</span>
                     </div>
                     {estudiosSeleccionados.map((estudio, idx) => {
                       const cat = catalogoEstudios.find((c) => c.id === estudio.id);
@@ -1472,13 +1472,13 @@ function NuevaConsultaContent() {
                         : doctores.find((d) => d.id === estudio.doctorId);
                       return (
                         <div key={idx} className="text-sm pl-3 flex items-center justify-between gap-3">
-                          <span className="text-gray-500 dark:text-[#71767B]">
+                          <span className="text-muted">
                             {cat?.nombre || 'Desconocido'}
-                            {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
+                            {doctorAsignado && <span className="text-xs text-muted ml-1">({doctorAsignado.nombre})</span>}
                           </span>
                           {editingMontos && (
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                              <span className="text-xs text-muted">$</span>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1486,7 +1486,7 @@ function NuevaConsultaContent() {
                                 value={costosEstudiosEdit[idx] ?? ''}
                                 onChange={(e) => setCostosEstudiosEdit((p) => ({ ...p, [idx]: e.target.value }))}
                                 placeholder={cat ? convertir(cat.costo).toFixed(2) : '0.00'}
-                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               />
                             </div>
                           )}
@@ -1497,8 +1497,8 @@ function NuevaConsultaContent() {
                 )}
                 {procedimientosSeleccionados.length > 0 && (
                   <>
-                    <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Procedimientos ({procedimientosSeleccionados.length})</span>
+                    <div className="border-t border-line pt-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted">Procedimientos ({procedimientosSeleccionados.length})</span>
                     </div>
                     {procedimientosSeleccionados.map((proc, idx) => {
                       const cat = catalogoProcedimientos.find((c) => c.id === proc.id);
@@ -1507,13 +1507,13 @@ function NuevaConsultaContent() {
                         : doctores.find((d) => d.id === proc.doctorId);
                       return (
                         <div key={idx} className="text-sm pl-3 flex items-center justify-between gap-3">
-                          <span className="text-gray-500 dark:text-[#71767B]">
+                          <span className="text-muted">
                             {cat?.nombre || 'Desconocido'}
-                            {doctorAsignado && <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({doctorAsignado.nombre})</span>}
+                            {doctorAsignado && <span className="text-xs text-muted ml-1">({doctorAsignado.nombre})</span>}
                           </span>
                           {editingMontos && (
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs text-gray-400 dark:text-[#71767B]">$</span>
+                              <span className="text-xs text-muted">$</span>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1521,7 +1521,7 @@ function NuevaConsultaContent() {
                                 value={costosProcsEdit[idx] ?? ''}
                                 onChange={(e) => setCostosProcsEdit((p) => ({ ...p, [idx]: e.target.value }))}
                                 placeholder={cat ? convertir(cat.costo).toFixed(2) : '0.00'}
-                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA]"
+                                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               />
                             </div>
                           )}
@@ -1541,37 +1541,37 @@ function NuevaConsultaContent() {
                   if (!honorario) return null;
                   return (
                     <>
-                      <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Honorarios</span>
+                      <div className="border-t border-line pt-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-muted">Honorarios</span>
                       </div>
                       <div className="flex justify-between text-sm pl-3">
-                        <span className="text-gray-500 dark:text-[#71767B]">
+                        <span className="text-muted">
                           Dr. {doctorPrincipal.nombre}
-                          <span className="text-xs text-gray-400 dark:text-[#71767B] ml-1">({TIPO_CONSULTA_MAP[consultationData.tipo] || 'Consulta'})</span>
+                          <span className="text-xs text-muted ml-1">({TIPO_CONSULTA_MAP[consultationData.tipo] || 'Consulta'})</span>
                         </span>
-                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${convertir(honorario).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-bold text-fg">${convertir(honorario).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </>
                   );
                 })()}
                 {esUSD && tipoCambio && (
-                  <div className="text-[10px] text-gray-400 dark:text-[#71767B] text-right">Tipo de cambio: 1 USD = {tipoCambio.toFixed(2)} MXN</div>
+                  <div className="text-[10px] text-muted text-right">Tipo de cambio: 1 USD = {tipoCambio.toFixed(2)} MXN</div>
                 )}
                 {selectedInsurance && selectedInsurance.porcentaje_cobertura != null && selectedInsurance.porcentaje_cobertura > 0 && (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-[#71767B]">Cobertura {selectedInsurance.nombre} ({selectedInsurance.porcentaje_cobertura}%):</span>
+                      <span className="text-muted">Cobertura {selectedInsurance.nombre} ({selectedInsurance.porcentaje_cobertura}%):</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">-${convertir(descuentoSeguro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-[#71767B]">Paciente paga:</span>
+                      <span className="text-muted">Paciente paga:</span>
                       <span className="font-bold text-amber-600 dark:text-amber-400">${convertir(pacientePaga).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </>
                 )}
-                <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2 flex justify-between">
-                  <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Total Clínica:</span>
-                  <span className="text-lg font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
+                <div className="border-t border-line pt-2 flex justify-between">
+                  <span className="text-sm font-bold text-fg">Total Clínica:</span>
+                  <span className="text-lg font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-muted">{esUSD ? 'USD' : 'MXN'}</span></span>
                 </div>
               </div>
             </div>
@@ -1585,11 +1585,11 @@ function NuevaConsultaContent() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-gray-400 dark:text-[#71767B]" />
-              <span className="text-xs text-gray-400 dark:text-[#71767B]">Los campos con <span className="text-red-500">*</span> son obligatorios.</span>
+              <AlertTriangle className="h-4 w-4 text-muted" />
+              <span className="text-xs text-muted">Los campos con <span className="text-red-500">*</span> son obligatorios.</span>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => requestExit('/agenda')} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
+              <button type="button" onClick={() => requestExit('/agenda')} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">CANCELAR</button>
               <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
                 <Eye className="h-4 w-4" /> PREVISUALIZAR
               </button>
@@ -1606,55 +1606,55 @@ function NuevaConsultaContent() {
 
         {/* Sidebar */}
         <div className="w-full lg:w-[300px] lg:shrink-0 space-y-5 lg:sticky lg:top-24 lg:self-start">
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
             <div className="px-6 py-4">
-              <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Resumen</h2>
+              <h2 className="text-xs font-extrabold uppercase tracking-widest text-fg">Resumen</h2>
             </div>
             <div className="px-6 pb-4 space-y-3 text-xs">
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Paciente</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right truncate max-w-[160px]">{pacienteSeleccionado?.nombre_completo || '—'}</span>
+                <span className="text-muted">Paciente</span>
+                <span className="font-bold text-fg text-right truncate max-w-[160px]">{pacienteSeleccionado?.nombre_completo || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Doctor</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{doctorSeleccionado?.nombre || '—'}</span>
+                <span className="text-muted">Doctor</span>
+                <span className="font-bold text-fg">{doctorSeleccionado?.nombre || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Fecha</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{consultationData.fecha}</span>
+                <span className="text-muted">Fecha</span>
+                <span className="font-bold text-fg">{consultationData.fecha}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Hora</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{consultationData.horaInicio} - {consultationData.horaFin || '—'}</span>
+                <span className="text-muted">Hora</span>
+                <span className="font-bold text-fg">{consultationData.horaInicio} - {consultationData.horaFin || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Origen</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedInsurance?.nombre || '—'}</span>
+                <span className="text-muted">Origen</span>
+                <span className="font-bold text-fg">{selectedInsurance?.nombre || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400 dark:text-[#71767B]">Consulta</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA] text-right truncate max-w-[160px]">{selectedConsultaServicio?.nombre || '—'}</span>
+                <span className="text-muted">Consulta</span>
+                <span className="font-bold text-fg text-right truncate max-w-[160px]">{selectedConsultaServicio?.nombre || '—'}</span>
               </div>
-              <div className="border-t border-gray-100 dark:border-[#2F3336] pt-2 space-y-1">
+              <div className="border-t border-line/70 pt-2 space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-400 dark:text-[#71767B]">Base:</span>
-                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{selectedConsultaServicio?.nombre || '—'}</span>
+                  <span className="text-muted">Base:</span>
+                  <span className="font-bold text-fg">{selectedConsultaServicio?.nombre || '—'}</span>
                 </div>
                 {estudiosSeleccionados.length > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400 dark:text-[#71767B]">Estudios:</span>
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{estudiosSeleccionados.length}</span>
+                    <span className="text-muted">Estudios:</span>
+                    <span className="font-bold text-fg">{estudiosSeleccionados.length}</span>
                   </div>
                 )}
                 {procedimientosSeleccionados.length > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400 dark:text-[#71767B]">Procs:</span>
-                    <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{procedimientosSeleccionados.length}</span>
+                    <span className="text-muted">Procs:</span>
+                    <span className="font-bold text-fg">{procedimientosSeleccionados.length}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-gray-100 dark:border-[#2F3336] pt-1">
-                  <span className="text-gray-400 dark:text-[#71767B]">Total:</span>
-                  <span className="font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span></span>
+                <div className="flex justify-between border-t border-line/70 pt-1">
+                  <span className="text-muted">Total:</span>
+                  <span className="font-extrabold text-primary-700 dark:text-primary-400">${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-bold text-muted">{esUSD ? 'USD' : 'MXN'}</span></span>
                 </div>
               </div>
             </div>
@@ -1665,28 +1665,28 @@ function NuevaConsultaContent() {
       <Modal isOpen={showExitDraftModal} onClose={() => setShowExitDraftModal(false)} maxWidth="max-w-md">
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">Guardar borrador</h2>
-            <p className="mt-2 text-sm text-gray-500 dark:text-[#71767B]">
+            <h2 className="text-lg font-extrabold text-fg">Guardar borrador</h2>
+            <p className="mt-2 text-sm text-muted">
               Hay cambios en esta consulta. Revise el resumen antes de {pendingExitAction === 'reload' ? 'recargar' : 'salir'}.
             </p>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#2F3336] dark:bg-[#202327]">
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Cambios capturados</p>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-line dark:bg-surface-2">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">Cambios capturados</p>
             {draftChangeSummary.length > 0 ? (
-              <ul className="max-h-56 space-y-2 overflow-y-auto text-sm text-gray-700 dark:text-[#E7E9EA]">
+              <ul className="max-h-56 space-y-2 overflow-y-auto text-sm text-fg-2">
                 {draftChangeSummary.map((change, index) => (
-                  <li key={index} className="rounded-md bg-white px-3 py-2 dark:bg-[#16181C]">{change}</li>
+                  <li key={index} className="rounded-md bg-white px-3 py-2 dark:bg-surface">{change}</li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-[#71767B]">No hay cambios relevantes para guardar.</p>
+              <p className="text-sm text-muted">No hay cambios relevantes para guardar.</p>
             )}
           </div>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={exitWithoutSaving}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors"
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors"
             >
               {pendingExitAction === 'reload' ? 'Recargar sin guardar' : 'Salir sin guardar'}
             </button>
@@ -1715,26 +1715,26 @@ function NuevaConsultaContent() {
             <Eye className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">Vista Previa de Consulta</h2>
-            <p className="text-xs text-gray-400 dark:text-[#71767B]">Revise la información antes de finalizar</p>
+            <h2 className="text-lg font-extrabold text-fg">Vista Previa de Consulta</h2>
+            <p className="text-xs text-muted">Revise la información antes de finalizar</p>
           </div>
         </div>
 
         <div className="space-y-6">
           {pacienteSeleccionado && (
-            <div className="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-100 dark:bg-[#202327] dark:ring-[#2F3336]">
+            <div className="rounded-xl bg-gray-50 p-5 ring-1 ring-gray-100 dark:bg-surface-2 dark:ring-line">
               <div className="flex items-center gap-3 mb-3">
                 <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="lg" />
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{pacienteSeleccionado.nombre_completo}</h3>
-                  <p className="text-xs text-gray-500 dark:text-[#71767B]">{pacienteSeleccionado.edad ? `${pacienteSeleccionado.edad} años` : ''} {pacienteSeleccionado.sexo ? `• ${pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''}</p>
+                  <h3 className="text-base font-extrabold text-fg">{pacienteSeleccionado.nombre_completo}</h3>
+                  <p className="text-xs text-muted">{pacienteSeleccionado.edad ? `${pacienteSeleccionado.edad} años` : ''} {pacienteSeleccionado.sexo ? `• ${pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''}</p>
                 </div>
               </div>
             </div>
           )}
 
           <div>
-            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <ClipboardList className="h-4 w-4 text-primary-600" /> Datos de Consulta
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -1747,10 +1747,10 @@ function NuevaConsultaContent() {
             </div>
             <div className="mt-3 space-y-3">
               <PreviewField label="Diagnóstico" value={consultationData.diagnostico || 'No especificado'} full />
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios</span>
+              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-line dark:bg-surface">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Estudios</span>
                 {estudiosSeleccionados.length === 0 ? (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-[#71767B]">Ninguno</p>
+                  <p className="mt-1 text-sm text-muted">Ninguno</p>
                 ) : (
                   <ul className="mt-1 space-y-1">
                     {estudiosSeleccionados.map((e, index) => {
@@ -1761,8 +1761,8 @@ function NuevaConsultaContent() {
                       return (
                         <li key={index} className="text-sm">
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre}</span>
-                            {doctorName && <span className="text-[10px] text-gray-400 dark:text-[#71767B]">({doctorName})</span>}
+                            <span className="text-fg">{cat?.nombre}</span>
+                            {doctorName && <span className="text-[10px] text-muted">({doctorName})</span>}
                           </div>
                         </li>
                       );
@@ -1770,10 +1770,10 @@ function NuevaConsultaContent() {
                   </ul>
                 )}
               </div>
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimientos</span>
+              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-line dark:bg-surface">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Procedimientos</span>
                 {procedimientosSeleccionados.length === 0 ? (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-[#71767B]">Ninguno</p>
+                  <p className="mt-1 text-sm text-muted">Ninguno</p>
                 ) : (
                   <ul className="mt-1 space-y-1">
                     {procedimientosSeleccionados.map((p, index) => {
@@ -1781,8 +1781,8 @@ function NuevaConsultaContent() {
                       return (
                         <li key={index} className="text-sm">
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre}</span>
-                            {p.motivo && <span className="text-[10px] text-gray-400 dark:text-[#71767B] italic">({p.motivo})</span>}
+                            <span className="text-fg">{cat?.nombre}</span>
+                            {p.motivo && <span className="text-[10px] text-muted italic">({p.motivo})</span>}
                           </div>
                         </li>
                       );
@@ -1794,29 +1794,29 @@ function NuevaConsultaContent() {
           </div>
 
           <div>
-            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Banknote className="h-4 w-4 text-amber-600" /> Datos de Cobro
             </h4>
             <div className="space-y-3 text-sm">
               <PreviewField label="Método de Pago" value={consultationData.metodoPago || 'No seleccionado'} />
               <PreviewField label="Moneda" value={consultationData.moneda || '—'} />
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-[#2F3336] dark:bg-[#16181C]">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Costo Total</span>
+              <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-line dark:bg-surface">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Costo Total</span>
                 <p className="mt-1 text-lg font-extrabold text-primary-700 dark:text-primary-400">
-                  ${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{esUSD ? 'USD' : 'MXN'}</span>
+                  ${convertir(costoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-muted">{esUSD ? 'USD' : 'MXN'}</span>
                 </p>
                 <div className="mt-2 space-y-1 text-xs">
                   <div>
-                    <span className="text-gray-500 dark:text-[#71767B]">Consulta: </span>
-                    <span className="text-gray-900 dark:text-[#E7E9EA]">{selectedConsultaServicio?.nombre || '—'}</span>
+                    <span className="text-muted">Consulta: </span>
+                    <span className="text-fg">{selectedConsultaServicio?.nombre || '—'}</span>
                   </div>
                   {estudiosSeleccionados.map((e, idx) => {
                     const cat = catalogoEstudios.find((c) => c.id === e.id);
                     const doctorName = e.mismoDoctor ? doctorSeleccionado?.nombre : doctores.find((d) => d.id === e.doctorId)?.nombre;
                     return (
                       <div key={idx}>
-                        <span className="text-gray-500 dark:text-[#71767B]">Estudio: </span>
-                        <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre || 'Desconocido'}{doctorName ? ` (${doctorName})` : ''}</span>
+                        <span className="text-muted">Estudio: </span>
+                        <span className="text-fg">{cat?.nombre || 'Desconocido'}{doctorName ? ` (${doctorName})` : ''}</span>
                       </div>
                     );
                   })}
@@ -1824,8 +1824,8 @@ function NuevaConsultaContent() {
                     const cat = catalogoProcedimientos.find((c) => c.id === p.id);
                     return (
                       <div key={idx}>
-                        <span className="text-gray-500 dark:text-[#71767B]">Procedimiento: </span>
-                        <span className="text-gray-900 dark:text-[#E7E9EA]">{cat?.nombre || 'Desconocido'}</span>
+                        <span className="text-muted">Procedimiento: </span>
+                        <span className="text-fg">{cat?.nombre || 'Desconocido'}</span>
                       </div>
                     );
                   })}
@@ -1840,8 +1840,8 @@ function NuevaConsultaContent() {
                     if (!honorario) return null;
                     return (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-[#71767B]">Honorarios Dr. {doctorPrincipal.nombre}:</span>
-                        <span className="text-gray-900 dark:text-[#E7E9EA]">${convertir(honorario).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="text-muted">Honorarios Dr. {doctorPrincipal.nombre}:</span>
+                        <span className="text-fg">${convertir(honorario).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     );
                   })()}
@@ -1852,7 +1852,7 @@ function NuevaConsultaContent() {
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 mt-6 pt-5">
-          <button onClick={() => setShowPreview(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors">CERRAR</button>
+          <button onClick={() => setShowPreview(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">CERRAR</button>
           <button
             onClick={() => { setShowPreview(false); handleCreate(); }}
             disabled={saving || !pacienteSeleccionado || !consultationData.doctorId || Boolean(dateTimeError)}
@@ -1869,7 +1869,7 @@ function NuevaConsultaContent() {
 
 export default function NuevaConsultaPage() {
   return (
-    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-gray-100 dark:bg-[#202327] rounded-lg" /><div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" /></div>}>
+    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-surface-2 rounded-lg" /><div className="h-32 bg-surface-2 rounded-lg" /></div>}>
       <NuevaConsultaContent />
     </Suspense>
   );

@@ -88,9 +88,9 @@ export default function LIOSelector({
           onChange={(e) => onChange(e.target.value || null)}
           disabled={disabled || loading}
           className={cn(
-            'w-full rounded-lg border border-gray-200 dark:border-[#2F3336]',
-            'bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm',
-            'text-gray-900 dark:text-[#E7E9EA]',
+            'w-full rounded-lg border border-line',
+            'bg-surface-2 px-4 py-2.5 text-sm',
+            'text-fg',
             'focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500',
             'appearance-none disabled:opacity-60 pr-10'
           )}
@@ -109,7 +109,7 @@ export default function LIOSelector({
         )}
       </div>
       {selected && (
-        <div className="rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/60 px-3 py-2 text-xs text-gray-600 dark:text-[#71767B]">
+        <div className="rounded-lg border border-line/70 bg-gray-50 dark:bg-surface-2/60 px-3 py-2 text-xs text-gray-600 dark:text-muted">
           {formatearResumen(selected)}
         </div>
       )}

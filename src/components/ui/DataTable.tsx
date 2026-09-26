@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { cn } from '@/lib/utils';
 
@@ -23,16 +23,16 @@ export default function DataTable({
   emptyMessage = 'No hay datos disponibles',
 }: DataTableProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#16181C]">
+            <tr className="border-b border-line bg-surface-2/60">
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    'px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#71767B]',
+                    'whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted first:pl-5 last:pr-5',
                     col.className
                   )}
                 >
@@ -41,12 +41,12 @@ export default function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-[#2F3336]">
+          <tbody className="divide-y divide-line">
             {data.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-8 text-center text-sm text-gray-500 dark:text-[#71767B]"
+                  className="px-4 py-12 text-center text-sm text-muted"
                 >
                   {emptyMessage}
                 </td>
@@ -57,12 +57,12 @@ export default function DataTable({
                   key={rowIndex}
                   onClick={() => onRowClick?.(row)}
                   className={cn(
-                    'transition-colors hover:bg-gray-50 dark:hover:bg-[#1D1F23]',
+                    'transition-colors hover:bg-surface-2/70',
                     onRowClick && 'cursor-pointer'
                   )}
                 >
                   {columns.map((col) => (
-                    <td key={col.key} className={cn('px-4 py-3', col.className)}>
+                    <td key={col.key} className={cn('px-4 py-3.5 text-fg first:pl-5 last:pr-5', col.className)}>
                       {col.render
                         ? col.render(row[col.key], row)
                         : row[col.key]}

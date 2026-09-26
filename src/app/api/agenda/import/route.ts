@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import type { Worksheet } from 'exceljs';
@@ -483,7 +484,7 @@ export async function POST(request: Request) {
 
       if (error) {
         errores++;
-        rechazados.push({ nombre: f.nombre_paciente, fecha: f.fecha, motivo: error.message });
+        rechazados.push({ nombre: f.nombre_paciente, fecha: f.fecha, motivo: mensajeSeguro(error, 'agenda.import', 'No se pudo guardar') });
       } else {
         insertadas++;
         dupSet.add(dupKey);
@@ -718,7 +719,7 @@ export async function POST(request: Request) {
     if (error) {
       erroresInsercion += cirugiaBatch.length;
       for (const fila of cirugiaBatch) {
-        rechazados.push({ fila: insertadas + insertadasAplazadas + 1, motivo: error.message, nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: '' });
+        rechazados.push({ fila: insertadas + insertadasAplazadas + 1, motivo: mensajeSeguro(error, 'agenda.import', 'No se pudo guardar'), nombre: fila.nombre_paciente as string, fecha: fila.fecha as string, fila_original: '' });
       }
     } else {
       insertadas = cirugiaBatch.length;

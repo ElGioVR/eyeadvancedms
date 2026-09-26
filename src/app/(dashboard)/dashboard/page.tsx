@@ -1,30 +1,29 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getVerifiedUserId } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getDashboardData } from '@/lib/dashboard-data';
 import DashboardContent from './DashboardContent';
 import DashboardLoading from './loading';
 
 async function fetchDashboardData(doctorId?: string) {
-  const supabase = createClient();
-  const userPromise = supabase.auth.getUser();
-
-  // Perfil y datos del dashboard en paralelo (evita waterfall de 3 round-trips)
-  const user = (await userPromise).data.user;
-
-  if (!user) {
+  void doctorId;
+  // El middleware ya verificó la sesión en esta petición: sin segundo viaje a Auth
+  const userId = await getVerifiedUserId();
+  if (!userId) {
     redirect('/login');
   }
 
-  const perfilPromise = supabase
+  // Perfil y datos del dashboard en paralelo
+  const perfilPromise = getSupabaseAdmin()
     .from('usuarios')
     .select('nombre, iniciales, avatar_url, rol')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle();
 
   const [perfilResult, data] = await Promise.all([perfilPromise, getDashboardData()]);
 
-  const nombre = perfilResult.data?.nombre || user.user_metadata?.nombre || 'Usuario';
+  const nombre = perfilResult.data?.nombre || 'Usuario';
   const iniciales = perfilResult.data?.iniciales || nombre
     .split(' ')
     .map((n: string) => n[0])

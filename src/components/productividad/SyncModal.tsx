@@ -101,7 +101,7 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4 pr-6">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-[#E7E9EA]">Sync de honorarios</h2>
+            <h2 className="text-lg font-bold text-fg">Sync de honorarios</h2>
             <p className="text-sm text-gray-500">
               {desde && hasta ? `${desde} — ${hasta}` : 'Rango actual'}
             </p>
@@ -138,9 +138,9 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
               <p className="text-xs text-emerald-700 dark:text-emerald-400">Ya en módulo</p>
               <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{enModulo.length}</p>
             </div>
-            <div className="rounded-lg bg-gray-50 dark:bg-[#202327] border border-gray-200 dark:border-[#2F3336] p-3">
+            <div className="rounded-lg bg-surface-2 border border-line p-3">
               <p className="text-xs text-gray-500">Doctores rango</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-[#E7E9EA]">{preview.doctores_total ?? 0}</p>
+              <p className="text-xl font-bold text-fg">{preview.doctores_total ?? 0}</p>
             </div>
           </div>
         )}
@@ -153,10 +153,10 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
                   <AlertTriangle className="w-3.5 h-3.5" />
                   Encontrados (pendientes) — {fase === 'done' ? finalesPendientes.length : pendientes.length}
                 </p>
-                <ul className="divide-y divide-gray-100 dark:divide-[#2F3336] rounded-lg border border-amber-200 dark:border-amber-900/50">
+                <ul className="divide-y divide-line/70 rounded-lg border border-amber-200 dark:border-amber-900/50">
                   {(fase === 'done' ? finalesPendientes : pendientes).slice(0, 50).map((d, i) => (
                     <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                      <span className="font-medium text-gray-900 dark:text-[#E7E9EA]">{d.doctor_nombre}</span>
+                      <span className="font-medium text-fg">{d.doctor_nombre}</span>
                       <span className="text-xs text-gray-500">{d.origen}</span>
                     </li>
                   ))}
@@ -170,10 +170,10 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Ya en el módulo — {fase === 'done' ? finalesModulo.length : enModulo.length}
                 </p>
-                <ul className="divide-y divide-gray-100 dark:divide-[#2F3336] rounded-lg border border-emerald-200 dark:border-emerald-900/50">
+                <ul className="divide-y divide-line/70 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
                   {(fase === 'done' ? finalesModulo : enModulo).slice(0, 50).map((d, i) => (
                     <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                      <span className="font-medium text-gray-900 dark:text-[#E7E9EA]">{d.doctor_nombre}</span>
+                      <span className="font-medium text-fg">{d.doctor_nombre}</span>
                       <span className="text-xs text-gray-500">
                         {d.origen}
                         {typeof d.eventos === 'number' ? ` · ${d.eventos} ev.` : ''}
@@ -191,7 +191,7 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
         )}
 
         {fase === 'done' && resultado && (
-          <div className="rounded-lg bg-gray-50 dark:bg-[#202327] border border-gray-200 dark:border-[#2F3336] p-3 text-sm grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-surface-2 border border-line p-3 text-sm grid grid-cols-2 gap-2">
             <span className="text-gray-500">Eventos creados</span>
             <span className="font-bold text-right text-emerald-600">{resultado.eventos_creados ?? 0}</span>
             <span className="text-gray-500">Eventos existentes</span>
@@ -217,7 +217,7 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
           <button
               type="button"
               onClick={() => void cargarPreview()}
-              className="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-[#2F3336] rounded-lg hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+              className="px-4 py-2 text-sm font-medium border border-line rounded-lg hover:bg-surface-2"
             >
               Actualizar preview
             </button>

@@ -16,82 +16,82 @@ function CirugiaFormSkeleton() {
     <div className="space-y-6 animate-pulse">
       {/* PageHeader skeleton */}
       <div className="flex items-center justify-between">
-        <div className="h-6 w-48 bg-gray-100 dark:bg-[#202327] rounded" />
-        <div className="h-4 w-32 bg-gray-100 dark:bg-[#202327] rounded" />
+        <div className="h-6 w-48 bg-surface-2 rounded" />
+        <div className="h-4 w-32 bg-surface-2 rounded" />
       </div>
       
       {/* Section 1: Paciente */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
-        <div className="h-8 w-full bg-gray-100 dark:bg-[#202327] rounded mb-3" />
-        <div className="h-8 w-full bg-gray-100 dark:bg-[#202327] rounded mb-3" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
+        <div className="h-8 w-full bg-surface-2 rounded mb-3" />
+        <div className="h-8 w-full bg-surface-2 rounded mb-3" />
         <div className="grid grid-cols-2 gap-3">
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
         </div>
       </div>
       
       {/* Section 2: Expediente */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-40 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-40 bg-surface-2 rounded mb-4" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
         </div>
       </div>
       
       {/* Section 3: Datos de cirugía */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-36 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-36 bg-surface-2 rounded mb-4" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
         </div>
       </div>
       
       {/* Section 4: Equipo */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
         <div className="space-y-3">
-          <div className="flex items-center gap-3 h-10 bg-gray-100 dark:bg-[#202327] rounded px-3" />
-          <div className="flex items-center gap-3 h-10 bg-gray-100 dark:bg-[#202327] rounded px-3" />
+          <div className="flex items-center gap-3 h-10 bg-surface-2 rounded px-3" />
+          <div className="flex items-center gap-3 h-10 bg-surface-2 rounded px-3" />
         </div>
       </div>
       
       {/* Section 5: Recursos / Inventario */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-32 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
-          <div className="h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
+          <div className="h-8 bg-surface-2 rounded" />
         </div>
       </div>
       
       {/* Section 6: Archivos / Notas */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-        <div className="h-5 w-24 bg-gray-100 dark:bg-[#202327] rounded mb-4" />
-        <div className="h-32 bg-gray-100 dark:bg-[#202327] rounded" />
-        <div className="mt-3 h-8 bg-gray-100 dark:bg-[#202327] rounded" />
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="h-5 w-24 bg-surface-2 rounded mb-4" />
+        <div className="h-32 bg-surface-2 rounded" />
+        <div className="mt-3 h-8 bg-surface-2 rounded" />
       </div>
       
       {/* Actions skeleton */}
       <div className="flex items-center justify-end gap-3 pt-4">
-        <div className="h-10 w-24 bg-gray-100 dark:bg-[#202327] rounded" />
-        <div className="h-10 w-24 bg-gray-100 dark:bg-[#202327] rounded" />
+        <div className="h-10 w-24 bg-surface-2 rounded" />
+        <div className="h-10 w-24 bg-surface-2 rounded" />
       </div>
     </div>
   );
@@ -119,7 +119,7 @@ interface HistorialOjo {
 }
 
 const ETIQUETA_OJO: Record<OjoOperado, { texto: string; clase: string }> = {
-  sin_cirugias: { texto: 'Sin cirugías previas', clase: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-[#9BA1A6]' },
+  sin_cirugias: { texto: 'Sin cirugías previas', clase: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-fg-2' },
   OD: { texto: 'OD ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
   OI: { texto: 'OI ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
   ambos: { texto: 'Ambos ojos operados', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
@@ -725,9 +725,9 @@ useEffect(() => {
     }
   };
 
-  const labelCls = 'block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1';
+  const labelCls = 'block text-xs font-bold text-muted mb-1';
   const inputCls =
-    'w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
+    'w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
 
   const origenNombre = useMemo(() => {
     return aseguranzas.find((a) => a.id === origenId)?.nombre || resumenPaciente?.aseguranza?.nombre || '—';
@@ -747,8 +747,8 @@ useEffect(() => {
         ) : (
           <>
             {/* 1. Paciente */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <User className="w-4 h-4 text-primary-500" /> 1. Paciente
               </h2>
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -765,7 +765,7 @@ useEffect(() => {
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
                         filtroOjo === f.id
                           ? 'bg-primary-600 border-primary-600 text-white'
-                          : 'border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+                          : 'border-line text-gray-600 dark:text-fg-2 hover:bg-surface-2'
                       }`}
                     >
                       {f.label}
@@ -784,9 +784,9 @@ useEffect(() => {
                   <Loader2 className="w-4 h-4 animate-spin text-primary-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 )}
                 {mostrarPacientes && (
-                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] shadow-lg max-h-60 overflow-auto">
+                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 shadow-lg max-h-60 overflow-auto">
                     {pacientesResult.length === 0 ? (
-                      <p className="px-4 py-3 text-xs text-gray-500 dark:text-[#71767B]">
+                      <p className="px-4 py-3 text-xs text-muted">
                         {filtroOjo === 'primer'
                           ? 'Sin pacientes sin cirugías previas para esta búsqueda.'
                           : filtroOjo === 'segundo'
@@ -800,10 +800,10 @@ useEffect(() => {
                           <button
                             key={p.id}
                             onClick={() => seleccionarPaciente(p)}
-                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-[#1D1F23] border-b border-gray-100 dark:border-[#2F3336] last:border-0"
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-surface-2 border-b border-line/70 last:border-0"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium text-gray-900 dark:text-[#E7E9EA]">
+                              <span className="font-medium text-fg">
                                 {p.nombre_completo}
                               </span>
                               {etiqueta && (
@@ -814,7 +814,7 @@ useEffect(() => {
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-[#71767B]">
+                            <div className="text-xs text-muted">
                               {[p.telefono, p.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                             </div>
                           </button>
@@ -829,10 +829,10 @@ useEffect(() => {
                 <div className="mt-4 rounded-lg border border-primary-100 dark:border-primary-900/30 bg-primary-50/50 dark:bg-primary-900/10 p-4">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+                      <div className="text-sm font-bold text-fg">
                         {resumenPaciente.paciente.nombre_completo}
                       </div>
-                      <div className="text-xs text-gray-600 dark:text-[#71767B] mt-1">
+                      <div className="text-xs text-gray-600 dark:text-muted mt-1">
                         Expediente: {resumenPaciente.expediente_id} · {resumenPaciente.paciente.edad || '—'} años ·{' '}
                         {resumenPaciente.paciente.sexo === 'MASCULINO' ? 'H' : 'M'}
                       </div>
@@ -849,29 +849,29 @@ useEffect(() => {
             </section>
 
             {/* 2. Expediente */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <ClipboardList className="w-4 h-4 text-primary-500" /> 2. Expediente
               </h2>
               {resumenPaciente ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div className="rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-3">
-                    <div className="text-xs text-gray-500 dark:text-[#71767B]">Última consulta</div>
-                    <div className="font-medium text-gray-900 dark:text-[#E7E9EA]">
+                  <div className="rounded-lg border border-line/70 bg-surface-2 p-3">
+                    <div className="text-xs text-muted">Última consulta</div>
+                    <div className="font-medium text-fg">
                       {resumenPaciente.ultima_consulta?.fecha
                          ? resumenPaciente.ultima_consulta.fecha
                         : 'Sin consultas previas'}
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-[#71767B] mt-1 line-clamp-2">
+                    <div className="text-xs text-gray-600 dark:text-muted mt-1 line-clamp-2">
                       {resumenPaciente.ultima_consulta?.diagnostico || '—'}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-3">
-                    <div className="text-xs text-gray-500 dark:text-[#71767B]">Antecedentes / historial</div>
-                    <div className="font-medium text-gray-900 dark:text-[#E7E9EA]">
+                  <div className="rounded-lg border border-line/70 bg-surface-2 p-3">
+                    <div className="text-xs text-muted">Antecedentes / historial</div>
+                    <div className="font-medium text-fg">
                       {resumenPaciente.consultas_previas} consulta(s) previa(s)
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-[#71767B] mt-1">
+                    <div className="text-xs text-gray-600 dark:text-muted mt-1">
                       {resumenPaciente.cirugias_previas} cirugía(s) previa(s)
                     </div>
                     <a
@@ -883,20 +883,20 @@ useEffect(() => {
                   </div>
                 </div>
               ) : pacienteSeleccionado ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-[#71767B]">
+                <div className="flex items-center gap-2 text-sm text-muted">
                   <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                   Cargando expediente...
                 </div>
               ) : (
-                <div className="text-sm text-gray-500 dark:text-[#71767B]">
+                <div className="text-sm text-muted">
                   Seleccione un paciente para ver su expediente.
                 </div>
               )}
             </section>
 
             {/* 3. Datos de cirugía */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <Stethoscope className="w-4 h-4 text-primary-500" /> 3. Datos de la cirugía
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1001,8 +1001,8 @@ useEffect(() => {
             </section>
 
             {/* 4. Asignación médica */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <Users className="w-4 h-4 text-primary-500" /> 4. Asignación médica
               </h2>
               {!loadingInitial && roles.length === 0 && (
@@ -1058,7 +1058,7 @@ useEffect(() => {
                 <button
                   onClick={agregarParticipante}
                   disabled={roles.length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" /> Agregar participante
                 </button>
@@ -1066,14 +1066,14 @@ useEffect(() => {
             </section>
 
             {/* 5. LIO / Inventario */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <Eye className="w-4 h-4 text-primary-500" /> 5. Lente intraocular (LIO)
               </h2>
               {!lioManual ? (
                 <>
                   <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
-                  <p className="text-xs text-gray-500 dark:text-[#71767B] mt-2">
+                  <p className="text-xs text-muted mt-2">
                     Opcional. Solo se muestran LIOs disponibles y no caducados.
                   </p>
                   <button
@@ -1082,7 +1082,7 @@ useEffect(() => {
                       setInventarioItemId(null);
                       setLioManual(true);
                     }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-line px-4 py-2 text-sm font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
                   >
                     <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
                   </button>
@@ -1146,7 +1146,7 @@ useEffect(() => {
                       setLioManualPotencia('');
                       setLioManualLote('');
                     }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2"
                   >
                     ← Volver a seleccionar desde inventario
                   </button>
@@ -1155,8 +1155,8 @@ useEffect(() => {
             </section>
 
             {/* 6. Archivos de apoyo */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] flex items-center gap-2 mb-4">
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <FileText className="w-4 h-4 text-primary-500" /> 6. Archivos de apoyo
               </h2>
               <div
@@ -1165,10 +1165,10 @@ useEffect(() => {
                   e.preventDefault();
                   handleFiles(e.dataTransfer.files);
                 }}
-                className="rounded-lg border-2 border-dashed border-gray-300 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-6 text-center"
+                className="rounded-lg border-2 border-dashed border-gray-300 dark:border-line bg-surface-2 p-6 text-center"
               >
-                <Upload className="w-6 h-6 mx-auto text-gray-400 dark:text-[#71767B]" />
-                <p className="mt-2 text-sm text-gray-600 dark:text-[#71767B]">
+                <Upload className="w-6 h-6 mx-auto text-muted" />
+                <p className="mt-2 text-sm text-gray-600 dark:text-muted">
                   Arrastra archivos aquí o{' '}
                   <label className="text-primary-600 font-bold cursor-pointer">
                     selecciona
@@ -1181,7 +1181,7 @@ useEffect(() => {
                     />
                   </label>
                 </p>
-                <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1">
+                <p className="text-xs text-muted mt-1">
                   PDF, JPG, JPEG, PNG, WEBP (máx. 10 MB por archivo)
                 </p>
               </div>
@@ -1191,11 +1191,11 @@ useEffect(() => {
                   {archivos.map((a) => (
                     <div
                       key={a.id}
-                      className="flex items-center gap-3 rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-3"
+                      className="flex items-center gap-3 rounded-lg border border-line/70 bg-surface-2 p-3"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{a.file.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-[#71767B]">{formatBytes(a.file.size)}</div>
+                        <div className="text-sm font-medium text-fg truncate">{a.file.name}</div>
+                        <div className="text-xs text-muted">{formatBytes(a.file.size)}</div>
                       </div>
                       <input
                         type="text"
@@ -1217,7 +1217,7 @@ useEffect(() => {
             </section>
 
             {/* Notas y acciones */}
-            <section className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5">
+            <section className="rounded-2xl border border-line bg-surface p-5">
               <label className={labelCls}>Notas adicionales</label>
               <textarea
                 value={notas}
@@ -1231,7 +1231,7 @@ useEffect(() => {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => router.back()}
-                className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+                className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2"
               >
                 Cancelar
               </button>
@@ -1252,7 +1252,7 @@ useEffect(() => {
 
 export default function NuevaCirugiaPage() {
   return (
-    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-gray-100 dark:bg-[#202327] rounded-lg" /><div className="h-32 bg-gray-100 dark:bg-[#202327] rounded-lg" /></div>}>
+    <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-12 bg-surface-2 rounded-lg" /><div className="h-32 bg-surface-2 rounded-lg" /></div>}>
       <NuevaCirugiaContent />
     </Suspense>
   );

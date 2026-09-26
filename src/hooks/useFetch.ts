@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { takePrefetched } from '@/lib/prefetch';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -52,12 +53,17 @@ export function useFetch<T>(url: string, params?: Record<string, string>): UseFe
       }
       const qs = new URLSearchParams(merged).toString();
       const fullUrl = qs ? `${url}?${qs}` : url;
-      const res = await fetch(fullUrl, { signal: controller.signal });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error al cargar datos');
+      // Primera carga: reutiliza la precarga hecha en /bienvenida si está fresca
+      const precargado = takePrefetched(fullUrl);
+      let json: any = precargado ? await precargado : null;
+      if (json === null) {
+        const res = await fetch(fullUrl, { signal: controller.signal });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Error al cargar datos');
+        }
+        json = await res.json();
       }
-      const json = await res.json();
       if (requestRef.current.id !== requestId) return;
       if (json && typeof json === 'object' && 'data' in json && 'total' in json) {
         setData(json.data);

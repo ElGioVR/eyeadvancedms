@@ -138,6 +138,52 @@ function computeOverlapColumns(items: OverlapItem[], HOUR_HEIGHT: number, HOUR_S
   return result;
 }
 
+const ESTADOS_ORDEN: AgendaCirugiaEstado[] = ['agendada', 'reagendada', 'aplazada', 'completada', 'cancelada'];
+
+function TipoStat({ label, total, porEstado, icon: Icon, tone }: {
+  label: string;
+  total: number;
+  porEstado: Record<string, number>;
+  icon: typeof Calendar;
+  tone: 'violet' | 'amber' | 'sky' | 'primary';
+}) {
+  const tones = {
+    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
+    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
+    sky: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
+    primary: 'bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-300',
+  } as const;
+  const suma = ESTADOS_ORDEN.reduce((a, e) => a + (porEstado[e] || 0), 0);
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-soft dark:shadow-none">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted">{label}</p>
+          <p className="mt-0.5 text-2xl font-semibold tracking-tight text-fg tabular-nums">{total}</p>
+        </div>
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tones[tone])}>
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      {/* Barra segmentada por estado */}
+      <div className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+        {suma > 0 && ESTADOS_ORDEN.map((e) => (porEstado[e] || 0) > 0 && (
+          <span key={e} className={cn('h-full', estadoConfig[e].solid)} style={{ width: `${((porEstado[e] || 0) / suma) * 100}%` }} title={`${estadoLabels[e]}: ${porEstado[e]}`} />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted">
+        {ESTADOS_ORDEN.filter((e) => (porEstado[e] || 0) > 0).map((e) => (
+          <span key={e} className="inline-flex items-center gap-1">
+            <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[e].dot)} />
+            {porEstado[e]} {estadoLabels[e].toLowerCase()}
+          </span>
+        ))}
+        {suma === 0 && <span>Sin eventos</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function AgendaContent({ userRol, doctores, userId, initialDate }: Props) {
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date(`${initialDate}T12:00:00`));
@@ -479,31 +525,31 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
 
   return (
-    <div className={cn('w-full h-full flex flex-col', isFullscreen && 'fixed inset-0 z-50 bg-white dark:bg-[#0F1115]')}>
+    <div className={cn('w-full h-full flex flex-col', isFullscreen && 'fixed inset-0 z-50 bg-white dark:bg-canvas')}>
       {/* ─── Desktop Header ─── */}
       {!isFullscreen && (
       <div className="hidden lg:block">
         <PageHeader
-          title="AGENDA"
-          subtitle="Calendario de eventos."
+          title="Agenda"
+          subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
           action={
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {userRol !== 'doctor' && (
                 <>
                   <div className="relative">
-                    <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                    <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="btn-secondary">
                       <Upload className="h-4 w-4" /> Importar
                     </button>
                     {showImportChoice && (
                       <div className="absolute left-0 top-full mt-2 z-50 w-52">
-                        <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-                          <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-                          <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-                          <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Importar</p>
-                          <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                        <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
+                          <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
+                          <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
+                          <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Importar</p>
+                          <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                           </button>
-                          <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                          <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
                           </button>
                         </div>
@@ -511,19 +557,19 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     )}
                   </div>
                   <div className="relative">
-                    <button onClick={() => { setShowCreateChoice(p => !p); setShowImportChoice(false); }} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
+                    <button onClick={() => { setShowCreateChoice(p => !p); setShowImportChoice(false); }} className="btn-primary">
                       <Plus className="h-4 w-4" /> Nuevo
                     </button>
                     {showCreateChoice && (
                       <div className="absolute right-0 top-full mt-2 z-50 w-52">
-                        <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-                          <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-                          <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-                          <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Crear</p>
-                          <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                        <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
+                          <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
+                          <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
+                          <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
+                          <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
                           </button>
-                          <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                          <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
                           </button>
                         </div>
@@ -537,101 +583,42 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         />
 
         {/* Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          {/* Total */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-gray-600" />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Total</p>
-              <p className="text-xl font-extrabold text-gray-900 dark:text-[#E7E9EA]">{stats.total}</p>
-            </div>
-          </div>
-
-          {/* Cirugías */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center">
-                <Stethoscope className="h-4 w-4 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Cirugías</p>
-                <p className="text-lg font-extrabold text-violet-600">{stats.cirugias}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500 dark:text-[#71767B]">
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" />{stats.cirugiasByEstado.agendada} agend.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{stats.cirugiasByEstado.aplazada} aplaz.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{stats.cirugiasByEstado.completada} comp.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{stats.cirugiasByEstado.cancelada} canc.</span>
-            </div>
-          </div>
-
-          {/* Consultas */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <User className="h-4 w-4 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Consultas</p>
-                <p className="text-lg font-extrabold text-amber-600">{stats.consultas}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500 dark:text-[#71767B]">
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" />{stats.consultasByEstado.agendada} agend.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{stats.consultasByEstado.aplazada} aplaz.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{stats.consultasByEstado.completada} comp.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{stats.consultasByEstado.cancelada} canc.</span>
-            </div>
-          </div>
-
-          {/* Estudios */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="h-8 w-8 rounded-lg bg-sky-100 flex items-center justify-center">
-                <FileSpreadsheet className="h-4 w-4 text-sky-600" />
-              </div>
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Estudios</p>
-                <p className="text-lg font-extrabold text-sky-600">{stats.estudios}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500 dark:text-[#71767B]">
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" />{stats.estudiosByEstado.agendada} agend.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{stats.estudiosByEstado.aplazada} aplaz.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{stats.estudiosByEstado.completada} comp.</span>
-              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{stats.estudiosByEstado.cancelada} canc.</span>
-            </div>
-          </div>
+        <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <TipoStat label="Total de eventos" total={stats.total} tone="primary" icon={Calendar}
+            porEstado={ESTADOS_ORDEN.reduce<Record<string, number>>((acc, e) => {
+              acc[e] = (stats.cirugiasByEstado[e] || 0) + (stats.consultasByEstado[e] || 0) + (stats.estudiosByEstado[e] || 0);
+              return acc;
+            }, {})} />
+          <TipoStat label="Cirugías" total={stats.cirugias} tone="violet" icon={Stethoscope} porEstado={stats.cirugiasByEstado} />
+          <TipoStat label="Consultas" total={stats.consultas} tone="amber" icon={User} porEstado={stats.consultasByEstado} />
+          <TipoStat label="Estudios" total={stats.estudios} tone="sky" icon={FileSpreadsheet} porEstado={stats.estudiosByEstado} />
         </div>
       </div>
       )}
 
       {/* ─── Fullscreen Floating Toolbar ─── */}
       {isFullscreen && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white dark:bg-[#16181C] rounded-xl shadow-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2">
-          <button onClick={() => setShowFilters(true)} className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#202327] px-3 py-2 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-200 dark:hover:bg-[#2F3336] transition-colors">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-surface rounded-xl shadow-lg border border-line px-4 py-2">
+          <button onClick={() => setShowFilters(true)} className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors">
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
-          <div className="h-6 w-px bg-gray-200 dark:bg-[#2F3336]" />
+          <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
           {userRol !== 'doctor' && (
             <>
               <div className="relative">
-                <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#202327] px-3 py-2 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-200 dark:hover:bg-[#2F3336] transition-colors">
+                <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors">
                   <Upload className="h-4 w-4" /> Importar
                 </button>
                 {showImportChoice && (
                   <div className="absolute left-0 top-full mt-2 z-50 w-52">
-                    <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-                      <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-                      <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-                      <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Importar</p>
-                      <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                    <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
+                      <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
+                      <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
+                      <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Importar</p>
+                      <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                       </button>
-                      <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                      <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
                       </button>
                     </div>
@@ -644,14 +631,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 </button>
                 {showCreateChoice && (
                   <div className="absolute right-0 top-full mt-2 z-50 w-52">
-                    <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-                      <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-                      <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-                      <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Crear</p>
-                      <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                    <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
+                      <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
+                      <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
+                      <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
+                      <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
                       </button>
-                      <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
+                      <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
                       </button>
                     </div>
@@ -660,43 +647,49 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               </div>
             </>
           )}
-          <div className="h-6 w-px bg-gray-200 dark:bg-[#2F3336]" />
-          <button onClick={() => setIsFullscreen(false)} className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#202327] px-3 py-2 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-200 dark:hover:bg-[#2F3336] transition-colors">
+          <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
+          <button onClick={() => setIsFullscreen(false)} className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors">
             <Minimize2 className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* ─── Mobile Top Bar ─── */}
-      <div className="flex lg:hidden items-center justify-between px-1 py-2 shrink-0">
-        <div className="flex items-center gap-1">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]">
-            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
-          </button>
-          <h2 className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
-            {MESES[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h2>
-          <button onClick={() => navigate(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]">
-            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
-          </button>
+      {/* ─── Mobile Header ─── */}
+      <div className="flex shrink-0 items-center justify-between gap-3 pb-3 lg:hidden">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-fg">Agenda</h1>
+          <p className="text-xs text-muted">
+            {loading ? 'Cargando…' : `${cirugiasFiltradas.length} evento${cirugiasFiltradas.length === 1 ? '' : 's'} este mes`}
+          </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(true)}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors active:scale-95 dark:shadow-none"
+            aria-label="Filtros"
+          >
+            <SlidersHorizontal className="h-[18px] w-[18px]" />
+            {(filterDoctor || search || filterTipos.size < 3 || filterEstados.size < 5) && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
+            )}
+          </button>
           {userRol !== 'doctor' && (
             <div className="relative">
-              <button onClick={() => { setShowCreateChoice(p => !p); setShowImportChoice(false); }} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#202327]" title="Nuevo">
-                <Plus className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
+              <button
+                onClick={() => { setShowCreateChoice(p => !p); setShowImportChoice(false); }}
+                className="btn-primary h-10 px-3.5"
+              >
+                <Plus className="h-4 w-4" /> Nuevo
               </button>
               {showCreateChoice && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-52">
-                  <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-                    <div className="absolute -top-2 right-5 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-                    <div className="absolute -top-[7px] right-5 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-                    <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Crear</p>
-                    <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
-                      <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
+                <div className="absolute right-0 top-full z-50 mt-2 w-52">
+                  <div className="rounded-2xl border border-line bg-surface p-1.5 shadow-pop animate-popIn">
+                    <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
+                    <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
+                      <span className="h-2 w-3 rounded-sm border-l-2 border-l-violet-500 bg-violet-200" /> Cirugía
                     </button>
-                    <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left">
-                      <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
+                    <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
+                      <span className="h-2 w-3 rounded-sm border-l-2 border-l-amber-500 bg-amber-200" /> Consulta
                     </button>
                   </div>
                 </div>
@@ -706,58 +699,25 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         </div>
       </div>
 
-      {/* ─── Mobile Day Carousel ─── */}
-      <div className="lg:hidden shrink-0 border-b border-gray-200 dark:border-[#2F3336]">
-        <div
-          ref={stripRef}
-          className="relative flex gap-1 overflow-x-auto snap-x snap-mandatory px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {carouselDays.map(wd => {
-            const isSelected = wd.dateStr === selectedDate;
-            return (
-              <button
-                key={wd.dateStr}
-                ref={isSelected ? stripSelectedRef : undefined}
-                data-selected={isSelected || undefined}
-                onClick={() => handleDayClick(wd.dateStr)}
-                className={cn(
-                  'shrink-0 snap-center w-[calc((100%-1.5rem)/7)] flex flex-col items-center py-2 rounded-xl transition-colors',
-                  isSelected && 'bg-primary-50 dark:bg-primary-900/10'
-                )}
-              >
-                <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">{wd.dayName}</span>
-                <span className={cn(
-                  'mt-0.5 inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold transition-all',
-                  wd.isToday ? 'bg-red-500 text-white' : isSelected ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700' : 'text-gray-900 dark:text-[#E7E9EA]'
-                )}>{wd.day}</span>
-                {(cirugiasPorFecha[wd.dateStr] || []).length > 0 && (
-                  <span className={cn('h-1.5 w-1.5 rounded-full mt-1', wd.isToday ? 'bg-red-400' : 'bg-primary-400')} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Main Layout: Sidebar + Calendar */}
       <div className="flex gap-5 flex-1 min-h-0">
         {/* Mini Calendar Sidebar */}
         {!isFullscreen && (
         <div className="hidden xl:block w-[220px] shrink-0">
           <div className="sticky top-24 space-y-4">
-            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-3">
+            <div className="rounded-2xl border border-line bg-surface p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+                <span className="text-xs font-extrabold text-fg">
                   {MESES[currentDate.getMonth()]} {currentDate.getFullYear()}
                 </span>
                 <div className="flex gap-0.5">
-                  <button onClick={() => { setCurrentDate(p => { const d = new Date(p); d.setMonth(d.getMonth() - 1); return d; }); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#202327]"><ChevronLeft className="h-3.5 w-3.5 text-gray-500" /></button>
-                  <button onClick={() => { setCurrentDate(p => { const d = new Date(p); d.setMonth(d.getMonth() + 1); return d; }); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#202327]"><ChevronRight className="h-3.5 w-3.5 text-gray-500" /></button>
+                  <button onClick={() => { setCurrentDate(p => { const d = new Date(p); d.setMonth(d.getMonth() - 1); return d; }); }} className="p-1 rounded hover:bg-surface-2"><ChevronLeft className="h-3.5 w-3.5 text-gray-500" /></button>
+                  <button onClick={() => { setCurrentDate(p => { const d = new Date(p); d.setMonth(d.getMonth() + 1); return d; }); }} className="p-1 rounded hover:bg-surface-2"><ChevronRight className="h-3.5 w-3.5 text-gray-500" /></button>
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-0">
                 {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => (
-                  <div key={d} className="text-center text-[9px] font-bold text-gray-400 dark:text-[#71767B] py-1">{d}</div>
+                  <div key={d} className="text-center text-[9px] font-bold text-muted py-1">{d}</div>
                 ))}
                 {miniMonth.map((cell, i) => (
                   <button
@@ -765,8 +725,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     onClick={() => { setCurrentDate(new Date(cell.date + 'T00:00:00')); setSelectedDate(cell.date); setCalendarView('day'); }}
                     className={cn(
                       'h-7 w-full flex items-center justify-center text-[11px] rounded-full transition-colors',
-                      !cell.isCurrentMonth && 'text-gray-300 dark:text-[#71767B]',
-                      cell.isCurrentMonth && !cell.isToday && 'text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327]',
+                      !cell.isCurrentMonth && 'text-gray-300 dark:text-muted',
+                      cell.isCurrentMonth && !cell.isToday && 'text-fg-2 hover:bg-surface-2',
                       cell.isToday && 'bg-primary-600 text-white font-bold',
                       cell.date === selectedDate && !cell.isToday && 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 font-bold',
                     )}
@@ -778,22 +738,22 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             </div>
 
             {/* Filters */}
-            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-3 space-y-3">
+            <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                 <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-                  className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] pl-8 pr-3 py-2 text-xs text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30" />
+                  className="w-full rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30" />
               </div>
               <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-2 text-xs font-medium text-gray-700 dark:text-[#E7E9EA] focus:outline-none focus:ring-1 focus:ring-primary-500/30">
+                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-medium text-fg-2 focus:outline-none focus:ring-1 focus:ring-primary-500/30">
                 <option value="">Todos los doctores</option>
                 {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
               </select>
             </div>
 
             {/* Legend with toggles */}
-            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] mb-2">Tipos</p>
+            <div className="rounded-2xl border border-line bg-surface p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">Tipos</p>
               <div className="space-y-1 mb-3">
                 {[
                   { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
@@ -807,13 +767,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       return next;
                     });
                   }} className={cn('flex items-center gap-2 w-full rounded-md px-1.5 py-1 transition-colors',
-                    filterTipos.has(t.key) ? 'bg-gray-100 dark:bg-[#202327]' : 'opacity-40')}>
+                    filterTipos.has(t.key) ? 'bg-surface-2' : 'opacity-40')}>
                     <span className={cn('h-2.5 w-4 rounded-sm border-l-2', t.bg, t.border)} />
-                    <span className="text-[11px] text-gray-600 dark:text-[#E7E9EA]">{t.label}</span>
+                    <span className="text-[11px] text-fg-2">{t.label}</span>
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] mb-2">Estados</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">Estados</p>
               <div className="space-y-1">
                 {Object.entries(estadoLabels).map(([k, v]) => (
                   <button key={k} onClick={() => {
@@ -823,9 +783,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       return next;
                     });
                   }} className={cn('flex items-center gap-2 w-full rounded-md px-1.5 py-1 transition-colors',
-                    filterEstados.has(k) ? 'bg-gray-100 dark:bg-[#202327]' : 'opacity-40')}>
+                    filterEstados.has(k) ? 'bg-surface-2' : 'opacity-40')}>
                     <span className={cn('h-2.5 w-2.5 rounded-full', estadoConfig[k as AgendaCirugiaEstado].dot)} />
-                    <span className="text-[11px] text-gray-600 dark:text-[#E7E9EA]">{v}</span>
+                    <span className="text-[11px] text-fg-2">{v}</span>
                   </button>
                 ))}
               </div>
@@ -837,44 +797,37 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         {/* Main Calendar Area */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {/* Desktop Toolbar */}
-          <div className="hidden lg:flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
-                <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
-              </button>
-              <button onClick={() => navigate(1)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors">
-                <ChevronRight className="h-5 w-5 text-gray-600 dark:text-[#E7E9EA]" />
-              </button>
-              <button onClick={handleGoToday}
-                className="ml-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                Hoy
-              </button>
-              <h2 className="ml-3 text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+          <div className="mb-3 hidden shrink-0 items-center justify-between gap-3 lg:flex">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex items-center rounded-xl border border-line bg-surface p-0.5 shadow-soft dark:shadow-none">
+                <button onClick={() => navigate(-1)} aria-label="Anterior" className="rounded-lg p-1.5 text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button onClick={handleGoToday} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg">
+                  Hoy
+                </button>
+                <button onClick={() => navigate(1)} aria-label="Siguiente" className="rounded-lg p-1.5 text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <h2 className="truncate text-lg font-semibold tracking-tight text-fg first-letter:uppercase">
                 {calendarView === 'month' && `${MESES[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
                 {calendarView === 'week' && `${fmtDateShort(toDateStr(getMonday(currentDate)))} – ${fmtDateShort(toDateStr(addDays(getMonday(currentDate), 6)))}, ${currentDate.getFullYear()}`}
                 {calendarView === 'day' && fmtDate(toDateStr(currentDate))}
               </h2>
+              {loading && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-primary-500" aria-label="Cargando" />}
             </div>
             <div className="flex items-center gap-2">
-              {/* Mobile search */}
-              <div className="relative lg:hidden">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-                  className="w-40 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] pl-8 pr-3 py-2 text-xs text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30" />
-              </div>
-              {/* Fullscreen Toggle */}
-              <button onClick={() => setIsFullscreen(!isFullscreen)}
-                className="hidden lg:inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{isFullscreen ? 'Salir' : 'Pantalla completa'}</span>
+              <button onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors hover:bg-surface-2 hover:text-fg dark:shadow-none">
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
-              {/* View Toggle */}
-              <div className="flex rounded-lg border border-gray-200 dark:border-[#2F3336] overflow-hidden bg-white dark:bg-[#16181C]">
+              <div className="flex rounded-xl bg-surface-2 p-1" role="tablist" aria-label="Vista del calendario">
                 {([['month', Square, 'Mes'], ['week', Columns3, 'Semana'], ['day', Calendar, 'Día']] as const).map(([v, Icon, label]) => (
-                  <button key={v} onClick={() => setCalendarView(v)}
-                    className={cn('px-3 py-2 text-xs font-bold transition-colors flex items-center gap-1.5',
-                      calendarView === v ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]')}>
-                    <Icon className="h-3.5 w-3.5" /><span className="hidden sm:inline">{label}</span>
+                  <button key={v} role="tab" aria-selected={calendarView === v} onClick={() => setCalendarView(v)}
+                    className={cn('flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                      calendarView === v ? 'bg-surface text-fg shadow-soft dark:bg-surface-3' : 'text-muted hover:text-fg')}>
+                    <Icon className="h-3.5 w-3.5" />{label}
                   </button>
                 ))}
               </div>
@@ -885,7 +838,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           <div className="lg:hidden">
             <MobileCalendarView
               cirugiasPorFecha={cirugiasPorFecha}
+              loading={loading}
               onDateSelect={(date) => { setSelectedDate(date); }}
+              onMonthChange={(y, m) => {
+                // Móvil trabaja por mes: pide el mes visible completo
+                setCalendarView('month');
+                setCurrentDate(new Date(y, m, 1, 12));
+              }}
               onAdd={(_date: string) => { setShowCreateChoice(true); }}
               onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               todayStr={todayStr}
@@ -894,18 +853,18 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           </div>
 
           {/* Desktop View Container with transition */}
-          <div className="hidden lg:block relative overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col">
+          <div className="hidden lg:block relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col">
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
               <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0 h-full">
-                <div className="grid grid-cols-7 border-b border-gray-200 dark:border-[#2F3336]">
+                <div className="grid grid-cols-7 border-b border-line">
                   {DIAS_CORTOS.map(d => (
-                    <div key={d} className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] py-2.5 border-r border-gray-100 dark:border-[#2F3336] last:border-r-0">{d}</div>
+                    <div key={d} className="text-center text-[11px] font-semibold uppercase tracking-wider text-muted py-2.5 border-r border-line/70 last:border-r-0 bg-surface-2/40">{d}</div>
                   ))}
                 </div>
                 <div className={cn(
-                  'grid grid-cols-7 divide-x divide-gray-100 dark:divide-[#2F3336] flex-1 min-h-0',
+                  'grid grid-cols-7 divide-x divide-line/70 flex-1 min-h-0',
                   `grid-rows-[repeat(${Math.ceil((firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth()) + daysInMonth(currentDate.getFullYear(), currentDate.getMonth())) / 7)},1fr)]`
                 )}>
                   {Array.from({ length: Math.ceil((firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth()) + daysInMonth(currentDate.getFullYear(), currentDate.getMonth())) / 7) * 7 }).map((_, i) => {
@@ -945,19 +904,20 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         onDragLeave={() => setDragOverDate(null)}
                         onDrop={e => handleDrop(e, cellDateStr)}
                         className={cn(
-                          'p-1.5 cursor-pointer transition-all border-b border-gray-100 dark:border-[#2F3336] overflow-hidden',
-                          !isCurrentMonth && 'bg-gray-50/50 dark:bg-[#16181C]/50',
-                          isToday && 'bg-primary-50/30 dark:bg-primary-900/5',
-                          isSelected && 'bg-primary-50/60 dark:bg-primary-900/10 ring-2 ring-inset ring-primary-400',
-                          isDragOver && 'bg-primary-100 dark:bg-primary-900/20 ring-2 ring-inset ring-primary-300',
-                          'hover:bg-gray-50 dark:hover:bg-[#1D1F23]',
+                          'group/cell p-1.5 cursor-pointer transition-colors border-b border-line/70 overflow-hidden',
+                          !isCurrentMonth && 'bg-surface-2/50',
+                          isCurrentMonth && i % 7 >= 5 && 'bg-surface-2/25',
+                          isToday && 'bg-primary-50/50 dark:bg-primary-400/[0.06]',
+                          isSelected && 'bg-primary-50/70 dark:bg-primary-400/10 ring-2 ring-inset ring-primary-400/70',
+                          isDragOver && 'bg-primary-100 dark:bg-primary-400/20 ring-2 ring-inset ring-primary-300',
+                          'hover:bg-surface-2/80',
                         )}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className={cn('inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-bold transition-all',
-                            isToday ? 'bg-primary-600 text-white' : isCurrentMonth ? 'text-gray-700 dark:text-[#E7E9EA]' : 'text-gray-300 dark:text-[#71767B]',
-                            isSelected && !isToday && 'bg-primary-100 dark:bg-primary-900/30 text-primary-700'
+                          <span className={cn('inline-flex items-center justify-center h-6 min-w-6 px-1 rounded-full text-xs font-semibold tabular-nums transition-all',
+                            isToday ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/30' : isCurrentMonth ? 'text-fg' : 'text-muted/60',
+                            isSelected && !isToday && 'bg-primary-100 text-primary-700 dark:bg-primary-400/15 dark:text-primary-300'
                           )}>{dayNum}</span>
-                          {dayCx.length > 0 && <span className="text-[9px] font-bold text-gray-400">{dayCx.length}</span>}
+                          {dayCx.length > 0 && <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold text-muted tabular-nums">{dayCx.length}</span>}
                         </div>
                         <div className="space-y-px">
                           {dayCx.slice(0, 3).map(c => (
@@ -966,8 +926,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                               onDragStart={e => handleDragStart(e, c.id)}
                               onClick={e => handleEventClick(e, c)}
                               className={cn(
-                                'flex items-center gap-1 text-[9px] leading-tight px-1.5 py-[3px] rounded cursor-pointer transition-all',
-                                'hover:brightness-95 hover:shadow-sm',
+                                'flex items-center gap-1 text-[10px] leading-tight px-1.5 py-1 rounded-md cursor-pointer transition-all',
+                                'hover:brightness-95 hover:shadow-sm dark:hover:brightness-125',
                                 draggingId === c.id && 'opacity-40 scale-95',
                                 tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
                                 'border-l-2', estadoConfig[c.estado].border,
@@ -980,7 +940,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           ))}
                           {dayCx.length > 3 && (
                             <button onClick={e => { e.stopPropagation(); setSelectedDate(cellDateStr); setCurrentDate(new Date(cellDateStr + 'T00:00:00')); setCalendarView('day'); }}
-                              className="text-[9px] font-bold text-primary-600 hover:text-primary-700 pl-1">
+                              className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-primary-600 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-400/10">
                               +{dayCx.length - 3} más
                             </button>
                           )}
@@ -996,15 +956,15 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             {calendarView === 'week' && (
               <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Headers */}
-                <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
-                  <div className="border-r border-gray-100 dark:border-[#2F3336]" />
+                <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-line sticky top-0 bg-surface z-10">
+                  <div className="border-r border-line/70" />
                   {weekDays.map(wd => (
                     <div key={wd.dateStr}
                       onClick={() => { setSelectedDate(wd.dateStr); setCurrentDate(new Date(wd.dateStr + 'T00:00:00')); setCalendarView('day'); }}
-                      className={cn('text-center py-2.5 border-r border-gray-100 dark:border-[#2F3336] last:border-r-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors')}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">{wd.dayName}</div>
-                      <div className={cn('inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-extrabold mt-0.5',
-                        wd.isToday ? 'bg-primary-600 text-white' : 'text-gray-900 dark:text-[#E7E9EA]'
+                      className={cn('text-center py-2.5 border-r border-line/70 last:border-r-0 cursor-pointer hover:bg-surface-2 transition-colors')}>
+                      <div className={cn('text-[11px] font-semibold uppercase tracking-wider', wd.isToday ? 'text-primary-600 dark:text-primary-300' : 'text-muted')}>{wd.dayName}</div>
+                      <div className={cn('inline-flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold mt-0.5 tabular-nums',
+                        wd.isToday ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/30' : 'text-fg'
                       )}>{wd.day}</div>
                     </div>
                   ))}
@@ -1016,8 +976,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     {/* Hour Labels */}
                     <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
-                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-line/70 flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-muted leading-none">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -1030,13 +990,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           onDragOver={e => handleDragOver(e, wd.dateStr)}
                           onDragLeave={() => setDragOverDate(null)}
                           onDrop={e => handleDrop(e, wd.dateStr)}
-                          className={cn('relative border-r border-gray-100 dark:border-[#2F3336] last:border-r-0',
+                          className={cn('relative border-r border-line/70 last:border-r-0',
                             wd.isToday && 'bg-primary-50/20 dark:bg-primary-900/5'
                           )}>
                           {hours.map(h => (
                             <div key={h}
                               onClick={(e) => userRol !== 'doctor' && handleQuickAdd(wd.dateStr, h, e)}
-                              className={cn('border-b border-gray-100 dark:border-[#2F3336] transition-colors',
+                              className={cn('border-b border-line/70 transition-colors',
                                 userRol !== 'doctor' && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
                               )} style={{ height: HOUR_HEIGHT }} />
                           ))}
@@ -1121,12 +1081,12 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             {calendarView === 'day' && (
               <div className="animate-in fade-in duration-200 flex flex-col flex-1 min-h-0">
                 {/* Day Header */}
-                <div className="grid grid-cols-[72px_1fr] border-b border-gray-200 dark:border-[#2F3336] sticky top-0 bg-white dark:bg-[#16181C] z-10">
-                  <div className="border-r border-gray-100 dark:border-[#2F3336]" />
+                <div className="grid grid-cols-[72px_1fr] border-b border-line sticky top-0 bg-surface z-10">
+                  <div className="border-r border-line/70" />
                   <div className="text-center py-2">
-                    <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{DIAS_CORTOS[(dayViewDateObj.getDay() + 6) % 7]}</span>
+                    <span className="text-xs font-bold text-muted">{DIAS_CORTOS[(dayViewDateObj.getDay() + 6) % 7]}</span>
                     <span className={cn('ml-2 inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-extrabold',
-                      dayViewDate === todayStr ? 'bg-primary-600 text-white' : 'text-gray-900 dark:text-[#E7E9EA]'
+                      dayViewDate === todayStr ? 'bg-primary-600 text-white' : 'text-fg'
                     )}>{dayViewDateObj.getDate()}</span>
                   </div>
                 </div>
@@ -1137,8 +1097,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     {/* Hour Labels */}
                     <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-gray-100 dark:border-[#2F3336] flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
-                          <span className="text-[11px] font-bold text-gray-400 dark:text-[#71767B] leading-none">{fmtHourAMPM(h)}</span>
+                        <div key={h} className="border-r border-line/70 flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
+                          <span className="text-[11px] font-bold text-muted leading-none">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
                     </div>
@@ -1150,7 +1110,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       {hours.map(h => (
                         <div key={h}
                           onClick={(e) => userRol !== 'doctor' && handleQuickAdd(dayViewDate, h, e)}
-                          className={cn('border-b border-gray-100 dark:border-[#2F3336] transition-colors',
+                          className={cn('border-b border-line/70 transition-colors',
                             userRol !== 'doctor' && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
                           )} style={{ height: HOUR_HEIGHT }} />
                       ))}
@@ -1251,10 +1211,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="relative rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-xl p-1.5">
-            <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-[#2F3336]" />
-            <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-[#16181C]" />
-            <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">
+          <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
+            <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
+            <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
+            <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
               Crear · {fmtDate(dayCreate.date)}{dayCreate.hour ? ` · ${dayCreate.hour}` : ''}
             </p>
             <button
@@ -1267,7 +1227,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 setEditingId(null);
                 setShowForm(true);
               }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left"
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
             >
               <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
             </button>
@@ -1278,7 +1238,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 setDayCreate(null);
                 router.push(`/consultas/nueva?tipo=ESTUDIO&fecha=${encodeURIComponent(fecha)}${hora ? `&hora=${encodeURIComponent(hora)}` : ''}`);
               }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left"
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
             >
               <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
             </button>
@@ -1289,7 +1249,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 setDayCreate(null);
                 router.push(`/consultas/nueva?fecha=${encodeURIComponent(fecha)}${hora ? `&hora=${encodeURIComponent(hora)}` : ''}`);
               }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-left"
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
             >
               <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
             </button>
@@ -1324,11 +1284,11 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
       {/* ─── Filters Modal (Fullscreen) ─── */}
       {showFilters && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowFilters(false)}>
-          <div className="bg-white dark:bg-[#16181C] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 backdrop-blur-sm animate-fadeIn sm:items-center" onClick={() => setShowFilters(false)}>
+          <div className="w-full rounded-t-3xl border border-line bg-surface p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-pop animate-sheetUp sm:mx-4 sm:max-w-md sm:rounded-3xl sm:pb-6 sm:animate-popIn" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">Filtros</h3>
-              <button onClick={() => setShowFilters(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327]">
+              <h3 className="text-lg font-semibold tracking-tight text-fg">Filtros</h3>
+              <button onClick={() => setShowFilters(false)} className="p-2 rounded-lg hover:bg-surface-2">
                 <X className="h-5 w-5 text-gray-500" />
               </button>
             </div>
@@ -1336,18 +1296,18 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente..."
-                  className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
+                  className="w-full rounded-lg border border-line bg-surface-2 pl-10 pr-4 py-2.5 text-sm text-fg placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1.5">Doctor</label>
+                <label className="block text-xs font-bold text-muted mb-1.5">Doctor</label>
                 <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/30">
+                  className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm font-medium text-fg-2 focus:outline-none focus:ring-2 focus:ring-primary-500/30">
                   <option value="">Todos los doctores</option>
                   {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1.5">Tipo</label>
+                <label className="block text-xs font-bold text-muted mb-1.5">Tipo</label>
                 <div className="flex flex-wrap gap-2">
                   {[
                     { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
@@ -1358,23 +1318,23 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       setFilterTipos(prev => { const n = new Set(prev); if (n.has(t.key)) n.delete(t.key); else n.add(t.key); return n; });
                     }} className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
                       filterTipos.has(t.key)
-                        ? 'border-gray-300 dark:border-[#71767B] bg-gray-100 dark:bg-[#202327] text-gray-900 dark:text-[#E7E9EA]'
-                        : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-400 dark:text-[#71767B]')}>
+                        ? 'border-gray-300 dark:border-line-strong bg-surface-2 text-fg'
+                        : 'border-line bg-surface text-muted')}>
                       <span className={cn('h-2 w-3 rounded-sm border-l-2', t.bg, t.border)} />{t.label}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1.5">Estado</label>
+                <label className="block text-xs font-bold text-muted mb-1.5">Estado</label>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(estadoLabels).map(([k, v]) => (
                     <button key={k} onClick={() => {
                       setFilterEstados(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
                     }} className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
                       filterEstados.has(k)
-                        ? 'border-gray-300 dark:border-[#71767B] bg-gray-100 dark:bg-[#202327] text-gray-900 dark:text-[#E7E9EA]'
-                        : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-400 dark:text-[#71767B]')}>
+                        ? 'border-gray-300 dark:border-line-strong bg-surface-2 text-fg'
+                        : 'border-line bg-surface text-muted')}>
                       <span className={cn('h-2 w-2 rounded-full', estadoConfig[k as AgendaCirugiaEstado].dot)} />{v}
                     </button>
                   ))}
@@ -1387,7 +1347,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                   setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
                   setSearch('');
                 }}
-                  className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#2F3336] transition-colors">
+                  className="flex-1 rounded-lg border border-line bg-white dark:bg-surface-2 px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-gray-50 dark:hover:bg-surface-3 transition-colors">
                   Limpiar
                 </button>
                 <button onClick={() => setShowFilters(false)}
@@ -1431,35 +1391,35 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
           {cirugia.hora ? fmtTime(cirugia.hora) : '--:--'}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{cirugia.nombre_paciente}</h3>
+          <h3 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className={cn('inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
               <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
               {estadoLabels[cirugia.estado]}
             </span>
-            {cirugia.fecha && <span className="text-xs text-gray-500 dark:text-[#71767B]">{fmtDateShort(cirugia.fecha)}</span>}
+            {cirugia.fecha && <span className="text-xs text-muted">{fmtDateShort(cirugia.fecha)}</span>}
           </div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {items.map(item => (
-          <div key={item.label} className="rounded-lg border border-gray-100 dark:border-[#2F3336] p-3 bg-gray-50/50 dark:bg-[#202327]/50">
+          <div key={item.label} className="rounded-lg border border-line/70 p-3 bg-gray-50/50 dark:bg-surface-2/50">
             <div className="flex items-center gap-1.5 mb-1">
-              <item.Icon className="h-3 w-3 text-gray-400 dark:text-[#71767B]" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">{item.label}</span>
+              <item.Icon className="h-3 w-3 text-muted" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{item.label}</span>
             </div>
-            <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{item.value}</p>
+            <p className="text-sm font-bold text-fg">{item.value}</p>
           </div>
         ))}
       </div>
       {cirugia.notas && (
-        <div className="rounded-lg bg-gray-50 dark:bg-[#202327] border border-gray-100 dark:border-[#2F3336] p-3">
+        <div className="rounded-lg bg-surface-2 border border-line/70 p-3">
           <div className="flex items-center gap-1.5 mb-1"><StickyNote className="h-3 w-3 text-gray-400" /><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Notas</span></div>
-          <p className="text-sm text-gray-700 dark:text-[#E7E9EA]">{cirugia.notas}</p>
+          <p className="text-sm text-fg-2">{cirugia.notas}</p>
         </div>
       )}
       {userRol !== 'doctor' && (
-        <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-[#2F3336]">
+        <div className="flex gap-2 pt-2 border-t border-line/70">
           {cirugia.estado === 'agendada' && (
             <>
               <button onClick={() => updateEstado('completada')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
@@ -1470,7 +1430,7 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
               </button>
             </>
           )}
-          <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+          <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">
             Editar
           </button>
         </div>
@@ -1521,24 +1481,24 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
 
   return (
     <div ref={cardRef}
-      className="fixed z-50 w-[340px] rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-50 w-[340px] rounded-2xl border border-line bg-surface shadow-2xl animate-in fade-in zoom-in-95 duration-150"
       style={{ left: adjustedPos.x, top: adjustedPos.y }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-3 min-w-0">
           <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
-          <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{cirugia.nombre_paciente}</h3>
+          <h3 className="text-base font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && (
             <button onClick={() => updateEstado('cancelada')} disabled={updating}
-              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-gray-400 hover:text-red-500"
+              className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors text-gray-400 hover:text-red-500"
               title="Eliminar">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
             </button>
           )}
           <button onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#202327] transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-[#E7E9EA]"
+            className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-fg"
             title="Cerrar">
             <X className="h-4 w-4" />
           </button>
@@ -1547,7 +1507,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
 
       {/* Subtitle */}
       <div className="px-4 pb-2">
-        <p className="text-xs text-gray-500 dark:text-[#71767B]">
+        <p className="text-xs text-muted">
           {cirugia.fecha && fmtDate(cirugia.fecha)}
         </p>
       </div>
@@ -1555,68 +1515,68 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
       {/* Details */}
       <div className="px-4 pb-3 space-y-2">
         {cirugia.codigo && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <FileSpreadsheet className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <FileSpreadsheet className="h-4 w-4 text-muted shrink-0" />
             <span className="font-mono text-xs">{cirugia.codigo}</span>
           </div>
         )}
         {cirugia.procedimiento && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Stethoscope className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <Stethoscope className="h-4 w-4 text-muted shrink-0" />
             <span>{cirugia.procedimiento}</span>
           </div>
         )}
         {cirugia.doctor_nombre && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <User className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <User className="h-4 w-4 text-muted shrink-0" />
             <span>{cirugia.doctor_nombre}</span>
           </div>
         )}
         {cirugia.hora && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Clock className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <Clock className="h-4 w-4 text-muted shrink-0" />
             <span>{fmtTime(cirugia.hora)}{cirugia.tiempo_estimado ? ` · ${cirugia.tiempo_estimado}` : ''}</span>
           </div>
         )}
         {cirugia.ojo && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Eye className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <Eye className="h-4 w-4 text-muted shrink-0" />
             <span>{cirugia.ojo}</span>
           </div>
         )}
         {cirugia.jornada && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <MapPin className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <MapPin className="h-4 w-4 text-muted shrink-0" />
             <span>{cirugia.jornada}</span>
           </div>
         )}
         {cirugia.expediente && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <FileSpreadsheet className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <FileSpreadsheet className="h-4 w-4 text-muted shrink-0" />
             <span>Exp. {cirugia.expediente}</span>
           </div>
         )}
         {cirugia.procedencia && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Building2 className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <Building2 className="h-4 w-4 text-muted shrink-0" />
             <span>{cirugia.procedencia}</span>
           </div>
         )}
         {cirugia.diagnostico && (
-          <div className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Stethoscope className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5 text-sm text-fg-2">
+            <Stethoscope className="h-4 w-4 text-muted shrink-0 mt-0.5" />
             <span className="line-clamp-2">{cirugia.diagnostico}</span>
           </div>
         )}
         {(cirugia.lio || cirugia.marca_lio) && (
-          <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <Eye className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0" />
+          <div className="flex items-center gap-2.5 text-sm text-fg-2">
+            <Eye className="h-4 w-4 text-muted shrink-0" />
             <span>{[cirugia.marca_lio, cirugia.lio].filter(Boolean).join(' — ')}</span>
           </div>
         )}
         {cirugia.notas && (
-          <div className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-[#E7E9EA]">
-            <StickyNote className="h-4 w-4 text-gray-400 dark:text-[#71767B] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5 text-sm text-fg-2">
+            <StickyNote className="h-4 w-4 text-muted shrink-0 mt-0.5" />
             <span className="line-clamp-2">{cirugia.notas}</span>
           </div>
         )}
@@ -1629,7 +1589,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
       </div>
 
       {/* Status + Actions */}
-      <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-[#2F3336] space-y-2">
+      <div className="px-4 pb-4 pt-2 border-t border-line/70 space-y-2">
         <div className="flex items-center gap-2">
           <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
             <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
@@ -1650,7 +1610,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
           )}
           {cirugia.tipo !== 'estudio' && userRol !== 'doctor' && (
             <button onClick={onEdit}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-line text-fg-2 hover:bg-surface-2 transition-colors">
               Editar
             </button>
           )}
@@ -1754,10 +1714,10 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error desconocido'); } finally { setSaving(false); }
   };
 
-  if (loadingCirugia) return <div className="animate-pulse space-y-4 py-4"><div className="h-8 bg-gray-200 dark:bg-[#202327] rounded" /></div>;
+  if (loadingCirugia) return <div className="animate-pulse space-y-4 py-4"><div className="h-8 bg-gray-200 dark:bg-surface-2 rounded" /></div>;
 
-  const inputCls = "w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500";
-  const labelCls = "block text-xs font-bold text-gray-500 dark:text-[#71767B] mb-1";
+  const inputCls = "w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500";
+  const labelCls = "block text-xs font-bold text-muted mb-1";
 
   return (
     <div className="space-y-4">
@@ -1787,7 +1747,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
             <option value="">—</option><option value="OD">OD</option><option value="OI">OI</option><option value="OU">OU</option>
           </select>
         </div>
-        <div className="col-span-2"><label className={labelCls}>LIO desde Inventario <span className="font-normal text-gray-400 dark:text-[#71767B]">(opcional)</span></label>
+        <div className="col-span-2"><label className={labelCls}>LIO desde Inventario <span className="font-normal text-muted">(opcional)</span></label>
           <LIOSelector value={form.inventario_item_id} onChange={handleLIOSelect} />
         </div>
       </div>
@@ -1798,8 +1758,8 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
       <div><label className={labelCls}>Notas</label><textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} placeholder="Notas adicionales..." className={cn(inputCls, 'resize-none')} /></div>
       <div><label className={labelCls}>Procedencia</label><input type="text" value={form.procedencia} onChange={e => setForm(f => ({ ...f, procedencia: e.target.value }))} placeholder="Ej. Derivación externa" className={inputCls} /></div>
       <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
-      <div className="flex gap-3 pt-3 border-t border-gray-100 dark:border-[#2F3336]">
-        <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
+      <div className="flex gap-3 pt-3 border-t border-line/70">
+        <button onClick={onClose} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
         <button onClick={handleSubmit} disabled={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
           {saving ? 'Guardando...' : cirugiaId ? 'ACTUALIZAR' : 'GUARDAR'}
         </button>
@@ -1862,12 +1822,12 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
           <button onClick={descargarPlantilla} className="text-xs font-bold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
             ⬇ Descargar plantilla CSV
           </button>
-          <div className="border-2 border-dashed border-gray-300 dark:border-[#2F3336] rounded-lg p-6 text-center">
-            <FileSpreadsheet className="h-10 w-10 mx-auto text-gray-400 dark:text-[#71767B] mb-3" />
+          <div className="border-2 border-dashed border-gray-300 dark:border-line rounded-lg p-6 text-center">
+            <FileSpreadsheet className="h-10 w-10 mx-auto text-muted mb-3" />
             <input type="file" accept=".xlsx,.csv" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Cancelar</button>
+            <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Cancelar</button>
             <button onClick={handleUpload} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Procesando...' : 'Previsualizar'}</button>
           </div>
         </>
@@ -1880,12 +1840,12 @@ function ImportExcel({ doctores, onClose, onImported }: { doctores: Doctor[]; on
           </div>
           {(preview.erroresCirugia > 0 || preview.erroresAplazada > 0) && <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm text-orange-700"><AlertTriangle className="h-4 w-4 inline mr-1" />{preview.erroresCirugia + preview.erroresAplazada} filas con errores serán omitidas</div>}
           {preview.doctorNoEncontrado > 0 && <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-700"><AlertTriangle className="h-4 w-4 inline mr-1" />{preview.doctorNoEncontrado} cirugía(s) con cirujano sin match</div>}
-          <div className="max-h-60 overflow-y-auto space-y-1 border border-gray-200 dark:border-[#2F3336] rounded-lg p-2">
-            {preview.cirugias.slice(0, 20).map((c, i) => <div key={i} className="text-xs py-1 px-2 rounded bg-gray-50 dark:bg-[#202327] flex justify-between"><span className="font-medium text-gray-900 dark:text-[#E7E9EA]">{c.nombre_paciente}</span><span className="text-gray-500 dark:text-[#71767B]">{c.fecha || 'Sin fecha'}</span></div>)}
+          <div className="max-h-60 overflow-y-auto space-y-1 border border-line rounded-lg p-2">
+            {preview.cirugias.slice(0, 20).map((c, i) => <div key={i} className="text-xs py-1 px-2 rounded bg-surface-2 flex justify-between"><span className="font-medium text-fg">{c.nombre_paciente}</span><span className="text-muted">{c.fecha || 'Sin fecha'}</span></div>)}
             {preview.cirugias.length > 20 && <p className="text-xs text-gray-400 text-center py-1">... y {preview.cirugias.length - 20} más</p>}
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Volver</button>
+            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Volver</button>
             <button onClick={handleConfirm} disabled={loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Importando...' : 'Confirmar Importación'}</button>
           </div>
         </>
@@ -1961,12 +1921,12 @@ function ImportConsultas({ onClose, onImported }: { onClose: () => void; onImpor
           <button onClick={descargarPlantilla} className="text-xs font-bold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
             ⬇ Descargar plantilla CSV
           </button>
-          <div className="border-2 border-dashed border-gray-300 dark:border-[#2F3336] rounded-lg p-6 text-center">
-            <FileSpreadsheet className="h-10 w-10 mx-auto text-gray-400 dark:text-[#71767B] mb-3" />
+          <div className="border-2 border-dashed border-gray-300 dark:border-line rounded-lg p-6 text-center">
+            <FileSpreadsheet className="h-10 w-10 mx-auto text-muted mb-3" />
             <input type="file" accept=".csv,.xlsx" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Cancelar</button>
+            <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Cancelar</button>
             <button onClick={handleUpload} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Procesando...' : 'Previsualizar'}</button>
           </div>
         </>
@@ -1978,18 +1938,18 @@ function ImportConsultas({ onClose, onImported }: { onClose: () => void; onImpor
             <div className="rounded bg-orange-50 p-2 text-center"><p className="text-xs font-bold text-orange-600 uppercase">Sin fecha/nombre</p><p className="text-2xl font-extrabold text-orange-800">{preview.omitidas}</p></div>
             <div className="rounded bg-amber-50 p-2 text-center"><p className="text-xs font-bold text-amber-600 uppercase">Doctor sin match</p><p className="text-2xl font-extrabold text-amber-800">{preview.doctorNoEncontrado}</p></div>
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#2F3336] divide-y divide-gray-100 dark:divide-[#2F3336] text-xs">
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-line divide-y divide-line/70 text-xs">
             {preview.filas.slice(0, 50).map((f, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2">
                 <span className="font-bold text-primary-700 w-10">{f.hora || '—'}</span>
-                <span className="font-medium text-gray-900 dark:text-[#E7E9EA] truncate flex-1">{f.paciente}</span>
-                <span className="text-gray-500 dark:text-[#71767B] truncate w-28">{f.doctor}</span>
-                <span className="text-gray-400 dark:text-[#71767B] w-20">{f.tipo}</span>
+                <span className="font-medium text-fg truncate flex-1">{f.paciente}</span>
+                <span className="text-muted truncate w-28">{f.doctor}</span>
+                <span className="text-muted w-20">{f.tipo}</span>
               </div>
             ))}
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50">Atrás</button>
+            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Atrás</button>
             <button onClick={handleConfirm} disabled={loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Importando...' : `Importar ${preview.total} consultas`}</button>
           </div>
         </>

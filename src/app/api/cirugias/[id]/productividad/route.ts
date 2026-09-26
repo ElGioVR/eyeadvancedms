@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { listarProductividadCirugia } from '@/lib/productividad';
 
@@ -15,7 +16,7 @@ export async function GET(
     const rows = await listarProductividadCirugia(id);
     return NextResponse.json(rows);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'cirugias.[id].productividad', 'Error interno del servidor');
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
