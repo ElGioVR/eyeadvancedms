@@ -37,6 +37,7 @@ const lenteUpdateSchema = z.object({
 function mapLente(l: any) {
   return {
     id: l.id,
+    folio: l.folio ?? null,
     manufacturer: l.manufacturer,
     product_name: l.product_name,
     model: l.model,
@@ -144,6 +145,90 @@ export async function POST(request: Request) {
   }
 
   const data = validation.data;
+  const cantidad = data.stock ?? 1;
+  const serie = data.serial_number?.trim() || null;
+  const escaparIlike = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+  // 1) Misma serie ya registrada (como ítem o dentro de un ítem agrupado) → no duplicar
+  if (serie) {
+    const [{ data: dupItem }, { data: dupMov }] = await Promise.all([
+      supabase.from('inventario_items').select('id, folio').eq('serial_number', serie).limit(1).maybeSingle(),
+      supabase
+        .from('inventario_movimientos')
+        .select('id')
+        .eq('tipo', 'ENTRADA')
+        .ilike('motivo', `%SN ${escaparIlike(serie)}%`)
+        .limit(1),
+    ]);
+    if (dupItem || (dupMov && dupMov.length > 0)) {
+      return NextResponse.json(
+        { error: `Este lente (serie ${serie}) ya está registrado en el inventario${dupItem?.folio ? ` · ${dupItem.folio}` : ''}.`, duplicado: true },
+        { status: 409 },
+      );
+    }
+  }
+
+  const motivoEntrada = `Alta por etiqueta${serie ? ` — SN ${serie}` : ''}${data.expiration_date ? ` · cad. ${data.expiration_date}` : ''}`;
+
+  // 2) Lente idéntico (misma marca, modelo y graduación) → se suma al stock existente
+  let qIgual = supabase
+    .from('inventario_items')
+    .select('id, stock, expiration_date, precio_venta, barcode')
+    .ilike('manufacturer', escaparIlike(data.manufacturer.trim()))
+    .ilike('model', escaparIlike(data.model.trim()));
+  for (const campo of ['sphere', 'cylinder', 'add_intermediate', 'add_near'] as const) {
+    const v = data[campo];
+    qIgual = v === null || v === undefined ? qIgual.is(campo, null) : qIgual.eq(campo, v);
+  }
+  const { data: igual } = await qIgual.order('created_at', { ascending: true }).limit(1).maybeSingle();
+
+  if (igual) {
+    // Actualización optimista: si otro usuario sumó al mismo tiempo, se reintenta
+    let actual = igual;
+    for (let intento = 0; intento < 3; intento += 1) {
+      const nuevoStock = (Number(actual.stock) || 0) + cantidad;
+      const cambios: Record<string, unknown> = { stock: nuevoStock };
+      // Caducidad: se conserva la más próxima (primero en caducar, primero en usarse)
+      if (data.expiration_date && (!actual.expiration_date || data.expiration_date < actual.expiration_date)) {
+        cambios.expiration_date = data.expiration_date;
+      }
+      if (data.precio_venta !== undefined && data.precio_venta !== null) cambios.precio_venta = data.precio_venta;
+      if (!actual.barcode && data.barcode) {
+        cambios.barcode = data.barcode;
+        cambios.barcode_format = data.barcode_format ?? null;
+      }
+      const { data: actualizado, error: errUpd } = await supabase
+        .from('inventario_items')
+        .update(cambios)
+        .eq('id', actual.id)
+        .eq('stock', actual.stock)
+        .select(SELECT)
+        .maybeSingle();
+      if (errUpd) {
+        return NextResponse.json({ error: translateError(errUpd.message) }, { status: 500 });
+      }
+      if (actualizado) {
+        await supabase.from('inventario_movimientos').insert({
+          inventario_item_id: actual.id,
+          tipo: 'ENTRADA',
+          cantidad,
+          stock_resultante: nuevoStock,
+          usuario_id: auth.user.id,
+          referencia_tipo: 'COMPRA',
+          motivo: motivoEntrada,
+        });
+        return NextResponse.json({ ...mapLente(actualizado), fusionado: true, agregado: cantidad });
+      }
+      const { data: releido } = await supabase
+        .from('inventario_items')
+        .select('id, stock, expiration_date, precio_venta, barcode')
+        .eq('id', actual.id)
+        .maybeSingle();
+      if (!releido) break;
+      actual = releido;
+    }
+    return NextResponse.json({ error: 'El stock cambió mientras se guardaba. Intenta de nuevo.' }, { status: 409 });
+  }
 
   const year = new Date().getFullYear().toString().slice(-2);
   const { count } = await supabase
@@ -166,8 +251,8 @@ export async function POST(request: Request) {
     expiration_date: data.expiration_date ?? null,
     barcode: data.barcode ?? null,
     barcode_format: data.barcode_format ?? null,
-    stock: data.stock ?? 0,
-    stock_minimo: data.stock_minimo ?? 5,
+    stock: cantidad,
+    stock_minimo: data.stock_minimo ?? 0,
     precio_compra: data.precio_compra ?? null,
     precio_venta: data.precio_venta ?? null,
     lote: data.lote ?? null,
@@ -186,7 +271,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
   }
 
-  return NextResponse.json(mapLente(lente), { status: 201 });
+  // Kardex: entrada inicial (también sirve para detectar series ya registradas)
+  if (cantidad > 0) {
+    await supabase.from('inventario_movimientos').insert({
+      inventario_item_id: lente.id,
+      tipo: 'ENTRADA',
+      cantidad,
+      stock_resultante: cantidad,
+      usuario_id: auth.user.id,
+      referencia_tipo: 'COMPRA',
+      motivo: motivoEntrada,
+    });
+  }
+
+  return NextResponse.json({ ...mapLente(lente), fusionado: false, agregado: cantidad }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {

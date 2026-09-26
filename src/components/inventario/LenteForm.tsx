@@ -117,6 +117,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         expiration_date: form.expiration_date || null,
         barcode: form.barcode || null,
         barcode_format: form.barcode_format || null,
+        precio_venta: form.precio_venta ? Number(form.precio_venta) : null,
       };
       if (mode === 'create') {
         payload.stock = 1;
@@ -135,7 +136,9 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         return;
       }
 
-      toast(mode === 'edit' ? 'Lente actualizado correctamente' : 'Lente registrado correctamente');
+      if (mode === 'edit') toast('Lente actualizado correctamente');
+      else if (data.fusionado) toast(`Ya existía ${data.folio || 'este lente'}: se sumó ${data.agregado ?? 1} al stock (ahora ${data.stock})`);
+      else toast('Lente registrado correctamente');
       router.push('/inventario');
     } catch {
       setErrors({ general: 'Error de conexion' });
@@ -199,9 +202,25 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
               <input type="text" value={form.model} onChange={(e) => setForm((p) => ({ ...p, model: e.target.value.toUpperCase() }))} placeholder="CNATT2" className={errors.model ? inputErr : input} />
               {errors.model && <p className="mt-1 text-xs text-red-500">{errors.model}</p>}
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className={etiqueta}>Producto</label>
               <input type="text" value={form.product_name} onChange={(e) => setForm((p) => ({ ...p, product_name: e.target.value }))} placeholder="Clareon PanOptix Toric IOL" className={input} />
+            </div>
+            <div>
+              <label className={etiqueta}>Precio</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={form.precio_venta}
+                  onChange={(e) => setForm((p) => ({ ...p, precio_venta: e.target.value }))}
+                  className={cn(input, 'pl-7')}
+                />
+              </div>
             </div>
           </div>
         </div>
