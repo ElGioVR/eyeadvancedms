@@ -178,14 +178,12 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
       });
       setParsed(result);
       setView('results');
+      // Se aplica directo al formulario: el usuario solo revisa y guarda
+      onParsed(result);
     } catch {
       setError('Error al procesar la imagen. Intenta de nuevo.');
       setView('choose');
     }
-  }
-
-  function handleApply() {
-    if (parsed) onParsed(parsed);
   }
 
   function handleReset() {
@@ -209,26 +207,26 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
             <ImageIcon className="h-6 w-6 text-primary-600" />
           </div>
           <div>
-            <p className="text-sm font-extrabold text-fg">Auto-completar desde foto</p>
-            <p className="text-xs text-muted mt-1">Toma una foto o sube la etiqueta del lente para rellenar el formulario automaticamente</p>
+            <p className="text-sm font-semibold text-fg">Foto de la etiqueta</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted">Toma una foto de la etiqueta de la caja y los datos se llenan solos. Acércate para que la etiqueta ocupe la mitad de la foto.</p>
           </div>
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 flex items-center gap-2 max-w-sm mx-auto">
               <X className="h-4 w-4 shrink-0" /> {error}
             </div>
           )}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="mx-auto grid max-w-sm grid-cols-2 gap-2">
             <button
               onClick={() => { setError(''); setView('viewfinder'); }}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+              className="btn-primary"
             >
-              <Camera className="h-4 w-4" /> Tomar Foto
+              <Camera className="h-4 w-4" /> Tomar foto
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors"
+              className="btn-secondary"
             >
-              <Upload className="h-4 w-4" /> Subir Imagen
+              <Upload className="h-4 w-4" /> Subir imagen
             </button>
           </div>
         </div>
@@ -329,59 +327,54 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
           </div>
         )}
 
-{parsed && (
+{parsed && (() => {
+          const campos = [
+            { label: 'Fabricante', value: parsed.manufacturer },
+            { label: 'Producto', value: parsed.product_name },
+            { label: 'Modelo', value: parsed.model },
+            { label: 'Esfera', value: parsed.sphere },
+            { label: 'Cilindro', value: parsed.cylinder },
+            { label: 'ADD Intermedia', value: parsed.add_intermediate },
+            { label: 'ADD Cercana', value: parsed.add_near },
+            { label: 'Nozzle', value: parsed.nozzle },
+            { label: 'Numero de serie', value: parsed.serial_number },
+            { label: 'Caducidad', value: parsed.expiration_date },
+            { label: 'Código de barras', value: parsed.barcode },
+          ];
+          const faltan = campos.filter((c) => !c.value);
+          return (
             <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-600" />
-                  <span className="text-sm font-extrabold text-emerald-700">Etiqueta detectada</span>
-                  <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-primary-700">
-                    Lente intraocular
-                  </span>
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  <CheckCircle className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-fg">Etiqueta detectada</p>
+                  <p className="text-xs text-muted">
+                    Se llenaron {campos.length - faltan.length} de {campos.length} datos. Revísalos abajo antes de guardar.
+                  </p>
+                  {faltan.length > 0 && (
+                    <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                      No se leyó: {faltan.map((f) => f.label).join(', ')}
+                    </p>
+                  )}
                 </div>
-                <button onClick={handleReset} className="text-xs font-bold text-muted hover:text-gray-600 dark:hover:text-fg">Foto nueva</button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  { label: 'Fabricante', value: parsed.manufacturer },
-                  { label: 'Producto', value: parsed.product_name },
-                  { label: 'Modelo', value: parsed.model },
-                  { label: 'Esfera (D)', value: parsed.sphere },
-                  { label: 'Cilindro (D)', value: parsed.cylinder },
-                  { label: 'Nozzle', value: parsed.nozzle },
-                  { label: 'ADD Intermedia (D)', value: parsed.add_intermediate },
-                  { label: 'ADD Cercana (D)', value: parsed.add_near },
-                  { label: 'Numero de serie', value: parsed.serial_number },
-                  { label: 'Fecha Caducidad', value: parsed.expiration_date },
-                  {
-                    label: 'Código Barras',
-                    value: parsed.barcode
-                      ? `${parsed.barcode}${parsed.barcode_format ? ` (${parsed.barcode_format})` : ''}`
-                      : '',
-                  },
-                ].filter((f) => f.value).map((f) => (
-                  <div key={f.label} className="rounded-lg bg-surface-2 px-3 py-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{f.label}</span>
-                    <p className="font-bold text-fg mt-0.5">{f.value}</p>
-                  </div>
-                ))}
+                <button onClick={handleReset} className="btn-secondary h-9 shrink-0 px-3 text-xs">
+                  <Camera className="h-3.5 w-3.5" /> Otra foto
+                </button>
               </div>
 
               <details className="group">
-                <summary className="text-xs font-bold text-muted cursor-pointer hover:text-gray-600 dark:hover:text-fg">
+                <summary className="cursor-pointer text-xs font-medium text-muted hover:text-fg">
                   Ver texto detectado
                 </summary>
-                <p className="mt-2 text-xs text-muted bg-surface-2 rounded-lg p-3 max-h-24 overflow-y-auto">
+                <p className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-xs text-muted">
                   {rawText}
                 </p>
               </details>
-
-              <button onClick={handleApply} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors inline-flex items-center justify-center gap-2">
-                <CheckCircle className="h-4 w-4" /> Aplicar Datos al Formulario
-              </button>
             </>
-          )}
+          );
+        })()}
       </div>
     </div>
   );
