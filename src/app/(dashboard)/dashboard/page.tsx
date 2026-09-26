@@ -17,14 +17,18 @@ async function fetchDashboardData(doctorId?: string) {
   // Perfil y datos del dashboard en paralelo
   const perfilPromise = getSupabaseAdmin()
     .from('usuarios')
-    .select('nombre, iniciales, avatar_url, rol')
+    .select('nombre, email, avatar_url, rol')  // (la tabla no tiene columna iniciales)
     .eq('id', userId)
     .maybeSingle();
 
   const [perfilResult, data] = await Promise.all([perfilPromise, getDashboardData()]);
 
-  const nombre = perfilResult.data?.nombre || 'Usuario';
-  const iniciales = perfilResult.data?.iniciales || nombre
+  if (perfilResult.error) console.error('[dashboard] perfil', perfilResult.error.message);
+  const nombre =
+    perfilResult.data?.nombre?.trim() ||
+    perfilResult.data?.email?.split('@')[0] ||
+    'Usuario';
+  const iniciales = nombre
     .split(' ')
     .map((n: string) => n[0])
     .slice(0, 2)
