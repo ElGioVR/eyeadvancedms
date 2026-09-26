@@ -14,6 +14,7 @@ import {
 import Skeleton from '@/components/ui/Skeleton';
 import Pagination from '@/components/ui/Pagination';
 import { cn } from '@/lib/utils';
+import { rangoMesActual, rangoMesAnterior } from '@/lib/rangos';
 import type { EstadoPago, HonorariosListado } from '@/types/productividad';
 
 const PAGE_SIZE = 15;
@@ -76,13 +77,24 @@ export default function MisHonorariosPage() {
     fetchData();
   }, [fetchData]);
 
-  const cambiarRango = (siguienteDesde: string, siguienteHasta: string) => {
+  const cambiarRango = (siguienteDesde: string, siguienteHasta: string, desdeAtajo = false) => {
+    if (!desdeAtajo) setPresetActivo(null);
     setDesde(siguienteDesde);
     setHasta(siguienteHasta);
     setPage(1);
   };
 
   const rangoIncompleto = (!!desde && !hasta) || (!!hasta && !desde);
+  const personalizado = !!desde && !!hasta;
+
+  // Atajos de periodo (fechas calculadas solo al hacer clic → sin riesgo de hidratación)
+  const [presetActivo, setPresetActivo] = useState<'actual' | 'mes' | 'anterior' | null>('actual');
+  const aplicarPreset = (id: 'actual' | 'mes' | 'anterior') => {
+    setPresetActivo(id);
+    if (id === 'actual') return cambiarRango('', '', true);
+    const r = id === 'mes' ? rangoMesActual() : rangoMesAnterior();
+    cambiarRango(r.desde, r.hasta, true);
+  };
 
   if (loading && !data) {
     return (
@@ -137,54 +149,88 @@ export default function MisHonorariosPage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-gray-400" />
-            <span className="text-xs font-extrabold uppercase tracking-widest text-fg">
-              Periodo
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-soft dark:shadow-none">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-300">
+              <Calendar className="h-[18px] w-[18px]" />
             </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg">Periodo</p>
+              {data?.rango && (
+                <p className="truncate text-xs text-muted tabular-nums">
+                  {fmtFecha(data.rango.desde)} — {fmtFecha(data.rango.hasta)}
+                </p>
+              )}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => cambiarRango('', '')}
-            disabled={!desde && !hasta}
-            className="rounded-lg px-2 py-1 text-xs font-bold text-primary-600 disabled:opacity-30"
+          <span
+            className={cn(
+              'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold',
+              personalizado
+                ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+            )}
           >
-            Periodo actual
-          </button>
+            {personalizado ? 'Personalizado' : 'Actual'}
+          </span>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="text-[11px] font-bold text-muted">Desde</span>
+
+        {/* Atajos */}
+        <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+          {([
+            ['actual', 'Periodo actual'],
+            ['mes', 'Este mes'],
+            ['anterior', 'Mes anterior'],
+          ] as const).map(([id, label]) => {
+            const activo = presetActivo === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => aplicarPreset(id)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors active:scale-95',
+                  activo
+                    ? 'border-primary-600 bg-primary-600 text-white dark:border-primary-500 dark:bg-primary-500'
+                    : 'border-line bg-surface-2 text-fg-2 hover:text-fg',
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Rango manual */}
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <label className="min-w-0">
+            <span className="mb-1 block text-[11px] font-medium text-muted">Desde</span>
             <input
               type="date"
-              value={desde}
-              onChange={(e) => cambiarRango(e.target.value, hasta)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-line dark:bg-canvas dark:text-fg"
+              value={desde || data?.rango?.desde || ''}
+              max={hasta || data?.rango?.hasta || undefined}
+              onChange={(e) => cambiarRango(e.target.value, hasta || data?.rango?.hasta || '')}
+              className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-3 text-sm font-medium text-fg tabular-nums focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/15"
             />
           </label>
-          <label className="space-y-1">
-            <span className="text-[11px] font-bold text-muted">Hasta</span>
+          <label className="min-w-0">
+            <span className="mb-1 block text-[11px] font-medium text-muted">Hasta</span>
             <input
               type="date"
-              value={hasta}
-              onChange={(e) => cambiarRango(desde, e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-line dark:bg-canvas dark:text-fg"
+              value={hasta || data?.rango?.hasta || ''}
+              min={desde || data?.rango?.desde || undefined}
+              onChange={(e) => cambiarRango(desde || data?.rango?.desde || '', e.target.value)}
+              className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-3 text-sm font-medium text-fg tabular-nums focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/15"
             />
           </label>
         </div>
         {rangoIncompleto && (
-          <p className="mt-2 text-xs font-bold text-amber-500">
+          <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
             Completa ambas fechas para filtrar; sin ellas se muestra el periodo actual.
           </p>
         )}
-        {data?.rango && (
-          <p className="mt-2 text-xs text-muted">
-            Mostrando {fmtFecha(data.rango.desde)} — {fmtFecha(data.rango.hasta)}
-          </p>
-        )}
-      </div>
+      </section>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">

@@ -845,7 +845,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 setCalendarView('month');
                 setCurrentDate(new Date(y, m, 1, 12));
               }}
-              onAdd={(_date: string) => { setShowCreateChoice(true); }}
+              onAdd={userRol !== 'doctor' ? (_date: string) => { setShowCreateChoice(true); } : undefined}
               onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               todayStr={todayStr}
               openDay={mobileOpenDay}

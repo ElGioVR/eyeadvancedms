@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
+  Wallet,
 } from "lucide-react";
 import { useUser, clearUserCache } from "@/hooks/useUser";
 import Avatar from "@/components/ui/Avatar";
@@ -56,15 +57,38 @@ const tipoLabels: Record<string, string> = {
 };
 
 const notifColors: Record<string, string> = {
-  info: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300",
+  info: "bg-primary-50 text-primary-600 dark:bg-primary-400/15 dark:text-primary-300",
   warning: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
   error: "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300",
 };
 
-const notifEntityHref: Record<string, string> = {
-  consulta: "/agenda",
-  lente: "/inventario",
+/** Ícono según la entidad de la notificación. */
+const notifEntityIcon: Record<string, typeof User> = {
+  consulta: Stethoscope,
+  agenda_cirugia: CalendarDays,
+  cirugia: CalendarDays,
+  inventario_item: Package,
+  lente: Package,
+  honorarios: Wallet,
 };
+
+/** A dónde lleva cada notificación al tocarla. */
+function notifHref(n: Notificacion): string | null {
+  switch (n.entidad_tipo) {
+    case "consulta":
+      return n.entidad_id ? `/consultas/${n.entidad_id}` : "/agenda";
+    case "agenda_cirugia":
+    case "cirugia":
+      return n.entidad_id ? `/cirugias/${n.entidad_id}` : "/agenda";
+    case "inventario_item":
+    case "lente":
+      return "/inventario";
+    case "honorarios":
+      return "/mis-honorarios";
+    default:
+      return null;
+  }
+}
 
 function formatNotifTime(dateStr: string, now: Date): string {
   const d = new Date(dateStr);
@@ -199,12 +223,16 @@ export default function TopBar(_props: TopBarProps) {
       return;
     }
     setNotifOpen(true);
-    setNotifLoading(true);
+    setNotifLoading(notifications.length === 0);
     try {
-      const res = await fetch("/api/notificaciones");
+      const res = await fetch("/api/notificaciones", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.data);
+        const lista: Notificacion[] = data.data ?? [];
+        setNotifications(lista);
+        // Sincroniza el contador con lo que realmente hay (la lista trae las 50 más recientes)
+        const noLeidas = lista.filter((n) => !n.leido).length;
+        setUnreadCount((prev) => (lista.length < 50 ? noLeidas : Math.max(prev, noLeidas)));
       }
     } catch {
       /* silent */
@@ -214,22 +242,47 @@ export default function TopBar(_props: TopBarProps) {
   }
 
   async function markAsRead(ids: string[]) {
-    await fetch("/api/notificaciones", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
-    });
-    setNotifications((prev) =>
-      prev.map((n) => (ids.includes(n.id) ? { ...n, leido: true } : n)),
-    );
+    if (ids.length === 0) return;
+    // Optimista: la UI responde al instante y se revierte si falla
+    const previas = notifications;
+    const conteoPrevio = unreadCount;
+    setNotifications((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, leido: true } : n)));
     setUnreadCount((prev) => Math.max(0, prev - ids.length));
+    try {
+      const res = await fetch("/api/notificaciones", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifications(previas);
+      setUnreadCount(conteoPrevio);
+    }
+  }
+
+  async function markAllAsRead() {
+    const previas = notifications;
+    const conteoPrevio = unreadCount;
+    setNotifications((prev) => prev.map((n) => ({ ...n, leido: true })));
+    setUnreadCount(0);
+    try {
+      const res = await fetch("/api/notificaciones", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifications(previas);
+      setUnreadCount(conteoPrevio);
+    }
   }
 
   function handleNotifClick(n: Notificacion) {
     if (!n.leido) markAsRead([n.id]);
-    if (n.entidad_tipo && n.entidad_id && notifEntityHref[n.entidad_tipo]) {
-      router.push(notifEntityHref[n.entidad_tipo]);
-    }
+    const href = notifHref(n);
+    if (href) router.push(href);
     setNotifOpen(false);
   }
 
@@ -460,13 +513,7 @@ export default function TopBar(_props: TopBarProps) {
                   <span className="text-sm font-semibold text-fg">Notificaciones</span>
                   {unreadCount > 0 && (
                     <button
-                      onClick={() =>
-                        markAsRead(
-                          notifications
-                            .filter((n) => !n.leido)
-                            .map((n) => n.id),
-                        )
-                      }
+                      onClick={markAllAsRead}
                       className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-300"
                     >
                       Marcar todo leído
@@ -495,11 +542,16 @@ export default function TopBar(_props: TopBarProps) {
                           !n.leido && "bg-primary-50/60 dark:bg-primary-400/5"
                         )}
                       >
-                        <span
-                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${notifColors[n.tipo] ?? notifColors.info}`}
-                        >
-                          {n.tipo === "info" ? "i" : n.tipo === "warning" ? "!" : "✕"}
-                        </span>
+                        {(() => {
+                          const Icono = (n.entidad_tipo && notifEntityIcon[n.entidad_tipo]) || Bell;
+                          return (
+                            <span
+                              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${notifColors[n.tipo] ?? notifColors.info}`}
+                            >
+                              <Icono className="h-4 w-4" />
+                            </span>
+                          );
+                        })()}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="truncate text-sm font-semibold text-fg">{n.titulo}</span>

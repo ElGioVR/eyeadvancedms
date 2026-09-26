@@ -31,6 +31,16 @@ export function rangoMesActual(now = new Date()): RangoFechas {
   return { desde, hasta };
 }
 
+/** Mes anterior completo en hora de Tijuana. */
+export function rangoMesAnterior(now = new Date()): RangoFechas {
+  const { y, m } = partesTijuana(now);
+  const py = m === 1 ? y - 1 : y;
+  const pm = m === 1 ? 12 : m - 1;
+  const ultimo = new Date(Date.UTC(py, pm, 0)).getUTCDate();
+  const mm = String(pm).padStart(2, '0');
+  return { desde: `${py}-${mm}-01`, hasta: `${py}-${mm}-${String(ultimo).padStart(2, '0')}` };
+}
+
 export function rangoPersonalizado(
   desde?: string | null,
   hasta?: string | null,

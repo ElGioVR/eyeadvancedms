@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { notificarAsignacion } from '@/services/notificaciones';
 import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
@@ -267,16 +268,17 @@ export async function POST(request: Request) {
     }
   }
 
-  if (cirugia.doctor_id) {
-    await supabase.from('notificaciones').insert({
-      user_id: cirugia.doctor_id,
-      tipo: 'info',
-      titulo: 'Nueva cirugía agendada',
-      mensaje: `Cirugía programada para ${cirugia.nombre_paciente} el ${cirugia.fecha || 'sin fecha'}`,
-      entidad_tipo: 'agenda_cirugia',
-      entidad_id: cirugia.id,
-    });
-  }
+  // Notifica al doctor asignado (resuelve doctores.usuario_id)
+  await notificarAsignacion({
+    doctorId: cirugia.doctor_id,
+    tipoServicio: 'Cirugía',
+    paciente: cirugia.nombre_paciente,
+    fecha: cirugia.fecha,
+    hora: cirugia.hora,
+    entidadTipo: 'agenda_cirugia',
+    entidadId: cirugia.id,
+    actorUserId: auth.user.id,
+  });
 
   return NextResponse.json(cirugia, { status: 201 });
 }

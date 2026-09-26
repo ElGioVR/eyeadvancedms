@@ -85,10 +85,10 @@ const kardexTipoConfig: Record<string, { bg: string; text: string; icon: typeof 
 };
 
 const estadoConfig: Record<string, { bg: string; text: string; dot?: string }> = {
-  DISPONIBLE: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  OCUPADO: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
-  DANADO: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-  VENCIDO: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+  DISPONIBLE: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  OCUPADO: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+  DANADO: { bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-600 dark:text-red-300', dot: 'bg-red-500' },
+  VENCIDO: { bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-600 dark:text-red-300', dot: 'bg-red-500' },
 };
 
 function getEstadoLente(stock: number, minimo: number): string {
@@ -268,44 +268,46 @@ export default function InventarioPage() {
   const puedeCrear = puedeEscribir || user?.rol === 'doctor';
 
   const headerActions = (
-    <div className="flex flex-col sm:flex-row gap-3">
-      <button onClick={() => setShowScanner(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-5 py-2.5 text-sm font-bold text-primary-700 hover:bg-primary-100 transition-colors">
-        <Camera className="h-4 w-4" /> ESCANEAR
+    <div className={cn('grid w-full gap-2 sm:flex sm:w-auto', puedeCrear ? 'grid-cols-2' : 'grid-cols-1')}>
+      <button onClick={() => setShowScanner(true)} className="btn-secondary">
+        <Camera className="h-4 w-4" /> Escanear
       </button>
       {puedeCrear && (
-        <Link href="/inventario/nueva" className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors">
-          <PlusIcon className="h-4 w-4" /> Nuevo Ítem
+        <Link href="/inventario/nueva" className="btn-primary">
+          <PlusIcon className="h-4 w-4" /> Nuevo ítem
         </Link>
       )}
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6">
-      <PageHeader title="INVENTARIO" subtitle="Lentes de visión, intraoculares, especificaciones y stock clínico." action={headerActions} />
+    <div className="mx-auto max-w-[1440px] space-y-4 sm:space-y-6">
+      <PageHeader title="Inventario" subtitle="Lentes intraoculares, especificaciones y stock clínico." action={headerActions} />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3">
         {[
-          { label: 'Total', value: stats.total, color: 'text-fg' },
-          { label: 'Con Stock', value: stats.conStock, color: 'text-emerald-600' },
-          { label: 'Stock Bajo', value: stats.bajo, color: 'text-amber-600' },
-          { label: 'Sin Stock', value: stats.sinStock, color: 'text-red-600' },
+          { label: 'Total', value: stats.total, color: 'text-fg', dot: 'bg-primary-500' },
+          { label: 'Con stock', value: stats.conStock, color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+          { label: 'Bajo', value: stats.bajo, color: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+          { label: 'Sin stock', value: stats.sinStock, color: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' },
         ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-muted">{s.label}</span>
-            <p className={cn('text-2xl font-extrabold mt-1', s.color)}>{s.value}</p>
+          <div key={s.label} className="min-w-0 rounded-2xl border border-line bg-surface px-2.5 py-2.5 shadow-soft dark:shadow-none sm:px-4 sm:py-3">
+            <span className="flex items-center gap-1.5 truncate text-[11px] font-medium text-muted sm:text-xs">
+              <span className={cn('hidden h-1.5 w-1.5 shrink-0 rounded-full sm:inline-block', s.dot)} />
+              {s.label}
+            </span>
+            <p className={cn('mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-surface rounded-xl border border-line shadow-sm p-4 space-y-3">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, codigo, marca, modelo, grado refractivo..." />
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-          <span className="text-xs font-bold text-muted dark:text-muted uppercase tracking-wider">Filtrar:</span>
-          <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
-          <FilterSelect value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
-          <FilterSelect value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
+      <div className="space-y-3 rounded-2xl border border-line bg-surface p-3 shadow-soft dark:shadow-none sm:p-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar folio, código, marca, modelo…" />
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+          <FilterSelect label="Categoría" value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
+          <FilterSelect label="Proveedor" value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
+          <FilterSelect label="Stock" value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
         </div>
       </div>
 
@@ -336,24 +338,26 @@ export default function InventarioPage() {
             const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo);
             return (
               <div key={lente.id} className={cn(
-                'rounded-xl border bg-surface shadow-sm overflow-hidden transition-all hover:shadow-md',
-                sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-line'
+                'rounded-2xl border bg-surface shadow-soft overflow-hidden transition-all hover:shadow-card dark:shadow-none',
+                sinStock ? 'border-red-200 dark:border-red-500/30' : stockBajo ? 'border-amber-200 dark:border-amber-500/30' : 'border-line'
               )}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-                  <div className="flex items-center gap-3">
-                    <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold', sinStock ? 'bg-red-50 text-red-600' : stockBajo ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700')}>
-                      {lente.folio || lente.id.slice(0, 8)}
-                    </span>
-                    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase bg-purple-50 text-purple-600">
-                      LIO
-                    </span>
-                    <div>
-                      <h3 className="text-base font-extrabold text-fg">{lente.manufacturer} {lente.model}</h3>
-                      <p className="text-xs text-muted">{lente.categoria || 'Sin categoria'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
+                  <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                        <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums', sinStock ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300' : stockBajo ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300')}>
+                          {lente.folio || lente.id.slice(0, 8)}
+                        </span>
+                        <span className="inline-flex items-center rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
+                          LIO
+                        </span>
+                      </div>
+                      <h3 className="truncate text-base font-semibold text-fg">{lente.manufacturer} {lente.model}</h3>
+                      <p className="truncate text-xs text-muted">{lente.categoria || 'Sin categoría'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
+                  <div className="flex items-center justify-between gap-4 sm:justify-end">
+                    <div className="sm:text-right">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-muted">Precio Venta</span>
                       <p className="text-lg font-extrabold text-fg">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
                     </div>
@@ -361,8 +365,8 @@ export default function InventarioPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-line/70 bg-gray-50 dark:bg-surface-2/30 dark:bg-surface-2/30 px-4 py-3 sm:px-6 sm:py-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                <div className="border-t border-line/70 bg-surface-2/40 px-3 py-3 sm:px-6 sm:py-4">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-6">
                     {[
                       { label: 'Esfera (D)', value: lente.sphere?.toString() || '—' },
                       { label: 'Cilindro (D)', value: lente.cylinder?.toString() || '—' },
@@ -374,24 +378,24 @@ export default function InventarioPage() {
                       { label: 'Stock', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-fg' },
                       { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-muted' },
                     ].map((item) => (
-                      <div key={item.label} className="rounded-lg bg-surface border border-line px-4 py-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{item.label}</span>
-                        <p className={cn('mt-1 text-sm font-extrabold text-fg', item.className)}>{item.value}</p>
+                      <div key={item.label} className="min-w-0 rounded-xl border border-line bg-surface px-2.5 py-2 sm:px-4 sm:py-3">
+                        <span className="block truncate text-[10px] font-medium text-muted sm:text-[11px]">{item.label}</span>
+                        <p className={cn('mt-0.5 truncate text-[13px] font-semibold text-fg tabular-nums sm:text-sm', item.className)}>{item.value}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-line/70 px-4 py-3 sm:px-6">
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
+                <div className="flex flex-col gap-3 border-t border-line/70 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
+                  <div className="hidden flex-wrap items-center gap-4 text-xs text-muted sm:flex">
                     <span>Fabricante: <span className="font-bold text-fg-2">{lente.manufacturer}</span></span>
                     <span>Producto: <span className="font-bold text-fg-2">{lente.product_name || '\u2014'}</span></span>
                     <span>Modelo: <span className="font-bold text-fg-2">{lente.model}</span></span>
                     <span>Proveedor: <span className="font-bold text-fg-2">{lente.proveedor || '\u2014'}</span></span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <button onClick={() => openKardex(lente)} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors">
-                      <History className="h-3 w-3" /> <span className="hidden sm:inline">Kardex</span>
+                      <History className="h-3 w-3" /> <span>Kardex</span>
                     </button>
                     {puedeEscribir && (
                       <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors">

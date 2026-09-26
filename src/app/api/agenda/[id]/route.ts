@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
@@ -95,7 +96,7 @@ export async function PATCH(
   // Read current state before update (for side-effects and state machine)
   const { data: prev, error: prevError } = await supabase
     .from('agenda_cirugias')
-    .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, estado')
+    .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente')
     .eq('id', id)
     .single();
 
@@ -255,6 +256,26 @@ export async function PATCH(
       await new MotorDevengoService().cancelarPorCirugia(id);
     } catch {
       // best-effort: no bloquea la cancelación de agenda
+    }
+  }
+
+  // Notificaciones al doctor (best-effort, nunca bloquean la respuesta)
+  const doctorFinal = data.doctor_id !== undefined ? data.doctor_id : prev.doctor_id;
+  const fechaFinal = data.fecha !== undefined ? data.fecha : prev.fecha;
+  const horaFinal = data.hora !== undefined ? data.hora : prev.hora;
+  const paciente = (data.nombre_paciente as string | undefined) || prev.nombre_paciente || 'Paciente';
+  const base = { paciente, entidadTipo: 'agenda_cirugia' as const, entidadId: id, actorUserId: auth.user.id };
+  if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
+    await notificarCancelacion({ ...base, doctorId: doctorFinal, fecha: prev.fecha, hora: prev.hora, motivo: data.motivo });
+  } else {
+    if (data.doctor_id !== undefined && data.doctor_id !== prev.doctor_id) {
+      await notificarAsignacion({ ...base, doctorId: data.doctor_id, tipoServicio: 'Cirugía', fecha: fechaFinal, hora: horaFinal });
+    }
+    const cambioFechaHora =
+      (data.fecha !== undefined && data.fecha !== prev.fecha) || (data.hora !== undefined && data.hora !== prev.hora);
+    const reprogramada = (nuevoEstado === 'reagendada' || nuevoEstado === 'aplazada') && nuevoEstado !== estadoAnterior;
+    if ((cambioFechaHora || reprogramada) && doctorFinal === prev.doctor_id) {
+      await notificarReagendado({ ...base, doctorId: doctorFinal, fecha: fechaFinal, hora: horaFinal, aplazada: nuevoEstado === 'aplazada' });
     }
   }
 

@@ -1,27 +1,9 @@
 import { NextResponse } from 'next/server';
+import { notificarRoles } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { translateError } from '@/lib/supabase/errors';
 import { z } from 'zod';
-
-async function crearNotificacion(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  userId: string,
-  tipo: 'info' | 'warning' | 'error',
-  titulo: string,
-  mensaje: string,
-  entidadTipo?: string,
-  entidadId?: string,
-) {
-  await supabase.from('notificaciones').insert({
-    user_id: userId,
-    tipo,
-    titulo,
-    mensaje,
-    entidad_tipo: entidadTipo ?? null,
-    entidad_id: entidadId ?? null,
-  });
-}
 
 const lenteBaseSchema = z.object({
   manufacturer: z.string().min(1).max(255),
@@ -288,26 +270,23 @@ export async function PATCH(request: Request) {
     });
   }
 
-  // Notify if stock is at or below minimum
-  if (cleanUpdates.stock !== undefined && lente.stock_minimo && lente.stock <= lente.stock_minimo) {
-    const { data: admins } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('rol', 'admin')
-      .eq('activo', true);
-
-    if (admins && admins.length > 0) {
-      await supabase.from('notificaciones').insert(
-        admins.map((admin) => ({
-          user_id: admin.id,
-          tipo: 'warning',
-          titulo: 'Stock bajo',
-          mensaje: `Stock mínimo alcanzado — ${lente.marca} ${lente.modelo} (Stock: ${lente.stock})`,
-          entidad_tipo: 'inventario_item',
-          entidad_id: lente.id,
-        }))
-      );
-    }
+  // Aviso de stock bajo: solo al CRUZAR el mínimo (evita repetir el aviso en cada ajuste)
+  const minimo = Number(lente.stock_minimo) || 0;
+  const cruzoMinimo =
+    cleanUpdates.stock !== undefined &&
+    minimo > 0 &&
+    lente.stock <= minimo &&
+    (stockAnterior === null || stockAnterior > minimo);
+  if (cruzoMinimo) {
+    const nombre = [lente.manufacturer, lente.model].filter(Boolean).join(' ') || lente.folio || 'Lente';
+    await notificarRoles(['admin'], {
+      tipo: 'STOCK_BAJO',
+      titulo: lente.stock === 0 ? 'Sin stock' : 'Stock bajo',
+      mensaje: `${nombre} — quedan ${lente.stock} (mínimo ${minimo})`,
+      entidadTipo: 'inventario_item',
+      entidadId: lente.id,
+      actorUserId: auth.user.id,
+    });
   }
 
   return NextResponse.json(mapLente(lente));

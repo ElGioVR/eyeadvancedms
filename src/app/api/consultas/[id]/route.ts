@@ -260,16 +260,6 @@ export async function PATCH(
       de: existing.estatus,
       a: data.estatus,
     });
-
-    // Get patient name for notifications
-    const { data: consultaInfo } = await supabase
-      .from('consultas')
-      .select('doctor_id, pacientes:paciente_id(usuarios:usuario_id(id))')
-      .eq('id', id)
-      .maybeSingle();
-
-    const pacienteNombre = ((consultaInfo as any)?.pacientes?.usuarios?.nombre_completo as string) || 'Paciente';
-    const fecha = (await supabase.from('consultas').select('fecha').eq('id', id).maybeSingle()).data?.fecha || '';
   }
 
   if (data.estatus_pago !== undefined) {
@@ -312,6 +302,33 @@ export async function PATCH(
       { error: handleSupabaseError(updateError, 'consultas.actualizar').mensaje },
       { status: 500 },
     );
+  }
+
+  // Notificaciones al doctor por cancelación / reagendado (best-effort)
+  const cancelada = data.estatus === 'CANCELADA' && existing.estatus !== 'CANCELADA';
+  const reprogramada =
+    (data.estatus === 'REAGENDADA' || data.estatus === 'APLAZADA') && data.estatus !== existing.estatus;
+  const cambioFecha =
+    (data.fecha !== undefined && data.fecha !== existing.fecha) ||
+    (data.hora_inicio !== undefined && data.hora_inicio !== existing.hora_inicio);
+  if (updated && (cancelada || reprogramada || cambioFecha)) {
+    const { data: pac } = await supabase
+      .from('pacientes')
+      .select('nombre_completo')
+      .eq('id', updated.paciente_id)
+      .maybeSingle();
+    const base = {
+      doctorId: updated.doctor_id as string | null,
+      paciente: pac?.nombre_completo || 'Paciente',
+      entidadTipo: 'consulta' as const,
+      entidadId: id,
+      actorUserId: auth.user.id,
+    };
+    if (cancelada) {
+      await notificarCancelacion({ ...base, fecha: existing.fecha, hora: existing.hora_inicio });
+    } else {
+      await notificarReagendado({ ...base, fecha: updated.fecha, hora: updated.hora_inicio, aplazada: data.estatus === 'APLAZADA' });
+    }
   }
 
   return NextResponse.json(updated);

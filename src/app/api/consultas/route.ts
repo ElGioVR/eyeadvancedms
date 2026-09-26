@@ -4,27 +4,8 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { MotorDevengoService } from '@/services/productividad';
-import { notificarCancelacion, notificarReagendado, notificarAsignacionServicio } from '@/services/notificaciones';
+import { notificarAsignacion } from '@/services/notificaciones';
 import { z } from 'zod';
-
-async function crearNotificacion(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  userId: string,
-  tipo: 'info' | 'warning' | 'error',
-  titulo: string,
-  mensaje: string,
-  entidadTipo?: string,
-  entidadId?: string,
-) {
-  await supabase.from('notificaciones').insert({
-    user_id: userId,
-    tipo,
-    titulo,
-    mensaje,
-    entidad_tipo: entidadTipo ?? null,
-    entidad_id: entidadId ?? null,
-  });
-}
 
 const tipoConsultaMap: Record<string, string> = {
   'Primera Consulta': 'CONSULTA',
@@ -581,15 +562,16 @@ export async function POST(request: Request) {
       ? (await supabase.from('pacientes').select('nombre_completo').eq('id', data.paciente_id).maybeSingle())?.data?.nombre_completo ?? 'un paciente'
       : 'un paciente';
 
-    await crearNotificacion(
-      supabase,
-      consultaData.doctor_id,
-      'info',
-      'Nueva consulta asignada',
-      `Consulta ${folio} registrada para ${nombrePaciente} el ${data.fecha}`,
-      'consulta',
-      consultaData.id,
-    );
+    await notificarAsignacion({
+      doctorId: consultaData.doctor_id,
+      tipoServicio: tipoConsulta === 'ESTUDIO' ? 'Estudio' : 'Consulta',
+      paciente: `${nombrePaciente} (${folio})`,
+      fecha: data.fecha,
+      hora: data.hora_inicio,
+      entidadTipo: 'consulta',
+      entidadId: consultaData.id,
+      actorUserId: auth.user.id,
+    });
   }
 
   return NextResponse.json(consultaData, { status: 201 });

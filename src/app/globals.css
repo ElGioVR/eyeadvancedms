@@ -215,3 +215,28 @@ body {
   }
   .welcome-ring { display: none; }
 }
+
+/* ─────────────────────────────────────────────
+   Inputs de fecha/hora en iOS Safari
+   iOS les da un ancho mínimo nativo (se desbordan en grids) y centra/oculta
+   el valor. Esto los hace respetar el ancho del contenedor en todo el app.
+   ───────────────────────────────────────────── */
+input[type='date'],
+input[type='time'],
+input[type='datetime-local'],
+input[type='month'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  display: block;
+}
+input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+  min-height: 1.25em;
+}
+input[type='date']::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+}

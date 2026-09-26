@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
@@ -47,13 +48,24 @@ export async function POST(
 
   const { data: existing, error: checkError } = await supabase
     .from('consultas')
-    .select('id, estatus, fecha, hora_inicio, hora_fin, doctor_id')
+    .select('id, estatus, fecha, hora_inicio, hora_fin, doctor_id, pacientes:paciente_id (nombre_completo)')
     .eq('id', id)
     .maybeSingle();
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
+
+  const pacienteJoin = (existing as { pacientes?: { nombre_completo?: string } | { nombre_completo?: string }[] | null }).pacientes;
+  const pacienteNombre =
+    (Array.isArray(pacienteJoin) ? pacienteJoin[0]?.nombre_completo : pacienteJoin?.nombre_completo) || 'Paciente';
+  const notifBase = {
+    doctorId: existing.doctor_id as string | null,
+    paciente: pacienteNombre,
+    entidadTipo: 'consulta' as const,
+    entidadId: id,
+    actorUserId: auth.user.id,
+  };
 
   if (existing.estatus === 'COMPLETADA' || existing.estatus === 'CANCELADA') {
     return NextResponse.json({ error: 'La consulta ya está completada o cancelada' }, { status: 400 });
@@ -123,6 +135,7 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: 'Error al registrar el aplazamiento' }, { status: 500 });
     }
+    await notificarReagendado({ ...notifBase, fecha: existing.fecha, hora: nuevaHora, aplazada: true });
     return NextResponse.json({
       ok: true,
       accion: 'aplazar',
@@ -159,6 +172,7 @@ export async function POST(
       // el cancelamiento de honorarios es best-effort y no bloquea la cancelación de consulta
     }
 
+    await notificarCancelacion({ ...notifBase, fecha: existing.fecha, hora: existing.hora_inicio, motivo: data.motivo });
     return NextResponse.json({ ok: true, accion: 'cancelar' });
   }
 
@@ -220,6 +234,8 @@ export async function POST(
   if (error) {
     return NextResponse.json({ error: 'Error al registrar el reagendado' }, { status: 500 });
   }
+
+  await notificarReagendado({ ...notifBase, fecha: nuevaFecha, hora: nuevaHora });
 
   return NextResponse.json({
     ok: true,
