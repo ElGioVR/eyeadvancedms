@@ -8,36 +8,33 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
 
-  const [consultasEstatus, topProcedimientos, agendaOcupacion] = await Promise.all([
-    supabase
-      .from('consultas')
-      .select('estatus')
-      .gte('fecha', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)),
+  const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const hace7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const hoy = new Date().toISOString().slice(0, 10);
 
+  // Una sola lectura de consultas (antes 2 sobre el mismo rango) + agenda en paralelo
+  const [consultas30, agendaOcupacion] = await Promise.all([
     supabase
       .from('consultas')
-      .select('procedimiento')
-      .not('procedimiento', 'is', null)
-      .neq('procedimiento', '')
-      .gte('fecha', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)),
+      .select('estatus, procedimiento')
+      .gte('fecha', hace30)
+      .limit(10000),
 
     supabase
       .from('agenda_cirugias')
       .select('fecha, doctor_id, doctores:doctor_id (alias)')
-      .gte('fecha', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10))
-      .lte('fecha', new Date().toISOString().slice(0, 10)),
+      .gte('fecha', hace7)
+      .lte('fecha', hoy)
+      .limit(5000),
   ]);
 
   const estatusCount: Record<string, number> = {};
-  for (const c of consultasEstatus.data ?? []) {
+  const procCount: Record<string, number> = {};
+  for (const c of consultas30.data ?? []) {
     const est = c.estatus || 'BORRADOR';
     estatusCount[est] = (estatusCount[est] ?? 0) + 1;
-  }
-
-  const procCount: Record<string, number> = {};
-  for (const c of topProcedimientos.data ?? []) {
-    const proc = c.procedimiento || 'Otro';
-    procCount[proc] = (procCount[proc] ?? 0) + 1;
+    const proc = typeof c.procedimiento === 'string' ? c.procedimiento.trim() : '';
+    if (proc) procCount[proc] = (procCount[proc] ?? 0) + 1;
   }
   const topProcs = Object.entries(procCount)
     .sort((a, b) => b[1] - a[1])

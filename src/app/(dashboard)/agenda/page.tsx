@@ -1,23 +1,23 @@
-import { createClient } from '@/lib/supabase/server';
+import { getVerifiedUserId } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import AgendaContent from './AgendaContent';
 
 export default async function AgendaPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  // Sesión ya verificada por el middleware (evita otro viaje a Supabase Auth)
+  const userId = await getVerifiedUserId();
+  if (!userId) {
     redirect('/login');
   }
+  const supabase = getSupabaseAdmin();
 
   // Usuario y doctores en paralelo (evita waterfall)
   const [{ data: usuario }, { data: doctores, error: doctoresError }] = await Promise.all([
-    supabase.from('usuarios').select('id, nombre, rol').eq('id', user.id).single(),
-    getSupabaseAdmin().from('doctores').select('id, alias, usuario_id').eq('activo', true).order('alias'),
+    supabase.from('usuarios').select('id, nombre, rol, activo').eq('id', userId).single(),
+    supabase.from('doctores').select('id, alias, usuario_id').eq('activo', true).order('alias'),
   ]);
 
-  if (!usuario || !['admin', 'doctor', 'recepcionista'].includes(usuario.rol)) {
+  if (!usuario || usuario.activo === false || !['admin', 'doctor', 'recepcionista'].includes(usuario.rol)) {
     redirect('/dashboard');
   }
 
@@ -29,7 +29,7 @@ export default async function AgendaPage() {
     <AgendaContent
       userRol={usuario.rol}
       doctores={doctores || []}
-      userId={user.id}
+      userId={userId}
       initialDate={new Date().toISOString().slice(0, 10)}
     />
   );

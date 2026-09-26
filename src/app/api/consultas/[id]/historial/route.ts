@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
@@ -22,7 +23,7 @@ export async function GET(
     .order('created_at', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: mensajeSeguro(error, 'consultas.[id].historial') }, { status: 500 });
   }
 
   let enriched = data || [];

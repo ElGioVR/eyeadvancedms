@@ -31,9 +31,9 @@ const icons: Record<ToastType, typeof CheckCircle> = {
 };
 
 const styles: Record<ToastType, string> = {
-  success: 'bg-emerald-50 dark:bg-[#00BA7C]/10 border-emerald-200 dark:border-[#00BA7C]/30 text-emerald-700 dark:text-[#00BA7C]',
-  error: 'bg-red-50 dark:bg-[#F4212E]/10 border-red-200 dark:border-[#F4212E]/30 text-red-700 dark:text-[#F4212E]',
-  warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
+  success: 'bg-emerald-50 dark:bg-surface border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400',
+  error: 'bg-red-50 dark:bg-surface border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400',
+  warning: 'bg-amber-50 dark:bg-surface border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400',
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -54,14 +54,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 max-w-sm">
+      <div className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[100] flex flex-col gap-2 sm:inset-x-auto sm:right-6 sm:max-w-sm lg:bottom-6">
         {toasts.map((t) => {
           const Icon = icons[t.type];
           return (
             <div
               key={t.id}
               className={cn(
-                'flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg animate-[slideIn_0.3s_ease-out]',
+                'flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-pop backdrop-blur-xl animate-popIn',
                 styles[t.type]
               )}
             >

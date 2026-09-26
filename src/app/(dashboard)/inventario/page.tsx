@@ -287,22 +287,22 @@ export default function InventarioPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: stats.total, color: 'text-gray-900 dark:text-[#E7E9EA]' },
+          { label: 'Total', value: stats.total, color: 'text-fg' },
           { label: 'Con Stock', value: stats.conStock, color: 'text-emerald-600' },
           { label: 'Stock Bajo', value: stats.bajo, color: 'text-amber-600' },
           { label: 'Sin Stock', value: stats.sinStock, color: 'text-red-600' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3 shadow-sm">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">{s.label}</span>
+          <div key={s.label} className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-muted">{s.label}</span>
             <p className={cn('text-2xl font-extrabold mt-1', s.color)}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white dark:bg-[#16181C] rounded-xl border border-gray-200 dark:border-[#2F3336] shadow-sm p-4 space-y-3">
+      <div className="bg-surface rounded-xl border border-line shadow-sm p-4 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, codigo, marca, modelo, grado refractivo..." />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-          <span className="text-xs font-bold text-gray-400 dark:text-[#71767B] dark:text-[#71767B] uppercase tracking-wider">Filtrar:</span>
+          <span className="text-xs font-bold text-muted dark:text-muted uppercase tracking-wider">Filtrar:</span>
           <FilterSelect value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
           <FilterSelect value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
           <FilterSelect value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
@@ -312,14 +312,14 @@ export default function InventarioPage() {
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6">
+            <div key={i} className="animate-pulse rounded-2xl border border-line bg-surface p-6">
               <div className="flex gap-4">
-                <div className="h-12 w-12 rounded bg-gray-200 dark:bg-[#202327]" />
+                <div className="h-12 w-12 rounded bg-gray-200 dark:bg-surface-2" />
                 <div className="flex-1 space-y-3">
-                  <div className="h-5 bg-gray-200 dark:bg-[#202327] rounded w-1/3" />
-                  <div className="h-4 bg-gray-200 dark:bg-[#202327] rounded w-1/4" />
+                  <div className="h-5 bg-gray-200 dark:bg-surface-2 rounded w-1/3" />
+                  <div className="h-4 bg-gray-200 dark:bg-surface-2 rounded w-1/4" />
                   <div className="grid grid-cols-3 gap-4 mt-4">
-                    {[1, 2, 3].map((j) => <div key={j} className="h-16 bg-gray-100 dark:bg-[#202327] rounded" />)}
+                    {[1, 2, 3].map((j) => <div key={j} className="h-16 bg-surface-2 rounded" />)}
                   </div>
                 </div>
               </div>
@@ -336,8 +336,8 @@ export default function InventarioPage() {
             const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo);
             return (
               <div key={lente.id} className={cn(
-                'rounded-xl border bg-white dark:bg-[#16181C] shadow-sm overflow-hidden transition-all hover:shadow-md',
-                sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-gray-200 dark:border-[#2F3336]'
+                'rounded-xl border bg-surface shadow-sm overflow-hidden transition-all hover:shadow-md',
+                sinStock ? 'border-red-200' : stockBajo ? 'border-amber-200' : 'border-line'
               )}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="flex items-center gap-3">
@@ -348,20 +348,20 @@ export default function InventarioPage() {
                       LIO
                     </span>
                     <div>
-                      <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">{lente.manufacturer} {lente.model}</h3>
-                      <p className="text-xs text-gray-400 dark:text-[#71767B]">{lente.categoria || 'Sin categoria'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
+                      <h3 className="text-base font-extrabold text-fg">{lente.manufacturer} {lente.model}</h3>
+                      <p className="text-xs text-muted">{lente.categoria || 'Sin categoria'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Precio Venta</span>
-                      <p className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-muted">Precio Venta</span>
+                      <p className="text-lg font-extrabold text-fg">${lente.precio_venta?.toLocaleString() || '\u2014'}</p>
                     </div>
                     <StatusBadge status={estadoLente} config={estadoConfig} />
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/30 dark:bg-[#202327]/30 px-4 py-3 sm:px-6 sm:py-4">
+                <div className="border-t border-line/70 bg-gray-50 dark:bg-surface-2/30 dark:bg-surface-2/30 px-4 py-3 sm:px-6 sm:py-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                     {[
                       { label: 'Esfera (D)', value: lente.sphere?.toString() || '—' },
@@ -371,40 +371,40 @@ export default function InventarioPage() {
                       { label: 'Boquilla', value: lente.nozzle || '—' },
                       { label: 'N\u00b0 Serie', value: lente.serial_number || '—' },
                       { label: 'Caducidad', value: lente.expiration_date || '—' },
-                      { label: 'Stock', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-gray-900 dark:text-[#E7E9EA]' },
-                      { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-gray-500 dark:text-[#71767B]' },
+                      { label: 'Stock', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-fg' },
+                      { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-muted' },
                     ].map((item) => (
-                      <div key={item.label} className="rounded-lg bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] px-4 py-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{item.label}</span>
-                        <p className={cn('mt-1 text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]', item.className)}>{item.value}</p>
+                      <div key={item.label} className="rounded-lg bg-surface border border-line px-4 py-3">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{item.label}</span>
+                        <p className={cn('mt-1 text-sm font-extrabold text-fg', item.className)}>{item.value}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-[#71767B]">
-                    <span>Fabricante: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.manufacturer}</span></span>
-                    <span>Producto: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.product_name || '\u2014'}</span></span>
-                    <span>Modelo: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.model}</span></span>
-                    <span>Proveedor: <span className="font-bold text-gray-700 dark:text-[#E7E9EA]">{lente.proveedor || '\u2014'}</span></span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-line/70 px-4 py-3 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
+                    <span>Fabricante: <span className="font-bold text-fg-2">{lente.manufacturer}</span></span>
+                    <span>Producto: <span className="font-bold text-fg-2">{lente.product_name || '\u2014'}</span></span>
+                    <span>Modelo: <span className="font-bold text-fg-2">{lente.model}</span></span>
+                    <span>Proveedor: <span className="font-bold text-fg-2">{lente.proveedor || '\u2014'}</span></span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => openKardex(lente)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                    <button onClick={() => openKardex(lente)} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors">
                       <History className="h-3 w-3" /> <span className="hidden sm:inline">Kardex</span>
                     </button>
                     {puedeEscribir && (
-                      <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                      <button onClick={() => { setShowAdjust(lente.id); setAdjustQty(0); }} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors">
                         <SlidersHorizontal className="h-3 w-3" /> <span className="hidden sm:inline">Ajustar Stock</span>
                       </button>
                     )}
                     {puedeEscribir && (
-                      <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                      <Link href={`/inventario/${lente.id}/editar`} className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors">
                         <Pencil className="h-3 w-3" /> <span className="hidden sm:inline">Editar</span>
                       </Link>
                     )}
                     {puedeEscribir && (
-                      <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-[#1D1F23] transition-colors">
+                      <button onClick={() => setDeleteId(lente.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-surface px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-surface-2 transition-colors">
                         <Trash2 className="h-3 w-3" /> <span className="hidden sm:inline">Eliminar</span>
                       </button>
                     )}
@@ -435,18 +435,18 @@ export default function InventarioPage() {
             <Camera className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">Escanear Codigo de Barras</h3>
-            <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Usa la camara o escribe el codigo manualmente</p>
+            <h3 className="text-base font-extrabold text-fg">Escanear Codigo de Barras</h3>
+            <p className="text-xs text-muted dark:text-muted">Usa la camara o escribe el codigo manualmente</p>
           </div>
         </div>
 
         {/* Mode tabs */}
-        <div className="flex rounded-lg bg-gray-100 dark:bg-[#202327] p-1 mb-4">
+        <div className="flex rounded-lg bg-surface-2 p-1 mb-4">
           <button
             onClick={() => setScannerMode('camera')}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'camera' ? 'bg-white dark:bg-[#16181C] text-primary-700 shadow-sm' : 'text-gray-500 dark:text-[#71767B] hover:text-gray-700 dark:hover:text-[#E7E9EA] dark:text-[#E7E9EA]'
+              scannerMode === 'camera' ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-gray-700 dark:hover:text-fg dark:text-fg'
             )}
           >
             <ScanLine className="h-4 w-4" /> Camara
@@ -455,7 +455,7 @@ export default function InventarioPage() {
             onClick={() => setScannerMode('manual')}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'manual' ? 'bg-white dark:bg-[#16181C] text-primary-700 shadow-sm' : 'text-gray-500 dark:text-[#71767B] hover:text-gray-700 dark:hover:text-[#E7E9EA] dark:text-[#E7E9EA]'
+              scannerMode === 'manual' ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-gray-700 dark:hover:text-fg dark:text-fg'
             )}
           >
             <Keyboard className="h-4 w-4" /> Manual
@@ -481,7 +481,7 @@ export default function InventarioPage() {
               onChange={(e) => setBarcodeInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
               placeholder="Escriba el codigo de barras..."
-              className="block w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-4 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder:text-gray-400 dark:placeholder:text-[#71767B] dark:text-[#71767B] dark:text-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              className="block w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg placeholder:text-gray-400 dark:placeholder:text-muted dark:text-muted dark:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               autoFocus
             />
             <button onClick={handleBarcodeSearch} disabled={scanning || !barcodeInput.trim()} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
@@ -501,22 +501,22 @@ export default function InventarioPage() {
               <span className="text-sm font-extrabold text-primary-700">Lente encontrado</span>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-400 dark:text-[#71767B]">Fabricante:</span> <span className="font-bold">{scanResult.manufacturer}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Producto:</span> <span className="font-bold">{scanResult.product_name || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Modelo:</span> <span className="font-bold">{scanResult.model}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Esfera:</span> <span className="font-bold">{scanResult.sphere?.toString() || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Cilindro:</span> <span className="font-bold">{scanResult.cylinder?.toString() || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">ADD Int:</span> <span className="font-bold">{scanResult.add_intermediate?.toString() || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">ADD Cerc:</span> <span className="font-bold">{scanResult.add_near?.toString() || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">N\u00b0 Serie:</span> <span className="font-bold">{scanResult.serial_number || '\u2014'}</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{scanResult.stock} pzas</span></div>
-              <div><span className="text-gray-400 dark:text-[#71767B]">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
+              <div><span className="text-muted">Fabricante:</span> <span className="font-bold">{scanResult.manufacturer}</span></div>
+              <div><span className="text-muted">Producto:</span> <span className="font-bold">{scanResult.product_name || '\u2014'}</span></div>
+              <div><span className="text-muted">Modelo:</span> <span className="font-bold">{scanResult.model}</span></div>
+              <div><span className="text-muted">Esfera:</span> <span className="font-bold">{scanResult.sphere?.toString() || '\u2014'}</span></div>
+              <div><span className="text-muted">Cilindro:</span> <span className="font-bold">{scanResult.cylinder?.toString() || '\u2014'}</span></div>
+              <div><span className="text-muted">ADD Int:</span> <span className="font-bold">{scanResult.add_intermediate?.toString() || '\u2014'}</span></div>
+              <div><span className="text-muted">ADD Cerc:</span> <span className="font-bold">{scanResult.add_near?.toString() || '\u2014'}</span></div>
+              <div><span className="text-muted">N\u00b0 Serie:</span> <span className="font-bold">{scanResult.serial_number || '\u2014'}</span></div>
+              <div><span className="text-muted">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-fg')}>{scanResult.stock} pzas</span></div>
+              <div><span className="text-muted">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
             </div>
             <div className="flex gap-2 pt-2">
               <Link href={`/inventario/${scanResult.id}/editar`} onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); }} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors text-center">
                 Editar
               </Link>
-              <button onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); setShowAdjust(scanResult.id); setAdjustQty(0); }} className="flex-1 rounded-lg border border-primary-200 bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 transition-colors">
+              <button onClick={() => { setShowScanner(false); setScanResult(null); setBarcodeInput(''); setShowAdjust(scanResult.id); setAdjustQty(0); }} className="flex-1 rounded-lg border border-primary-200 bg-surface px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 transition-colors">
                 Ajustar Stock
               </button>
             </div>
@@ -533,32 +533,32 @@ export default function InventarioPage() {
           const stockClass = lente.stock === 0 ? 'text-red-600' : lente.stock < lente.stock_minimo ? 'text-amber-600' : 'text-primary-600';
           return (
             <div className="space-y-4">
-              <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA] text-center">Ajustar Stock</h3>
-              <div className="rounded-lg bg-gray-50 dark:bg-[#202327] p-3 text-center">
-                <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">{lente.manufacturer} {lente.model}</span>
-                <p className="text-2xl font-extrabold text-gray-900 dark:text-[#E7E9EA] mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-fg text-center">Ajustar Stock</h3>
+              <div className="rounded-lg bg-surface-2 p-3 text-center">
+                <span className="text-xs font-bold text-muted">{lente.manufacturer} {lente.model}</span>
+                <p className="text-2xl font-extrabold text-fg mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
               </div>
               <div className="flex items-center justify-center gap-4">
-                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
                   <Minus className="h-4 w-4" />
                 </button>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B] dark:text-[#71767B]">Cantidad</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted dark:text-muted">Cantidad</span>
                   <p className={cn('text-3xl font-extrabold', adjustQty >= 0 ? 'text-primary-600' : 'text-red-600')}>
                     {adjustQty > 0 ? '+' : ''}{adjustQty}
                   </p>
                   {adjustQty !== 0 && (
-                    <p className="text-xs text-gray-400 dark:text-[#71767B] dark:text-[#71767B] mt-1">
-                      Nuevo stock: <span className={cn('font-bold', newStock === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>{newStock}</span>
+                    <p className="text-xs text-muted dark:text-muted mt-1">
+                      Nuevo stock: <span className={cn('font-bold', newStock === 0 ? 'text-red-600' : 'text-fg')}>{newStock}</span>
                     </p>
                   )}
                 </div>
-                <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
+                <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
                   <PlusIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">CANCELAR</button>
+                <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
                 <button onClick={handleAdjustStock} disabled={adjusting || adjustQty === 0} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
                   {adjusting ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : 'CONFIRMAR'}
                 </button>
@@ -584,14 +584,14 @@ export default function InventarioPage() {
       {kardexItemId && (
         <>
           <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setKardexItemId(null)} />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-[#16181C] border-l border-gray-200 dark:border-[#2F3336] z-50 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#2F3336] px-6 py-4">
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-surface border-l border-line z-50 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div>
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-[#E7E9EA]">Kardex</h3>
-                <p className="text-xs text-gray-400 dark:text-[#71767B]">{kardexItemName}</p>
+                <h3 className="text-base font-extrabold text-fg">Kardex</h3>
+                <p className="text-xs text-muted">{kardexItemName}</p>
               </div>
-              <button onClick={() => setKardexItemId(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#1D1F23] transition-colors">
-                <X className="h-5 w-5 text-gray-400 dark:text-[#71767B]" />
+              <button onClick={() => setKardexItemId(null)} className="p-2 rounded-lg hover:bg-surface-2 transition-colors">
+                <X className="h-5 w-5 text-muted" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
@@ -601,21 +601,21 @@ export default function InventarioPage() {
                 </div>
               ) : kardexData.length === 0 ? (
                 <div className="text-center py-12">
-                  <History className="h-8 w-8 text-gray-300 dark:text-[#2F3336] mx-auto mb-3" />
-                  <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin movimientos registrados</p>
+                  <History className="h-8 w-8 text-gray-300 dark:text-line-strong mx-auto mb-3" />
+                  <p className="text-sm text-muted">Sin movimientos registrados</p>
                 </div>
               ) : (
                 <div className="relative space-y-3">
-                  <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-[#2F3336]" />
+                  <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-surface-3" />
                   {kardexData.map((mov) => {
                     const config = kardexTipoConfig[mov.tipo] || kardexTipoConfig.AJUSTE;
                     const Icon = config.icon;
                     return (
                       <div key={mov.id} className="relative flex items-start gap-3">
-                        <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336]">
+                        <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface border border-line">
                           <Icon className={cn('h-4 w-4', config.text)} />
                         </div>
-                        <div className="flex-1 min-w-0 rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-3">
+                        <div className="flex-1 min-w-0 rounded-lg border border-line/70 bg-surface-2 p-3">
                           <div className="flex items-center justify-between">
                             <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase', config.bg, config.text)}>
                               {mov.tipo.replace('_', ' ')}
@@ -625,9 +625,9 @@ export default function InventarioPage() {
                             </span>
                           </div>
                           {mov.motivo && (
-                            <p className="mt-1.5 text-xs text-gray-500 dark:text-[#71767B]">{mov.motivo}</p>
+                            <p className="mt-1.5 text-xs text-muted">{mov.motivo}</p>
                           )}
-                          <div className="mt-1.5 flex items-center gap-3 text-[10px] text-gray-400 dark:text-[#71767B]">
+                          <div className="mt-1.5 flex items-center gap-3 text-[10px] text-muted">
                             {mov.usuarios?.nombre_completo && <span>{mov.usuarios.nombre_completo}</span>}
                              <span><ClientDate date={mov.created_at} dateTime /></span>
                           </div>

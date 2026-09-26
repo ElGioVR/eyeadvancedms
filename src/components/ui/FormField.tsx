@@ -17,7 +17,7 @@ export default function FormField({
 }: FormFieldProps) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B]">
+      <label className="block text-[13px] font-medium text-fg-2">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
@@ -53,7 +53,7 @@ export function FormInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className="block w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder-gray-400 dark:placeholder-[#71767B] shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:focus:ring-[#1D9BF0]/30 dark:focus:border-[#1D9BF0]"
+        className="input-field"
       />
     </FormField>
   );
@@ -84,7 +84,7 @@ export function FormSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="block w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:focus:ring-[#1D9BF0]/30 dark:focus:border-[#1D9BF0]"
+        className="input-field"
       >
         {options.map((option, i) => (
           <option key={option} value={option}>

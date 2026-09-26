@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { editarMontoHonorario } from '@/lib/productividad';
 import { z } from 'zod';
@@ -36,7 +37,7 @@ export async function PATCH(
     const item = await editarMontoHonorario(id, validation.data.monto);
     return NextResponse.json({ item });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'productividad.honorarios.[id]', 'Error interno del servidor');
     const status =
       typeof (err as { status?: number }).status === 'number'
         ? (err as { status: number }).status

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -40,22 +40,30 @@ export default function Modal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm animate-fadeIn"
         onClick={onClose}
       />
       <div
+        role="dialog"
+        aria-modal="true"
         className={cn(
-          'relative mx-4 w-full max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-6 shadow-2xl',
+          'modal-content relative w-full max-h-[92dvh] overflow-y-auto border border-line bg-surface shadow-pop',
+          // Móvil: bottom sheet
+          'rounded-t-3xl px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-7 animate-sheetUp',
+          // Desktop: diálogo centrado
+          'sm:rounded-3xl sm:p-6 sm:animate-popIn',
           maxWidth
         )}
       >
+        <span className="absolute left-1/2 top-2.5 h-1.5 w-10 -translate-x-1/2 rounded-full bg-line-strong sm:hidden" />
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]"
+          aria-label="Cerrar"
+          className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
-          <X className="h-5 w-5" />
+          <X className="h-[18px] w-[18px]" />
         </button>
         {children}
       </div>

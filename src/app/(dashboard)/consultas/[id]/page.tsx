@@ -137,8 +137,8 @@ const tipoVisitaLabels: Record<string, string> = {
 function Field({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
   return (
     <div className={full ? 'col-span-2' : ''}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{label}</span>
-      <p className="mt-0.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{value || '—'}</p>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{label}</span>
+      <p className="mt-0.5 text-sm font-medium text-fg">{value || '—'}</p>
     </div>
   );
 }
@@ -146,7 +146,7 @@ function Field({ label, value, full }: { label: string; value: string | null | u
 function ConsultaDetailSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+      <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-line dark:bg-surface">
         <Skeleton className="h-14 w-14 rounded-full" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-5 w-56" />
@@ -156,13 +156,13 @@ function ConsultaDetailSkeleton() {
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-line dark:bg-surface">
             <Skeleton className="mb-6 h-5 w-44" />
             <div className="grid grid-cols-2 gap-6">
               {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-[#2F3336] dark:bg-[#16181C]">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-line dark:bg-surface">
             <Skeleton className="mb-6 h-5 w-40" />
             <Skeleton className="h-28 w-full" />
           </div>
@@ -394,7 +394,7 @@ export default function ConsultaDetailPage() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
+              className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
@@ -440,7 +440,7 @@ export default function ConsultaDetailPage() {
                 <button
                   onClick={() => { setEditing(false); setEditError(null); }}
                   disabled={savingEdit}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
+                  className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
                 >
                   Cancelar
                 </button>
@@ -459,11 +459,11 @@ export default function ConsultaDetailPage() {
       />
 
       {/* Header with patient info */}
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
+      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
         <Avatar initials={consulta.iniciales} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{consulta.paciente}</h2>
-          <p className="text-sm text-gray-500 dark:text-[#71767B]">Dr. {consulta.doctor} — {consulta.fecha} {consulta.hora_inicio}</p>
+          <h2 className="text-lg font-extrabold text-fg truncate">{consulta.paciente}</h2>
+          <p className="text-sm text-muted">Dr. {consulta.doctor} — {consulta.fecha} {consulta.hora_inicio}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge status={consulta.estatus} config={estatusConfig} />
@@ -473,52 +473,52 @@ export default function ConsultaDetailPage() {
 
       {/* Patient summary */}
       {(consulta.paciente || consulta.paciente_sexo) && (
-        <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6">
-          <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+        <div className="bg-surface border border-line rounded-xl p-6 mb-6">
+          <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
             <User className="h-4 w-4 text-primary-600" /> Resumen del Paciente
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nombre</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente || '—'}</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nombre</span>
+              <p className="mt-0.5 font-medium text-fg">{consulta.paciente || '—'}</p>
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Edad</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Edad</span>
+              <p className="mt-0.5 font-medium text-fg">
                 {edadPaciente || '—'}
               </p>
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Sexo</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_sexo === 'H' ? 'Masculino' : consulta.paciente_sexo === 'M' ? 'Femenino' : consulta.paciente_sexo || '—'}</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Sexo</span>
+              <p className="mt-0.5 font-medium text-fg">{consulta.paciente_sexo === 'H' ? 'Masculino' : consulta.paciente_sexo === 'M' ? 'Femenino' : consulta.paciente_sexo || '—'}</p>
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Teléfono</span>
-              <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_telefono || '—'}</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Teléfono</span>
+              <p className="mt-0.5 font-medium text-fg">{consulta.paciente_telefono || '—'}</p>
             </div>
           </div>
           {showPatientDetails && (
-            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#2F3336] grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div className="mt-3 pt-3 border-t border-line/70 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Aseguradora</span>
-                <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData?.aseguradora?.nombre || '—'}</p>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Aseguradora</span>
+                <p className="mt-0.5 font-medium text-fg">{aseguradoraData?.aseguradora?.nombre || '—'}</p>
               </div>
               {consulta.paciente_poliza && (
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Póliza</span>
-                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_poliza}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Póliza</span>
+                  <p className="mt-0.5 font-medium text-fg">{consulta.paciente_poliza}</p>
                 </div>
               )}
               {consulta.paciente_afiliacion && (
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Afiliación</span>
-                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_afiliacion}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Afiliación</span>
+                  <p className="mt-0.5 font-medium text-fg">{consulta.paciente_afiliacion}</p>
                 </div>
               )}
               {consulta.paciente_email && (
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Email</span>
-                  <p className="mt-0.5 font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.paciente_email}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Email</span>
+                  <p className="mt-0.5 font-medium text-fg">{consulta.paciente_email}</p>
                 </div>
               )}
             </div>
@@ -536,8 +536,8 @@ export default function ConsultaDetailPage() {
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Consulta data */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <FileText className="h-4 w-4 text-primary-600" /> Datos de Consulta
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -552,20 +552,20 @@ export default function ConsultaDetailPage() {
           </div>
 
           {/* Clinical details */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
             </h3>
             <div className="space-y-3 text-sm">
               {(consulta.estudio_1 || consulta.estudio_2 || consulta.estudio_3) && (
-                <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Estudios</span>
+                <div className="rounded-lg border border-line bg-surface-2 px-4 py-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Estudios</span>
                   <div className="mt-1.5 space-y-1.5">
                     {consulta.estudio_1 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_1}</span>
+                        <span className="text-sm font-medium text-fg">{consulta.estudio_1}</span>
                         <div className="flex items-center gap-2">
-                          {consulta.est1_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est1_doctor}</span>}
+                          {consulta.est1_doctor && <span className="text-xs text-muted">Dr. {consulta.est1_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
                             (() => {
                               const consultaId = estudiosAgendados.get(consulta.estudio_1!);
@@ -599,9 +599,9 @@ export default function ConsultaDetailPage() {
                     )}
                     {consulta.estudio_2 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_2}</span>
+                        <span className="text-sm font-medium text-fg">{consulta.estudio_2}</span>
                         <div className="flex items-center gap-2">
-                          {consulta.est2_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est2_doctor}</span>}
+                          {consulta.est2_doctor && <span className="text-xs text-muted">Dr. {consulta.est2_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
                             (() => {
                               const consultaId = estudiosAgendados.get(consulta.estudio_2!);
@@ -635,9 +635,9 @@ export default function ConsultaDetailPage() {
                     )}
                     {consulta.estudio_3 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.estudio_3}</span>
+                        <span className="text-sm font-medium text-fg">{consulta.estudio_3}</span>
                         <div className="flex items-center gap-2">
-                          {consulta.est3_doctor && <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.est3_doctor}</span>}
+                          {consulta.est3_doctor && <span className="text-xs text-muted">Dr. {consulta.est3_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
                             (() => {
                               const consultaId = estudiosAgendados.get(consulta.estudio_3!);
@@ -673,12 +673,12 @@ export default function ConsultaDetailPage() {
                 </div>
               )}
               {consulta.procedimiento ? (
-                <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Procedimiento</span>
+                <div className="rounded-lg border border-line bg-surface-2 px-4 py-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Procedimiento</span>
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{consulta.procedimiento}</span>
+                    <span className="text-sm font-medium text-fg">{consulta.procedimiento}</span>
                     {consulta.proc_doctor && (
-                      <span className="text-xs text-gray-500 dark:text-[#71767B]">Dr. {consulta.proc_doctor}</span>
+                      <span className="text-xs text-muted">Dr. {consulta.proc_doctor}</span>
                     )}
                   </div>
                 </div>
@@ -687,12 +687,12 @@ export default function ConsultaDetailPage() {
               )}
               {editing ? (
                 <div className="col-span-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Notas</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Notas</span>
                   <textarea
                     value={editNotas}
                     onChange={(e) => setEditNotas(e.target.value)}
                     rows={4}
-                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm font-medium text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
                   />
                   {editError && <p className="mt-1 text-xs font-bold text-red-600">{editError}</p>}
                 </div>
@@ -706,13 +706,13 @@ export default function ConsultaDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Payment info */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <CreditCard className="h-4 w-4 text-emerald-600" /> Pago
             </h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center gap-2">
-                <span className="text-gray-500 dark:text-[#71767B]">Costo total</span>
+                <span className="text-muted">Costo total</span>
                 {editing ? (
                   <input
                     type="number"
@@ -721,10 +721,10 @@ export default function ConsultaDetailPage() {
                     value={editCosto}
                     onChange={(e) => setEditCosto(e.target.value)}
                     disabled={consulta.estatus_pago === 'PAGADO'}
-                    className="w-28 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-2 py-1 text-right text-sm font-bold text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none disabled:opacity-50"
+                    className="w-28 rounded-lg border border-line bg-white dark:bg-surface-2 px-2 py-1 text-right text-sm font-bold text-fg focus:border-primary-500 focus:outline-none disabled:opacity-50"
                   />
                 ) : (
-                  <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.costo_total.toLocaleString('es-MX')}</span>
+                  <span className="font-bold text-fg">${consulta.costo_total.toLocaleString('es-MX')}</span>
                 )}
               </div>
               {consulta.estatus_pago === 'PAGADO' && (
@@ -733,11 +733,11 @@ export default function ConsultaDetailPage() {
                 </p>
               )}
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Monto pagado</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.monto_pagado.toLocaleString('es-MX')}</span>
+                <span className="text-muted">Monto pagado</span>
+                <span className="font-bold text-fg">${consulta.monto_pagado.toLocaleString('es-MX')}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Estado</span>
+                <span className="text-muted">Estado</span>
                 <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />
               </div>
               {(user?.rol === 'admin' || user?.rol === 'recepcionista') && consulta.estatus_pago !== 'PAGADO' && (
@@ -755,46 +755,46 @@ export default function ConsultaDetailPage() {
 
           {/* Aseguradora */}
           {aseguradoraData?.aseguradora && (
-            <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-              <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+            <div className="bg-surface border border-line rounded-xl p-6">
+              <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
                 <Shield className="h-4 w-4 text-sky-600" /> Aseguradora
               </h3>
               <div className="space-y-3 text-sm">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nombre</span>
-                  <p className="mt-0.5 font-bold text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData.aseguradora.nombre}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nombre</span>
+                  <p className="mt-0.5 font-bold text-fg">{aseguradoraData.aseguradora.nombre}</p>
                 </div>
                 {aseguradoraData.cobertura && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-[#71767B]">% Cobertura</span>
-                      <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{aseguradoraData.cobertura.porcentaje_cobertura}%</span>
+                      <span className="text-muted">% Cobertura</span>
+                      <span className="font-bold text-fg">{aseguradoraData.cobertura.porcentaje_cobertura}%</span>
                     </div>
                     {aseguradoraData.cobertura.copago_fijo !== null && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-[#71767B]">Copago fijo</span>
-                        <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${aseguradoraData.cobertura.copago_fijo.toLocaleString('es-MX')}</span>
+                        <span className="text-muted">Copago fijo</span>
+                        <span className="font-bold text-fg">${aseguradoraData.cobertura.copago_fijo.toLocaleString('es-MX')}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-400 dark:text-[#71767B]">Aplica</span>
-                      <span className="text-gray-600 dark:text-[#71767B]">
+                      <span className="text-muted">Aplica</span>
+                      <span className="text-gray-600 dark:text-muted">
                         {aseguradoraData.cobertura.aplica_estudios ? 'Estudios' : ''}{aseguradoraData.cobertura.aplica_estudios && aseguradoraData.cobertura.aplica_procedimientos ? ' + ' : ''}{aseguradoraData.cobertura.aplica_procedimientos ? 'Procedimientos' : ''}
                       </span>
                     </div>
                     {consulta.costo_total > 0 && (
-                      <div className="mt-2 rounded-lg bg-gray-50 dark:bg-[#202327] p-3 space-y-2">
+                      <div className="mt-2 rounded-lg bg-surface-2 p-3 space-y-2">
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 dark:text-[#71767B]">Costo base</span>
-                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">${consulta.costo_total.toLocaleString('es-MX')}</span>
+                          <span className="text-muted">Costo base</span>
+                          <span className="font-bold text-fg">${consulta.costo_total.toLocaleString('es-MX')}</span>
                         </div>
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 dark:text-[#71767B]">Cobertura ({aseguradoraData.cobertura.porcentaje_cobertura}%)</span>
+                          <span className="text-muted">Cobertura ({aseguradoraData.cobertura.porcentaje_cobertura}%)</span>
                           <span className="font-bold text-emerald-600">-${(consulta.costo_total * aseguradoraData.cobertura.porcentaje_cobertura / 100).toLocaleString('es-MX')}</span>
                         </div>
-                        <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2 flex justify-between text-xs">
-                          <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">Monto paciente</span>
-                          <span className="font-extrabold text-gray-900 dark:text-[#E7E9EA]">${(consulta.costo_total * (1 - aseguradoraData.cobertura.porcentaje_cobertura / 100)).toLocaleString('es-MX')}</span>
+                        <div className="border-t border-line pt-2 flex justify-between text-xs">
+                          <span className="font-bold text-fg">Monto paciente</span>
+                          <span className="font-extrabold text-fg">${(consulta.costo_total * (1 - aseguradoraData.cobertura.porcentaje_cobertura / 100)).toLocaleString('es-MX')}</span>
                         </div>
                       </div>
                     )}
@@ -805,25 +805,25 @@ export default function ConsultaDetailPage() {
           )}
 
           {/* Cirugías relacionadas */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Scissors className="h-4 w-4 text-rose-600" /> Cirugías relacionadas
             </h3>
             {cirugiasRelacionadas.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B]">No hay cirugías vinculadas a esta consulta.</p>
+              <p className="text-sm text-muted">No hay cirugías vinculadas a esta consulta.</p>
             ) : (
               <div className="space-y-3">
                 {cirugiasRelacionadas.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => router.push(`/cirugias/${c.id}`)}
-                    className="w-full text-left rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-[#25282C] transition-colors"
+                    className="w-full text-left rounded-lg border border-line bg-surface-2 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-surface-3 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.codigo || 'Cirugía'}</span>
-                      <span className="text-xs text-gray-500 dark:text-[#71767B]">{c.estado}</span>
+                      <span className="text-sm font-bold text-fg">{c.codigo || 'Cirugía'}</span>
+                      <span className="text-xs text-muted">{c.estado}</span>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-[#71767B]">{c.servicio?.nombre || '—'} {c.ojo || ''} — {c.fecha || 'Sin fecha'}</p>
+                    <p className="text-xs text-muted">{c.servicio?.nombre || '—'} {c.ojo || ''} — {c.fecha || 'Sin fecha'}</p>
                   </button>
                 ))}
               </div>
@@ -831,21 +831,21 @@ export default function ConsultaDetailPage() {
           </div>
 
           {/* Timeline */}
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Clock className="h-4 w-4 text-violet-600" /> Historial
             </h3>
             {historial.length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-[#71767B] text-center py-4">Sin eventos registrados</p>
+              <p className="text-sm text-muted text-center py-4">Sin eventos registrados</p>
             ) : (
               <div className="relative space-y-4">
-                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-[#2F3336]" />
+                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-surface-3" />
                 {historial.map((evento) => {
                   const Icon = eventoIcons[evento.tipo_evento] || Clock;
                   return (
                     <div key={evento.id} className="relative flex items-start gap-3">
-                      <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336]">
-                        <Icon className="h-4 w-4 text-gray-500 dark:text-[#71767B]" />
+                      <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface border border-line">
+                        <Icon className="h-4 w-4 text-muted" />
                       </div>
                       <div className="flex-1 min-w-0">
                         {(() => {
@@ -864,16 +864,16 @@ export default function ConsultaDetailPage() {
                           const horaNueva = payload.hora_nueva ? String(payload.hora_nueva).slice(0, 5) : null;
                           return (
                             <>
-                              <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
+                              <p className="text-sm font-medium text-fg">
                                 {titulo}
                               </p>
                               {estudioAgendado && (
-                                <p className="text-xs text-gray-500 dark:text-[#71767B]">
+                                <p className="text-xs text-muted">
                                   {String(payload.estudio_nombre || 'Estudio')} · Fecha: {String(payload.fecha_estudio || '—')} {String(payload.hora_estudio || '')} · Asignado a: {String(payload.asignado_a || '—')}
                                 </p>
                               )}
                               {(fechaNueva || horaNueva) && (
-                                <p className="text-xs text-gray-500 dark:text-[#71767B]">
+                                <p className="text-xs text-muted">
                                   Nueva cita: {fechaNueva || String(payload.fecha_anterior || '')} {horaNueva || ''}
                                 </p>
                               )}
@@ -885,7 +885,7 @@ export default function ConsultaDetailPage() {
                             </>
                           );
                         })()}
-                        <p className="text-xs text-gray-400 dark:text-[#71767B]">
+                        <p className="text-xs text-muted">
                            {evento.usuario_nombre || 'Sistema'} — <ClientDate date={evento.created_at} dateTime />
                         </p>
                       </div>

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
@@ -75,6 +76,8 @@ export async function GET(request: Request) {
   const filtrarPorDoctor = userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
 
+  const searchSeguro = search ? sanitizarBusqueda(search) : '';
+
   // ── Cirugías ──
   let queryCirugias = supabase
     .from('agenda_cirugias')
@@ -88,7 +91,7 @@ export async function GET(request: Request) {
   if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
   if (doctorFiltro) queryCirugias = queryCirugias.eq('doctor_id', doctorFiltro);
   if (estado) queryCirugias = queryCirugias.eq('estado', estado);
-  if (search) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${search}%,expediente.ilike.%${search}%`);
+  if (searchSeguro) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${searchSeguro}%,expediente.ilike.%${searchSeguro}%`);
 
   // ── Consultas ──
   let queryConsultas = supabase
@@ -108,7 +111,7 @@ export async function GET(request: Request) {
   if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
   if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
   if (doctorFiltro) queryConsultas = queryConsultas.eq('doctor_id', doctorFiltro);
-  if (search) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${search}%`, { foreignTable: 'pacientes' });
+  if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
 
   const shouldQueryCirugias = !tipo || tipo === 'cirugia';
   const shouldQueryConsultas = !tipo || tipo === 'consulta' || tipo === 'estudio';

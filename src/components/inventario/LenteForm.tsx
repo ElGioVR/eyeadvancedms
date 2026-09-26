@@ -189,7 +189,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
     }
   }
 
-  const input = 'block w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] placeholder-gray-400 dark:placeholder-[#71767B] shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
+  const input = 'block w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-fg placeholder-gray-400 dark:placeholder-muted shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
   const inputErr = input.replace('border-gray-200', 'border-red-300').replace('focus:border-primary-500', 'focus:border-red-500').replace('focus:ring-primary-500', 'focus:ring-red-500');
 
   return (
@@ -198,16 +198,16 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <Link
           href="/inventario"
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA]">
+          <h1 className="text-2xl font-extrabold tracking-tight text-fg">
             {mode === 'edit' ? 'EDITAR ÍTEM' : 'NUEVO ÍTEM DE INVENTARIO'}
           </h1>
-          <p className="mt-0.5 text-sm text-gray-400 dark:text-[#71767B]">
+          <p className="mt-0.5 text-sm text-muted">
             {mode === 'edit' ? 'Modifique las especificaciones del ítem' : 'Registre un lente de visión o intraocular en el inventario'}
           </p>
         </div>
@@ -232,44 +232,44 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         {/* Left column - main info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Identificacion */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Identificacion</h3>
+          <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+            <div className="border-b border-line/70 px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Identificacion</h3>
             </div>
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Fabricante <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Fabricante <span className="text-red-500">*</span></label>
                   <input type="text" value={form.manufacturer} onChange={(e) => setForm((p) => ({ ...p, manufacturer: e.target.value }))} placeholder="Ej. Alcon, Zeiss, Essilor" className={errors.manufacturer ? inputErr : input} />
                   {errors.manufacturer && <p className="text-xs text-red-600 mt-1">{errors.manufacturer}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Producto</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Producto</label>
                   <input type="text" value={form.product_name} onChange={(e) => setForm((p) => ({ ...p, product_name: e.target.value }))} placeholder="Ej. Clareon PanOptix Toric IOL" className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Modelo <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Modelo <span className="text-red-500">*</span></label>
                   <input type="text" value={form.model} onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))} placeholder="Ej. CNATT2" className={errors.model ? inputErr : input} />
                   {errors.model && <p className="text-xs text-red-600 mt-1">{errors.model}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Categoria</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Categoria</label>
                   <select value={form.categoria_id} onChange={(e) => setForm((p) => ({ ...p, categoria_id: e.target.value }))} className={input}>
                     <option value="">Sin categoria</option>
                     {cats.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
                   {suggestFromManufacturer(form.manufacturer, cats, provs).categoriaId && (
-                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {cats.find((c) => c.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.categoriaId)?.nombre || ''}</p>
+                    <p className="mt-1 text-xs text-muted capitalize">Sugerido: {cats.find((c) => c.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.categoriaId)?.nombre || ''}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Proveedor</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Proveedor</label>
                   <select value={form.proveedor_id} onChange={(e) => setForm((p) => ({ ...p, proveedor_id: e.target.value }))} className={input}>
                     <option value="">Sin proveedor</option>
                     {provs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
                   {suggestFromManufacturer(form.manufacturer, cats, provs).proveedorId && (
-                    <p className="mt-1 text-xs text-gray-400 dark:text-[#71767B] capitalize">Sugerido: {provs.find((p) => p.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.proveedorId)?.nombre || ''}</p>
+                    <p className="mt-1 text-xs text-muted capitalize">Sugerido: {provs.find((p) => p.id === suggestFromManufacturer(form.manufacturer, cats, provs)?.proveedorId)?.nombre || ''}</p>
                   )}
                 </div>
               </div>
@@ -277,30 +277,30 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
           </div>
 
           {/* Especificaciones Opticas */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Especificaciones Opticas</h3>
+          <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+            <div className="border-b border-line/70 px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Especificaciones Opticas</h3>
             </div>
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Esfera (D)</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Esfera (D)</label>
                   <input type="number" step="0.25" placeholder="Ej. +23.50" value={form.sphere} onChange={(e) => setForm((p) => ({ ...p, sphere: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Cilindro (D)</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Cilindro (D)</label>
                   <input type="number" step="0.25" placeholder="Ej. 1.00" value={form.cylinder} onChange={(e) => setForm((p) => ({ ...p, cylinder: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Nozzle</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Nozzle</label>
                   <input type="text" placeholder="Ej. D" value={form.nozzle} onChange={(e) => setForm((p) => ({ ...p, nozzle: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">ADD Intermedia (D)</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">ADD Intermedia (D)</label>
                   <input type="number" step="0.25" placeholder="Ej. 2.17" value={form.add_intermediate} onChange={(e) => setForm((p) => ({ ...p, add_intermediate: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">ADD Cercana (D)</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">ADD Cercana (D)</label>
                   <input type="number" step="0.25" placeholder="Ej. 3.25" value={form.add_near} onChange={(e) => setForm((p) => ({ ...p, add_near: e.target.value }))} className={input} />
                 </div>
               </div>
@@ -308,22 +308,22 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
           </div>
 
           {/* Trazabilidad */}
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Trazabilidad</h3>
+          <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+            <div className="border-b border-line/70 px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Trazabilidad</h3>
             </div>
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Lote</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Lote</label>
                   <input type="text" placeholder="L-2024-001" value={form.lote} onChange={(e) => setForm((p) => ({ ...p, lote: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Fecha Caducidad</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Fecha Caducidad</label>
                   <input type="date" value={form.expiration_date} onChange={(e) => setForm((p) => ({ ...p, expiration_date: e.target.value }))} className={input} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Numero de Serie</label>
+                  <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Numero de Serie</label>
                   <input type="text" placeholder="Ej. 26169559028" value={form.serial_number} onChange={(e) => setForm((p) => ({ ...p, serial_number: e.target.value }))} className={input} />
                 </div>
               </div>
@@ -331,23 +331,23 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
           </div>
 
         {/* Codigo de Barras & Notas */}
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-          <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-            <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Codigo de Barras & Notas</h3>
+        <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+          <div className="border-b border-line/70 px-6 py-4">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Codigo de Barras & Notas</h3>
           </div>
           <div className="px-6 py-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Codigo de Barras</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Codigo de Barras</label>
                 <input type="text" placeholder="7501234567890" value={form.barcode} onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))} className={input} />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Formato de Codigo</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Formato de Codigo</label>
                 <input type="text" placeholder="Ej. CODE_39, EAN_13" value={form.barcode_format} onChange={(e) => setForm((p) => ({ ...p, barcode_format: e.target.value }))} className={input} />
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Notas</label>
+              <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Notas</label>
               <textarea value={form.notas} onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))} placeholder="Observaciones adicionales..." rows={3} className={input} />
             </div>
 </div>
@@ -356,39 +356,39 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
 
         {/* Right column - stock & pricing */}
         <div className="space-y-6">
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Stock</h3>
+          <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+            <div className="border-b border-line/70 px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Stock</h3>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Stock Inicial</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Stock Inicial</label>
                 <input type="number" min="0" placeholder="0" value={form.stock} onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))} className={input} />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Stock M\u00ednimo</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Stock M\u00ednimo</label>
                 <input type="number" min="0" placeholder="5" value={form.stock_minimo} onChange={(e) => setForm((p) => ({ ...p, stock_minimo: e.target.value }))} className={input} />
-                <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1">Alerta cuando el stock baje de esta cantidad</p>
+                <p className="text-xs text-muted mt-1">Alerta cuando el stock baje de esta cantidad</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-6 py-4">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">Costos</h3>
+          <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+            <div className="border-b border-line/70 px-6 py-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-fg">Costos</h3>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Precio de Compra ($)</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Precio de Compra ($)</label>
                 <input type="number" step="0.01" min="0" placeholder="0.00" value={form.precio_compra} onChange={(e) => setForm((p) => ({ ...p, precio_compra: e.target.value }))} className={input} />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#71767B] mb-1.5">Precio de Venta ($)</label>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-muted mb-1.5">Precio de Venta ($)</label>
                 <input type="number" step="0.01" min="0" placeholder="0.00" value={form.precio_venta} onChange={(e) => setForm((p) => ({ ...p, precio_venta: e.target.value }))} className={input} />
               </div>
               {form.precio_compra && form.precio_venta && (
-                <div className="rounded-lg bg-gray-50 dark:bg-[#202327] p-3">
-                  <span className="text-xs font-bold text-gray-400 dark:text-[#71767B]">Margen</span>
+                <div className="rounded-lg bg-surface-2 p-3">
+                  <span className="text-xs font-bold text-muted">Margen</span>
                   <p className="text-lg font-extrabold text-emerald-600">
                     {((Number(form.precio_venta) - Number(form.precio_compra)) / Number(form.precio_compra) * 100).toFixed(1)}%
                   </p>
@@ -402,10 +402,10 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
             <div className="px-6 py-4">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary-700 mb-3">Vista Previa</h3>
               <div className="space-y-2">
-                <p className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+                <p className="text-sm font-extrabold text-fg">
                   {form.manufacturer || 'Fabricante'} {form.model || 'Modelo'}
                 </p>
-                <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-[#71767B]">
+                <div className="flex flex-wrap gap-2 text-xs text-muted">
                   {form.sphere && <span>Esfera: {form.sphere} D</span>}
                   {form.cylinder && <span>Cilindro: {form.cylinder} D</span>}
                   {form.add_intermediate && <span>ADD Int: {form.add_intermediate} D</span>}
@@ -414,15 +414,15 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                   <div>
-                    <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Stock</span>
-                    <p className={cn('text-sm font-extrabold', Number(form.stock) === 0 ? 'text-red-600' : 'text-gray-900 dark:text-[#E7E9EA]')}>
+                    <span className="text-[10px] font-bold uppercase text-muted">Stock</span>
+                    <p className={cn('text-sm font-extrabold', Number(form.stock) === 0 ? 'text-red-600' : 'text-fg')}>
                       {form.stock || '0'} pzas
                     </p>
                   </div>
                   {form.precio_venta && (
                     <div>
-                      <span className="text-[10px] font-bold uppercase text-gray-400 dark:text-[#71767B]">Venta</span>
-                      <p className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">${Number(form.precio_venta).toLocaleString()}</p>
+                      <span className="text-[10px] font-bold uppercase text-muted">Venta</span>
+                      <p className="text-sm font-extrabold text-fg">${Number(form.precio_venta).toLocaleString()}</p>
                     </div>
                   )}
                 </div>

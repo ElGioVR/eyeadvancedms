@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,23 +25,23 @@ export default function StatCard({
   return (
     <div
       className={cn(
-        'rounded-xl border bg-white dark:bg-[#16181C] p-3 sm:p-5 shadow-sm transition-all duration-200 hover:shadow-md',
-        borderColor || 'border-gray-200 dark:border-[#2F3336]'
+        'group relative overflow-hidden rounded-2xl border bg-surface p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop dark:shadow-none dark:hover:border-line-strong sm:p-5',
+        borderColor || 'border-line'
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="space-y-0.5 min-w-0">
-          <p className="text-[10px] sm:text-sm font-medium text-gray-500 dark:text-[#71767B] truncate">{label}</p>
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-[#E7E9EA]">{value}</p>
-          {trend && (
-            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">
-              {trend}
-            </span>
-          )}
+      <div className="flex items-start justify-between gap-3">
+        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11', bgColor)}>
+          <Icon className={cn('h-5 w-5', color)} />
         </div>
-        <div className={cn('rounded-lg sm:rounded-xl p-2 sm:p-3 shrink-0', bgColor)}>
-          <Icon className={cn('h-4 w-4 sm:h-6 sm:w-6', color)} />
-        </div>
+        {trend && (
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-300">
+            {trend}
+          </span>
+        )}
+      </div>
+      <div className="mt-3 min-w-0 sm:mt-4">
+        <p className="truncate text-xs font-medium text-muted sm:text-sm">{label}</p>
+        <p className="mt-0.5 truncate text-xl font-semibold tracking-tight text-fg tabular-nums sm:text-[28px] sm:leading-9">{value}</p>
       </div>
     </div>
   );

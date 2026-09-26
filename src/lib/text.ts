@@ -69,3 +69,22 @@ export function getInitials(name: string | null | undefined, fallback = '??'): s
     .join('')
     .toUpperCase();
 }
+
+/**
+ * Sanea texto de búsqueda para usarlo dentro de filtros PostgREST (`.or()` / `ilike`).
+ * - Elimina caracteres de sintaxis de filtros ( , ( ) " ' \ : ) → evita inyectar
+ *   condiciones extra en `.or()` (p. ej. `x,rol.eq.admin`).
+ * - Escapa comodines de ILIKE (% _) para que no se liste toda la tabla.
+ * - Recorta a `max` caracteres.
+ */
+export function sanitizarBusqueda(q: string, max = 60): string {
+  return q
+    .replace(/[,()"'\\:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+    .replace(/[%_]/g, (c) => `\\${c}`);
+}
+
+/** UUID (cualquier versión, formato 8-4-4-4-12) */
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

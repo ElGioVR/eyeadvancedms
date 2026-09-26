@@ -167,11 +167,11 @@ export default function AgendaCalendario({
 
   if (agenda.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Agenda del doctor</h3>
+      <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-line/70">
+          <h3 className="text-sm font-bold text-fg">Agenda del doctor</h3>
         </div>
-        <p className="px-4 py-6 text-sm text-gray-500 dark:text-[#71767B]">
+        <p className="px-4 py-6 text-sm text-muted">
           Sin citas ni cirugías en el rango seleccionado.
         </p>
       </div>
@@ -179,9 +179,9 @@ export default function AgendaCalendario({
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Agenda del doctor</h3>
+    <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-line/70">
+        <h3 className="text-sm font-bold text-fg">Agenda del doctor</h3>
         <span className="text-xs text-gray-400">
           {agenda.length} de {total} en el rango
         </span>
@@ -195,11 +195,11 @@ export default function AgendaCalendario({
               onClick={() => mover(-1)}
               disabled={sinRango || claveActual <= minMes}
               aria-label="Mes anterior"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line text-fg-2 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="min-w-[150px] px-2 text-center text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+            <span className="min-w-[150px] px-2 text-center text-sm font-bold text-fg">
               {MESES[vista.mes]} {vista.anio}
             </span>
             <button
@@ -207,7 +207,7 @@ export default function AgendaCalendario({
               onClick={() => mover(1)}
               disabled={sinRango || claveActual >= maxMes}
               aria-label="Mes siguiente"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line text-fg-2 hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -215,7 +215,7 @@ export default function AgendaCalendario({
 
           <div className="flex flex-wrap items-center gap-3">
             {TIPOS.map((t) => (
-              <span key={t} className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-[#71767B]">
+              <span key={t} className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <span className={`h-2 w-2 rounded-full ${TIPO[t].punto}`} />
                 {TIPO[t].label}
               </span>
@@ -251,15 +251,15 @@ export default function AgendaCalendario({
                   activo
                     ? 'border-primary-600 bg-primary-50 dark:bg-primary-600/15'
                     : dentro
-                      ? 'border-gray-100 dark:border-[#2F3336] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
-                      : 'border-transparent bg-gray-50/60 dark:bg-[#202327]/30 opacity-40'
+                      ? 'border-line/70 hover:bg-surface-2'
+                      : 'border-transparent bg-gray-50/60 dark:bg-surface-2/30 opacity-40'
                 }`}
               >
                 <span
                   className={`text-xs font-semibold ${
                     activo
                       ? 'text-primary-700 dark:text-white'
-                      : 'text-gray-700 dark:text-[#E7E9EA]'
+                      : 'text-fg-2'
                   }`}
                 >
                   {c.dia}
@@ -287,9 +287,9 @@ export default function AgendaCalendario({
           })}
         </div>
 
-        <div className="rounded-lg border border-gray-100 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327]/50 p-3">
+        <div className="rounded-lg border border-line/70 bg-gray-50 dark:bg-surface-2/50 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+            <p className="text-sm font-bold text-fg">
               {seleccionado ? formatFechaCsv(seleccionado) : 'Sin fecha seleccionada'}
             </p>
             <span className="text-xs text-gray-400">
@@ -298,7 +298,7 @@ export default function AgendaCalendario({
           </div>
 
           {eventosDelDia.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-[#71767B]">
+            <p className="text-sm text-muted">
               Sin citas en este día.
             </p>
           ) : (
@@ -306,12 +306,12 @@ export default function AgendaCalendario({
               {eventosDelDia.map((e) => (
                 <li
                   key={e.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-gray-100 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line/70 bg-surface px-3 py-2"
                 >
-                  <span className="w-16 shrink-0 text-xs font-bold text-gray-700 dark:text-[#E7E9EA]">
+                  <span className="w-16 shrink-0 text-xs font-bold text-fg-2">
                     {e.hora ? e.hora.slice(0, 5) : '—'}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-[#E7E9EA]">
+                  <span className="min-w-0 flex-1 truncate text-sm text-fg">
                     {e.nombre_paciente || '—'}
                   </span>
                   <span
@@ -319,10 +319,10 @@ export default function AgendaCalendario({
                   >
                     {TIPO[e.tipo]?.label || e.tipo}
                   </span>
-                  <span className="shrink-0 text-xs text-gray-500 dark:text-[#71767B]">
+                  <span className="shrink-0 text-xs text-muted">
                     {e.procedimiento || '—'}
                   </span>
-                  <span className="shrink-0 text-xs text-gray-500 dark:text-[#71767B]">
+                  <span className="shrink-0 text-xs text-muted">
                     {e.estado || '—'}
                   </span>
                 </li>

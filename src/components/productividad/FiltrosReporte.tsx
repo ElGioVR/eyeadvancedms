@@ -81,7 +81,7 @@ export default function FiltrosReporte({ onFilter, showDoctor, doctores, loading
   }, [preset, fechaDesde, fechaHasta, onFilter]);
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-4 space-y-4">
+    <div className="rounded-2xl border border-line bg-surface p-4 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
         {PRESETS.map((p) => (
@@ -91,7 +91,7 @@ export default function FiltrosReporte({ onFilter, showDoctor, doctores, loading
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
               preset === p.value
                 ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 dark:bg-[#202327] text-gray-600 dark:text-[#71767B] hover:bg-gray-200 dark:hover:bg-[#2F3336]'
+                : 'bg-surface-2 text-gray-600 dark:text-muted hover:bg-gray-200 dark:hover:bg-surface-3'
             }`}
           >
             {p.label}
@@ -104,12 +104,12 @@ export default function FiltrosReporte({ onFilter, showDoctor, doctores, loading
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</label>
             <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} onBlur={handleCustomDate}
-              className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+              className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm text-fg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
           </div>
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Hasta</label>
             <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} onBlur={handleCustomDate}
-              className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
+              className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm text-fg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500" />
           </div>
         </div>
       )}
@@ -118,7 +118,7 @@ export default function FiltrosReporte({ onFilter, showDoctor, doctores, loading
         <div className="flex items-center gap-3">
           <Search className="h-4 w-4 text-gray-400" />
           <select value={doctorId} onChange={(e) => handleDoctorChange(e.target.value)}
-            className="flex-1 max-w-xs rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+            className="flex-1 max-w-xs rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm text-fg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
             <option value="">Todos los doctores</option>
             {doctores.map((d) => (
               <option key={d.id} value={d.id}>{d.nombre}</option>

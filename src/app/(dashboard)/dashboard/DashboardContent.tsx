@@ -20,6 +20,8 @@ import {
 import dynamic from "next/dynamic";
 import StatCard from "@/components/ui/StatCard";
 import Avatar from "@/components/ui/Avatar";
+import { useUser } from "@/hooks/useUser";
+import { takePrefetched } from "@/lib/prefetch";
 import type { DashboardData } from "@/lib/dashboard-data";
 import {
   obtenerFestivo,
@@ -39,16 +41,22 @@ const DashboardCharts = dynamic(
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5"
+            className="rounded-2xl border border-line bg-surface p-5"
           >
-            <div className="h-4 w-40 bg-gray-100 dark:bg-[#202327] rounded animate-pulse mb-4" />
-            <div className="h-[160px] w-full bg-gray-100 dark:bg-[#202327] rounded-lg animate-pulse" />
+            <div className="h-4 w-40 bg-surface-2 rounded animate-pulse mb-4" />
+            <div className="h-[160px] w-full bg-surface-2 rounded-lg animate-pulse" />
           </div>
         ))}
       </div>
     ),
   },
 );
+
+interface ChartData {
+  consultasPorEstatus: Record<string, number>;
+  topProcedimientos: { nombre: string; cantidad: number }[];
+  agendaOcupacion: { nombre: string; cantidad: number }[];
+}
 
 interface DashboardContentProps {
   data: DashboardData;
@@ -112,6 +120,7 @@ export default function DashboardContent({
   userRol,
 }: DashboardContentProps) {
   const router = useRouter();
+  const { user: perfilUsuario } = useUser();
   const firstName = userNombre.split(" ")[0] || "Usuario";
   const [greeting, setGreeting] = useState("Buenos días");
   const [festivoActivo, setFestivoActivo] = useState<FestivoActivo | null>(
@@ -130,11 +139,7 @@ export default function DashboardContent({
     right: number;
   } | null>(null);
   const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
-  const [chartData, setChartData] = useState<{
-    consultasPorEstatus: Record<string, number>;
-    topProcedimientos: { nombre: string; cantidad: number }[];
-    agendaOcupacion: { nombre: string; cantidad: number }[];
-  } | null>(null);
+  const [chartData, setChartData] = useState<ChartData | null>(null);
 
   useEffect(() => {
     const tijuanaNow = new Date(
@@ -155,16 +160,12 @@ export default function DashboardContent({
 
   // Preferencias del usuario: nivel de festividad (default TOTAL)
   useEffect(() => {
-    fetch("/api/usuarios/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((me) => {
-        const nivel = me?.preferencias?.festividad;
-        if (nivel && NIVELES_FESTIVIDAD.some((n) => n.value === nivel)) {
-          setNivelFestividad(nivel);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    // Reutiliza el perfil compartido de useUser (sin GET extra a /api/usuarios/me)
+    const nivel = perfilUsuario?.preferencias?.festividad;
+    if (typeof nivel === "string" && NIVELES_FESTIVIDAD.some((n) => n.value === nivel)) {
+      setNivelFestividad(nivel as NivelFestividad);
+    }
+  }, [perfilUsuario]);
 
   async function cambiarNivelFestividad(nivel: NivelFestividad) {
     setNivelFestividad(nivel);
@@ -194,10 +195,19 @@ export default function DashboardContent({
   const mostrarFestividad = nivelFestividad !== "NADA";
 
   useEffect(() => {
-    fetch("/api/dashboard/charts")
-      .then((r) => r.json())
-      .then(setChartData)
+    const ctrl = new AbortController();
+    // Reutiliza la precarga hecha en /bienvenida si existe (sin request extra)
+    const precargado = takePrefetched<ChartData>("/api/dashboard/charts");
+    const peticion =
+      precargado ??
+      fetch("/api/dashboard/charts", { signal: ctrl.signal })
+        .then((r) => (r.ok ? (r.json() as Promise<ChartData>) : null));
+    peticion
+      .then((d) => {
+        if (d && !ctrl.signal.aborted) setChartData(d);
+      })
       .catch(() => {});
+    return () => ctrl.abort();
   }, []);
 
   const stats = [
@@ -257,11 +267,11 @@ export default function DashboardContent({
     }));
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-4">
+    <div className="mx-auto max-w-[1440px] space-y-5 lg:space-y-6">
       {/* Banner dinámico: festivo (según nivel de festividad) o saludo estándar */}
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl p-5 sm:p-6 shadow-sm ring-1 transition-colors duration-500",
+          "relative overflow-hidden rounded-3xl p-5 sm:p-7 shadow-card ring-1 transition-colors duration-500 dark:shadow-none",
           mostrarBannerFestivo && festivoMostrado
             ? cn(
                 "bg-gradient-to-r",
@@ -269,13 +279,14 @@ export default function DashboardContent({
                 festivoMostrado.anillo,
                 "shadow-lg",
               )
-            : "bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] ring-transparent",
+            : "bg-surface border border-line ring-transparent",
         )}
       >
         {(!mostrarBannerFestivo || !festivoMostrado) && (
           <>
-            <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gray-50 dark:bg-[#202327]" />
-            <div className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-gray-50 dark:bg-[#202327]" />
+            <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-primary-400/20 blur-3xl dark:bg-primary-500/20" />
+            <div className="pointer-events-none absolute -bottom-24 right-1/3 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-400/10" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgb(var(--line))_1px,transparent_1px)] [background-size:18px_18px] opacity-40 [mask-image:linear-gradient(to_left,black,transparent_60%)]" />
           </>
         )}
         {mostrarBannerFestivo && mostrarDecoraciones && festivoMostrado && (
@@ -311,7 +322,7 @@ export default function DashboardContent({
                   "text-sm font-semibold",
                   mostrarBannerFestivo && festivoMostrado
                     ? "text-white/80"
-                    : "text-gray-400 dark:text-[#71767B]",
+                    : "text-muted",
                 )}
               >
                 {greeting}
@@ -352,10 +363,10 @@ export default function DashboardContent({
             </div>
             <h1
               className={cn(
-                "mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight",
+                "mt-1 text-2xl font-semibold tracking-tight sm:text-[32px] sm:leading-10",
                 mostrarBannerFestivo && festivoMostrado
                   ? "text-white drop-shadow-sm"
-                  : "text-gray-900 dark:text-[#E7E9EA]",
+                  : "text-fg",
               )}
             >
               Hola, {firstName}
@@ -365,7 +376,7 @@ export default function DashboardContent({
                 "mt-1 text-sm",
                 mostrarBannerFestivo && festivoMostrado
                   ? "text-white/85"
-                  : "text-gray-500 dark:text-[#71767B]",
+                  : "text-muted",
               )}
             >
               {mostrarBannerFestivo && festivoMostrado
@@ -376,7 +387,7 @@ export default function DashboardContent({
               !festivo &&
               !previewFestivo &&
               festivoProximo && (
-                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-[#202327] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#9BA1A6] ring-1 ring-gray-200 dark:ring-[#2F3336]">
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-fg-2 ring-1 ring-gray-200 dark:ring-line">
                   <span className="text-sm leading-none">
                     {festivoProximo.festivo.emoji}
                   </span>
@@ -407,13 +418,13 @@ export default function DashboardContent({
                   "inline-flex items-center justify-center w-9 h-9 rounded-lg transition-colors",
                   mostrarBannerFestivo && festivoMostrado
                     ? "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-                    : "border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] text-gray-500 dark:text-[#9BA1A6] hover:bg-gray-50 dark:hover:bg-[#2F3336] hover:text-gray-700 dark:hover:text-[#E7E9EA]",
+                    : "border border-line bg-white dark:bg-surface-2 text-gray-500 dark:text-fg-2 hover:bg-gray-50 dark:hover:bg-surface-3 hover:text-gray-700 dark:hover:text-fg",
                 )}
               >
                 <PartyPopper className="h-4 w-4" />
               </button>
               {/* Tooltip propio (el title nativo no siempre aparece) */}
-              <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-md bg-gray-900 dark:bg-[#2F3336] text-white text-[11px] font-bold px-2.5 py-1.5 shadow-lg ring-1 ring-black/10 dark:ring-white/10 opacity-0 group-hover/nivel:opacity-100 transition-opacity duration-150">
+              <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-md bg-gray-900 dark:bg-surface-3 text-white text-[11px] font-bold px-2.5 py-1.5 shadow-lg ring-1 ring-black/10 dark:ring-white/10 opacity-0 group-hover/nivel:opacity-100 transition-opacity duration-150">
                 Nivel de festividad
               </span>
               {nivelDropdownOpen &&
@@ -425,11 +436,11 @@ export default function DashboardContent({
                       onClick={() => setNivelDropdownOpen(false)}
                     />
                     <div
-                      className="fixed z-50 w-60 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg overflow-hidden"
+                      className="fixed z-50 w-60 bg-surface border border-line rounded-xl shadow-lg overflow-hidden"
                       style={{ top: nivelPos.top, right: nivelPos.right }}
                     >
-                      <div className="px-3 py-2 border-b border-gray-100 dark:border-[#2F3336]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+                      <div className="px-3 py-2 border-b border-line/70">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
                           Nivel de festividad
                         </p>
                       </div>
@@ -442,7 +453,7 @@ export default function DashboardContent({
                               "w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg text-sm transition-colors",
                               nivelFestividad === n.value
                                 ? "bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300 font-bold"
-                                : "text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]",
+                                : "text-fg-2 hover:bg-surface-2",
                             )}
                           >
                             <span className="w-4 shrink-0">
@@ -452,13 +463,13 @@ export default function DashboardContent({
                             </span>
                             <span className="min-w-0">
                               <span className="block">{n.label}</span>
-                              <span className="block text-[11px] font-medium text-gray-400 dark:text-[#71767B]">
+                              <span className="block text-[11px] font-medium text-muted">
                                 {n.descripcion}
                               </span>
                             </span>
                           </button>
                         ))}
-                        <div className="border-t border-gray-100 dark:border-[#2F3336] my-1" />
+                        <div className="border-t border-line/70 my-1" />
                         <button
                           onClick={() => {
                             setPreviewFestivo(
@@ -470,7 +481,7 @@ export default function DashboardContent({
                             "w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg text-sm font-bold transition-colors",
                             previewFestivo
                               ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
-                              : "text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]",
+                              : "text-fg-2 hover:bg-surface-2",
                           )}
                         >
                           <span className="w-4 shrink-0 text-center">👁</span>
@@ -492,7 +503,7 @@ export default function DashboardContent({
                     "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     festivoMostrado
                       ? "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-                      : "border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#2F3336]",
+                      : "border border-line bg-white dark:bg-surface-2 text-fg-2 hover:bg-gray-50 dark:hover:bg-surface-3",
                   )}
                 >
                   <Users className="h-4 w-4 opacity-80" />
@@ -505,9 +516,9 @@ export default function DashboardContent({
                       className="fixed inset-0 z-40"
                       onClick={() => setDoctorDropdownOpen(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
-                      <div className="px-3 py-2 border-b border-gray-100 dark:border-[#2F3336]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-line/70">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
                           Filtrar por doctor
                         </p>
                       </div>
@@ -517,7 +528,7 @@ export default function DashboardContent({
                             router.push("/dashboard");
                             setDoctorDropdownOpen(false);
                           }}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm font-medium text-gray-700 dark:text-[#E7E9EA] transition-colors"
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-2 rounded-lg text-sm font-medium text-fg-2 transition-colors"
                         >
                           Todos los doctores
                         </button>
@@ -528,13 +539,13 @@ export default function DashboardContent({
                               router.push(`/dashboard?doctor=${doctor.id}`);
                               setDoctorDropdownOpen(false);
                             }}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] rounded-lg text-sm font-medium text-gray-700 dark:text-[#E7E9EA] transition-colors"
+                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-2 rounded-lg text-sm font-medium text-fg-2 transition-colors"
                           >
                             <Avatar
                               initials={doctor.iniciales}
                               className="h-6 w-6 text-[10px] bg-sky-500"
                             />
-                            <span className="truncate text-gray-700 dark:text-[#E7E9EA]">
+                            <span className="truncate text-fg-2">
                               {doctor.nombre}
                             </span>
                           </button>
@@ -560,7 +571,7 @@ export default function DashboardContent({
       </div>
 
       {/* Stats */}
-      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
           <StatCard
             key={stat.label}
@@ -575,11 +586,11 @@ export default function DashboardContent({
       </div>
 
       {/* Citas de hoy + Inventario bajo */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-        <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-5 py-3.5">
+      <div className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+        <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+          <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">
+              <h2 className="text-base font-semibold tracking-tight text-fg">
                 Citas de Hoy
               </h2>
               <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-primary-100 dark:bg-primary-500/15 px-1.5 text-[11px] font-bold text-primary-700 dark:text-primary-300">
@@ -594,16 +605,16 @@ export default function DashboardContent({
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="divide-y divide-gray-50 dark:divide-[#2F3336] max-h-[320px] overflow-y-auto">
+          <div className="divide-y divide-line/60 max-h-[320px] overflow-y-auto">
             {data.citas.length === 0 && (
-              <div className="px-6 py-10 text-center text-sm text-gray-400 dark:text-[#71767B]">
+              <div className="px-6 py-10 text-center text-sm text-muted">
                 Sin citas programadas para hoy
               </div>
             )}
             {data.citas.map((cita) => (
               <div
                 key={cita.id}
-                className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-gray-50/60 dark:hover:bg-[#1D1F23]/60 md:grid md:grid-cols-[64px_minmax(150px,1fr)_minmax(130px,0.9fr)_100px] md:items-center md:gap-0"
+                className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-gray-50/60 dark:hover:bg-surface-2/60 md:grid md:grid-cols-[64px_minmax(150px,1fr)_minmax(130px,0.9fr)_100px] md:items-center md:gap-0"
               >
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="hidden h-2 w-2 rounded-full bg-primary-400 md:block" />
@@ -612,19 +623,19 @@ export default function DashboardContent({
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="truncate font-bold text-gray-900 dark:text-[#E7E9EA] group-hover:text-primary-700 transition-colors">
+                  <div className="truncate font-bold text-fg group-hover:text-primary-700 transition-colors">
                     {cita.paciente}
                   </div>
                 </div>
                 <div className="hidden min-w-0 md:block md:text-left">
-                  <div className="truncate text-[13px] font-medium text-gray-600 dark:text-[#E7E9EA]">
+                  <div className="truncate text-[13px] font-medium text-fg-2">
                     {cita.doctor}
                   </div>
-                  <div className="truncate text-xs text-gray-400 dark:text-[#71767B]">
+                  <div className="truncate text-xs text-muted">
                     {cita.diagnostico}
                   </div>
                 </div>
-                <span className="hidden w-fit rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-1.5 text-center text-xs font-semibold text-gray-500 dark:text-[#71767B] md:block">
+                <span className="hidden w-fit rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-center text-xs font-semibold text-muted md:block">
                   {cita.tipo}
                 </span>
               </div>
@@ -632,10 +643,10 @@ export default function DashboardContent({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#2F3336] px-5 py-3.5">
+        <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+          <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">
+              <h2 className="text-base font-semibold tracking-tight text-fg">
                 LIOs Bajo Stock
               </h2>
               <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-amber-100 dark:bg-amber-500/15 px-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
@@ -652,7 +663,7 @@ export default function DashboardContent({
           </div>
           <div className="space-y-2.5 p-4 max-h-[320px] overflow-y-auto">
             {data.lentesBajoStock.length === 0 && (
-              <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-[#71767B]">
+              <div className="px-4 py-10 text-center text-sm text-muted">
                 Todo en orden — sin stock bajo
               </div>
             )}
@@ -666,14 +677,14 @@ export default function DashboardContent({
                     <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] leading-snug">
+                    <div className="text-sm font-bold text-fg leading-snug">
                       {item.nombre}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-[#71767B] mt-0.5">
+                    <div className="text-xs text-muted mt-0.5">
                       {item.detalle}
                     </div>
                   </div>
-                  <span className="whitespace-nowrap rounded-lg bg-white dark:bg-[#202327] px-2.5 py-1.5 text-xs font-extrabold text-amber-600 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-500/30 shadow-sm">
+                  <span className="whitespace-nowrap rounded-lg bg-white dark:bg-surface-2 px-2.5 py-1.5 text-xs font-extrabold text-amber-600 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-500/30 shadow-sm">
                     {item.stock} pzas
                   </span>
                 </div>

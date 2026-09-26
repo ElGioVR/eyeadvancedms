@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { z } from 'zod';
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
             }
           }
         } catch (err) {
-          errores.push(`Consulta ${consulta.id}: ${err instanceof Error ? err.message : 'Error'}`);
+          errores.push(`Consulta ${consulta.id}: ${mensajeSeguro(err, 'productividad.sync', 'Error')}`);
         }
       }
     }
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
             if (resultado.deployed) cirugiasDesplegadas++;
           }
         } catch (err) {
-          errores.push(`Cirugía ${cirugia.id}: ${err instanceof Error ? err.message : 'Error'}`);
+          errores.push(`Cirugía ${cirugia.id}: ${mensajeSeguro(err, 'productividad.sync', 'Error')}`);
         }
       }
     }
@@ -199,7 +200,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     return NextResponse.json({
-      error: err instanceof Error ? err.message : 'Error en sync',
+      error: mensajeSeguro(err, 'productividad.sync', 'Error en sync'),
     }, { status: 500 });
   }
 }
@@ -221,7 +222,7 @@ export async function GET(request: Request) {
       return NextResponse.json(preview);
     } catch (err) {
       return NextResponse.json({
-        error: err instanceof Error ? err.message : 'Error en preview',
+        error: mensajeSeguro(err, 'productividad.sync', 'Error en preview'),
       }, { status: 500 });
     }
   }

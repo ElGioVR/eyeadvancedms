@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
   if (error) {
     const friendly = errorTranslations[error.message];
     return NextResponse.json(
-      { error: friendly || error.message || 'Error interno del servidor' },
+      { error: friendly || mensajeSeguro(error, 'cirugias') },
       { status: friendly ? 400 : 500 }
     );
   }

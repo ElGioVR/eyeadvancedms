@@ -113,40 +113,40 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+          <h2 className="text-lg font-extrabold text-fg">
             Agendar Estudio
           </h2>
-          <p className="text-sm text-gray-500 dark:text-[#71767B]">
+          <p className="text-sm text-muted">
             Programe una cita para el estudio
           </p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] p-4">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+        <div className="rounded-lg border border-line bg-surface-2 p-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
             Estudio
           </span>
-          <p className="mt-1 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
+          <p className="mt-1 text-sm font-medium text-fg">
             {estudio.nombre}
           </p>
           {estudio.doctor_nombre && (
-            <p className="text-xs text-gray-500 dark:text-[#71767B]">
+            <p className="text-xs text-muted">
               Dr. {estudio.doctor_nombre}
             </p>
           )}
         </div>
 
-        <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#1D1F23] p-4">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+        <div className="rounded-lg border border-line bg-surface-2 p-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
             Paciente
           </span>
-          <p className="mt-1 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
+          <p className="mt-1 text-sm font-medium text-fg">
             {consulta.paciente}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">
               Fecha
             </label>
             <div className="relative mt-1">
@@ -156,12 +156,12 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
                 min={minDate}
-                className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] pl-10 pr-3 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full rounded-lg border border-line bg-white dark:bg-surface-2 pl-10 pr-3 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               />
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">
               Hora
             </label>
             <div className="relative mt-1">
@@ -170,7 +170,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
                 type="time"
                 value={hora}
                 onChange={(e) => setHora(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] pl-10 pr-3 py-2.5 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                className="w-full rounded-lg border border-line bg-white dark:bg-surface-2 pl-10 pr-3 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               />
             </div>
           </div>
@@ -180,7 +180,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#25282C] transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg border border-line bg-white dark:bg-surface-2 px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-gray-50 dark:hover:bg-surface-3 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>

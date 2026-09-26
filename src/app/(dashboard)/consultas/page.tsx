@@ -80,13 +80,13 @@ function Field({
 }) {
   return (
     <div
-      className={`rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-3${full ? " col-span-2" : ""}`}
+      className={`rounded-lg border border-line bg-surface px-4 py-3${full ? " col-span-2" : ""}`}
     >
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
         {label}
       </span>
       <p
-        className={`mt-1 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]${full ? " break-words" : ""}`}
+        className={`mt-1 text-sm font-medium text-gray-900 dark:text-fg${full ? " break-words" : ""}`}
       >
         {value || "—"}
       </p>
@@ -246,13 +246,13 @@ export default function ConsultasPage() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="animate-pulse rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-5"
+              className="animate-pulse rounded-2xl border border-line bg-surface p-5"
             >
               <div className="flex gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-[#202327]" />
+                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-surface-2" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-200 dark:bg-[#202327] rounded w-1/3" />
-                  <div className="h-3 bg-gray-200 dark:bg-[#202327] rounded w-1/4" />
+                  <div className="h-4 bg-gray-200 dark:bg-surface-2 rounded w-1/3" />
+                  <div className="h-3 bg-gray-200 dark:bg-surface-2 rounded w-1/4" />
                 </div>
               </div>
             </div>
@@ -269,11 +269,11 @@ export default function ConsultasPage() {
           description="Intente ajustar los filtros de búsqueda."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50">
+                <tr className="border-b border-line/70 bg-gray-50/50 dark:bg-surface-2/50">
                   {[
                     { label: "Folio", hide: "" },
                     { label: "Paciente", hide: "" },
@@ -287,18 +287,18 @@ export default function ConsultasPage() {
                     <th
                       key={h.label}
                       scope="col"
-                      className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] text-left ${h.hide}`}
+                      className={`px-5 py-3 text-xs font-bold uppercase tracking-wider text-muted text-left ${h.hide}`}
                     >
                       {h.label}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+              <tbody className="divide-y divide-line/60">
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
-                    className="group transition-colors hover:bg-gray-50/60 dark:hover:bg-[#1D1F23]/60"
+                    className="group transition-colors hover:bg-gray-50/60 dark:hover:bg-surface-2/60"
                   >
                     <td className="px-5 py-4 text-xs font-bold text-primary-600">
                       {c.folio || c.id.slice(0, 8)}
@@ -310,23 +310,23 @@ export default function ConsultasPage() {
                           className="bg-primary-500"
                           size="sm"
                         />
-                        <span className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] truncate">
+                        <span className="text-sm font-bold text-fg truncate">
                           {c.paciente}
                         </span>
                       </div>
                     </td>
-                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">
+                    <td className="hidden md:table-cell px-5 py-4 text-sm text-fg-2">
                       {c.doctor}
                     </td>
-                    <td className="hidden md:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">
+                    <td className="hidden md:table-cell px-5 py-4 text-sm text-fg-2">
                       {c.fecha} {c.hora_inicio}
                     </td>
                     <td className="hidden lg:table-cell px-5 py-4">
-                      <span className="inline-flex rounded-md bg-gray-100 dark:bg-[#202327] px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:text-[#E7E9EA]">
+                      <span className="inline-flex rounded-md bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-fg-2">
                         {c.tipo_consulta}
                       </span>
                     </td>
-                    <td className="hidden lg:table-cell px-5 py-4 text-sm text-gray-600 dark:text-[#E7E9EA] max-w-[200px] truncate">
+                    <td className="hidden lg:table-cell px-5 py-4 text-sm text-fg-2 max-w-[200px] truncate">
                       {c.diagnostico || "—"}
                     </td>
                     <td className="hidden sm:table-cell px-5 py-4">
@@ -346,7 +346,7 @@ export default function ConsultasPage() {
                         <button
                           aria-label={`Ver consulta de ${c.paciente}`}
                           onClick={() => router.push(`/consultas/${c.id}`)}
-                          className="text-gray-400 dark:text-[#71767B] hover:text-primary-600 transition-colors"
+                          className="text-muted hover:text-primary-600 transition-colors"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -371,40 +371,40 @@ export default function ConsultasPage() {
       {/* Modal de Confirmación de Pago */}
       {pagoConsulta && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => !pagando && setPagoConsulta(null)}>
-          <div className="bg-white dark:bg-[#16181C] rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                 <CreditCard className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-[#E7E9EA]">Registrar Pago</h3>
-                <p className="text-xs text-gray-400 dark:text-[#71767B]">Confirmar pago de consulta</p>
+                <h3 className="text-base font-bold text-fg">Registrar Pago</h3>
+                <p className="text-xs text-muted">Confirmar pago de consulta</p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] p-4 space-y-2.5 text-sm">
+            <div className="rounded-xl border border-line bg-surface-2 p-4 space-y-2.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Folio</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.folio || '—'}</span>
+                <span className="text-muted">Folio</span>
+                <span className="font-bold text-fg">{pagoConsulta.folio || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Paciente</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.paciente}</span>
+                <span className="text-muted">Paciente</span>
+                <span className="font-bold text-fg">{pagoConsulta.paciente}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Doctor</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.doctor}</span>
+                <span className="text-muted">Doctor</span>
+                <span className="font-bold text-fg">{pagoConsulta.doctor}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Fecha</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.fecha}</span>
+                <span className="text-muted">Fecha</span>
+                <span className="font-bold text-fg">{pagoConsulta.fecha}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Tipo</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{pagoConsulta.tipo_consulta}</span>
+                <span className="text-muted">Tipo</span>
+                <span className="font-bold text-fg">{pagoConsulta.tipo_consulta}</span>
               </div>
-              <div className="border-t border-gray-200 dark:border-[#2F3336] pt-2.5 flex justify-between">
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">Total a pagar</span>
+              <div className="border-t border-line pt-2.5 flex justify-between">
+                <span className="font-bold text-fg">Total a pagar</span>
                 <span className="text-lg font-extrabold text-emerald-600">${pagoConsulta.costo_total.toLocaleString('es-MX')} MXN</span>
               </div>
             </div>
@@ -413,7 +413,7 @@ export default function ConsultasPage() {
               <button
                 onClick={() => setPagoConsulta(null)}
                 disabled={pagando}
-                className="flex-1 rounded-xl border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>

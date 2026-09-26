@@ -29,7 +29,7 @@ interface ModalRangoFechasProps {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
+  'w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
 
 export default function ModalRangoFechas({
   isOpen,
@@ -76,11 +76,11 @@ export default function ModalRangoFechas({
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
       <div className="space-y-4">
         <div className="pr-6">
-          <h2 className="inline-flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-[#E7E9EA]">
+          <h2 className="inline-flex items-center gap-2 text-lg font-bold text-fg">
             <CalendarRange className="w-5 h-5 text-primary-600" />
             {titulo}
           </h2>
-          {descripcion && <p className="mt-1 text-sm text-gray-500 dark:text-[#71767B]">{descripcion}</p>}
+          {descripcion && <p className="mt-1 text-sm text-muted">{descripcion}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -134,7 +134,7 @@ export default function ModalRangoFechas({
             type="button"
             onClick={onClose}
             disabled={cargando}
-            className="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-[#2F3336] rounded-lg hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium border border-line rounded-lg hover:bg-surface-2 disabled:opacity-50"
           >
             Cancelar
           </button>

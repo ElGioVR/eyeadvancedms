@@ -7,7 +7,6 @@ import DoctorBottomNav from '@/components/layout/DoctorBottomNav';
 import OfflineAndInstall from '@/components/layout/OfflineAndInstall';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
-import 'react-image-crop/dist/ReactCrop.css';
 
 export default function DashboardLayout({
   children,
@@ -19,7 +18,7 @@ export default function DashboardLayout({
 
   return (
     <ToastProvider>
-      <div className="min-h-screen flex bg-[#f5f7f9] dark:bg-black">
+      <div className="min-h-screen flex bg-canvas">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -30,17 +29,17 @@ export default function DashboardLayout({
         <div
           className={cn(
             'flex-1 flex flex-col min-w-0 transition-[margin] duration-300',
-            'lg:ml-[72px]',
-            sidebarCollapsed ? 'xl:ml-[72px]' : 'xl:ml-[260px]'
+            'lg:ml-[76px]',
+            sidebarCollapsed ? 'xl:ml-[76px]' : 'xl:ml-[272px]'
           )}
         >
           <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
-          <main className="flex-1 overflow-auto px-4 sm:px-6 py-8 pb-24 lg:pb-8">
+          <main className="flex-1 overflow-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8">
             {children}
           </main>
         </div>
 
-        <DoctorBottomNav />
+        <DoctorBottomNav onMenuOpen={() => setMobileMenuOpen(true)} />
         <OfflineAndInstall />
       </div>
     </ToastProvider>

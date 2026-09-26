@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useCallback } from 'react';
 import ReactCrop, { type Crop, type PixelCrop, centerCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import Modal from '@/components/ui/Modal';
 
 interface AvatarCropModalProps {
@@ -91,9 +92,9 @@ export default function AvatarCropModal({ isOpen, onClose, imageSrc, onCropCompl
   return (
     <Modal isOpen={isOpen} onClose={handleClose} maxWidth="max-w-md">
       <div className="space-y-4">
-        <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Ajustar foto de perfil</h3>
+        <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">Ajustar foto de perfil</h3>
 
-        <div className="flex justify-center overflow-hidden rounded-lg bg-gray-100 dark:bg-[#202327]">
+        <div className="flex justify-center overflow-hidden rounded-lg bg-surface-2">
           <ReactCrop
             crop={crop}
             onChange={(c) => setCrop(c)}
@@ -116,8 +117,8 @@ export default function AvatarCropModal({ isOpen, onClose, imageSrc, onCropCompl
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Zoom</label>
-            <span className="text-xs text-gray-400 dark:text-[#71767B]">{Math.round(zoom * 100)}%</span>
+            <label className="text-xs font-bold text-muted uppercase tracking-wider">Zoom</label>
+            <span className="text-xs text-muted">{Math.round(zoom * 100)}%</span>
           </div>
           <input
             type="range"
@@ -133,7 +134,7 @@ export default function AvatarCropModal({ isOpen, onClose, imageSrc, onCropCompl
         <div className="flex justify-end gap-3">
           <button
             onClick={handleClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors"
           >
             Cancelar
           </button>

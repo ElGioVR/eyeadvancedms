@@ -110,7 +110,7 @@ export default function HistorialMedicoPage() {
             <Skeleton className="h-4 w-48 sm:w-64 max-w-full" />
           </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#2F3336] dark:bg-[#16181C]">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-line dark:bg-surface">
           <div className="flex items-center gap-6">
             <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
             <div className="flex-1 space-y-2 min-w-0">
@@ -119,7 +119,7 @@ export default function HistorialMedicoPage() {
             </div>
           </div>
         </div>
-        <div className="flex gap-1 border-b border-gray-200 dark:border-[#2F3336] overflow-x-auto">
+        <div className="flex gap-1 border-b border-line overflow-x-auto">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-10 w-24 rounded-t-lg shrink-0" />
           ))}
@@ -127,8 +127,8 @@ export default function HistorialMedicoPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl border border-gray-200 bg-white dark:border-[#2F3336] dark:bg-[#16181C]">
-                <div className="flex items-center gap-3 border-b border-gray-100 dark:border-[#2F3336] px-6 py-3">
+              <div key={i} className="rounded-xl border border-gray-200 bg-white dark:border-line dark:bg-surface">
+                <div className="flex items-center gap-3 border-b border-line/70 px-6 py-3">
                   <Skeleton className="h-3 w-24" />
                   <Skeleton className="h-5 w-20 rounded-full" />
                 </div>
@@ -188,30 +188,30 @@ export default function HistorialMedicoPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <Link
           href="/pacientes"
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-[#2F3336] dark:bg-[#16181C] dark:text-[#E7E9EA] dark:hover:bg-[#1D1F23] transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-[#E7E9EA] break-words">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-fg break-words">
             HISTORIAL MÉDICO - {paciente.nombre_completo}
           </h1>
-          <p className="mt-0.5 text-sm text-gray-400 dark:text-[#71767B]">
+          <p className="mt-0.5 text-sm text-muted">
             Consulta, diagnósticos y tratamientos detallados del paciente.
           </p>
         </div>
       </div>
 
       {/* Patient info card */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-purple-500 text-xl font-bold text-white">
             {paciente.iniciales || '??'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">{paciente.nombre_completo}</h2>
-            <p className="text-sm text-gray-400 dark:text-[#71767B] mt-0.5">
+            <h2 className="text-lg font-extrabold text-fg">{paciente.nombre_completo}</h2>
+            <p className="text-sm text-muted mt-0.5">
               {paciente.sexo === 'FEMENINO' ? 'Femenino' : paciente.sexo === 'MASCULINO' ? 'Masculino' : paciente.sexo || '—'}
               {paciente.edad ? ` · ${paciente.edad} años` : ''}
               {` · ID: #${paciente.id.slice(0, 8).toUpperCase()}`}
@@ -219,15 +219,15 @@ export default function HistorialMedicoPage() {
           </div>
           <div className="hidden md:flex items-center gap-8">
             <div className="text-right">
-              <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Teléfono</p>
-              <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{paciente.telefono || '—'}</p>
+              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Teléfono</p>
+              <p className="text-sm font-bold text-fg mt-0.5">{paciente.telefono || '—'}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Correo Electrónico</p>
-              <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{paciente.email || '—'}</p>
+              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Correo Electrónico</p>
+              <p className="text-sm font-bold text-fg mt-0.5">{paciente.email || '—'}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Consultas Totales</p>
+              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Consultas Totales</p>
               <p className="text-sm font-bold text-primary-600 mt-0.5">{paciente.total_consultas} consulta{paciente.total_consultas !== 1 ? 's' : ''}</p>
             </div>
           </div>
@@ -235,7 +235,7 @@ export default function HistorialMedicoPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-[#2F3336]">
+      <div className="border-b border-line">
         <nav className="flex gap-1 -mb-px overflow-x-auto">
           {historialTabs.map((tab) => {
             const isActive = activeTab === tab.label;
@@ -247,7 +247,7 @@ export default function HistorialMedicoPage() {
                   'inline-flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-3 text-sm font-semibold border-b-2 transition-colors',
                   isActive
                     ? 'border-primary-600 text-primary-700'
-                    : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:text-[#71767B] dark:hover:text-[#E7E9EA] dark:hover:border-[#536471]'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:text-muted dark:hover:text-fg dark:hover:border-line-strong'
                 )}
               >
                 <tab.icon className="h-4 w-4" />
@@ -265,12 +265,12 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Resumen' && (
             <>
               <div className="mb-4">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Línea de Tiempo - Consultas</h2>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Línea de Tiempo - Consultas</h2>
               </div>
               {consultas.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-[#16181C] dark:border-[#2F3336]">
-                  <Calendar className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-                  <p className="text-sm font-bold text-gray-400 dark:text-[#71767B]">No hay consultas registradas</p>
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <Calendar className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">No hay consultas registradas</p>
                   <Link href="/consultas/nueva" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800">
                     Crear consulta →
                   </Link>
@@ -278,14 +278,14 @@ export default function HistorialMedicoPage() {
               ) : (
                 <div className="space-y-4">
                   {consultas.map((c) => (
-                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
+                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-line dark:bg-surface">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/70 px-4 py-3 sm:px-6">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <span className="text-sm font-extrabold text-primary-700 dark:text-primary-400"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
-                          <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', tipoConsultaColors[c.tipo_consulta] || 'bg-gray-50 text-gray-700 ring-gray-200 dark:bg-[#202327] dark:text-[#E7E9EA] dark:ring-[#2F3336]')}>
+                          <span className={cn('inline-flex rounded-md px-2.5 py-0.5 text-[10px] font-extrabold ring-1 ring-inset', tipoConsultaColors[c.tipo_consulta] || 'bg-gray-50 text-gray-700 ring-gray-200 dark:bg-surface-2 dark:text-fg dark:ring-line')}>
                             {c.tipo_consulta || 'CONSULTA'}
                           </span>
-                          {c.folio && <span className="text-xs font-mono text-gray-400 dark:text-[#71767B]">{c.folio}</span>}
+                          {c.folio && <span className="text-xs font-mono text-muted">{c.folio}</span>}
                         </div>
                         <Link href={`/consultas/${c.id}`} className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">
                           Ver detalle <span className="text-xs">→</span>
@@ -293,22 +293,22 @@ export default function HistorialMedicoPage() {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
                         <div>
-                          <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Médico</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.doctor || '—'}</p>
-                          {c.especialidad && <p className="text-xs text-gray-400 dark:text-[#71767B]">({c.especialidad})</p>}
+                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Médico</p>
+                          <p className="text-sm font-bold text-fg">{c.doctor || '—'}</p>
+                          {c.especialidad && <p className="text-xs text-muted">({c.especialidad})</p>}
                         </div>
                         <div>
-                          <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] leading-snug">{c.diagnostico || '—'}</p>
+                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
+                          <p className="text-sm font-bold text-fg leading-snug">{c.diagnostico || '—'}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Tratamiento</p>
-                          <p className="text-sm text-gray-600 dark:text-[#E7E9EA] leading-snug">{c.notas || '—'}</p>
+                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Tratamiento</p>
+                          <p className="text-sm text-fg-2 leading-snug">{c.notas || '—'}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Cobro</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{formatMoney(c.monto, c.moneda)}</p>
-                          <p className="text-xs text-gray-400 dark:text-[#71767B]">· {c.pagado ? 'Pagado' : 'Pendiente'}</p>
+                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Cobro</p>
+                          <p className="text-sm font-bold text-fg">{formatMoney(c.monto, c.moneda)}</p>
+                          <p className="text-xs text-muted">· {c.pagado ? 'Pagado' : 'Pendiente'}</p>
                         </div>
                       </div>
                     </div>
@@ -322,23 +322,23 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Consultas' && (
             <>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Historial de Consultas</h2>
-                <span className="text-sm text-gray-400 dark:text-[#71767B]">{consultas.length} consulta{consultas.length !== 1 ? 's' : ''}</span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Historial de Consultas</h2>
+                <span className="text-sm text-muted">{consultas.length} consulta{consultas.length !== 1 ? 's' : ''}</span>
               </div>
               {consultas.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-[#16181C] dark:border-[#2F3336]">
-                  <Calendar className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-                  <p className="text-sm font-bold text-gray-400 dark:text-[#71767B]">No hay consultas registradas</p>
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <Calendar className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">No hay consultas registradas</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {consultas.map((c) => (
-                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-[#2F3336] px-4 py-3 sm:px-6">
+                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/70 px-4 py-3 sm:px-6">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <span className="text-sm font-extrabold text-primary-700 dark:text-primary-400"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
-                          <span className="text-sm font-semibold text-gray-600 dark:text-[#E7E9EA]">· {c.doctor}</span>
-                          {c.folio && <span className="text-xs font-mono text-gray-400 dark:text-[#71767B]">{c.folio}</span>}
+                          <span className="text-sm font-semibold text-fg-2">· {c.doctor}</span>
+                          {c.folio && <span className="text-xs font-mono text-muted">{c.folio}</span>}
                         </div>
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
@@ -350,23 +350,23 @@ export default function HistorialMedicoPage() {
                       <div className="px-4 py-3 sm:px-6 sm:py-4 space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
-                            <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Tipo de Consulta</p>
-                            <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.tipo_consulta || '—'}</p>
+                            <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Tipo de Consulta</p>
+                            <p className="text-sm font-bold text-fg">{c.tipo_consulta || '—'}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
-                            <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.diagnostico || '—'}</p>
+                            <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Diagnóstico</p>
+                            <p className="text-sm font-bold text-fg">{c.diagnostico || '—'}</p>
                           </div>
                         </div>
                         {c.procedimiento && (
                           <div>
-                            <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Procedimiento</p>
-                            <p className="text-sm text-gray-700 dark:text-[#E7E9EA]">{c.procedimiento}</p>
+                            <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Procedimiento</p>
+                            <p className="text-sm text-fg-2">{c.procedimiento}</p>
                           </div>
                         )}
                         <div>
-                          <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider mb-1">Notas Clínicas</p>
-                          <p className="text-sm text-gray-600 dark:text-[#E7E9EA] leading-relaxed bg-gray-50 dark:bg-[#202327] rounded-lg p-3">{c.notas || 'Sin notas'}</p>
+                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Notas Clínicas</p>
+                          <p className="text-sm text-fg-2 leading-relaxed bg-surface-2 rounded-lg p-3">{c.notas || 'Sin notas'}</p>
                         </div>
                       </div>
                     </div>
@@ -380,34 +380,34 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Procedimientos' && (
             <>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Procedimientos Realizados</h2>
-                <span className="text-sm text-gray-400 dark:text-[#71767B]">{consultasConProcedimiento.length} procedimiento{consultasConProcedimiento.length !== 1 ? 's' : ''}</span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Procedimientos Realizados</h2>
+                <span className="text-sm text-muted">{consultasConProcedimiento.length} procedimiento{consultasConProcedimiento.length !== 1 ? 's' : ''}</span>
               </div>
               {consultasConProcedimiento.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-[#16181C] dark:border-[#2F3336]">
-                  <FlaskConical className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-                  <p className="text-sm font-bold text-gray-400 dark:text-[#71767B]">No hay procedimientos registrados</p>
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <FlaskConical className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">No hay procedimientos registrados</p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[640px]">
                       <thead>
-                        <tr className="border-b border-gray-100 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50">
-                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Fecha</th>
-                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Procedimiento</th>
-                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Doctor</th>
-                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Diagnóstico</th>
-                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B]">Estado</th>
+                        <tr className="border-b border-line/70 bg-gray-50/50 dark:bg-surface-2/50">
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-muted">Fecha</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-muted">Procedimiento</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-muted">Doctor</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-muted">Diagnóstico</th>
+                          <th className="px-4 py-3 sm:px-6 text-left text-xs font-bold uppercase tracking-wider text-muted">Estado</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+                      <tbody className="divide-y divide-line/60">
                         {consultasConProcedimiento.map((c) => (
-                          <tr key={c.id} className="group hover:bg-gray-50/60 dark:hover:bg-[#202327]/60 transition-colors">
+                          <tr key={c.id} className="group hover:bg-gray-50/60 dark:hover:bg-surface-2/60 transition-colors">
                             <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-primary-700 dark:text-primary-400 whitespace-nowrap"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></td>
-                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{c.procedimiento}</td>
-                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA]">{c.doctor}</td>
-                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-gray-600 dark:text-[#E7E9EA] max-w-xs">{c.diagnostico}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm font-bold text-fg">{c.procedimiento}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-fg-2">{c.doctor}</td>
+                            <td className="px-4 py-3 sm:px-6 sm:py-4 text-sm text-fg-2 max-w-xs">{c.diagnostico}</td>
                             <td className="px-4 py-3 sm:px-6 sm:py-4">
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
                                 <CheckCircle className="h-3 w-3" />Completado
@@ -427,12 +427,12 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Lentes' && (
             <>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Historial de Lentes</h2>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Historial de Lentes</h2>
               </div>
-              <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-[#16181C] dark:border-[#2F3336]">
-                <Glasses className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-                <p className="text-sm font-bold text-gray-400 dark:text-[#71767B]">Módulo de lentes en desarrollo</p>
-                <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1">Próximamente se conectarán los lentes del inventario al historial del paciente</p>
+              <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                <Glasses className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                <p className="text-sm font-bold text-muted">Módulo de lentes en desarrollo</p>
+                <p className="text-xs text-muted mt-1">Próximamente se conectarán los lentes del inventario al historial del paciente</p>
               </div>
             </>
           )}
@@ -441,29 +441,29 @@ export default function HistorialMedicoPage() {
           {activeTab === 'Estudios' && (
             <>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Estudios Diagnósticos</h2>
-                <span className="text-sm text-gray-400 dark:text-[#71767B]">{estudiosFromConsultas.length} estudio{estudiosFromConsultas.length !== 1 ? 's' : ''}</span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Estudios Diagnósticos</h2>
+                <span className="text-sm text-muted">{estudiosFromConsultas.length} estudio{estudiosFromConsultas.length !== 1 ? 's' : ''}</span>
               </div>
               {estudiosFromConsultas.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-[#16181C] dark:border-[#2F3336]">
-                  <Eye className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-                  <p className="text-sm font-bold text-gray-400 dark:text-[#71767B]">No hay estudios registrados</p>
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <Eye className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">No hay estudios registrados</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {estudiosFromConsultas.map((e) => (
-                    <div key={e.id} className="flex items-center gap-3 sm:gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md dark:border-[#2F3336] dark:bg-[#16181C]">
+                    <div key={e.id} className="flex items-center gap-3 sm:gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md dark:border-line dark:bg-surface">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100 dark:bg-sky-500/10 dark:ring-sky-500/30">
                         <Eye className="h-5 w-5 text-sky-600 dark:text-sky-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                          <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{e.estudio}</h3>
-                          <span className="text-xs text-gray-400 dark:text-[#71767B]">·</span>
-                          <span className="text-xs text-gray-400 dark:text-[#71767B]">{e.doctor}</span>
+                          <h3 className="text-sm font-bold text-fg">{e.estudio}</h3>
+                          <span className="text-xs text-muted">·</span>
+                          <span className="text-xs text-muted">{e.doctor}</span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-[#E7E9EA] mt-1">{e.resultado}</p>
-                        <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1"><ClientDate date={e.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
+                        <p className="text-sm text-fg-2 mt-1">{e.resultado}</p>
+                        <p className="text-xs text-muted mt-1"><ClientDate date={e.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
                       </div>
                     </div>
                   ))}
@@ -475,13 +475,13 @@ export default function HistorialMedicoPage() {
 
         {/* Sidebar */}
         <div className="w-full lg:w-[360px] shrink-0 space-y-5">
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Diagnósticos</h3>
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
+            <div className="border-b border-line/70 px-5 py-3">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-fg">Diagnósticos</h3>
             </div>
             <div className="p-4 space-y-2">
               {diagnosticos.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-[#71767B]">Sin diagnósticos registrados</p>
+                <p className="text-sm text-muted">Sin diagnósticos registrados</p>
               ) : (
                 diagnosticos.map((d, idx) => (
                   <div key={idx} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30">
@@ -492,22 +492,22 @@ export default function HistorialMedicoPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-[#2F3336] dark:bg-[#16181C]">
-            <div className="border-b border-gray-100 dark:border-[#2F3336] px-5 py-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-900 dark:text-[#E7E9EA]">Información del Paciente</h3>
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
+            <div className="border-b border-line/70 px-5 py-3">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-fg">Información del Paciente</h3>
             </div>
-            <div className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+            <div className="divide-y divide-line/60">
               <div className="px-5 py-3">
-                <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Dirección</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1">{paciente.direccion || '—'}</p>
+                <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Dirección</p>
+                <p className="text-sm font-bold text-fg mt-1">{paciente.direccion || '—'}</p>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Fecha de Nacimiento</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1"><ClientDate date={paciente.fecha_nacimiento} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
+                <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Fecha de Nacimiento</p>
+                <p className="text-sm font-bold text-fg mt-1"><ClientDate date={paciente.fecha_nacimiento} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[10px] text-gray-400 dark:text-[#71767B] uppercase font-semibold tracking-wider">Paciente desde</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA] mt-1"><ClientDate date={paciente.created_at} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
+                <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Paciente desde</p>
+                <p className="text-sm font-bold text-fg mt-1"><ClientDate date={paciente.created_at} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
               </div>
             </div>
           </div>

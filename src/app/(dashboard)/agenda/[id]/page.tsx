@@ -39,8 +39,8 @@ const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = 
 function Field({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
   return (
     <div className={full ? 'col-span-2' : ''}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{label}</span>
-      <p className="mt-0.5 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">{value || '—'}</p>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{label}</span>
+      <p className="mt-0.5 text-sm font-medium text-fg">{value || '—'}</p>
     </div>
   );
 }
@@ -91,18 +91,18 @@ export default function CirugiaDetailPage() {
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex items-center gap-3">
-            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors no-print">
+            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors no-print">
               <Printer className="h-4 w-4" /> Imprimir
             </button>
           </div>
         }
       />
 
-      <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6 mb-6 flex items-center gap-4">
+      <div className="bg-surface border border-line rounded-xl p-6 mb-6 flex items-center gap-4">
         <Avatar initials={cirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA] truncate">{cirugia.nombre_paciente}</h2>
-          <p className="text-sm text-gray-500 dark:text-[#71767B]">
+          <h2 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h2>
+          <p className="text-sm text-muted">
             {cirugia.doctor_nombre || 'Sin doctor'} {cirugia.fecha ? `— ${cirugia.fecha} ${cirugia.hora || ''}` : ''}
           </p>
         </div>
@@ -111,8 +111,8 @@ export default function CirugiaDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <FileText className="h-4 w-4 text-primary-600" /> Datos de la Cirugía
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -127,8 +127,8 @@ export default function CirugiaDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Stethoscope className="h-4 w-4 text-sky-600" /> Procedimiento
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -144,22 +144,22 @@ export default function CirugiaDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-gray-900 dark:text-[#E7E9EA]">
+          <div className="bg-surface border border-line rounded-xl p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <AlertTriangle className="h-4 w-4 text-amber-600" /> Estado
             </h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Estado actual</span>
+                <span className="text-muted">Estado actual</span>
                 <StatusBadge status={cirugia.estado} config={estadoConfig} />
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">Ojo</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{cirugia.ojo || '—'}</span>
+                <span className="text-muted">Ojo</span>
+                <span className="font-bold text-fg">{cirugia.ojo || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-[#71767B]">LIO</span>
-                <span className="font-bold text-gray-900 dark:text-[#E7E9EA]">{cirugia.lio || '—'}</span>
+                <span className="text-muted">LIO</span>
+                <span className="font-bold text-fg">{cirugia.lio || '—'}</span>
               </div>
             </div>
           </div>

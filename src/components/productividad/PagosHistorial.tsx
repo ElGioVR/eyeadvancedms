@@ -20,8 +20,8 @@ interface RespuestaPagos {
 const th =
   'px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400';
 const thR = 'px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400';
-const td = 'px-4 py-3 text-sm text-gray-700 dark:text-[#E7E9EA]';
-const tdR = 'px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]';
+const td = 'px-4 py-3 text-sm text-fg-2';
+const tdR = 'px-4 py-3 text-right text-sm font-semibold text-fg';
 
 export default function PagosHistorial({
   desde,
@@ -127,7 +127,7 @@ export default function PagosHistorial({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]">
+          <span className="text-sm font-semibold text-fg">
             {data?.total || 0} pagos
           </span>
           <span className="text-sm font-bold text-emerald-600">
@@ -140,13 +140,13 @@ export default function PagosHistorial({
         <button
           type="button"
           onClick={() => void descargarCsv()}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-gray-700 dark:text-[#E7E9EA] rounded-lg hover:bg-gray-50 dark:hover:bg-[#1D1F23] text-sm font-medium"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-line bg-surface text-fg-2 rounded-lg hover:bg-surface-2 text-sm font-medium"
         >
           <Download className="w-4 h-4" /> CSV
         </button>
       </div>
 
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
+      <div className="rounded-2xl border border-line bg-surface overflow-hidden">
         {items.length === 0 ? (
           <EmptyState
             icon={History}
@@ -157,7 +157,7 @@ export default function PagosHistorial({
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 dark:bg-[#202327]/50">
+                <tr className="bg-gray-50 dark:bg-surface-2/50">
                   <th className={th}>Fecha pago</th>
                   <th className={th}>Doctor</th>
                   <th className={th}>Fecha servicio</th>
@@ -166,9 +166,9 @@ export default function PagosHistorial({
                   <th className={th}>Pagado por</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+              <tbody className="divide-y divide-line/60">
                 {items.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
+                  <tr key={p.id} className="hover:bg-surface-2">
                     <td className={`${td} font-semibold`}>
                       {p.fecha_pago ? formatFechaCsv(p.fecha_pago) : '—'}
                     </td>

@@ -265,7 +265,7 @@ export default function ServiciosPage() {
                 onClick={handleDescargarPlantilla}
                 disabled={importing}
                 title="Descargar plantilla CSV con el formato permitido"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
                 Plantilla
@@ -295,7 +295,7 @@ export default function ServiciosPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar servicio por nombre..."
-            className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-gray-900 dark:text-[#E7E9EA]"
+            className="w-full pl-8 pr-4 py-2.5 bg-surface border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-fg"
           />
         </div>
         <div className="flex gap-1.5 flex-wrap">
@@ -307,7 +307,7 @@ export default function ServiciosPage() {
                 'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
                 filterTipo === t
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-[#202327] text-gray-600 dark:text-[#71767B] hover:bg-gray-200 dark:hover:bg-[#2F3336]'
+                  : 'bg-surface-2 text-gray-600 dark:text-muted hover:bg-gray-200 dark:hover:bg-surface-3'
               )}
             >
               {t} ({counts[t] ?? 0})
@@ -321,31 +321,31 @@ export default function ServiciosPage() {
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-12 flex items-center justify-center">
+        <div className="rounded-2xl border border-line bg-surface p-12 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] p-12 text-center">
-          <ShieldCheck className="h-10 w-10 text-gray-300 dark:text-[#71767B] mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-500 dark:text-[#71767B]">No se encontraron servicios</p>
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center">
+          <ShieldCheck className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+          <p className="text-sm font-medium text-muted">No se encontraron servicios</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
+        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-[#2F3336]">
-                  <th className="text-left px-5 py-3 text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Nombre</th>
-                  <th className="text-left px-5 py-3 text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Tipo</th>
-                  <th className="text-right px-5 py-3 text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Costo ($)</th>
-                  <th className="text-right px-5 py-3 text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">% Cobertura</th>
-                  <th className="text-right px-5 py-3 text-xs font-bold text-gray-500 dark:text-[#71767B] uppercase tracking-wider">Acciones</th>
+                <tr className="border-b border-line/70">
+                  <th className="text-left px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">Nombre</th>
+                  <th className="text-left px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">Tipo</th>
+                  <th className="text-right px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">Costo ($)</th>
+                  <th className="text-right px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">% Cobertura</th>
+                  <th className="text-right px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s.id} className="border-b border-gray-50 dark:border-[#2F3336] last:border-0 hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors">
-                    <td className="px-5 py-3 font-medium text-gray-900 dark:text-[#E7E9EA]">{s.nombre}</td>
+                  <tr key={s.id} className="border-b border-gray-50 dark:border-line last:border-0 hover:bg-surface-2 transition-colors">
+                    <td className="px-5 py-3 font-medium text-fg">{s.nombre}</td>
                     <td className="px-5 py-3">
                       <span className={cn('inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold uppercase', tipoBadge[s.tipo])}>
                         {s.tipo}
@@ -359,10 +359,10 @@ export default function ServiciosPage() {
                           onChange={(e) => setEditCosto(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, s.id)}
                           autoFocus
-                          className="w-24 text-right rounded-md border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                          className="w-24 text-right rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                         />
                       ) : (
-                        <span className="text-gray-700 dark:text-[#E7E9EA] font-mono">${s.costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-fg-2 font-mono">${s.costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
@@ -374,10 +374,10 @@ export default function ServiciosPage() {
                           value={editCobertura}
                           onChange={(e) => setEditCobertura(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, s.id)}
-                          className="w-20 text-right rounded-md border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                          className="w-20 text-right rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                         />
                       ) : (
-                        <span className="font-mono text-gray-700 dark:text-[#E7E9EA]">{s.porcentaje_cobertura}%</span>
+                        <span className="font-mono text-fg-2">{s.porcentaje_cobertura}%</span>
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
@@ -394,7 +394,7 @@ export default function ServiciosPage() {
                           <button
                             onClick={cancelEdit}
                             disabled={savingId === s.id}
-                            className="text-xs font-bold text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA] disabled:opacity-50"
+                            className="text-xs font-bold text-muted hover:text-gray-600 dark:hover:text-fg disabled:opacity-50"
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -414,11 +414,11 @@ export default function ServiciosPage() {
             </table>
           </div>
 
-          <div className="md:hidden divide-y divide-gray-100 dark:divide-[#2F3336]">
+          <div className="md:hidden divide-y divide-line/70">
             {filtered.map((s) => (
               <div key={s.id} className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-[#E7E9EA] break-words">{s.nombre}</p>
+                  <p className="text-sm font-medium text-fg break-words">{s.nombre}</p>
                   <span className={cn('shrink-0 inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold uppercase', tipoBadge[s.tipo])}>
                     {s.tipo}
                   </span>
@@ -426,16 +426,16 @@ export default function ServiciosPage() {
                 {editingId === s.id ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-bold text-gray-500 dark:text-[#71767B] w-20">Costo ($)</label>
+                      <label className="text-xs font-bold text-muted w-20">Costo ($)</label>
                       <input
                         type="number"
                         value={editCosto}
                         onChange={(e) => setEditCosto(e.target.value)}
-                        className="flex-1 rounded-md border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                        className="flex-1 rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-bold text-gray-500 dark:text-[#71767B] w-20">% Cobertura</label>
+                      <label className="text-xs font-bold text-muted w-20">% Cobertura</label>
                       <input
                         type="number"
                         min="0"
@@ -443,7 +443,7 @@ export default function ServiciosPage() {
                         value={editCobertura}
                         onChange={(e) => setEditCobertura(e.target.value)}
                         onKeyDown={(e) => handleKeyDown(e, s.id)}
-                        className="flex-1 rounded-md border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-sm text-gray-900 dark:text-[#E7E9EA] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                        className="flex-1 rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                       />
                     </div>
                     <div className="flex items-center gap-2 pt-1">
@@ -458,14 +458,14 @@ export default function ServiciosPage() {
                       <button
                         onClick={cancelEdit}
                         disabled={savingId === s.id}
-                        className="rounded-md border border-gray-200 dark:border-[#2F3336] px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+                        className="rounded-md border border-line px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50"
                       >
                         CANCELAR
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-[#71767B]">
+                  <div className="flex items-center justify-between text-xs text-muted">
                     <span className="font-mono">${s.costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })} &middot; {s.porcentaje_cobertura}% cobertura</span>
                     <button
                       onClick={() => startEdit(s)}
@@ -482,7 +482,7 @@ export default function ServiciosPage() {
       )}
 
       <Modal isOpen={showImportModal} onClose={handleCloseImportModal}>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-[#E7E9EA] mb-4">Confirmar importación</h3>
+        <h3 className="text-lg font-bold text-fg mb-4">Confirmar importación</h3>
         {importPreview && (
           <div className="space-y-4 mb-6">
             <div className="grid grid-cols-3 gap-2">
@@ -502,24 +502,24 @@ export default function ServiciosPage() {
 
             {/* Modo de importación */}
             <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-[#71767B]">Modo de importación</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">Modo de importación</p>
               <label className={cn(
                 'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
-                importModo === 'agregar' ? 'border-primary-400 bg-primary-50/50 dark:border-primary-500/40 dark:bg-primary-500/5' : 'border-gray-200 dark:border-[#2F3336] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+                importModo === 'agregar' ? 'border-primary-400 bg-primary-50/50 dark:border-primary-500/40 dark:bg-primary-500/5' : 'border-line hover:bg-surface-2'
               )}>
                 <input type="radio" name="modo-import" checked={importModo === 'agregar'} onChange={() => setImportModo('agregar')} className="mt-0.5 h-4 w-4 text-primary-600" />
                 <span>
-                  <span className="block text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Agregar</span>
-                  <span className="block text-xs text-gray-500 dark:text-[#71767B]">Los duplicados se omiten, no se tocan los existentes.</span>
+                  <span className="block text-sm font-bold text-fg">Agregar</span>
+                  <span className="block text-xs text-muted">Los duplicados se omiten, no se tocan los existentes.</span>
                 </span>
               </label>
               <label className={cn(
                 'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
-                importModo === 'reemplazar' ? 'border-red-400 bg-red-50/50 dark:border-red-500/40 dark:bg-red-500/5' : 'border-gray-200 dark:border-[#2F3336] hover:bg-gray-50 dark:hover:bg-[#1D1F23]'
+                importModo === 'reemplazar' ? 'border-red-400 bg-red-50/50 dark:border-red-500/40 dark:bg-red-500/5' : 'border-line hover:bg-surface-2'
               )}>
                 <input type="radio" name="modo-import" checked={importModo === 'reemplazar'} onChange={() => setImportModo('reemplazar')} className="mt-0.5 h-4 w-4 text-red-600" />
                 <span>
-                  <span className="block text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">Limpiar todo y volver a cargar</span>
+                  <span className="block text-sm font-bold text-fg">Limpiar todo y volver a cargar</span>
                   <span className="block text-xs text-red-600 dark:text-red-400">Elimina TODOS los servicios actuales de esta aseguranza y carga solo los del archivo.</span>
                 </span>
               </label>
@@ -527,11 +527,11 @@ export default function ServiciosPage() {
 
             {/* Detalle de filas con problema */}
             {importPreview.rows.length > 0 && importPreview.rows.some((r) => r.duplicado || r.errores.length > 0) && (
-              <div className="rounded-lg border border-gray-200 dark:border-[#2F3336] overflow-hidden">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-[#71767B] px-3 py-2 bg-gray-50 dark:bg-[#202327]">
+              <div className="rounded-lg border border-line overflow-hidden">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted px-3 py-2 bg-surface-2">
                   Detalle ({importPreview.rows.filter((r) => r.duplicado || r.errores.length > 0).length})
                 </p>
-                <div className="max-h-40 overflow-y-auto divide-y divide-gray-50 dark:divide-[#2F3336]">
+                <div className="max-h-40 overflow-y-auto divide-y divide-line/60">
                   {importPreview.rows.filter((r) => r.duplicado || r.errores.length > 0).slice(0, 50).map((r, i) => (
                     <div key={i} className="px-3 py-2 text-xs">
                       <div className="flex items-center gap-2">
@@ -541,7 +541,7 @@ export default function ServiciosPage() {
                         )}>
                           {r.errores.length > 0 ? 'Error' : 'Duplicado'}
                         </span>
-                        <span className="font-medium text-gray-900 dark:text-[#E7E9EA] truncate">{r.nombre}</span>
+                        <span className="font-medium text-fg truncate">{r.nombre}</span>
                       </div>
                       {r.errores.length > 0 && (
                         <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">{r.errores.join('; ')}</p>
@@ -556,7 +556,7 @@ export default function ServiciosPage() {
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={handleCloseImportModal}
-            className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2 text-xs font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+            className="rounded-lg border border-line px-4 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2"
           >
             Cancelar
           </button>

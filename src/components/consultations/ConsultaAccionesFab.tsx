@@ -148,28 +148,28 @@ export default function ConsultaAccionesFab({
       <Modal isOpen={!!accion} onClose={cerrar}>
         {accion && (
           <div className="space-y-4">
-            <h2 className="pr-8 text-lg font-extrabold text-gray-900 dark:text-[#E7E9EA]">
+            <h2 className="pr-8 text-lg font-extrabold text-fg">
               {titulos[accion]}
             </h2>
 
             {accion === 'reagendar' && (
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nueva fecha</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nueva fecha</span>
                   <input
                     type="date"
                     value={nuevaFecha}
                     onChange={(e) => setNuevaFecha(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Nueva hora</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nueva hora</span>
                   <input
                     type="time"
                     value={nuevaHora}
                     onChange={(e) => setNuevaHora(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none"
                   />
                 </label>
               </div>
@@ -178,30 +178,30 @@ export default function ConsultaAccionesFab({
             {accion === 'aplazar' && (
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
                     Nueva hora inicio <span className="text-red-500">*</span>
                   </span>
                   <input
                     type="time"
                     value={nuevaHora}
                     onChange={(e) => setNuevaHora(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">Hora fin</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Hora fin</span>
                   <input
                     type="time"
                     value={nuevaHoraFin}
                     onChange={(e) => setNuevaHoraFin(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none"
                   />
                 </label>
               </div>
             )}
 
             {(accion === 'aplazar' || accion === 'reagendar') && (
-              <div className="flex items-start gap-2 rounded-lg bg-gray-50 dark:bg-[#1D1F23] px-3 py-2 text-xs text-gray-600 dark:text-[#71767B]">
+              <div className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs text-gray-600 dark:text-muted">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   Actual: {fecha} {horaInicio.slice(0, 5)}{horaFin ? `–${horaFin.slice(0, 5)}` : ''}
@@ -213,7 +213,7 @@ export default function ConsultaAccionesFab({
             )}
 
             <label className="block">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
                 Motivo <span className="text-red-500">*</span>
               </span>
               <textarea
@@ -222,7 +222,7 @@ export default function ConsultaAccionesFab({
                 rows={3}
                 maxLength={500}
                 placeholder="Describe el motivo (obligatorio)"
-                className="mt-1 w-full rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#1D1F23] px-3 py-2 text-sm text-gray-900 dark:text-[#E7E9EA] focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none"
               />
             </label>
 
@@ -233,7 +233,7 @@ export default function ConsultaAccionesFab({
                 type="button"
                 onClick={cerrar}
                 disabled={saving}
-                className="rounded-lg border border-gray-200 dark:border-[#2F3336] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] disabled:opacity-50"
+                className="rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50"
               >
                 Volver
               </button>

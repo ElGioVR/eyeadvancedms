@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { UUID_RE } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { errorTranslations } from '@/lib/supabase/errors';
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  let aseguranzaId = aseguranzaParam;
+  // Solo UUID válidos: el valor se interpola en un filtro .or()
+  let aseguranzaId = aseguranzaParam && UUID_RE.test(aseguranzaParam) ? aseguranzaParam : null;
 
   if (!aseguranzaId && pacienteId) {
     const { data: paciente } = await supabase

@@ -18,17 +18,18 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { useUser } from '@/hooks/useUser';
+import { useUser, clearUserCache } from '@/hooks/useUser';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-  { icon: Users, label: 'Pacientes', href: '/pacientes' },
-  { icon: Calendar, label: 'Agenda', href: '/agenda' },
-  { icon: Package, label: 'Inventario', href: '/inventario' },
-  { icon: TrendingUp, label: 'Productividad', href: '/productividad', adminOnly: true },
-  { icon: Settings, label: 'Configuración', href: '/configuracion' },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', section: 'Principal' },
+  { icon: Users, label: 'Pacientes', href: '/pacientes', section: 'Principal' },
+  { icon: Calendar, label: 'Agenda', href: '/agenda', section: 'Principal' },
+  { icon: Package, label: 'Inventario', href: '/inventario', section: 'Operación' },
+  { icon: TrendingUp, label: 'Productividad', href: '/productividad', section: 'Operación', adminOnly: true },
+  { icon: Settings, label: 'Configuración', href: '/configuracion', section: 'Sistema' },
 ];
 
 interface SidebarProps {
@@ -56,162 +57,212 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
   const isDesktop = useIsDesktop();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Mobile (<lg): 260px when open → show labels
-  // Tablet (lg–xl): always 72px → icon-only
-  // Desktop (xl+): 260px or 72px depending on collapsed
+  // Mobile (<lg): 272px cuando está abierto → muestra etiquetas
+  // Tablet (lg–xl): siempre 76px → solo iconos
+  // Desktop (xl+): 272px o 76px según `collapsed`
   const sidebarWide = isDesktop ? !collapsed : isOpen;
   const showLabels = sidebarWide;
 
+  const visibleItems = menuItems.filter(
+    (item) => !('adminOnly' in item && item.adminOnly) || user?.rol === 'admin'
+  );
+  const sections = visibleItems.reduce<Record<string, typeof visibleItems>>((acc, item) => {
+    (acc[item.section] ??= []).push(item);
+    return acc;
+  }, {});
+
   return (
     <>
-      {/* Backdrop for mobile */}
+      {/* Backdrop móvil */}
       <div
         className={cn(
-          'fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 lg:hidden',
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          'fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px] transition-opacity duration-300 lg:hidden',
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
         onClick={onClose}
       />
 
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-white dark:bg-[#0F1115] border-r border-gray-200 dark:border-[#2F3336] text-gray-900 dark:text-[#E7E9EA] transition-all duration-300 ease-in-out z-50 flex flex-col shadow-2xl lg:shadow-sm dark:lg:shadow-none',
-          // Mobile (<lg): overlay, slides in/out
-          'max-lg:w-[260px]',
+          'fixed left-0 top-0 z-50 flex h-[100dvh] flex-col border-r border-line bg-surface text-fg transition-all duration-300 ease-out',
+          // Mobile (<lg): drawer
+          'max-lg:w-[272px] max-lg:rounded-r-3xl max-lg:shadow-pop',
           isOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
-          // Tablet (lg–xl): always collapsed 72px, always visible
-          'lg:w-[72px] lg:translate-x-0',
-          // Desktop (xl+): respects collapsed prop
+          // Tablet (lg–xl): 76px fijo
+          'lg:w-[76px] lg:translate-x-0',
+          // Desktop (xl+)
           'xl:translate-x-0',
-          collapsed ? 'xl:w-[72px]' : 'xl:w-[260px]'
+          collapsed ? 'xl:w-[76px]' : 'xl:w-[272px]'
         )}
       >
         {/* Logo */}
-        <div className={cn('flex items-center justify-center h-[72px] shrink-0', showLabels ? 'px-4' : 'w-full')}>
+        <div className={cn('flex h-16 shrink-0 items-center', showLabels ? 'px-5' : 'justify-center')}>
           {showLabels ? (
-            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98]">
-              {/* Light: logo a color sobre fondo blanco; Dark: variante blanca */}
+            <Link href="/dashboard" className="flex items-center transition-opacity hover:opacity-80" onClick={() => { if (window.innerWidth < 1024) onClose(); }}>
               <Image
                 src="/images/eyeadvanced-logo.png"
                 alt="EyeAdvanced"
-                width={160}
-                height={40}
+                width={148}
+                height={37}
                 priority
-                className="w-[160px] h-auto dark:hidden"
+                className="h-auto w-[148px] dark:hidden"
               />
               <Image
                 src="/images/eyeadvanced-logo-white.png"
                 alt="EyeAdvanced"
-                width={160}
-                height={40}
+                width={148}
+                height={37}
                 priority
-                className="w-[160px] h-auto hidden dark:block"
+                className="hidden h-auto w-[148px] dark:block"
               />
-            </div>
+            </Link>
           ) : (
-            <div className="bg-primary-700 dark:bg-primary-600 w-full h-[72px] flex items-center justify-center transition-colors duration-300">
-              <Image
-                src="/images/logo-eye.png"
-                alt="EyeAdvanced"
-                width={32}
-                height={32}
-                priority
-                className="w-8 h-8 object-contain"
-              />
-            </div>
+            <Link
+              href="/dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm shadow-primary-900/30 transition-transform hover:scale-105"
+            >
+              <Image src="/images/logo-eye.png" alt="EyeAdvanced" width={24} height={24} priority className="h-6 w-6 object-contain" />
+            </Link>
           )}
         </div>
 
-        {/* Toggle button – only visible on xl+ */}
+        {/* Botón colapsar – solo xl+ */}
         <button
           onClick={onToggle}
-          className="hidden xl:flex absolute -right-3 top-[84px] w-6 h-6 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-full shadow-md items-center justify-center text-gray-500 dark:text-[#71767B] hover:bg-gray-50 dark:hover:bg-[#1D1F23] hover:text-gray-700 dark:hover:text-[#E7E9EA] hover:scale-110 active:scale-95 transition-all duration-200"
+          className="absolute -right-3 top-[52px] hidden h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-soft transition-all hover:scale-110 hover:text-fg xl:flex"
           aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </button>
 
-        {/* Menu */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden">
-          {menuItems
-            .filter((item) => !('adminOnly' in item && item.adminOnly) || user?.rol === 'admin')
-            .map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'group relative flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 active:scale-[0.98]',
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-[#1D9BF0]/10 dark:text-[#1D9BF0]'
-                    : 'text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white',
-                  !showLabels && 'justify-center px-0'
-                )}
-                title={!showLabels ? item.label : undefined}
-                onClick={() => { if (window.innerWidth < 1024) onClose(); }}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-primary-600 dark:bg-[#1D9BF0] transition-all duration-300" />
-                )}
-                <item.icon
-                  className={cn(
-                    'w-5 h-5 shrink-0 transition-transform duration-200 group-hover:scale-110',
-                    isActive ? 'text-primary-600 dark:text-[#1D9BF0]' : 'text-gray-400 dark:text-[#71767B] group-hover:text-gray-700 dark:group-hover:text-[#E7E9EA]'
-                  )}
-                />
-                {showLabels && <span className="font-semibold text-sm">{item.label}</span>}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User & Logout */}
-        <div className="p-4 border-t border-gray-200 dark:border-[#2F3336]">
-          {showLabels && user && (
-            <div className="flex items-center gap-3 px-1 py-3 mb-2">
-              <Avatar initials={user.iniciales} src={user.avatar_url} className="bg-primary-500 dark:bg-[#202327] text-white dark:text-[#E7E9EA]" />
-              <div className="min-w-0">
-                <div className="text-sm font-bold leading-5 truncate">{user.nombre || user.email}</div>
-                <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-[#71767B]">
-                  <ShieldCheck className="h-3 w-3" />
-                  <span className="capitalize">{user.rol}</span>
-                </div>
+        {/* Menú */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-2">
+          {Object.entries(sections).map(([section, items], idx) => (
+            <div key={section} className={cn(idx > 0 && 'mt-5')}>
+              {showLabels ? (
+                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted/80">
+                  {section}
+                </p>
+              ) : (
+                idx > 0 && <div className="mx-auto mb-3 h-px w-8 bg-line" />
+              )}
+              <div className="space-y-0.5">
+                {items.map((item) => {
+                  const isActive = pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 active:scale-[0.98]',
+                        isActive
+                          ? 'bg-primary-50 text-primary-700 dark:bg-primary-400/10 dark:text-primary-300'
+                          : 'text-fg-2 hover:bg-surface-2 hover:text-fg',
+                        !showLabels && 'mx-auto h-11 w-11 justify-center px-0'
+                      )}
+                      title={!showLabels ? item.label : undefined}
+                      onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                    >
+                      {isActive && showLabels && (
+                        <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary-600 dark:bg-primary-400" />
+                      )}
+                      <item.icon
+                        className={cn(
+                          'h-[18px] w-[18px] shrink-0 transition-colors',
+                          isActive ? 'text-primary-600 dark:text-primary-300' : 'text-muted group-hover:text-fg'
+                        )}
+                        strokeWidth={isActive ? 2.2 : 1.9}
+                      />
+                      {showLabels && <span className="truncate">{item.label}</span>}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
+          ))}
+        </nav>
+
+        {/* Usuario */}
+        <div className="border-t border-line p-3">
+          {showLabels ? (
+            <div className="rounded-2xl bg-surface-2/70 p-2.5">
+              {user && (
+                <Link
+                  href="/mi-perfil"
+                  onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                  className="flex items-center gap-3 rounded-xl p-1 transition-colors hover:bg-surface-3/60"
+                >
+                  <Avatar
+                    initials={user.iniciales}
+                    src={user.avatar_url}
+                    size="sm"
+                    className="h-9 w-9 bg-gradient-to-br from-primary-500 to-primary-700 text-white ring-2 ring-surface"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold leading-5">{user.nombre || user.email}</div>
+                    <div className="flex items-center gap-1 text-xs text-muted">
+                      <ShieldCheck className="h-3 w-3" />
+                      <span className="capitalize">{user.rol}</span>
+                    </div>
+                  </div>
+                </Link>
+              )}
+              <div className="mt-2 flex items-center gap-1 border-t border-line pt-2">
+                <ThemeToggle withLabel className="h-9 flex-1 justify-start text-xs" />
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(true)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                  title="Cerrar sesión"
+                  aria-label="Cerrar sesión"
+                >
+                  <LogOut className="h-[18px] w-[18px]" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => setShowLogoutModal(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+              {user && (
+                <Link href="/mi-perfil" className="mt-1" title={user.nombre || user.email}>
+                  <Avatar
+                    initials={user.iniciales}
+                    src={user.avatar_url}
+                    size="sm"
+                    className="h-9 w-9 bg-gradient-to-br from-primary-500 to-primary-700 text-white"
+                  />
+                </Link>
+              )}
+            </div>
           )}
-          <button
-            type="button"
-            onClick={() => setShowLogoutModal(true)}
-            className={cn(
-              'flex items-center gap-3 px-4 py-2.5 w-full rounded-xl border border-gray-200 dark:border-[#2F3336] text-gray-600 dark:text-[#E7E9EA] hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/30 transition-all duration-200 active:scale-[0.98]',
-              !showLabels && 'justify-center px-0'
-            )}
-            title={!showLabels ? 'Cerrar Sesión' : undefined}
-          >
-            <LogOut className="w-5 h-5 shrink-0" />
-            {showLabels && <span className="font-semibold text-sm">Cerrar Sesión</span>}
-          </button>
         </div>
       </aside>
 
-      <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
+      <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} maxWidth="max-w-sm">
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Cerrar Sesión</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-300">¿Estás seguro que deseas cerrar sesión?</p>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setShowLogoutModal(false)}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <LogOut className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-fg">Cerrar sesión</h3>
+            <p className="mt-1 text-sm text-muted">¿Estás seguro que deseas cerrar sesión?</p>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button onClick={() => setShowLogoutModal(false)} className="btn-secondary">
               Cancelar
             </button>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition-colors"
-              >
-                Cerrar Sesión
+            <form action={logout} onSubmit={() => clearUserCache()}>
+              <button type="submit" className="btn-danger w-full">
+                Cerrar sesión
               </button>
             </form>
           </div>

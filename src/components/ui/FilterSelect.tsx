@@ -25,7 +25,7 @@ export default function FilterSelect({
   return (
     <div className="relative">
       {label && (
-        <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-500 dark:text-[#71767B]">{label}</label>
+        <label htmlFor={id} className="mb-1 block text-xs font-medium text-muted">{label}</label>
       )}
       <div className="relative">
         <select
@@ -33,10 +33,10 @@ export default function FilterSelect({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            'appearance-none rounded-lg border px-3 py-2 pr-8 text-sm font-medium shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500',
+            'h-10 appearance-none rounded-xl border px-3 pr-8 text-sm font-medium shadow-soft transition-all focus:outline-none focus:ring-4 focus:ring-primary-500/15',
             isActive
           ? activeColor
-          : 'border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#202327] text-gray-700 dark:text-[#E7E9EA] hover:border-gray-300 dark:hover:border-[#536471]'
+          : 'border-line bg-white dark:bg-surface-2 text-fg-2 hover:border-gray-300 dark:hover:border-line-strong'
           )}
         >
           {options.map((option) => (
@@ -46,7 +46,7 @@ export default function FilterSelect({
           ))}
         </select>
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-          <ChevronDown className="h-4 w-4 text-gray-400 dark:text-[#71767B]" />
+          <ChevronDown className="h-4 w-4 text-muted" />
         </div>
       </div>
     </div>

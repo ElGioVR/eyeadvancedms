@@ -21,13 +21,13 @@ import AgendaCalendario, { type EventoAgenda } from './AgendaCalendario';
 
 const th = 'px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400';
 const thR = 'px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-gray-400';
-const td = 'px-4 py-3 text-sm text-gray-700 dark:text-[#E7E9EA]';
-const tdR = 'px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-[#E7E9EA]';
+const td = 'px-4 py-3 text-sm text-fg-2';
+const tdR = 'px-4 py-3 text-right text-sm font-semibold text-fg';
 
 const badgePago: Record<string, string> = {
   PAGADO: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
   POR_PAGAR: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  PENDIENTE_CONFIG: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-[#9BA1A6]',
+  PENDIENTE_CONFIG: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-fg-2',
   CANCELADO: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
   PENDIENTE: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
 };
@@ -292,12 +292,12 @@ export default function DoctorDetalle({
           <button
             type="button"
             onClick={onCerrar}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] text-sm font-medium text-gray-700 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23]"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-fg-2 hover:bg-surface-2"
           >
             <ArrowLeft className="w-4 h-4" /> Doctores
           </button>
           <div>
-            <p className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">{nombre}</p>
+            <p className="text-sm font-bold text-fg">{nombre}</p>
             <p className="text-xs text-gray-400">
               {formatFechaCsv(desde)} – {formatFechaCsv(hasta)}
             </p>
@@ -353,10 +353,10 @@ export default function DoctorDetalle({
         hasta={hasta}
       />
 
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
+      <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-line/70">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-[#E7E9EA]">
+            <h3 className="text-sm font-bold text-fg">
               Honorarios del doctor
             </h3>
             <span className="text-xs text-gray-400">{honTotal} eventos</span>
@@ -375,14 +375,14 @@ export default function DoctorDetalle({
         {honAviso && (
           <p
             role="status"
-            className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-[#9BA1A6] bg-gray-50 dark:bg-[#202327]/50 border-b border-gray-100 dark:border-[#2F3336]"
+            className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-fg-2 bg-gray-50 dark:bg-surface-2/50 border-b border-line/70"
           >
             {honAviso}
           </p>
         )}
 
         {honorarios.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-gray-500 dark:text-[#71767B]">
+          <p className="px-4 py-6 text-sm text-muted">
             Sin eventos de honorarios en el rango seleccionado.
           </p>
         ) : (
@@ -392,7 +392,7 @@ export default function DoctorDetalle({
           >
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 dark:bg-[#202327]/50">
+                <tr className="bg-gray-50 dark:bg-surface-2/50">
                   <th className={th}>
                     <input
                       type="checkbox"
@@ -411,12 +411,12 @@ export default function DoctorDetalle({
                   <th className={th}>Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-[#2F3336]">
+              <tbody className="divide-y divide-line/60">
                 {honorarios.map((h) => {
                   const seleccionable = h.estado_pago === 'POR_PAGAR';
                   const editable = h.estado_pago !== 'PAGADO' && h.estado_pago !== 'CANCELADO';
                   return (
-                    <tr key={h.id} className="hover:bg-gray-50 dark:hover:bg-[#1D1F23]">
+                    <tr key={h.id} className="hover:bg-surface-2">
                       <td className="px-4 py-3">
                         {seleccionable && (
                           <input
@@ -443,7 +443,7 @@ export default function DoctorDetalle({
                               onChange={(e) => setEditMonto(e.target.value)}
                               autoFocus
                               aria-label="Monto"
-                              className="w-24 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-gray-50 dark:bg-[#202327] px-2 py-1 text-right text-sm"
+                              className="w-24 rounded-lg border border-line bg-surface-2 px-2 py-1 text-right text-sm"
                             />
                             <button
                               type="button"
@@ -472,7 +472,7 @@ export default function DoctorDetalle({
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
                             badgePago[h.estado_pago] ||
-                            'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-[#9BA1A6]'
+                            'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-fg-2'
                           }`}
                         >
                           {h.estado_pago}
@@ -485,7 +485,7 @@ export default function DoctorDetalle({
                               type="button"
                               onClick={() => iniciarEdicion(h)}
                               disabled={accionBusy || editBusy}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-gray-600 dark:text-[#9BA1A6] hover:bg-gray-100 dark:hover:bg-[#202327]"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
                             >
                               <Pencil className="w-3 h-3" /> Monto
                             </button>

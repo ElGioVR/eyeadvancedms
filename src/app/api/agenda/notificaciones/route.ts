@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const MINUTOS_ANTES = parseInt(process.env.AGENDA_NOTIFICACION_MINUTOS || '30', 10);
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -11,7 +14,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'CRON_SECRET no configurado' }, { status: 500 });
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  // Comparación en tiempo constante (evita ataques de temporización sobre el secreto)
+  const esperado = Buffer.from(`Bearer ${cronSecret}`);
+  const recibido = Buffer.from(authHeader ?? '');
+  if (recibido.length !== esperado.length || !timingSafeEqual(recibido, esperado)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 

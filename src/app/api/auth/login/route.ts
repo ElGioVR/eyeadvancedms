@@ -36,10 +36,14 @@ export async function POST(request: NextRequest) {
   const clientIP = getClientIP(request);
   const rateKey = `${clientIP}:${email.trim().toLowerCase()}`;
 
+  // Segundo límite solo por email: evita evadir el bloqueo rotando X-Forwarded-For
+  const emailKey = `email:${email.trim().toLowerCase()}`;
   const rateCheck = checkRateLimit(rateKey);
-  if (!rateCheck.allowed) {
+  const emailCheck = checkRateLimit(emailKey);
+  if (!rateCheck.allowed || !emailCheck.allowed) {
+    const retry = Math.max(rateCheck.retryAfter ?? 0, emailCheck.retryAfter ?? 0);
     return NextResponse.json(
-      { error: `Demasiados intentos. Intenta de nuevo en ${rateCheck.retryAfter} segundos.` },
+      { error: `Demasiados intentos. Intenta de nuevo en ${retry} segundos.` },
       { status: 429 },
     );
   }
@@ -95,6 +99,7 @@ export async function POST(request: NextRequest) {
       code: error.code,
     });
 
+    recordFailedAttempt(emailKey, 15);
     const result = recordFailedAttempt(rateKey);
     if (result.blocked) {
       return NextResponse.json(
@@ -110,5 +115,6 @@ export async function POST(request: NextRequest) {
   }
 
   recordSuccessfulLogin(rateKey);
+  recordSuccessfulLogin(emailKey);
   return response;
 }

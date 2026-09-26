@@ -10,17 +10,19 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div className="border-b border-gray-200 dark:border-[#2F3336]">
-      <nav className="-mb-px flex gap-4">
+    <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none]">
+      <nav className="inline-flex min-w-full gap-1 rounded-2xl bg-surface-2 p-1 sm:min-w-0" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab}
+            role="tab"
+            aria-selected={active === tab}
             onClick={() => onChange(tab)}
             className={cn(
-              'whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors',
+              'flex-1 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-all sm:flex-none',
               active === tab
-                ? 'border-primary-600 text-primary-600 dark:border-[#1D9BF0] dark:text-[#1D9BF0]'
-                : 'border-transparent text-gray-500 dark:text-[#71767B] hover:border-gray-300 dark:hover:border-[#536471] hover:text-gray-700 dark:hover:text-[#E7E9EA]'
+                ? 'bg-surface text-fg shadow-soft dark:bg-surface-3'
+                : 'text-muted hover:text-fg'
             )}
           >
             {tab}

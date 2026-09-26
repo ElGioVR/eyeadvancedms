@@ -195,14 +195,14 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
   // --- VIEW: Choose ---
   if (view === 'choose') {
     return (
-      <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2F3336] bg-gray-50/50 dark:bg-[#202327]/50 p-6">
+      <div className="rounded-xl border-2 border-dashed border-line bg-gray-50/50 dark:bg-surface-2/50 p-6">
         <div className="text-center space-y-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 mx-auto">
             <ImageIcon className="h-6 w-6 text-primary-600" />
           </div>
           <div>
-            <p className="text-sm font-extrabold text-gray-900 dark:text-[#E7E9EA]">Auto-completar desde foto</p>
-            <p className="text-xs text-gray-400 dark:text-[#71767B] mt-1">Toma una foto o sube la etiqueta del lente para rellenar el formulario automaticamente</p>
+            <p className="text-sm font-extrabold text-fg">Auto-completar desde foto</p>
+            <p className="text-xs text-muted mt-1">Toma una foto o sube la etiqueta del lente para rellenar el formulario automaticamente</p>
           </div>
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 flex items-center gap-2 max-w-sm mx-auto">
@@ -218,7 +218,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-[#E7E9EA] hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors"
             >
               <Upload className="h-4 w-4" /> Subir Imagen
             </button>
@@ -232,7 +232,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
   // --- VIEW: Viewfinder (live camera) ---
   if (view === 'viewfinder') {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none overflow-hidden">
         <div className="relative bg-gray-900" style={{ minHeight: 280 }}>
           <video
             ref={videoRef}
@@ -262,7 +262,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
             </button>
             <button
               onClick={capturePhoto}
-              className="rounded-full bg-white dark:bg-[#202327] p-1 shadow-lg hover:bg-gray-100 dark:hover:bg-[#1D1F23] transition-colors"
+              className="rounded-full bg-white dark:bg-surface-2 p-1 shadow-lg hover:bg-surface-2 transition-colors"
             >
               <div className="rounded-full bg-primary-600 p-4 hover:bg-primary-700 transition-colors">
                 <Circle className="h-8 w-8 text-white fill-white" />
@@ -290,13 +290,13 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
   // --- VIEW: Processing ---
   if (view === 'processing') {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none overflow-hidden">
         <div className="relative bg-gray-900" style={{ minHeight: 200 }}>
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center space-y-3">
               <Loader2 className="h-10 w-10 text-white animate-spin mx-auto" />
               <p className="text-sm text-white font-bold">Leyendo etiqueta...</p>
-              <p className="text-xs text-gray-400 dark:text-[#71767B]">Analizando imagen con OCR</p>
+              <p className="text-xs text-muted">Analizando imagen con OCR</p>
             </div>
           </div>
         </div>
@@ -306,7 +306,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
 
   // --- VIEW: Results ---
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] shadow-sm overflow-hidden">
+    <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none overflow-hidden">
       <div className="p-4 space-y-3">
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 flex items-center gap-2">
@@ -325,7 +325,7 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
                     Lente intraocular
                   </span>
                 </div>
-                <button onClick={handleReset} className="text-xs font-bold text-gray-400 dark:text-[#71767B] hover:text-gray-600 dark:hover:text-[#E7E9EA]">Foto nueva</button>
+                <button onClick={handleReset} className="text-xs font-bold text-muted hover:text-gray-600 dark:hover:text-fg">Foto nueva</button>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -347,18 +347,18 @@ export default function LabelScanner({ onParsed }: LabelScannerProps) {
                       : '',
                   },
                 ].filter((f) => f.value).map((f) => (
-                  <div key={f.label} className="rounded-lg bg-gray-50 dark:bg-[#202327] px-3 py-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#71767B]">{f.label}</span>
-                    <p className="font-bold text-gray-900 dark:text-[#E7E9EA] mt-0.5">{f.value}</p>
+                  <div key={f.label} className="rounded-lg bg-surface-2 px-3 py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{f.label}</span>
+                    <p className="font-bold text-fg mt-0.5">{f.value}</p>
                   </div>
                 ))}
               </div>
 
               <details className="group">
-                <summary className="text-xs font-bold text-gray-400 dark:text-[#71767B] cursor-pointer hover:text-gray-600 dark:hover:text-[#E7E9EA]">
+                <summary className="text-xs font-bold text-muted cursor-pointer hover:text-gray-600 dark:hover:text-fg">
                   Ver texto detectado
                 </summary>
-                <p className="mt-2 text-xs text-gray-500 dark:text-[#71767B] bg-gray-50 dark:bg-[#202327] rounded-lg p-3 max-h-24 overflow-y-auto">
+                <p className="mt-2 text-xs text-muted bg-surface-2 rounded-lg p-3 max-h-24 overflow-y-auto">
                   {rawText}
                 </p>
               </details>

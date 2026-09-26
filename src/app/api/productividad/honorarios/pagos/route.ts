@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
@@ -149,7 +150,7 @@ export async function GET(request: Request) {
     response.headers.set('Server-Timing', `productividad;dur=${dur}`);
     return response;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error interno del servidor';
+    const message = mensajeSeguro(err, 'productividad.honorarios.pagos', 'Error interno del servidor');
     const status =
       typeof (err as { status?: number }).status === 'number'
         ? (err as { status: number }).status

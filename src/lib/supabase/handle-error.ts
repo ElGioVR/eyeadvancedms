@@ -30,3 +30,27 @@ export function handleSupabaseError(
   if (traducido) return { mensaje: traducido, traducido: true };
   return { mensaje: 'Error interno del servidor', traducido: false };
 }
+
+/**
+ * Patrones que delatan detalles internos (SQL, esquema, PostgREST, credenciales).
+ * Si el mensaje contiene alguno, NO se envía al cliente.
+ */
+const PATRON_INTERNO =
+  /(relation|column|schema|constraint|violates|syntax error|duplicate key|foreign key|permission denied|pgrst|postgres|sql|jwt|service_role|does not exist|function .*\(|rpc|null value in|invalid input syntax|timeout|ECONN|fetch failed|supabase)/i;
+
+/**
+ * Convierte cualquier error en un mensaje seguro para el cliente:
+ * - registra el error real en el servidor,
+ * - devuelve la traducción conocida, o el mensaje de negocio si no expone internos,
+ * - en otro caso, un mensaje genérico.
+ */
+export function mensajeSeguro(err: unknown, contexto: string, generico = 'Error interno del servidor'): string {
+  const message =
+    err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : '';
+  console.error(`[${contexto}]`, err);
+  if (!message) return generico;
+  const traducido = errorTranslations[message];
+  if (traducido) return traducido;
+  if (PATRON_INTERNO.test(message) || message.length > 200) return generico;
+  return message;
+}

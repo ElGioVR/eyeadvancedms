@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type User } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { VERIFIED_USER_HEADER } from './constants';
 
 export type UserRole = 'admin' | 'doctor' | 'recepcionista';
 
@@ -84,4 +85,17 @@ export async function requireRole(
   }
 
   return null;
+}
+
+/**
+ * Id del usuario autenticado para Server Components (páginas).
+ * Usa el id que el middleware ya verificó con Supabase Auth en esta misma
+ * petición; si no está (p. ej. fuera del matcher), cae a `auth.getUser()`.
+ * NO usar en route handlers /api (el middleware no corre ahí): usar requireAuth().
+ */
+export async function getVerifiedUserId(): Promise<string | null> {
+  const fromMiddleware = headers().get(VERIFIED_USER_HEADER);
+  if (fromMiddleware) return fromMiddleware;
+  const { data: { user } } = await createClient().auth.getUser();
+  return user?.id ?? null;
 }

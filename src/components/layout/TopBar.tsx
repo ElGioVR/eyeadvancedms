@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Bell,
   CalendarDays,
-  Menu,
   Search,
   User,
   Stethoscope,
@@ -17,8 +16,11 @@ import {
   EyeOff,
   ChevronDown,
 } from "lucide-react";
-import { useUser } from "@/hooks/useUser";
+import { useUser, clearUserCache } from "@/hooks/useUser";
 import Avatar from "@/components/ui/Avatar";
+import ThemeToggle from "@/components/ui/ThemeToggle";
+import { takePrefetched } from "@/lib/prefetch";
+import { cn } from "@/lib/utils";
 
 interface SearchResult {
   tipo: string;
@@ -54,9 +56,9 @@ const tipoLabels: Record<string, string> = {
 };
 
 const notifColors: Record<string, string> = {
-  info: "bg-blue-100 text-blue-600",
-  warning: "bg-amber-100 text-amber-600",
-  error: "bg-red-100 text-red-600",
+  info: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300",
+  warning: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
+  error: "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300",
 };
 
 const notifEntityHref: Record<string, string> = {
@@ -79,13 +81,14 @@ interface TopBarProps {
   onMenuToggle?: () => void;
 }
 
-export default function TopBar({ onMenuToggle }: TopBarProps) {
+export default function TopBar(_props: TopBarProps) {
   const { user } = useUser();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -103,6 +106,15 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
   const fetchUnreadCount = useCallback(async () => {
     try {
+      // Primera carga: usa la precarga de /bienvenida si está fresca
+      const precargado = takePrefetched<{ count: number }>("/api/notificaciones/unread-count");
+      if (precargado) {
+        const data = await precargado;
+        if (data) {
+          setUnreadCount(data.count);
+          return;
+        }
+      }
       const res = await fetch("/api/notificaciones/unread-count");
       if (res.ok) {
         const data = await res.json();
@@ -117,25 +129,37 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     if (user) fetchUnreadCount();
   }, [user, fetchUnreadCount]);
 
-  useEffect(() => {
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
-
+  // Sondeo cada 30 s solo con la pestaña visible; al volver, refresca de inmediato
   useEffect(() => {
     if (!user) return;
-    (async () => {
-      try {
-        const res = await fetch("/api/usuarios/me");
-        if (res.ok) {
-          const data = await res.json();
-          const prefs = data.preferencias ?? {};
-          setModoFocus(prefs.modo_focus === true);
-        }
-      } catch {
-        /* silent */
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(fetchUnreadCount, 30000);
+    };
+    const stop = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchUnreadCount();
+        start();
+      } else {
+        stop();
       }
-    })();
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user, fetchUnreadCount]);
+
+  // El perfil ya trae modo_focus (evita un GET /api/usuarios/me duplicado)
+  useEffect(() => {
+    if (user) setModoFocus(user.modo_focus);
   }, [user]);
 
   useEffect(() => {
@@ -256,6 +280,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
 
   function handleResultClick(href: string) {
     setSearchOpen(false);
+    setMobileSearchOpen(false);
     setSearchQuery("");
     router.push(href);
   }
@@ -263,6 +288,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   function handleSearchKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
       setSearchOpen(false);
+      setMobileSearchOpen(false);
       inputRef.current?.blur();
     }
   }
@@ -275,43 +301,40 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     {},
   );
 
-  return (
-    <header className="sticky top-0 z-30 bg-white dark:bg-black border-b border-gray-200 dark:border-[#2F3336] h-[72px] px-4 sm:px-6 flex items-center">
-      <div className="flex items-center justify-between gap-4 w-full">
-        <div className="flex items-center gap-3 flex-1">
-          {onMenuToggle && user?.rol !== "doctor" && !modoFocus && (
-            <button
-              onClick={onMenuToggle}
-              className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#202327] rounded-md"
-              aria-label="Abrir menú"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
+  const iconBtn =
+    "relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-fg";
 
-          {user?.rol === "doctor" && (
-            <div className="lg:hidden shrink-0">
-              <img
-                src="/images/eyeadvanced-logo.png"
-                alt="EyeAdvanced"
-                className="h-7 w-auto block dark:hidden"
-                style={{ width: 'auto' }}
-              />
-              <img
-                src="/images/logo-eye.png"
-                alt="EyeAdvanced"
-                className="h-7 w-auto hidden dark:block"
-                style={{ width: 'auto' }}
-              />
-            </div>
-          )}
+  return (
+    <header className="sticky top-0 z-30 border-b border-line/70 glass pt-[env(safe-area-inset-top)]">
+      <div className="flex h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {/* Logo compacto en móvil */}
+          <div className="shrink-0 lg:hidden">
+            <img
+              src="/images/eyeadvanced-logo.png"
+              alt="EyeAdvanced"
+              className="block h-7 w-auto dark:hidden"
+              style={{ width: "auto" }}
+            />
+            <img
+              src="/images/eyeadvanced-logo-white.png"
+              alt="EyeAdvanced"
+              className="hidden h-7 w-auto dark:block"
+              style={{ width: "auto" }}
+            />
+          </div>
 
           <div
             ref={searchRef}
-            className="relative hidden sm:flex flex-1 max-w-xl"
+            className={cn(
+              "flex-1 max-w-xl",
+              mobileSearchOpen
+                ? "absolute inset-x-0 top-[env(safe-area-inset-top)] z-10 flex h-16 items-center gap-2 bg-surface px-3 sm:static sm:h-auto sm:bg-transparent sm:px-0"
+                : "relative hidden sm:flex"
+            )}
           >
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#71767B]" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input
                 ref={inputRef}
                 type="text"
@@ -322,33 +345,52 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                 }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Buscar paciente, lente, consulta..."
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#202327] border border-gray-200 dark:border-[#2F3336] rounded-full text-sm text-gray-900 dark:text-[#E7E9EA] placeholder-gray-400 dark:placeholder-[#71767B] focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-[#1D9BF0]/30 focus:border-primary-500 dark:focus:border-[#1D9BF0]"
+                className="h-10 w-full rounded-xl border border-transparent bg-surface-2 pl-10 pr-16 text-sm text-fg placeholder:text-muted transition-all focus:border-primary-500 focus:bg-surface focus:outline-none focus:ring-4 focus:ring-primary-500/15"
               />
-              {searchQuery && (
+              {searchQuery ? (
                 <button
                   onClick={() => {
                     setSearchQuery("");
                     setSearchOpen(false);
                     setSearchResults([]);
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted hover:text-fg"
+                  aria-label="Limpiar búsqueda"
                 >
                   <X className="h-4 w-4" />
                 </button>
+              ) : (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-line bg-surface px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted md:block">
+                  Buscar
+                </kbd>
               )}
             </div>
+            {mobileSearchOpen && (
+              <button
+                onClick={() => {
+                  setMobileSearchOpen(false);
+                  setSearchOpen(false);
+                }}
+                className="shrink-0 px-2 text-sm font-medium text-primary-600 dark:text-primary-300 sm:hidden"
+              >
+                Cancelar
+              </button>
+            )}
 
             {searchOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg max-h-80 overflow-y-auto z-50">
+              <div
+                className={cn(
+                  "absolute z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-line bg-surface p-1.5 shadow-pop animate-popIn",
+                  mobileSearchOpen ? "inset-x-3 top-full sm:inset-x-0 sm:mt-2" : "left-0 right-0 top-full mt-2"
+                )}
+              >
                 {searchLoading && (
-                  <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                    Buscando...
-                  </div>
+                  <div className="px-3 py-3 text-sm text-muted">Buscando...</div>
                 )}
                 {!searchLoading &&
                   searchResults.length === 0 &&
                   searchQuery.length >= 2 && (
-                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="px-3 py-3 text-sm text-muted">
                       Sin resultados para &quot;{searchQuery}&quot;
                     </div>
                   )}
@@ -356,24 +398,22 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                   Object.entries(groupedResults).map(([tipo, items]) => {
                     const Icon = tipoIcons[tipo] ?? User;
                     return (
-                      <div key={tipo}>
-                        <div className="px-3 py-1.5 text-xs font-bold text-gray-400 dark:text-[#71767B] uppercase bg-gray-50 dark:bg-[#16181C] border-b border-gray-100 dark:border-[#2F3336]">
+                      <div key={tipo} className="py-1">
+                        <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
                           {tipoLabels[tipo] ?? tipo}
                         </div>
                         {items.map((r) => (
                           <button
                             key={`${r.tipo}-${r.id}`}
                             onClick={() => handleResultClick(r.href)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#1D1F23] text-left transition-colors"
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-2"
                           >
-                            <Icon className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                              <Icon className="h-4 w-4" />
+                            </span>
                             <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {r.titulo}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {r.subtitulo}
-                              </div>
+                              <div className="truncate text-sm font-medium text-fg">{r.titulo}</div>
+                              <div className="truncate text-xs text-muted">{r.subtitulo}</div>
                             </div>
                           </button>
                         ))}
@@ -385,32 +425,39 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden md:flex items-center gap-2 rounded-full border border-gray-200 dark:border-[#2F3336] bg-white dark:bg-[#16181C] px-3 py-2 text-sm font-medium text-gray-900 dark:text-[#E7E9EA]">
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          <button
+            onClick={() => {
+              setMobileSearchOpen(true);
+              setTimeout(() => inputRef.current?.focus(), 0);
+            }}
+            className={cn(iconBtn, "sm:hidden")}
+            aria-label="Buscar"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
+          <div className="mr-1 hidden items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-medium text-fg-2 md:flex">
             <CalendarDays className="h-4 w-4 text-primary-500" />
             {todayLabel}
           </div>
 
+          <ThemeToggle className="hidden sm:inline-flex" />
+
           <div ref={notifRef} className="relative">
-            <button
-              onClick={toggleNotifPanel}
-              className="relative p-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#202327] rounded-md"
-              aria-label="Notificaciones"
-            >
-              <Bell className="w-5 h-5" />
+            <button onClick={toggleNotifPanel} className={iconBtn} aria-label="Notificaciones">
+              <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-surface">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-black border border-gray-200 dark:border-[#2F3336] rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                    Notificaciones
-                  </span>
+              <div className="fixed inset-x-3 top-[calc(4.25rem+env(safe-area-inset-top))] z-50 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-popIn sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96">
+                <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                  <span className="text-sm font-semibold text-fg">Notificaciones</span>
                   {unreadCount > 0 && (
                     <button
                       onClick={() =>
@@ -420,21 +467,22 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                             .map((n) => n.id),
                         )
                       }
-                      className="text-xs font-semibold text-primary-600 hover:text-primary-700"
+                      className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-300"
                     >
-                      Marcar todo leido
+                      Marcar todo leído
                     </button>
                   )}
                 </div>
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-[60vh] overflow-y-auto p-1.5">
                   {notifLoading && (
-                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
-                      Cargando...
-                    </div>
+                    <div className="px-4 py-8 text-center text-sm text-muted">Cargando...</div>
                   )}
                   {!notifLoading && notifications.length === 0 && (
-                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
-                      Sin notificaciones
+                    <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-muted">
+                        <Bell className="h-5 w-5" />
+                      </span>
+                      <span className="text-sm text-muted">Sin notificaciones</span>
                     </div>
                   )}
                   {!notifLoading &&
@@ -442,31 +490,26 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                       <button
                         key={n.id}
                         onClick={() => handleNotifClick(n)}
-                        className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#202327] transition-colors border-b border-gray-50 dark:border-[#2F3336] ${!n.leido ? "bg-primary-50/30" : ""}`}
+                        className={cn(
+                          "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-2",
+                          !n.leido && "bg-primary-50/60 dark:bg-primary-400/5"
+                        )}
                       >
                         <span
-                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${notifColors[n.tipo] ?? notifColors.info}`}
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${notifColors[n.tipo] ?? notifColors.info}`}
                         >
-                          {n.tipo === "info"
-                            ? "i"
-                            : n.tipo === "warning"
-                              ? "!"
-                              : "âœ•"}
+                          {n.tipo === "info" ? "i" : n.tipo === "warning" ? "!" : "✕"}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                              {n.titulo}
-                            </span>
+                            <span className="truncate text-sm font-semibold text-fg">{n.titulo}</span>
                             {!n.leido && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-primary-500 shrink-0" />
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                            {n.mensaje}
-                          </p>
-                          <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">
-                            {now ? formatNotifTime(n.created_at, now) : '...'}
+                          <p className="mt-0.5 line-clamp-2 text-xs text-muted">{n.mensaje}</p>
+                          <span className="mt-1 block text-[10px] text-muted/80">
+                            {now ? formatNotifTime(n.created_at, now) : "..."}
                           </span>
                         </div>
                       </button>
@@ -479,70 +522,72 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
           <div ref={userMenuRef} className="relative">
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              className="ml-1 flex items-center gap-1.5 rounded-full p-0.5 pr-1.5 transition-colors hover:bg-surface-2"
+              aria-label="Menú de usuario"
             >
               <Avatar
                 initials={user?.iniciales ?? "?"}
                 src={user?.avatar_url}
-                size="md"
-                className="bg-primary-50 text-primary-700 border border-primary-100"
+                size="sm"
+                className="h-9 w-9 bg-gradient-to-br from-primary-500 to-primary-700 text-white"
               />
               <ChevronDown
-                className={`w-3.5 h-3.5 text-gray-400 dark:text-gray-500 transition-transform ${userMenuOpen ? "rotate-180" : ""}`}
+                className={`hidden h-3.5 w-3.5 text-muted transition-transform sm:block ${userMenuOpen ? "rotate-180" : ""}`}
               />
             </button>
 
             {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#16181C] border border-gray-200 dark:border-[#2F3336] rounded-xl shadow-lg z-50 overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 dark:border-[#2F3336]">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-[#E7E9EA] truncate">
-                    {user?.nombre}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-[#71767B] truncate">
-                    {user?.email}
-                  </p>
-                  <span className="mt-1 inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
-                    {user?.rol}
-                  </span>
+              <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-popIn">
+                <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+                  <Avatar
+                    initials={user?.iniciales ?? "?"}
+                    src={user?.avatar_url}
+                    size="md"
+                    className="bg-gradient-to-br from-primary-500 to-primary-700 text-white"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-fg">{user?.nombre}</p>
+                    <p className="truncate text-xs text-muted">{user?.email}</p>
+                    <span className="mt-1 inline-block rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-bold uppercase text-primary-700 dark:bg-primary-400/15 dark:text-primary-300">
+                      {user?.rol}
+                    </span>
+                  </div>
                 </div>
 
-                {user?.rol === "admin" && (
-                  <button
-                    onClick={toggleModoFocus}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors"
-                  >
-                    {modoFocus ? (
-                      <EyeOff className="w-4 h-4 text-primary-500" />
-                    ) : (
-                      <Eye className="w-4 h-4 text-gray-400 dark:text-[#71767B]" />
-                    )}
-                    <div className="flex-1">
-                      <span className="text-sm text-gray-700 dark:text-[#E7E9EA]">
-                        Modo Focus
-                      </span>
-                      <p className="text-[10px] text-gray-400 dark:text-[#71767B]">
-                        Ver solo tu información
-                      </p>
-                    </div>
-                    <div
-                      className={`w-8 h-4.5 rounded-full transition-colors relative ${modoFocus ? "bg-primary-500" : "bg-gray-300 dark:bg-[#2F3336]"}`}
+                <div className="p-1.5">
+                  {user?.rol === "admin" && (
+                    <button
+                      onClick={toggleModoFocus}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
                     >
+                      {modoFocus ? (
+                        <EyeOff className="h-4 w-4 text-primary-500" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted" />
+                      )}
+                      <div className="flex-1">
+                        <span className="text-sm text-fg">Modo Focus</span>
+                        <p className="text-[11px] text-muted">Ver solo tu información</p>
+                      </div>
                       <div
-                        className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${modoFocus ? "left-[18px]" : "left-0.5"}`}
-                      />
-                    </div>
-                  </button>
-                )}
-
-                <div className="border-t border-gray-100 dark:border-[#2F3336]">
+                        className={`relative h-5 w-9 rounded-full transition-colors ${modoFocus ? "bg-primary-500" : "bg-surface-3"}`}
+                      >
+                        <div
+                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${modoFocus ? "left-[18px]" : "left-0.5"}`}
+                        />
+                      </div>
+                    </button>
+                  )}
+                  <ThemeToggle withLabel className="w-full justify-start px-3 text-fg sm:hidden" />
                   <button
                     onClick={async () => {
+                      clearUserCache();
                       await fetch("/api/auth/logout", { method: "POST" });
                       window.location.href = "/login";
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-[#1D1F23] transition-colors text-red-600 dark:text-red-400"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <LogOut className="h-4 w-4" />
                     <span className="text-sm">Cerrar sesión</span>
                   </button>
                 </div>
