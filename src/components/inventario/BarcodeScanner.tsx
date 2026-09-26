@@ -1,15 +1,34 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, RefreshCw, X } from 'lucide-react';
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   onClose: () => void;
 }
 
-export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
-  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+type Cam = { id: string; label: string };
+
+/** Etiqueta corta y legible para una cámara (iOS entrega nombres muy largos). */
+function etiquetaCorta(label: string, i: number): string {
+  const l = label.toLowerCase();
+  if (l.includes('ultra')) return 'Ultra gran angular';
+  if (l.includes('tele')) return 'Teleobjetivo';
+  if (l.includes('doble') || l.includes('dual') || l.includes('triple')) return 'Posterior múltiple';
+  if (l.includes('front') || l.includes('frontal') || l.includes('user')) return 'Frontal';
+  if (l.includes('amplia') || l.includes('wide')) return 'Gran angular';
+  if (l.includes('back') || l.includes('trasera') || l.includes('posterior') || l.includes('rear') || l.includes('environment')) return 'Trasera';
+  return `Cámara ${i + 1}`;
+}
+
+function esTrasera(label: string): boolean {
+  const l = label.toLowerCase();
+  return ['back', 'trasera', 'posterior', 'rear', 'environment'].some((k) => l.includes(k));
+}
+
+export default function BarcodeScanner({ onScan }: BarcodeScannerProps) {
+  const [cameras, setCameras] = useState<Cam[]>([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -24,15 +43,12 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
     async function init() {
       try {
-        // Request permission first - this triggers the browser prompt
+        // Pide permiso primero (dispara el prompt del navegador)
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        // Stop the temporary stream - the scanner will start its own
         stream.getTracks().forEach((t) => t.stop());
         stream = null;
-
         if (!mounted) return;
 
-        // Dynamic import
         const { Html5Qrcode } = await import('html5-qrcode');
         if (!mounted) return;
 
@@ -40,28 +56,26 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         if (!mounted) return;
 
         if (devices && devices.length > 0) {
-          const mapped = devices.map((d: any) => ({ id: d.id, label: d.label || `Camara ${d.id}` }));
+          const mapped: Cam[] = devices.map((d: any, i: number) => ({ id: d.id, label: d.label || `Cámara ${i + 1}` }));
           setCameras(mapped);
 
-          // Prefer back/environment camera
-          const back = mapped.find((d) => {
-            const l = d.label.toLowerCase();
-            return l.includes('back') || l.includes('trasera') || l.includes('rear') || l.includes('environment') || l.includes('facing');
-          });
-          const cam = back || mapped[mapped.length - 1]; // last camera is usually back on mobile
+          // Preferir la trasera "normal" (evita ultra gran angular / tele, que enfocan mal de cerca)
+          const traseras = mapped.filter((d) => esTrasera(d.label));
+          const normal = traseras.find((d) => !/ultra|tele|doble|dual|triple/i.test(d.label));
+          const cam = normal || traseras[0] || mapped[mapped.length - 1];
           setSelectedCamera(cam.id);
           setReady(true);
         } else {
-          setError('No se encontraron camaras.');
+          setError('No se encontraron cámaras.');
         }
       } catch (err: any) {
         if (!mounted) return;
         if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission')) {
-          setError('Permiso de camara denegado. Permite el acceso en la configuracion del navegador.');
+          setError('Permiso de cámara denegado. Permite el acceso en la configuración del navegador.');
         } else if (err?.name === 'NotFoundError') {
-          setError('No se encontro ninguna camara en este dispositivo.');
+          setError('No se encontró ninguna cámara en este dispositivo.');
         } else {
-          setError('No se pudo acceder a la camara.');
+          setError('No se pudo acceder a la cámara.');
         }
       }
     }
@@ -90,8 +104,6 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
-
-      // Clear container
       containerRef.current.innerHTML = '';
 
       const scanner = new Html5Qrcode('barcode-viewport');
@@ -101,7 +113,16 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
       await scanner.start(
         cameraId,
-        { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 2.0 },
+        {
+          fps: 10,
+          // Área de lectura proporcional al ancho real del visor (no se desborda en móvil)
+          qrbox: (w: number, h: number) => {
+            const width = Math.max(160, Math.floor(Math.min(w * 0.85, 320)));
+            const height = Math.max(80, Math.floor(Math.min(h * 0.5, width * 0.45)));
+            return { width, height };
+          },
+          aspectRatio: 4 / 3,
+        },
         (decodedText: string) => {
           stopScanner();
           onScan(decodedText);
@@ -112,9 +133,9 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       startedRef.current = false;
       setScannerActive(false);
       if (err?.name === 'NotAllowedError') {
-        setError('Permiso de camara denegado.');
+        setError('Permiso de cámara denegado.');
       } else {
-        setError('No se pudo iniciar la camara. Intenta recargar.');
+        setError('No se pudo iniciar la cámara. Intenta recargar.');
       }
     }
   }
@@ -131,68 +152,70 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
     scannerRef.current = null;
   }
 
-  async function handleCameraChange(cameraId: string) {
+  async function siguienteCamara() {
+    if (cameras.length < 2) return;
+    const idx = cameras.findIndex((c) => c.id === selectedCamera);
+    const next = cameras[(idx + 1) % cameras.length];
     await stopScanner();
     startedRef.current = false;
     setScannerActive(false);
-    setSelectedCamera(cameraId);
+    setSelectedCamera(next.id);
   }
 
+  const idxActual = cameras.findIndex((c) => c.id === selectedCamera);
+  const actual = idxActual >= 0 ? cameras[idxActual] : null;
+
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-3">
       <style dangerouslySetInnerHTML={{ __html: `
-        #barcode-viewport { border: none !important; min-height: 200px; }
-        #barcode-viewport video { border-radius: 0.75rem; object-fit: cover; width: 100% !important; }
-        #barcode-viewport__scan_region { min-height: 200px; border: none !important; }
+        #barcode-viewport { border: none !important; width: 100% !important; max-width: 100% !important; overflow: hidden; }
+        #barcode-viewport video { display: block; width: 100% !important; max-width: 100% !important; height: 100% !important; object-fit: cover; }
+        #barcode-viewport canvas { max-width: 100% !important; }
+        #barcode-viewport__scan_region { width: 100% !important; max-width: 100% !important; min-height: 0 !important; border: none !important; overflow: hidden; }
         #barcode-viewport__dashboard, #barcode-viewport__dashboard_section, #barcode-viewport__dashboard_section_csr, #barcode-viewport__dashboard_section_fsr, #barcode-viewport__header_message, #barcode-viewport img[alt="Info icon"] { display: none !important; }
         #barcode-viewport__scan_region > br { display: none !important; }
+        #qr-shaded-region { border-color: rgba(0,0,0,0.45) !important; }
       `}} />
 
-      {cameras.length > 1 && (
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Seleccionar camara</label>
-          <div className="flex gap-2">
-            {cameras.map((cam) => (
-              <button
-                key={cam.id}
-                onClick={() => handleCameraChange(cam.id)}
-                className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
-                  selectedCamera === cam.id
-                    ? 'bg-primary-600 text-white'
-                    : 'border border-line bg-surface text-fg-2 hover:bg-surface-2'
-                }`}
-              >
-                {cam.label.length > 25 ? cam.label.slice(0, 25) + '...' : cam.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-line">
+        <div id="barcode-viewport" ref={containerRef} className="absolute inset-0 h-full w-full" />
 
-      <div className="relative rounded-xl overflow-hidden bg-gray-900" style={{ minHeight: 220 }}>
-        <div id="barcode-viewport" ref={containerRef} style={{ width: '100%', minHeight: 200 }} />
         {!scannerActive && !error && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 10 }}>
-            <div className="text-center space-y-2">
-              <Camera className="h-10 w-10 text-muted mx-auto animate-pulse" />
-              <p className="text-sm text-muted">Preparando camara...</p>
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="space-y-2 text-center">
+              <Camera className="mx-auto h-10 w-10 animate-pulse text-slate-400" />
+              <p className="text-sm text-slate-300">Preparando cámara…</p>
             </div>
           </div>
         )}
+
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 10 }}>
-            <div className="text-center space-y-2 px-4">
-              <X className="h-10 w-10 text-red-400 mx-auto" />
-              <p className="text-sm text-red-400 max-w-[250px]">{error}</p>
+          <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
+            <div className="space-y-2 text-center">
+              <X className="mx-auto h-10 w-10 text-red-400" />
+              <p className="max-w-[250px] text-sm text-red-300">{error}</p>
             </div>
           </div>
+        )}
+
+        {cameras.length > 1 && !error && (
+          <button
+            type="button"
+            onClick={siguienteCamara}
+            aria-label="Cambiar cámara"
+            className="absolute right-2 top-2 z-20 inline-flex max-w-[70%] items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/70 active:scale-95"
+          >
+            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{actual ? etiquetaCorta(actual.label, idxActual) : 'Cambiar cámara'}</span>
+            <span className="shrink-0 text-white/60">{idxActual + 1}/{cameras.length}</span>
+          </button>
         )}
       </div>
 
       {scannerActive && !error && (
-        <div className="flex items-center justify-center gap-2 text-sm text-primary-600">
-          <div className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
-          Apunta la camara al codigo de barras...
+        <div className="flex items-center justify-center gap-2 text-center text-sm text-fg-2">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-brand" />
+          Apunta la cámara al código de barras
         </div>
       )}
     </div>

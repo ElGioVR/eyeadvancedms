@@ -434,32 +434,32 @@ export default function InventarioPage() {
 
       {/* Scanner Modal */}
       <Modal isOpen={showScanner} onClose={() => { setShowScanner(false); setScanResult(null); setScanError(''); setBarcodeInput(''); setScannerMode('camera'); }} maxWidth="max-w-md">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200">
+        <div className="flex min-w-0 items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200 dark:bg-primary-500/15 dark:ring-primary-500/30">
             <Camera className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-fg">Escanear Codigo de Barras</h3>
-            <p className="text-xs text-muted dark:text-muted">Usa la camara o escribe el codigo manualmente</p>
+            <h3 className="text-base font-extrabold text-fg">Escanear código de barras</h3>
+            <p className="text-xs text-muted">Usa la cámara o escribe el código</p>
           </div>
         </div>
 
         {/* Mode tabs */}
-        <div className="flex rounded-lg bg-surface-2 p-1 mb-4">
+        <div className="flex rounded-xl bg-surface-2 p-1 mb-4">
           <button
             onClick={() => setScannerMode('camera')}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'camera' ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-gray-700 dark:hover:text-fg dark:text-fg'
+              'flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors',
+              scannerMode === 'camera' ? 'bg-surface text-primary-700 shadow-sm dark:text-primary-300' : 'text-muted hover:text-fg'
             )}
           >
-            <ScanLine className="h-4 w-4" /> Camara
+            <ScanLine className="h-4 w-4" /> Cámara
           </button>
           <button
             onClick={() => setScannerMode('manual')}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition-colors',
-              scannerMode === 'manual' ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-gray-700 dark:hover:text-fg dark:text-fg'
+              'flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors',
+              scannerMode === 'manual' ? 'bg-surface text-primary-700 shadow-sm dark:text-primary-300' : 'text-muted hover:text-fg'
             )}
           >
             <Keyboard className="h-4 w-4" /> Manual
@@ -484,12 +484,12 @@ export default function InventarioPage() {
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
-              placeholder="Escriba el codigo de barras..."
-              className="block w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg placeholder:text-gray-400 dark:placeholder:text-muted dark:text-muted dark:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              placeholder="Escribe el código de barras…"
+              className="block w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               autoFocus
             />
             <button onClick={handleBarcodeSearch} disabled={scanning || !barcodeInput.trim()} className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
-              {scanning ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</> : 'BUSCAR LENTE'}
+              {scanning ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</> : 'Buscar lente'}
             </button>
           </div>
         )}
@@ -499,12 +499,12 @@ export default function InventarioPage() {
           </div>
         )}
         {scanResult && (
-          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/50 p-4 space-y-2">
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/50 p-4 space-y-2 dark:border-primary-500/30 dark:bg-primary-500/10">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-primary-600" />
               <span className="text-sm font-extrabold text-primary-700">Lente encontrado</span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 gap-x-3 gap-y-1.5 text-sm min-[380px]:grid-cols-2 [&>div]:min-w-0 [&>div]:break-words">
               <div><span className="text-muted">Fabricante:</span> <span className="font-bold">{scanResult.manufacturer}</span></div>
               <div><span className="text-muted">Producto:</span> <span className="font-bold">{scanResult.product_name || '\u2014'}</span></div>
               <div><span className="text-muted">Modelo:</span> <span className="font-bold">{scanResult.model}</span></div>
@@ -512,7 +512,7 @@ export default function InventarioPage() {
               <div><span className="text-muted">Cilindro:</span> <span className="font-bold">{scanResult.cylinder?.toString() || '\u2014'}</span></div>
               <div><span className="text-muted">ADD Int:</span> <span className="font-bold">{scanResult.add_intermediate?.toString() || '\u2014'}</span></div>
               <div><span className="text-muted">ADD Cerc:</span> <span className="font-bold">{scanResult.add_near?.toString() || '\u2014'}</span></div>
-              <div><span className="text-muted">N\u00b0 Serie:</span> <span className="font-bold">{scanResult.serial_number || '\u2014'}</span></div>
+              <div><span className="text-muted">N° Serie:</span> <span className="font-bold">{scanResult.serial_number || '\u2014'}</span></div>
               <div><span className="text-muted">Stock:</span> <span className={cn('font-bold', scanResult.stock === 0 ? 'text-red-600' : 'text-fg')}>{scanResult.stock} pzas</span></div>
               <div><span className="text-muted">Precio:</span> <span className="font-bold">${scanResult.precio_venta?.toLocaleString() || '\u2014'}</span></div>
             </div>
