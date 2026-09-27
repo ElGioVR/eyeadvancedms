@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Save, Loader2, X, Bell, BellOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useUser, refreshUser } from '@/hooks/useUser';
+import { useUser } from '@/hooks/useUser';
+import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { useToast } from '@/components/ui/Toast';
 import dynamic from 'next/dynamic';
 
@@ -17,8 +18,6 @@ const rolLabels: Record<string, string> = {
   recepcionista: 'Recepcionista',
 };
 
-const AVATAR_MAX_SIZE = 500 * 1024;
-const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Nunca';
@@ -85,12 +84,9 @@ export default function PerfilPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Avatar state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [cropModalOpen, setCropModalOpen] = useState(false);
-  const [selectedImageSrc, setSelectedImageSrc] = useState('');
+  // Foto de perfil (lógica compartida con /mi-perfil)
+  const avatar = useAvatarUpload(user?.id, toast);
+  const { fileInputRef, uploading } = avatar;
 
   // Initialize form with user data
   if (user && !initialized) {
@@ -98,111 +94,9 @@ export default function PerfilPage() {
     setInitialized(true);
   }
 
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
-      toast('Formato no permitido. Usa JPEG, PNG o WebP', 'error');
-      return;
-    }
-
-    if (file.size > AVATAR_MAX_SIZE) {
-      toast('La imagen no puede superar 500KB', 'error');
-      return;
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    setSelectedImageSrc(previewUrl);
-    setCropModalOpen(true);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleCropComplete = async (blob: Blob) => {
-    if (!user) return;
-    setUploading(true);
-
-    try {
-      const supabase = await getSupabaseBrowser();
-      const filePath = `avatars/${user.id}/avatar.jpg`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      const avatarUrl = urlData.publicUrl;
-
-      const res = await fetch('/api/configuracion/usuarios', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, avatar_url: avatarUrl }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
-      }
-
-      setAvatarPreview(avatarUrl);
-      toast('Foto de perfil actualizada');
-      refreshUser();
-      router.refresh();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al subir la imagen';
-      toast(message, 'error');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleRemoveAvatar = async () => {
-    if (!user) return;
-    setUploading(true);
-
-    try {
-      const supabase = await getSupabaseBrowser();
-      const filePath = `avatars/${user.id}/avatar.jpg`;
-
-      await supabase.storage.from('avatars').remove([filePath]);
-
-      const res = await fetch('/api/configuracion/usuarios', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, avatar_url: null }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
-      }
-
-      setAvatarPreview(null);
-      toast('Foto de perfil eliminada');
-      refreshUser();
-      router.refresh();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al eliminar la imagen';
-      toast(message, 'error');
-    } finally {
-      setUploading(false);
-    }
-  };
+  const handleAvatarClick = avatar.abrirSelector;
+  const handleAvatarChange = avatar.onFileChange;
+  const handleRemoveAvatar = avatar.eliminar;
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -281,7 +175,7 @@ export default function PerfilPage() {
     );
   }
 
-  const displayAvatar = avatarPreview || user.avatar_url;
+  const displayAvatar = avatar.avatarPreview !== undefined ? avatar.avatarPreview : user.avatar_url;
 
   return (
     <>
@@ -474,12 +368,7 @@ export default function PerfilPage() {
         </div>
       </div>
 
-      <AvatarCropModal
-        isOpen={cropModalOpen}
-        onClose={() => setCropModalOpen(false)}
-        imageSrc={selectedImageSrc}
-        onCropComplete={handleCropComplete}
-      />
+      <AvatarCropModal {...avatar.cropModal} />
 
       {/* Notification Preferences */}
       <div className="mx-auto max-w-[1440px] mt-8">

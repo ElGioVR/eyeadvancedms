@@ -1,11 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { refreshUser } from '@/hooks/useUser';
 import { prefetchJSON } from '@/lib/prefetch';
 import { cn } from '@/lib/utils';
+import { tomarOrigenLogo } from '@/lib/transicion-bienvenida';
+
+// useLayoutEffect solo en el cliente (en SSR React avisa si se usa).
+const useLayoutEffectCliente = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** Tiempo mínimo en pantalla (deja ver la animación) y máximo (nunca bloquea). */
 const MIN_MS = 1600;
@@ -142,6 +146,35 @@ export default function BienvenidaPage() {
   const navegoRef = useRef(false);
   const estadosRef = useRef(estados);
   estadosRef.current = estados;
+  const ojoRef = useRef<HTMLDivElement>(null);
+  const flipHecho = useRef(false);
+
+  // Llegada desde el login: el ojo arranca exactamente donde estaba el logo del
+  // login y vuela a su lugar (FLIP) antes del primer pintado → sin saltos.
+  useLayoutEffectCliente(() => {
+    if (flipHecho.current) return;
+    flipHecho.current = true;
+    const origen = tomarOrigenLogo();
+    const el = ojoRef.current;
+    if (!origen || !el || typeof el.animate !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    el.style.animation = 'none'; // sin la apertura normal: el ojo ya viene abierto
+    const destino = el.getBoundingClientRect();
+    const escala = origen.w / destino.width;
+    const dx = origen.x + origen.w / 2 - (destino.left + destino.width / 2);
+    const dy = origen.y + origen.h / 2 - (destino.top + destino.height / 2);
+    const vuelo = el.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px) scale(${escala})` },
+        { transform: 'translate(0, 0) scale(1)' },
+      ],
+      { duration: 850, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+    );
+    vuelo.onfinish = () => {
+      el.style.animation = 'welcomeBlink 3.2s ease-in-out 0.4s both';
+    };
+  }, []);
 
   const entrar = useCallback(
     (destino = '/dashboard') => {
@@ -256,8 +289,14 @@ export default function BienvenidaPage() {
       )}
     >
       {/* Luces ambientales */}
-      <div className="welcome-blob pointer-events-none absolute -left-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-primary-400/25 blur-3xl" />
-      <div className="welcome-blob welcome-blob--alt pointer-events-none absolute -bottom-40 -right-24 h-[32rem] w-[32rem] rounded-full bg-cyan-400/15 blur-3xl" />
+      {/* Degradados radiales en vez de `blur-3xl`: en iOS Safari un filter: blur()
+          animado debajo del texto deja recuadros oscuros alrededor de cada línea. */}
+      {/* Aparecen suaves (solo opacidad): al llegar desde el login el fondo base
+          ya es el mismo, así que las luces se «encienden» sobre él. */}
+      <div className="welcome-fade-soft pointer-events-none absolute inset-0">
+        <div className="welcome-blob welcome-blob--a absolute -left-40 -top-40 h-[34rem] w-[34rem]" />
+        <div className="welcome-blob welcome-blob--alt absolute -bottom-48 -right-32 h-[38rem] w-[38rem]" />
+      </div>
       <div className="welcome-grid pointer-events-none absolute inset-0" />
 
       <div className="relative flex flex-col items-center px-6">
@@ -268,7 +307,7 @@ export default function BienvenidaPage() {
           <span className="welcome-ring" style={{ animationDelay: '1.8s' }} />
           <span className="welcome-halo absolute inset-6 rounded-full" />
 
-          <div className="welcome-eye relative h-28 w-28 sm:h-32 sm:w-32">
+          <div ref={ojoRef} className="welcome-eye relative h-28 w-28 sm:h-32 sm:w-32">
             <img
               src="/images/logo-eye.png"
               alt="EyeAdvanced"
@@ -281,10 +320,23 @@ export default function BienvenidaPage() {
 
         <div className="welcome-fade mt-4 flex flex-col items-center gap-5 text-center" style={{ animationDelay: '0.6s' }}>
           <div>
+            {/* Palabra por palabra; el nombre entra cuando llega el perfil */}
             <p className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-              {nombre ? `Bienvenido, ${nombre}` : 'Bienvenido'}
+              <span className="welcome-word" style={{ animationDelay: '0.65s' }}>
+                {nombre ? 'Bienvenido,' : 'Bienvenido'}
+              </span>
+              {nombre && (
+                <>
+                  {' '}
+                  <span key={nombre} className="welcome-word text-cyan-200" style={{ animationDelay: '0.8s' }}>
+                    {nombre}
+                  </span>
+                </>
+              )}
             </p>
-            <p className="mt-1 text-sm text-white/60">Preparando tu espacio de trabajo</p>
+            <p className="mt-1 text-sm text-white/60">
+              <span className="welcome-word" style={{ animationDelay: '0.9s' }}>Preparando tu espacio de trabajo</span>
+            </p>
           </div>
 
           {/* Progreso real de la precarga */}

@@ -2,11 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { z } from "zod";
 import { checkRateLimit, recordFailedAttempt, recordSuccessfulLogin } from "@/lib/rate-limit";
+import { SESION_TEMPORAL_COOKIE, opcionesCookieAuth } from "@/lib/supabase/constants";
 
 const loginSchema = z
   .object({
     email: z.string().email(),
     password: z.string().min(1),
+    recordarme: z.boolean().optional(),
   })
   .strict();
 
@@ -33,6 +35,8 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, password } = validation.data;
+  // Sin «Recordarme» las cookies de sesión mueren al cerrar el navegador.
+  const temporal = validation.data.recordarme !== true;
   const clientIP = getClientIP(request);
   const rateKey = `${clientIP}:${email.trim().toLowerCase()}`;
 
@@ -63,7 +67,7 @@ export async function POST(request: NextRequest) {
           response.cookies.set({
             name,
             value,
-            ...options,
+            ...opcionesCookieAuth(options, temporal),
             httpOnly: false,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
@@ -116,5 +120,21 @@ export async function POST(request: NextRequest) {
 
   recordSuccessfulLogin(rateKey);
   recordSuccessfulLogin(emailKey);
+
+  if (temporal) {
+    // Cookie de sesión (sin maxAge): el middleware y los refrescos la leen.
+    response.cookies.set({
+      name: SESION_TEMPORAL_COOKIE,
+      value: "1",
+      // Legible desde el cliente (no es un secreto): el cliente de Supabase del
+      // navegador también la respeta al refrescar el token.
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+  } else {
+    response.cookies.set({ name: SESION_TEMPORAL_COOKIE, value: "", path: "/", maxAge: 0 });
+  }
   return response;
 }

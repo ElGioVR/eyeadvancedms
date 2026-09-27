@@ -1,12 +1,26 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { clearUserCache } from '@/hooks/useUser';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Activity, Users, FileText } from 'lucide-react';
+import { guardarOrigenLogo, type RectLogo } from '@/lib/transicion-bienvenida';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Activity, Users, FileText, ArrowRight, ShieldCheck, Check } from 'lucide-react';
 
 const MAX_ATTEMPTS = 5;
+// «Recordarme»: guarda el correo en este dispositivo y mantiene la sesión abierta.
+const LS_RECORDAR = 'ea_login_recordar';
+const LS_EMAIL = 'ea_login_email';
+
+function leerLS(clave: string): string | null {
+  try { return window.localStorage.getItem(clave); } catch { return null; }
+}
+function escribirLS(clave: string, valor: string | null) {
+  try {
+    if (valor === null) window.localStorage.removeItem(clave);
+    else window.localStorage.setItem(clave, valor);
+  } catch { /* modo privado / almacenamiento bloqueado */ }
+}
 const LOCKOUT_MS = 30_000;
 
 const loginSlides = [
@@ -48,9 +62,23 @@ export default function LoginPage() {
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [footerYear, setFooterYear] = useState('');
+  // Transición a /bienvenida: el fondo de la bienvenida se abre en círculo desde
+  // el logo (móvil) o desde el botón (escritorio); el logo queda encima y la
+  // bienvenida lo recoge en su lugar (ver lib/transicion-bienvenida).
+  const [transicion, setTransicion] = useState<{ x: number; y: number; logo: RectLogo | null } | null>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const marcaRef = useRef<HTMLDivElement>(null);
+  const [marcaRect, setMarcaRect] = useState<RectLogo | null>(null);
 
   useEffect(() => {
     setFooterYear(String(new Date().getFullYear()));
+    // Preferencias guardadas (solo cliente, tras el montaje → sin problemas de hidratación)
+    if (leerLS(LS_RECORDAR) === '1') {
+      setRememberMe(true);
+      const guardado = leerLS(LS_EMAIL);
+      if (guardado) setEmail(guardado);
+    }
     // Descarga anticipada de la pantalla de bienvenida: la transición tras login es inmediata
     router.prefetch('/bienvenida');
   }, [router]);
@@ -85,7 +113,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, recordarme: rememberMe }),
       });
 
       if (!res.ok) {
@@ -105,62 +133,159 @@ export default function LoginPage() {
         return;
       }
 
+      if (rememberMe) {
+        escribirLS(LS_RECORDAR, '1');
+        escribirLS(LS_EMAIL, email.trim().toLowerCase());
+      } else {
+        escribirLS(LS_RECORDAR, null);
+        escribirLS(LS_EMAIL, null);
+      }
       clearUserCache();
-      router.replace('/bienvenida');
+      // Logo visible (cabecera móvil) → origen de la transición compartida.
+      const l = logoRef.current?.getBoundingClientRect();
+      const logo = l && l.width > 0 ? { x: l.left, y: l.top, w: l.width, h: l.height } : null;
+      const m = marcaRef.current?.getBoundingClientRect();
+      setMarcaRect(m && m.width > 0 ? { x: m.left, y: m.top, w: m.width, h: m.height } : null);
+      const b = submitRef.current?.getBoundingClientRect();
+      setTransicion({
+        x: logo ? logo.x + logo.w / 2 : b ? b.left + b.width / 2 : window.innerWidth / 2,
+        y: logo ? logo.y + logo.h / 2 : b ? b.top + b.height / 2 : window.innerHeight / 2,
+        logo,
+      });
+      if (logo) guardarOrigenLogo(logo);
+      // Se navega cuando el círculo ya cubre la pantalla; la capa sigue visible
+      // hasta que la bienvenida (mismo fondo) la reemplaza → sin salto.
+      const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.setTimeout(() => router.replace('/bienvenida'), reducido ? 150 : 820);
     } catch {
       setError('Error de conexión. Intenta de nuevo.');
       setLoading(false);
     }
-  }, [email, password, isLocked, lockedUntil, attempts, router]);
+  }, [email, password, rememberMe, isLocked, lockedUntil, attempts, router]);
+
+  const exito = transicion !== null;
 
   return (
     <>
-      {/* Left side — Form */}
-      <div className="w-full lg:w-1/2 flex flex-col min-h-[100dvh] lg:min-h-0 bg-slate-50 dark:bg-canvas">
-        <div className="relative flex-1 flex items-center justify-center overflow-y-auto px-4 py-8 sm:p-8 lg:py-12">
-          <div className="pointer-events-none absolute left-1/2 top-1/4 h-64 w-64 -translate-x-1/2 rounded-full bg-primary-500/10 blur-3xl dark:bg-primary-500/10" />
-          <div className="relative w-full max-w-md rounded-2xl border border-gray-200/80 bg-white/95 p-5 shadow-xl shadow-slate-900/5 dark:border-white/10 dark:bg-surface/95 dark:shadow-black/30 sm:p-8">
-            {/* Logo */}
-            <div className="mb-7 sm:mb-9">
+      {exito && (
+        <div
+          aria-hidden
+          className="login-reveal welcome-bg"
+          style={{ '--rx': `${transicion.x}px`, '--ry': `${transicion.y}px` } as React.CSSProperties}
+        >
+          <div className="welcome-grid absolute inset-0" />
+          {!transicion.logo && <span className="login-reveal-glow" />}
+        </div>
+      )}
+      {/* El logo y la marca quedan por encima del círculo, en su sitio exacto:
+          el ojo espera a la bienvenida y los textos se despiden hacia arriba. */}
+      {transicion?.logo && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-[101]">
+          <span
+            className="login-logo-halo"
+            style={{
+              left: transicion.logo.x - transicion.logo.w * 0.6,
+              top: transicion.logo.y - transicion.logo.h * 0.6,
+              width: transicion.logo.w * 2.2,
+              height: transicion.logo.h * 2.2,
+            }}
+          />
+          <img
+            src="/images/logo-eye.png"
+            alt=""
+            className="absolute select-none object-contain drop-shadow-[0_6px_20px_rgba(125,211,252,0.35)]"
+            style={{ left: transicion.logo.x, top: transicion.logo.y, width: transicion.logo.w, height: transicion.logo.h }}
+            draggable={false}
+          />
+          {marcaRect && (
+            <div
+              className="login-marca-salida absolute flex flex-col items-center text-center"
+              style={{ left: marcaRect.x, top: marcaRect.y, width: marcaRect.w }}
+            >
+              <p className="text-xl font-extrabold tracking-tight text-white">EyeAdvanced</p>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">Medical Solutions</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Left side — Form. Móvil: cabecera de marca + hoja inferior a pantalla completa.
+          ≥ sm: tarjeta centrada como antes. */}
+      <div className="w-full lg:w-1/2 flex flex-col min-h-[100dvh] lg:min-h-0 bg-white dark:bg-canvas sm:bg-slate-50 sm:dark:bg-canvas">
+        {/* Cabecera de marca (solo móvil) */}
+        <div className="login-hero relative shrink-0 overflow-hidden px-6 pb-14 pt-[calc(2.5rem+env(safe-area-inset-top))] sm:hidden">
+          <div className="login-hero-grid pointer-events-none absolute inset-0" />
+          <div className="relative flex flex-col items-center text-center">
+            <div className="relative mb-5 flex h-20 w-20 items-center justify-center">
+              <span className="login-hero-halo absolute inset-0 rounded-full" />
+              <img
+                ref={logoRef}
+                src="/images/logo-eye.png"
+                alt=""
+                aria-hidden
+                className="relative h-14 w-14 select-none object-contain drop-shadow-[0_6px_20px_rgba(125,211,252,0.35)]"
+                draggable={false}
+              />
+            </div>
+            <div ref={marcaRef} className="flex flex-col items-center">
+              <p className="text-xl font-extrabold tracking-tight text-white">EyeAdvanced</p>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">Medical Solutions</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative -mt-8 flex flex-1 items-start justify-center sm:mt-0 sm:items-center sm:overflow-y-auto sm:p-8 lg:py-12">
+          <div className="login-glow pointer-events-none absolute left-1/2 top-1/4 hidden h-72 w-72 -translate-x-1/2 rounded-full sm:block" />
+          <div className="relative flex min-h-full w-full max-w-md flex-col rounded-t-[28px] bg-white px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-8 dark:bg-canvas sm:min-h-0 sm:rounded-2xl sm:border sm:border-gray-200/80 sm:bg-white/95 sm:p-8 sm:shadow-xl sm:shadow-slate-900/5 sm:dark:border-white/10 sm:dark:bg-surface/95 sm:dark:shadow-black/30">
+            {/* Logo (≥ sm; en móvil va en la cabecera) */}
+            <div className="mb-9 hidden sm:block">
               <img
                 src="/images/eyeadvanced-logo.png"
                 alt="EyeAdvanced Medical Solutions"
-                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain block dark:hidden"
+                className="h-11 w-auto max-w-[220px] object-contain block dark:hidden"
               />
               <img
                 src="/images/eyeadvanced-logo-white.png"
                 alt="EyeAdvanced Medical Solutions"
-                className="h-9 sm:h-11 w-auto max-w-[190px] sm:max-w-[220px] object-contain hidden dark:block"
+                className="h-11 w-auto max-w-[220px] object-contain hidden dark:block"
               />
             </div>
 
             {/* Heading */}
             <div className="mb-7 sm:mb-8">
-              <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-fg tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-fg tracking-tight">
                 Bienvenido de nuevo
               </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              <p className="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 Ingresa tus credenciales para acceder al sistema clínico.
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className={`flex flex-col gap-4 transition-all duration-500 ease-out sm:gap-5 ${exito ? 'login-form-salida' : ''}`}
+              noValidate
+            >
               {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1.5">
-                  Correo Electrónico
+                <label htmlFor="email" className="mb-1.5 block text-[13px] font-semibold text-slate-700 dark:text-slate-300 sm:text-xs sm:font-bold sm:uppercase sm:tracking-wide sm:text-slate-600">
+                  Correo electrónico
                 </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-400 dark:text-slate-500 pointer-events-none" />
+                <div className="group relative">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary-500 dark:text-slate-500" />
                   <input
                     id="email"
                     name="email"
                     type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="usuario@clinica.com"
-                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-surface-2 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="login-input pl-12"
                     autoComplete="email"
                     required
                     disabled={loading || isLocked}
@@ -170,11 +295,11 @@ export default function LoginPage() {
 
               {/* Password */}
               <div>
-                <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1.5">
+                <label htmlFor="password" className="mb-1.5 block text-[13px] font-semibold text-slate-700 dark:text-slate-300 sm:text-xs sm:font-bold sm:uppercase sm:tracking-wide sm:text-slate-600">
                   Contraseña
                 </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-400 dark:text-slate-500 pointer-events-none" />
+                <div className="group relative">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary-500 dark:text-slate-500" />
                   <input
                     id="password"
                     name="password"
@@ -182,7 +307,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field min-h-[50px] rounded-xl border-slate-200 bg-slate-50 pl-11 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500/20 dark:border-white/10 dark:bg-surface-2 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="login-input pl-12 pr-12"
                     autoComplete="current-password"
                     required
                     disabled={loading || isLocked}
@@ -190,35 +315,45 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                     className="absolute right-0 top-0 h-full px-3.5 flex items-center text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 transition-colors"
+                    className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
                     aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
                   </button>
                 </div>
               </div>
 
+              {/* Recordarme (interruptor) */}
               <div className="flex items-center justify-between gap-3 pt-1">
-                <label htmlFor="remember-me" className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <label htmlFor="remember-me" className="inline-flex cursor-pointer select-none items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
                   <input
                     id="remember-me"
                     name="remember-me"
                     type="checkbox"
+                    role="switch"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-white/20 dark:bg-surface-2"
+                    className="peer sr-only"
                     disabled={loading || isLocked}
                   />
+                  <span
+                    aria-hidden
+                    className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors peer-focus-visible:ring-4 peer-focus-visible:ring-primary-500/25 peer-disabled:opacity-50 ${rememberMe ? 'bg-primary-600' : 'bg-slate-200 dark:bg-white/10'}`}
+                  >
+                    <span className={`ml-[3px] inline-block h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform ${rememberMe ? 'translate-x-4' : ''}`} />
+                  </span>
                   Recordarme
                 </label>
-                <span className="text-xs text-slate-400 dark:text-slate-500">Sesión segura</span>
+                <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Sesión segura
+                </span>
               </div>
 
               {/* Error */}
-              <div className="min-h-[20px]" role="alert" aria-live="assertive">
+              <div role="alert" aria-live="assertive">
                 {error && (
-                  <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300">
+                  <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300">
                     <AlertCircle className="w-5 h-5 shrink-0" />
                     <span>{error}</span>
                   </div>
@@ -227,26 +362,37 @@ export default function LoginPage() {
 
               {/* Submit */}
               <button
+                ref={submitRef}
                 type="submit"
                 disabled={loading || isLocked}
-                className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-3 min-h-[50px] text-sm font-bold tracking-wide rounded-xl shadow-md shadow-primary-900/15 hover:from-primary-700 hover:to-primary-800 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+                className="mt-2 inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 text-base font-bold text-white shadow-lg shadow-primary-900/20 transition-all hover:from-primary-600 hover:to-primary-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:mt-2 sm:min-h-[52px] sm:text-sm"
               >
-                {loading ? (
-                  <span className="inline-flex items-center gap-2">
+                {exito ? (
+                  <span className="inline-flex items-center gap-2 animate-popIn">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                      <Check className="h-4 w-4" strokeWidth={3} />
+                    </span>
+                    ¡Listo!
+                  </span>
+                ) : loading ? (
+                  <>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     Iniciando sesión...
-                  </span>
+                  </>
                 ) : (
-                  'INICIAR SESIÓN'
+                  <>
+                    Iniciar sesión
+                    <ArrowRight className="h-[18px] w-[18px]" />
+                  </>
                 )}
               </button>
             </form>
 
             {/* Footer */}
-            <p className="mt-7 text-center text-xs text-slate-400 dark:text-slate-500">
+            <p className="mt-auto pt-8 text-center text-xs text-slate-400 dark:text-slate-500 sm:mt-7 sm:pt-0">
                EyeAdvanced Medical Solutions &copy; {footerYear}
             </p>
           </div>

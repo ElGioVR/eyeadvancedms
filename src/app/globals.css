@@ -138,6 +138,87 @@ body {
 }
 
 /* ─────────────────────────────────────────────
+   Login
+   ───────────────────────────────────────────── */
+/* Inputs de 16px en móvil: con menos, iOS Safari hace zoom al enfocar.
+   En @layer components para que pl-12 / pr-12 del JSX tengan prioridad. */
+@layer components {
+.login-input {
+  @apply w-full min-h-[56px] rounded-2xl border border-transparent bg-slate-100 px-4 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary-500/15 disabled:opacity-60 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-white/[0.07] sm:min-h-[50px] sm:rounded-xl sm:border-slate-200 sm:bg-slate-50 sm:text-sm sm:dark:border-white/10 sm:dark:bg-surface-2;
+}
+}
+.login-hero {
+  background: radial-gradient(120% 100% at 50% 0%, #1f86c2 0%, #16486e 45%, #0f273d 100%);
+}
+.login-hero-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+  -webkit-mask-image: radial-gradient(circle at 50% 30%, black 0%, transparent 70%);
+  mask-image: radial-gradient(circle at 50% 30%, black 0%, transparent 70%);
+}
+.login-hero-halo {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);
+}
+/* Brillo tras la tarjeta (≥ sm) sin filter: blur() (recuadros en iOS Safari). */
+.login-glow {
+  background: radial-gradient(closest-side, rgba(31, 134, 194, 0.14), rgba(31, 134, 194, 0) 100%);
+}
+
+/* Transición login → bienvenida: círculo que se abre desde el botón con el
+   mismo fondo que /bienvenida, así el cambio de página no se nota. */
+.login-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: all;
+  -webkit-clip-path: circle(0px at var(--rx) var(--ry));
+  clip-path: circle(0px at var(--rx) var(--ry));
+  animation: loginReveal 0.75s cubic-bezier(0.7, 0, 0.2, 1) 0.18s forwards;
+}
+.login-reveal-glow {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  height: 16rem;
+  width: 16rem;
+  margin: -8rem 0 0 -8rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28), transparent 70%);
+  opacity: 0;
+  animation: welcomeFadeSoft 0.6s ease-out 0.55s forwards;
+}
+.login-form-salida {
+  opacity: 0.35;
+  transform: scale(0.98);
+  filter: saturate(0.8);
+}
+.login-logo-halo {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);
+  animation: welcomePulse 2.6s ease-in-out infinite;
+}
+.login-marca-salida { animation: loginMarcaSalida 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.35s forwards; }
+@keyframes loginMarcaSalida {
+  to { opacity: 0; transform: translateY(-12px) scale(0.98); }
+}
+@keyframes loginReveal {
+  to {
+    -webkit-clip-path: circle(150vmax at var(--rx) var(--ry));
+    clip-path: circle(150vmax at var(--rx) var(--ry));
+  }
+}
+@keyframes welcomeFadeSoft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-reveal { animation: none; -webkit-clip-path: none; clip-path: none; }
+  .login-reveal-glow { animation: none; opacity: 1; }
+  .login-marca-salida { animation: none; opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────
    Pantalla de bienvenida
    ───────────────────────────────────────────── */
 .welcome-bg {
@@ -147,10 +228,21 @@ body {
 .welcome-grid {
   background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
   background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, black 0%, transparent 65%);
   mask-image: radial-gradient(circle at 50% 45%, black 0%, transparent 65%);
 }
-.welcome-blob { animation: welcomeDrift 9s ease-in-out infinite alternate; }
-.welcome-blob--alt { animation-duration: 11s; animation-direction: alternate-reverse; }
+/* Luces ambientales sin filter: blur() (causaba recuadros oscuros tras el texto en
+   iOS Safari). El degradado ya es difuso; se anima solo transform. */
+.welcome-blob {
+  border-radius: 9999px;
+  animation: welcomeDrift 9s ease-in-out infinite alternate;
+}
+.welcome-blob--a { background: radial-gradient(closest-side, rgba(67, 163, 215, 0.3), rgba(67, 163, 215, 0.14) 45%, rgba(67, 163, 215, 0) 100%); }
+.welcome-blob--alt {
+  background: radial-gradient(closest-side, rgba(34, 211, 238, 0.2), rgba(34, 211, 238, 0.09) 45%, rgba(34, 211, 238, 0) 100%);
+  animation-duration: 11s;
+  animation-direction: alternate-reverse;
+}
 
 .welcome-eye {
   animation:
@@ -176,7 +268,19 @@ body {
   opacity: 0;
   animation: welcomeRing 2.7s cubic-bezier(0.2, 0.6, 0.3, 1) 0.4s infinite;
 }
-.welcome-fade { animation: welcomeFade 0.7s ease-out both; }
+/* `backwards` (no `both`): al terminar no queda un transform persistente que
+   mantenga el texto en su propia capa compuesta (origen de los recuadros en iOS). */
+.welcome-fade { animation: welcomeFade 0.7s ease-out backwards; }
+.welcome-fade-soft { animation: welcomeFadeSoft 0.9s ease-out backwards; }
+/* Texto que sube y aparece (solo al entrar; `backwards` no deja transform). */
+.welcome-word {
+  display: inline-block;
+  animation: welcomeWord 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes welcomeWord {
+  from { opacity: 0; transform: translateY(0.45em); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @keyframes welcomeOpen {
   0% { opacity: 0; clip-path: inset(50% 0 50% 0); transform: scale(0.85); }
@@ -210,7 +314,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-eye, .welcome-shine, .welcome-halo, .welcome-ring, .welcome-blob, .welcome-fade {
+  .welcome-eye, .welcome-shine, .welcome-halo, .welcome-ring, .welcome-blob, .welcome-fade, .welcome-fade-soft, .welcome-word {
     animation: none !important;
   }
   .welcome-ring { display: none; }

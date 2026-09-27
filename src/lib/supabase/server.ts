@@ -2,12 +2,13 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type User } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { cookies, headers } from 'next/headers';
-import { VERIFIED_USER_HEADER } from './constants';
+import { SESION_TEMPORAL_COOKIE, VERIFIED_USER_HEADER, opcionesCookieAuth } from './constants';
 
 export type UserRole = 'admin' | 'doctor' | 'recepcionista';
 
 export function createClient() {
   const cookieStore = cookies();
+  const temporal = cookieStore.has(SESION_TEMPORAL_COOKIE);
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +23,7 @@ export function createClient() {
             cookieStore.set({
               name,
               value,
-              ...options,
+              ...opcionesCookieAuth(options, temporal),
               httpOnly: false,
               secure: process.env.NODE_ENV === 'production',
               sameSite: 'lax',
