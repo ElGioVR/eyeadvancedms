@@ -99,3 +99,28 @@ export async function getVerifiedUserId(): Promise<string | null> {
   const { data: { user } } = await createClient().auth.getUser();
   return user?.id ?? null;
 }
+
+/**
+ * Ejecuta una lectura en paralelo con la verificación de rol (ya iniciada).
+ * Ahorra 1 viaje en serie por request. Si el rol se rechaza, el resultado de
+ * `trabajo` se descarta sin devolverse al cliente. SOLO para lecturas sin
+ * efectos secundarios; las mutaciones deben esperar a `requireRole` primero.
+ */
+export async function leerConRol<T>(
+  rolP: Promise<NextResponse | null>,
+  trabajo: () => Promise<T>
+): Promise<{ denegado: NextResponse } | { datos: T }> {
+  const trabajoP = trabajo();
+  let denegado: NextResponse | null;
+  try {
+    denegado = await rolP;
+  } catch (err) {
+    void trabajoP.catch(() => undefined);
+    throw err;
+  }
+  if (denegado) {
+    void trabajoP.catch(() => undefined);
+    return { denegado };
+  }
+  return { datos: await trabajoP };
+}

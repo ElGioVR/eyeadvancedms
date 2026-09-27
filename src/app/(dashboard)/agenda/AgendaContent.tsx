@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
+import { prefetchJSON, takePrefetched } from '@/lib/prefetch';
 import { useAutosave } from '@/hooks/useAutosave';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
@@ -58,6 +59,39 @@ function dateStr(y: number, m: number, d: number) { return `${y}-${String(m + 1)
 function getMonday(d: Date) { const r = new Date(d); const day = r.getDay(); const diff = r.getDate() - day + (day === 0 ? -6 : 1); r.setDate(diff); return r; }
 function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function toDateStr(d: Date) { return dateStr(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+type VistaCalendario = 'month' | 'week' | 'day';
+
+/** Rango de fechas que pide cada vista (mes completo, semana lun–dom o un día). */
+function rangoVista(vista: VistaCalendario, d: Date): { fechaDesde: string; fechaHasta: string } {
+  if (vista === 'month') {
+    return {
+      fechaDesde: dateStr(d.getFullYear(), d.getMonth(), 1),
+      fechaHasta: dateStr(d.getFullYear(), d.getMonth(), daysInMonth(d.getFullYear(), d.getMonth())),
+    };
+  }
+  if (vista === 'week') {
+    const mon = getMonday(d);
+    return { fechaDesde: toDateStr(mon), fechaHasta: toDateStr(addDays(mon, 6)) };
+  }
+  return { fechaDesde: toDateStr(d), fechaHasta: toDateStr(d) };
+}
+
+function desplazarVista(vista: VistaCalendario, prev: Date, dir: number): Date {
+  const d = new Date(prev);
+  if (vista === 'month') d.setMonth(d.getMonth() + dir);
+  else if (vista === 'week') d.setDate(d.getDate() + dir * 7);
+  else d.setDate(d.getDate() + dir);
+  return d;
+}
+
+/** Misma forma de URL que arma useFetch (orden de parámetros incluido) para que la precarga coincida. */
+function urlAgenda(params: Record<string, string>): string {
+  return `/api/agenda?${new URLSearchParams(params).toString()}`;
+}
+
+// Ventana corta para reutilizar precargas de periodos vecinos (evita datos viejos).
+const PRECARGA_AGENDA_MS = 30_000;
 function getDoctorInitials(name: string) { return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase(); }
 const docColors = ['bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'];
 function getDocColor(name: string) { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return docColors[Math.abs(h) % docColors.length]; }
@@ -188,11 +222,21 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date(`${initialDate}T12:00:00`));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [filterDoctor, setFilterDoctor] = useState('');
+  // Doctor: su filtro se conoce desde las props (determinista en SSR y cliente), así
+  // la primera petición ya sale con él y no se repite al aplicar el efecto.
+  const [filterDoctor, setFilterDoctor] = useState(() =>
+    userRol === 'doctor' ? doctores.find((d) => d.usuario_id === userId)?.id ?? '' : ''
+  );
   const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
   const [filterTipos, setFilterTipos] = useState<Set<string>>(new Set(['cirugia', 'consulta', 'estudio']));
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [search, setSearch] = useState('');
+  // Búsqueda con debounce: una petición al dejar de teclear, no una por tecla.
+  const [searchQuery, setSearchQuery] = useState('');
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearchQuery(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showImportConsultas, setShowImportConsultas] = useState(false);
@@ -298,12 +342,15 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     }
   }, [calendarView, now, todayStr, selectedDate]);
 
+  // Atajos de teclado: se leen las versiones vigentes vía ref (antes el listener
+  // se registraba una vez y ← / → usaban siempre la vista inicial «mes»).
+  const atajosRef = useRef<{ navigate: (dir: number) => void; hoy: () => void } | null>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key === 'ArrowLeft') navigate(-1);
-      else if (e.key === 'ArrowRight') navigate(1);
-      else if (e.key === 't' || e.key === 'T') handleGoToday();
+      if (e.key === 'ArrowLeft') atajosRef.current?.navigate(-1);
+      else if (e.key === 'ArrowRight') atajosRef.current?.navigate(1);
+      else if (e.key === 't' || e.key === 'T') atajosRef.current?.hoy();
       else if (e.key === 'm' || e.key === 'M') setCalendarView('month');
       else if (e.key === 'w' || e.key === 'W') setCalendarView('week');
       else if (e.key === 'd' || e.key === 'D') setCalendarView('day');
@@ -313,22 +360,40 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const fechaDesde = calendarView === 'month'
-    ? dateStr(currentDate.getFullYear(), currentDate.getMonth(), 1)
-    : calendarView === 'week'
-      ? toDateStr(getMonday(currentDate))
-      : toDateStr(currentDate);
-  const fechaHasta = calendarView === 'month'
-    ? dateStr(currentDate.getFullYear(), currentDate.getMonth(), daysInMonth(currentDate.getFullYear(), currentDate.getMonth()))
-    : calendarView === 'week'
-      ? toDateStr(addDays(getMonday(currentDate), 6))
-      : toDateStr(currentDate);
+  const paramsPara = useCallback((d: Date): Record<string, string> => {
+    const p: Record<string, string> = { ...rangoVista(calendarView, d), pageSize: '500' };
+    if (filterDoctor) p.doctorId = filterDoctor;
+    if (searchQuery) p.search = searchQuery;
+    return p;
+  }, [calendarView, filterDoctor, searchQuery]);
 
-  const fetchParams: Record<string, string> = { fechaDesde, fechaHasta, pageSize: '500' };
-  if (filterDoctor) fetchParams.doctorId = filterDoctor;
-  if (search) fetchParams.search = search;
+  const fetchParams = paramsPara(currentDate);
+  const { fechaDesde, fechaHasta } = fetchParams;
 
-  const { data: cirugias, loading, refetch } = useFetch<AgendaCirugia>('/api/agenda', fetchParams);
+  const { data: cirugias, loading, refetch: refetchAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams, {
+    prefetchMaxAgeMs: PRECARGA_AGENDA_MS,
+  });
+
+  // Precarga del periodo anterior y siguiente: navegar con ← / → es instantáneo.
+  const precargadasRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (loading || searchQuery) return;
+    const t = window.setTimeout(() => {
+      for (const dir of [1, -1]) {
+        const url = urlAgenda(paramsPara(desplazarVista(calendarView, currentDate, dir)));
+        precargadasRef.current.add(url);
+        void prefetchJSON(url, PRECARGA_AGENDA_MS);
+      }
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [loading, searchQuery, calendarView, currentDate, paramsPara]);
+
+  // Tras una mutación se descartan las precargas (podrían no incluir el cambio).
+  const refetch = useCallback((extra?: Record<string, string>) => {
+    for (const url of precargadasRef.current) void takePrefetched(url);
+    precargadasRef.current.clear();
+    return refetchAgenda(extra);
+  }, [refetchAgenda]);
 
   const cirugiasFiltradas = useMemo(() => {
     return cirugias.filter(c => filterTipos.has(c.tipo || 'cirugia') && filterEstados.has(c.estado || 'agendada'));
@@ -394,19 +459,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
   const navigate = useCallback((dir: number) => {
     setTransitionDir(dir);
-    setCurrentDate(prev => {
-      const d = new Date(prev);
-      if (calendarView === 'month') d.setMonth(d.getMonth() + dir);
-      else if (calendarView === 'week') d.setDate(d.getDate() + dir * 7);
-      else d.setDate(d.getDate() + dir);
-      return d;
-    });
+    setCurrentDate(prev => desplazarVista(calendarView, prev, dir));
   }, [calendarView]);
 
   const handleGoToday = useCallback(() => {
     setCurrentDate(new Date());
     setSelectedDate(todayStr);
   }, [todayStr]);
+  atajosRef.current = { navigate, hoy: handleGoToday };
 
   const handleDayClick = useCallback((ds: string, e?: React.MouseEvent) => {
     e?.stopPropagation();

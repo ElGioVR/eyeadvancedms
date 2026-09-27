@@ -60,15 +60,65 @@ export async function detectarConflictosAgenda(
   const horaFinStr = addMinutesToTime(hora, duracion_min);
 
   const conflictos: ConflictoAgenda[] = [];
+  const hayMedicos = medicos.length > 0;
+  const vacio = Promise.resolve({ data: [] as any[] });
+
+  // Las 5 fuentes son independientes: se consultan en paralelo (antes 5 viajes
+  // en serie). El orden de los conflictos devueltos se mantiene.
+  const [
+    { data: consultas },
+    { data: conceptos },
+    { data: cirugiasDoctor },
+    { data: cirugiasParticipante },
+    { data: cirugiasRecurso },
+  ] = await Promise.all([
+    hayMedicos
+      ? supabase
+          .from('consultas')
+          .select('id, doctor_id, paciente_id, fecha, hora_inicio, hora_fin, tipo_consulta')
+          .eq('fecha', fecha)
+          .in('doctor_id', medicos)
+      : vacio,
+    hayMedicos
+      ? supabase
+          .from('consulta_conceptos')
+          .select(
+            'id, tipo_concepto, doctor_id, consultas!inner(id, fecha, hora_inicio, hora_fin)'
+          )
+          .in('doctor_id', medicos)
+          .eq('consultas.fecha', fecha)
+          .in('tipo_concepto', ['ESTUDIO', 'PROCEDIMIENTO'])
+      : vacio,
+    hayMedicos
+      ? supabase
+          .from('agenda_cirugias')
+          .select('id, doctor_id, fecha, hora, duracion_min, estado')
+          .eq('fecha', fecha)
+          .in('doctor_id', medicos)
+          .neq('estado', 'cancelada')
+      : vacio,
+    hayMedicos
+      ? supabase
+          .from('cirugia_participantes')
+          .select(
+            'medico_id, agenda_cirugias!inner(id, fecha, hora, duracion_min, estado)'
+          )
+          .in('medico_id', medicos)
+          .eq('agenda_cirugias.fecha', fecha)
+          .neq('agenda_cirugias.estado', 'cancelada')
+      : vacio,
+    recurso_id
+      ? supabase
+          .from('agenda_cirugias')
+          .select('id, fecha, hora, duracion_min, estado, recurso_id')
+          .eq('fecha', fecha)
+          .eq('recurso_id', recurso_id)
+          .neq('estado', 'cancelada')
+      : vacio,
+  ]);
 
   // 1. Consultas (todos los tipos incluyen al médico principal)
-  if (medicos.length > 0) {
-    const { data: consultas } = await supabase
-      .from('consultas')
-      .select('id, doctor_id, paciente_id, fecha, hora_inicio, hora_fin, tipo_consulta')
-      .eq('fecha', fecha)
-      .in('doctor_id', medicos);
-
+  if (hayMedicos) {
     for (const c of consultas || []) {
       const inicio = timeToMinutes(c.hora_inicio);
       const fin = c.hora_fin ? timeToMinutes(c.hora_fin) : inicio + DEFAULT_DURACION_MIN;
@@ -86,14 +136,6 @@ export async function detectarConflictosAgenda(
     }
 
     // 2. Estudios / procedimientos asignados a otros doctores dentro de una consulta
-    const { data: conceptos } = await supabase
-      .from('consulta_conceptos')
-      .select(
-        'id, tipo_concepto, doctor_id, consultas!inner(id, fecha, hora_inicio, hora_fin)'
-      )
-      .in('doctor_id', medicos)
-      .eq('consultas.fecha', fecha)
-      .in('tipo_concepto', ['ESTUDIO', 'PROCEDIMIENTO']);
 
     for (const cc of conceptos || []) {
       const c = (cc as any).consultas as {
@@ -118,12 +160,6 @@ export async function detectarConflictosAgenda(
     }
 
     // 3. Cirugías donde el médico es el doctor principal (legacy) o participante
-    const { data: cirugiasDoctor } = await supabase
-      .from('agenda_cirugias')
-      .select('id, doctor_id, fecha, hora, duracion_min, estado')
-      .eq('fecha', fecha)
-      .in('doctor_id', medicos)
-      .neq('estado', 'cancelada');
 
     for (const c of cirugiasDoctor || []) {
       const inicio = timeToMinutes(c.hora);
@@ -142,14 +178,6 @@ export async function detectarConflictosAgenda(
       }
     }
 
-    const { data: cirugiasParticipante } = await supabase
-      .from('cirugia_participantes')
-      .select(
-        'medico_id, agenda_cirugias!inner(id, fecha, hora, duracion_min, estado)'
-      )
-      .in('medico_id', medicos)
-      .eq('agenda_cirugias.fecha', fecha)
-      .neq('agenda_cirugias.estado', 'cancelada');
 
     for (const cp of cirugiasParticipante || []) {
       const c = (cp as any).agenda_cirugias as {
@@ -178,12 +206,6 @@ export async function detectarConflictosAgenda(
 
   // 4. Conflictos por recurso / quirófano
   if (recurso_id) {
-    const { data: cirugiasRecurso } = await supabase
-      .from('agenda_cirugias')
-      .select('id, fecha, hora, duracion_min, estado, recurso_id')
-      .eq('fecha', fecha)
-      .eq('recurso_id', recurso_id)
-      .neq('estado', 'cancelada');
 
     for (const c of cirugiasRecurso || []) {
       const inicio = timeToMinutes(c.hora);

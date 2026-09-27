@@ -362,6 +362,7 @@ export default function ProductividadPage() {
   const [editBusy, setEditBusy] = useState(false);
   const abortLigaRef = useRef<AbortController | null>(null);
   const abortMetricasRef = useRef<AbortController | null>(null);
+  const abortPanelRef = useRef<AbortController | null>(null);
 
   const fetchMetricas = useCallback(
     async (fdesde: string, fhasta: string, fdoctor: string, signal?: AbortSignal) => {
@@ -489,15 +490,21 @@ export default function ProductividadPage() {
   }, [userLoading, isAdmin, fetchMetricas]);
 
   const fetchPanelDoctor = useCallback(async (id: string, p: number, fdesde: string, fhasta: string) => {
+    // Solo cuenta la última petición: las respuestas fuera de orden se descartan.
+    abortPanelRef.current?.abort();
+    const controller = new AbortController();
+    abortPanelRef.current = controller;
     try {
       const params = new URLSearchParams({ page: String(p) });
       if (fdesde) params.set('desde', fdesde);
       if (fhasta) params.set('hasta', fhasta);
-      const res = await fetch(`/api/productividad/honorarios/doctor/${id}?pageSize=10&${params}`);
-      if (res.ok) setPanelData((await res.json()) as HonorariosListado);
-      else setPanelData(null);
+      const res = await fetch(`/api/productividad/honorarios/doctor/${id}?pageSize=10&${params}`, {
+        signal: controller.signal,
+      });
+      const json = res.ok ? ((await res.json()) as HonorariosListado) : null;
+      if (!controller.signal.aborted) setPanelData(json);
     } catch {
-      setPanelData(null);
+      if (!controller.signal.aborted) setPanelData(null);
     }
   }, []);
 

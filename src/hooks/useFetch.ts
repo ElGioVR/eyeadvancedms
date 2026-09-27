@@ -20,7 +20,17 @@ interface UseFetchResult<T> {
   pageSize: number;
 }
 
-export function useFetch<T>(url: string, params?: Record<string, string>): UseFetchResult<T> {
+interface UseFetchOptions {
+  /** Antigüedad máxima (ms) de una precarga para reutilizarla. Por defecto la de prefetch.ts. */
+  prefetchMaxAgeMs?: number;
+}
+
+export function useFetch<T>(
+  url: string,
+  params?: Record<string, string>,
+  options?: UseFetchOptions
+): UseFetchResult<T> {
+  const prefetchMaxAgeMs = options?.prefetchMaxAgeMs;
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +64,7 @@ export function useFetch<T>(url: string, params?: Record<string, string>): UseFe
       const qs = new URLSearchParams(merged).toString();
       const fullUrl = qs ? `${url}?${qs}` : url;
       // Primera carga: reutiliza la precarga hecha en /bienvenida si está fresca
-      const precargado = takePrefetched(fullUrl);
+      const precargado = takePrefetched(fullUrl, prefetchMaxAgeMs);
       let json: any = precargado ? await precargado : null;
       if (json === null) {
         const res = await fetch(fullUrl, { signal: controller.signal });
@@ -88,7 +98,7 @@ export function useFetch<T>(url: string, params?: Record<string, string>): UseFe
     } finally {
       if (requestRef.current.id === requestId) setLoading(false);
     }
-  }, [url]);
+  }, [url, prefetchMaxAgeMs]);
 
   const paramsKey = JSON.stringify(params ?? {});
 

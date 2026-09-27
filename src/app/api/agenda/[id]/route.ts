@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
@@ -39,20 +39,24 @@ export async function GET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
-  if (roleError) return roleError;
+  // El rol se verifica en paralelo con la lectura (ver leerConRol).
+  const rolP = requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
 
   const { id } = await params;
   const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabase
-    .from('agenda_cirugias')
-    .select(`
-      *,
-      doctores:doctor_id (alias)
-    `)
-    .eq('id', id)
-    .single();
+  const r = await leerConRol(rolP, async () =>
+    supabase
+      .from('agenda_cirugias')
+      .select(`
+        *,
+        doctores:doctor_id (alias)
+      `)
+      .eq('id', id)
+      .single()
+  );
+  if ('denegado' in r) return r.denegado;
+  const { data, error } = r.datos;
 
   if (error || !data) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
@@ -71,11 +75,24 @@ export async function PATCH(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
-  if (roleError) return roleError;
-
+  const rolP = requireRole(auth.user, ['admin', 'recepcionista']);
   const { id } = await params;
   const supabase = getSupabaseAdmin();
+
+  // Lectura del estado actual (solo lectura) en paralelo con la verificación de
+  // rol; nada se escribe antes de confirmar el rol.
+  const prevP = Promise.resolve(
+    supabase
+      .from('agenda_cirugias')
+      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente')
+      .eq('id', id)
+      .single()
+  );
+  const roleError = await rolP;
+  if (roleError) {
+    void prevP.catch(() => undefined);
+    return roleError;
+  }
 
   let body: unknown;
   try {
@@ -93,12 +110,8 @@ export async function PATCH(
   const data = validation.data;
   const updates: Record<string, unknown> = {};
 
-  // Read current state before update (for side-effects and state machine)
-  const { data: prev, error: prevError } = await supabase
-    .from('agenda_cirugias')
-    .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente')
-    .eq('id', id)
-    .single();
+  // Estado actual antes de actualizar (efectos secundarios y máquina de estados)
+  const { data: prev, error: prevError } = await prevP;
 
   if (prevError || !prev) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
@@ -251,12 +264,11 @@ export async function PATCH(
     await liberarLIO(itemId, id, auth.user.id);
   }
 
+  // Devengo y notificaciones (best-effort) corren juntos; se esperan antes de responder.
+  const pendientes: Array<Promise<unknown>> = [];
   if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
-    try {
-      await new MotorDevengoService().cancelarPorCirugia(id);
-    } catch {
-      // best-effort: no bloquea la cancelación de agenda
-    }
+    // best-effort: no bloquea la cancelación de agenda
+    pendientes.push(new MotorDevengoService().cancelarPorCirugia(id).catch(() => undefined));
   }
 
   // Notificaciones al doctor (best-effort, nunca bloquean la respuesta)
@@ -266,18 +278,21 @@ export async function PATCH(
   const paciente = (data.nombre_paciente as string | undefined) || prev.nombre_paciente || 'Paciente';
   const base = { paciente, entidadTipo: 'agenda_cirugia' as const, entidadId: id, actorUserId: auth.user.id };
   if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
-    await notificarCancelacion({ ...base, doctorId: doctorFinal, fecha: prev.fecha, hora: prev.hora, motivo: data.motivo });
+    pendientes.push(notificarCancelacion({ ...base, doctorId: doctorFinal, fecha: prev.fecha, hora: prev.hora, motivo: data.motivo }));
   } else {
     if (data.doctor_id !== undefined && data.doctor_id !== prev.doctor_id) {
-      await notificarAsignacion({ ...base, doctorId: data.doctor_id, tipoServicio: 'Cirugía', fecha: fechaFinal, hora: horaFinal });
+      pendientes.push(notificarAsignacion({ ...base, doctorId: data.doctor_id, tipoServicio: 'Cirugía', fecha: fechaFinal, hora: horaFinal }));
     }
     const cambioFechaHora =
       (data.fecha !== undefined && data.fecha !== prev.fecha) || (data.hora !== undefined && data.hora !== prev.hora);
     const reprogramada = (nuevoEstado === 'reagendada' || nuevoEstado === 'aplazada') && nuevoEstado !== estadoAnterior;
     if ((cambioFechaHora || reprogramada) && doctorFinal === prev.doctor_id) {
-      await notificarReagendado({ ...base, doctorId: doctorFinal, fecha: fechaFinal, hora: horaFinal, aplazada: nuevoEstado === 'aplazada' });
+      pendientes.push(notificarReagendado({ ...base, doctorId: doctorFinal, fecha: fechaFinal, hora: horaFinal, aplazada: nuevoEstado === 'aplazada' }));
     }
   }
+
+  // Antes: devengo y cada notificación en serie.
+  await Promise.allSettled(pendientes);
 
   return NextResponse.json({ success: true });
 }

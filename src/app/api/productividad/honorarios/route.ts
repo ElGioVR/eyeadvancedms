@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { listarHonorariosLiga } from '@/lib/productividad';
 
 export async function GET(request: Request) {
@@ -8,8 +8,8 @@ export async function GET(request: Request) {
   const authStart = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
-  if (roleError) return roleError;
+  // El rol se verifica en paralelo con la lectura (ver leerConRol).
+  const rolP = requireRole(auth.user, ['admin']);
   const authDur = performance.now() - authStart;
 
   const { searchParams } = new URL(request.url);
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
   const dbStart = performance.now();
   try {
-    const data = await listarHonorariosLiga({
+    const r = await leerConRol(rolP, () => listarHonorariosLiga({
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 50,
       doctor_id: doctorId,
@@ -39,7 +39,9 @@ export async function GET(request: Request) {
       fuente,
       estado,
       agrupar_por,
-    });
+    }));
+    if ('denegado' in r) return r.denegado;
+    const data = r.datos;
     const dbDur = performance.now() - dbStart;
     const dur = (performance.now() - startedAt).toFixed(1);
     const response = NextResponse.json(data);
