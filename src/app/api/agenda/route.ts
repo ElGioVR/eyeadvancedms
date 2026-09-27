@@ -45,8 +45,7 @@ export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
-  if (roleError) return roleError;
+  const authDur = performance.now() - startedAt;
 
   const { searchParams } = new URL(request.url);
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -63,12 +62,18 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  // RBAC: resolver perfil y doctor en paralelo; evita tres consultas secuenciales.
+  // RBAC en una sola ronda: el mismo SELECT de `usuarios` valida rol/activo
+  // (equivalente a requireRole) y trae las preferencias; el doctor en paralelo.
+  // Antes: requireRole → (perfil ‖ doctor) = 2 viajes en serie.
   const [{ data: profile }, { data: doctorProfile }] = await Promise.all([
-    supabase.from('usuarios').select('rol, preferencias').eq('id', auth.user.id).maybeSingle(),
+    supabase.from('usuarios').select('rol, activo, preferencias').eq('id', auth.user.id).maybeSingle(),
     supabase.from('doctores').select('id').eq('usuario_id', auth.user.id).maybeSingle(),
   ]);
-  const userRole = profile?.rol;
+  const ROLES_AGENDA = ['admin', 'doctor', 'recepcionista'];
+  if (!profile || profile.activo !== true || !ROLES_AGENDA.includes(profile.rol)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+  const userRole = profile.rol;
   const sessionDoctorId = doctorProfile?.id ?? null;
   const focus = userRole === 'admin'
     && typeof profile?.preferencias === 'object'
@@ -76,6 +81,11 @@ export async function GET(request: Request) {
     && (profile.preferencias as Record<string, unknown>).modo_focus === true;
   const filtrarPorDoctor = userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
+
+  // Un doctor sin vínculo a `doctores` no debe ver la agenda de todos.
+  if (userRole === 'doctor' && !sessionDoctorId) {
+    return NextResponse.json({ data: [], total: 0, page, pageSize });
+  }
 
   const searchSeguro = search ? sanitizarBusqueda(search) : '';
 
@@ -106,12 +116,14 @@ export async function GET(request: Request) {
       tipo_consulta,
       estatus,
       doctores:doctor_id (alias),
-      pacientes:paciente_id (nombre_completo)
+      pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo)
     `);
 
   if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
   if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
   if (doctorFiltro) queryConsultas = queryConsultas.eq('doctor_id', doctorFiltro);
+  // Con `!inner` el filtro sobre pacientes sí reduce las consultas (antes solo
+  // vaciaba el join y devolvía todas las consultas del rango sin nombre).
   if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
 
   const shouldQueryCirugias = !tipo || tipo === 'cirugia';
@@ -121,6 +133,8 @@ export async function GET(request: Request) {
     shouldQueryCirugias ? queryCirugias.order('fecha', { ascending: true }).order('hora', { ascending: true }) : Promise.resolve({ data: [], error: null }),
     shouldQueryConsultas ? queryConsultas.order('fecha', { ascending: true }).order('hora_inicio', { ascending: true }) : Promise.resolve({ data: [], error: null }),
   ]);
+
+  const dbDur = performance.now() - startedAt - authDur;
 
   if (errorCirugias || errorConsultas) {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
@@ -169,7 +183,10 @@ export async function GET(request: Request) {
   const result = todos.slice(from, to + 1);
 
   const response = NextResponse.json({ data: result, total, page, pageSize });
-  response.headers.set('Server-Timing', `agenda;dur=${(performance.now() - startedAt).toFixed(1)}`);
+  response.headers.set(
+    'Server-Timing',
+    `auth;dur=${authDur.toFixed(1)}, db;dur=${dbDur.toFixed(1)}, agenda;dur=${(performance.now() - startedAt).toFixed(1)}`
+  );
   return response;
 }
 
@@ -200,12 +217,17 @@ export async function POST(request: Request) {
 
   const data = validation.data;
 
+  // Validaciones de doctor y paciente en paralelo (antes en serie).
+  const [{ data: doctorCheck }, { data: pacienteCheck }] = await Promise.all([
+    data.doctor_id
+      ? supabase.from('doctores').select('id, activo').eq('id', data.doctor_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    data.paciente_id
+      ? supabase.from('pacientes').select('id').eq('id', data.paciente_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
   if (data.doctor_id) {
-    const { data: doctorCheck } = await supabase
-      .from('doctores')
-      .select('id, activo')
-      .eq('id', data.doctor_id)
-      .maybeSingle();
     if (!doctorCheck) {
       return NextResponse.json({ error: 'El doctor seleccionado no existe' }, { status: 404 });
     }
@@ -215,11 +237,6 @@ export async function POST(request: Request) {
   }
 
   if (data.paciente_id) {
-    const { data: pacienteCheck } = await supabase
-      .from('pacientes')
-      .select('id')
-      .eq('id', data.paciente_id)
-      .maybeSingle();
     if (!pacienteCheck) {
       return NextResponse.json({ error: 'El paciente seleccionado no existe' }, { status: 404 });
     }
