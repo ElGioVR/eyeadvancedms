@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, DollarSign, Pencil, Users, Wallet, X } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
@@ -100,8 +100,12 @@ export default function DoctorDetalle({
     setHonPageSize(json.pageSize);
   }, []);
 
+  // Id de la última carga: descarta respuestas de rangos/doctores anteriores.
+  const cargaRef = useRef(0);
+
   const cargar = useCallback(async () => {
     if (!doctorId || !desde || !hasta) return;
+    const carga = ++cargaRef.current;
     setLoading(true);
     setError(null);
     setHonAviso(null);
@@ -127,14 +131,16 @@ export default function DoctorDetalle({
         resMetricas.json(),
         resAgenda.json(),
       ])) as [MetricasPayload, { data: EventoAgenda[]; total: number }];
+      if (carga !== cargaRef.current) return;
       setMetricas(jsonMetricas);
       aplicarHonorarios(honorariosPayload);
       setAgenda(jsonAgenda.data || []);
       setAgendaTotal(jsonAgenda.total || 0);
     } catch (err) {
+      if (carga !== cargaRef.current) return;
       setError(err instanceof Error ? err.message : 'Error al cargar el detalle');
     } finally {
-      setLoading(false);
+      if (carga === cargaRef.current) setLoading(false);
     }
   }, [doctorId, desde, hasta, obtenerHonorarios, aplicarHonorarios]);
 

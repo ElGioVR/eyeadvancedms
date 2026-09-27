@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import {
   CSV_BOM,
   formatFechaCsv,
@@ -474,8 +474,8 @@ export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
-  if (roleError) return roleError;
+  // El rol se verifica en paralelo con la lectura (ver leerConRol).
+  const rolP = requireRole(auth.user, ['admin']);
 
   const { searchParams } = new URL(request.url);
   const { desde, hasta } = rangoPersonalizado(
@@ -488,23 +488,28 @@ export async function GET(request: Request) {
   const tab = (TABS.includes(tabRaw as TabId) ? tabRaw : 'honorarios') as TabId;
 
   if (desde > hasta) {
+    const roleError = await rolP;
+    if (roleError) return roleError;
     return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
-  if (doctorId) {
-    const { data: doc } = await supabase
-      .from('doctores')
-      .select('id')
-      .eq('id', doctorId)
-      .maybeSingle();
+
+  try {
+    // Validación del doctor y carga de la pestaña en paralelo (antes en serie).
+    const r = await leerConRol(rolP, () =>
+      Promise.all([
+        doctorId
+          ? Promise.resolve(supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle())
+          : Promise.resolve({ data: { id: '' } }),
+        cargarTabs(desde, hasta, doctorId, [tab]),
+      ])
+    );
+    if ('denegado' in r) return r.denegado;
+    const [{ data: doc }, data] = r.datos;
     if (!doc) {
       return NextResponse.json({ error: 'Doctor no encontrado' }, { status: 404 });
     }
-  }
-
-  try {
-    const data = await cargarTabs(desde, hasta, doctorId, [tab]);
     const dur = (performance.now() - startedAt).toFixed(1);
 
     if (formato === 'csv') {

@@ -200,11 +200,14 @@ try {
   const leer = (rel) => fs.readFileSync(path.resolve(__dirname, '..', '..', rel), 'utf8');
   const liga = leer('src/lib/productividad/liga.ts');
   const needlesLiga = [
-    ['const [eventosRes, doctoresRes, periodoTipo] = await Promise.all([', 'eventos + doctores + período en paralelo'],
-    ['Promise.all([cadenaAgenda, cadenaConsultas])', 'agenda y cadena de consultas en paralelo'],
+    ['const [eventosTodos, doctoresRes, periodoTipo] = await Promise.all([', 'eventos + doctores + período en paralelo'],
+    ['rangoEnvolvente(params.referencia)', 'con referencia no espera el tipo de período para pedir eventos'],
+    ['Promise.all([cadenaAgenda, cadenaConsultas, cadenaAseg])', 'agenda, consultas y aseguranzas en paralelo'],
     ['resolverOrigenBatch(rawPagina)', 'origen resuelto solo para la página visible'],
-    ['const pendientes: string[] = []', 'fallback por concepto en lote (1 query)'],
+    ['conceptoToConsulta.set(c.id, c.consulta_id)', 'concepto→consulta reutilizado (sin 2º lookup de conceptos)'],
     ['consultaIdsQuery', 'ids de consulta aislados de los que agrega agenda'],
+    ['leerTodo<EventoRow>', 'eventos paginados sin truncar en 1000 filas'],
+    ["from('bitacora_honorarios').insert(\n      aPagar.map(", 'bitácora de pagos en un solo INSERT'],
   ];
   for (const n of needlesLiga) {
     if (liga.includes(n[0])) ok('rendimiento: ' + n[1]);

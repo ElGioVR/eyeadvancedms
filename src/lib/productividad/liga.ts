@@ -15,6 +15,7 @@ import type {
   TipoAgrupacionLiga,
   TipoPeriodoPago,
 } from '@/types/productividad';
+import { leerTodo } from './lotes';
 
 const ESTADOS_EXCLUIDOS = ['REVERSADO'];
 
@@ -103,47 +104,45 @@ function calcularResumen(filas: HonorarioLigaFila[]): HonorariosResumen {
   return resumen;
 }
 
+/**
+ * Nombre de la aseguranza (origen) de cada evento, resuelto en lote.
+ * 2 rondas máximo: agenda ‖ (conceptos → consultas) ‖ catálogo de aseguranzas.
+ * Antes: agenda ‖ consultas, luego aseguranzas y un 2º lookup de conceptos (4 rondas).
+ */
 async function resolverOrigenBatch(
   eventos: EventoRow[]
 ): Promise<Map<string, string | null>> {
   const map = new Map<string, string | null>();
-  const consultaIds = new Set<string>();
   const consultaIdsQuery = new Set<string>();
   const cirugiaIds = new Set<string>();
   const conceptoIds = new Set<string>();
 
   for (const eh of eventos) {
-    const key = `${eh.id}`;
     const snap = (eh.tarifa_snapshot || {}) as Record<string, unknown>;
     if (typeof snap.origen_nombre === 'string' && snap.origen_nombre) {
-      map.set(key, snap.origen_nombre);
+      map.set(eh.id, snap.origen_nombre);
       continue;
     }
     if (eh.origen_tipo === 'OPERACION' && eh.origen_id) cirugiaIds.add(eh.origen_id);
-    else if (eh.origen_tipo === 'CONSULTA' && eh.origen_id) {
-      consultaIds.add(eh.origen_id);
-      consultaIdsQuery.add(eh.origen_id);
-    } else if (eh.origen_id) conceptoIds.add(eh.origen_id);
+    else if (eh.origen_tipo === 'CONSULTA' && eh.origen_id) consultaIdsQuery.add(eh.origen_id);
+    else if (eh.origen_id) conceptoIds.add(eh.origen_id);
   }
 
-  const supabase = getSupabaseAdmin();
+  if (map.size === eventos.length) return map;
 
-  const asegIds = new Set<string>();
+  const supabase = getSupabaseAdmin();
   const consultaToAseg = new Map<string, string | null>();
-  const cirugiaRows: Array<{ id: string; origen_id: string | null; consulta_id: string | null }> = [];
+  const conceptoToConsulta = new Map<string, string>();
   const cirugiaToAseg = new Map<string, string | null>();
+  const asegNames = new Map<string, string>();
 
   const cadenaAgenda = (async () => {
     if (cirugiaIds.size === 0) return;
     const { data } = await supabase
       .from('agenda_cirugias')
-      .select('id, origen_id, consulta_id, codigo')
+      .select('id, origen_id, consulta_id')
       .in('id', [...cirugiaIds]);
-    for (const ac of data || []) {
-      cirugiaRows.push(ac);
-      if (ac.origen_id) asegIds.add(ac.origen_id);
-      if (ac.consulta_id) consultaIds.add(ac.consulta_id);
-    }
+    for (const ac of data || []) cirugiaToAseg.set(ac.id, ac.origen_id ?? null);
   })();
 
   const cadenaConsultas = (async () => {
@@ -154,7 +153,7 @@ async function resolverOrigenBatch(
         .in('id', [...conceptoIds]);
       for (const c of data || []) {
         if (c.consulta_id) {
-          consultaIds.add(c.consulta_id);
+          conceptoToConsulta.set(c.id, c.consulta_id);
           consultaIdsQuery.add(c.consulta_id);
         }
       }
@@ -162,83 +161,32 @@ async function resolverOrigenBatch(
     if (consultaIdsQuery.size > 0) {
       const { data } = await supabase
         .from('consultas')
-        .select('id, aseguranza_id, paciente_id, folio')
+        .select('id, aseguranza_id')
         .in('id', [...consultaIdsQuery]);
-      for (const c of data || []) {
-        consultaToAseg.set(c.id, c.aseguranza_id ?? null);
-        if (c.aseguranza_id) asegIds.add(c.aseguranza_id);
-      }
+      for (const c of data || []) consultaToAseg.set(c.id, c.aseguranza_id ?? null);
     }
   })();
 
-  await Promise.all([cadenaAgenda, cadenaConsultas]);
-
-  const asegNames = new Map<string, string>();
-  if (asegIds.size > 0) {
-    const { data } = await supabase
-      .from('aseguranzas')
-      .select('id, nombre')
-      .in('id', [...asegIds]);
+  // Catálogo pequeño: se lee completo en paralelo en vez de esperar los ids.
+  const cadenaAseg = (async () => {
+    const { data } = await supabase.from('aseguranzas').select('id, nombre').limit(1000);
     for (const a of data || []) asegNames.set(a.id, a.nombre);
-  }
+  })();
 
-  for (const ac of cirugiaRows) {
-    cirugiaToAseg.set(ac.id, ac.origen_id ?? null);
-    if (ac.consulta_id) {
-      const aseg = consultaToAseg.get(ac.consulta_id);
-      if (!ac.origen_id && aseg) cirugiaToAseg.set(ac.id, aseg);
-    }
-  }
-
-  const consultaIdDe = (eh: EventoRow): string | null => {
-    if (eh.origen_tipo === 'CONSULTA') return eh.origen_id;
-    return eh.origen_id && consultaIds.has(eh.origen_id) ? eh.origen_id : null;
-  };
-
-  // Fallback por concepto: antes 1 query por fila (N+1); ahora 1 sola query en lote.
-  const pendientes: string[] = [];
-  if (conceptoIds.size > 0) {
-    const vistos = new Set<string>();
-    for (const eh of eventos) {
-      if (map.has(eh.id) || eh.origen_tipo === 'OPERACION') continue;
-      const consultaId = consultaIdDe(eh);
-      const asegId = consultaId ? consultaToAseg.get(consultaId) ?? null : null;
-      if (!asegId && eh.origen_id && !vistos.has(eh.origen_id)) {
-        vistos.add(eh.origen_id);
-        pendientes.push(eh.origen_id);
-      }
-    }
-  }
-  const conceptoToConsulta = new Map<string, string>();
-  if (pendientes.length > 0) {
-    const { data } = await supabase
-      .from('consulta_conceptos')
-      .select('id, consulta_id')
-      .in('id', pendientes);
-    for (const c of data || []) {
-      if (c.consulta_id) conceptoToConsulta.set(c.id, c.consulta_id);
-    }
-  }
+  await Promise.all([cadenaAgenda, cadenaConsultas, cadenaAseg]);
 
   for (const eh of eventos) {
-    const key = eh.id;
-    if (map.has(key)) continue;
-    let nombre: string | null = null;
-
+    if (map.has(eh.id)) continue;
+    let asegId: string | null = null;
     if (eh.origen_tipo === 'OPERACION' && eh.origen_id) {
-      const asegId = cirugiaToAseg.get(eh.origen_id) ?? null;
-      nombre = asegId ? asegNames.get(asegId) ?? null : null;
-    } else {
-      const consultaId = consultaIdDe(eh);
-      let asegId = consultaId ? consultaToAseg.get(consultaId) ?? null : null;
-      if (!asegId && conceptoIds.size > 0 && eh.origen_id) {
-        const consultaDelConcepto = conceptoToConsulta.get(eh.origen_id);
-        if (consultaDelConcepto) asegId = consultaToAseg.get(consultaDelConcepto) ?? null;
-      }
-      nombre = asegId ? asegNames.get(asegId) ?? null : null;
+      asegId = cirugiaToAseg.get(eh.origen_id) ?? null;
+    } else if (eh.origen_tipo === 'CONSULTA' && eh.origen_id) {
+      asegId = consultaToAseg.get(eh.origen_id) ?? null;
+    } else if (eh.origen_id) {
+      const consultaId = conceptoToConsulta.get(eh.origen_id);
+      asegId = consultaId ? consultaToAseg.get(consultaId) ?? null : null;
     }
-
-    map.set(key, nombre);
+    map.set(eh.id, asegId ? asegNames.get(asegId) ?? null : null);
   }
 
   return map;
@@ -278,63 +226,81 @@ function agruparFilas(
   return rows;
 }
 
+const TIPOS_PERIODO: TipoPeriodo[] = ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'TRIMESTRAL'];
+
+/** Rango que contiene el periodo de `referencia` sea cual sea el tipo configurado. */
+function rangoEnvolvente(referencia: string): { desde: string; hasta: string } {
+  let desde = '';
+  let hasta = '';
+  for (const t of TIPOS_PERIODO) {
+    const r = getPeriodRange(referencia, t);
+    if (!desde || r.inicio < desde) desde = r.inicio;
+    if (!hasta || r.fin > hasta) hasta = r.fin;
+  }
+  return { desde, hasta };
+}
+
 export async function listarHonorariosLiga(
   params: ListarLigaParams = {}
 ): Promise<HonorariosListado> {
   const supabase = getSupabaseAdmin();
   const periodoP = leerTipoPeriodo();
 
-  let desde: string;
-  let hasta: string;
+  // Con `referencia` el rango depende del tipo de periodo configurado. Para no
+  // esperar esa lectura antes de pedir los eventos, se consulta un rango que
+  // envuelve cualquier tipo y se recorta en memoria al llegar el tipo real.
+  const rangoConsulta = params.referencia
+    ? rangoEnvolvente(params.referencia)
+    : rangoPersonalizado(params.desde, params.hasta);
 
-  if (params.referencia) {
-    const rango = getPeriodRange(params.referencia, await periodoP);
-    desde = rango.inicio;
-    hasta = rango.fin;
-  } else {
-    const rango = rangoPersonalizado(params.desde, params.hasta);
-    desde = rango.desde;
-    hasta = rango.hasta;
-  }
-
-  if (desde > hasta) {
+  if (rangoConsulta.desde > rangoConsulta.hasta) {
     throw new Error('Rango de fechas inválido');
   }
 
   const page = Math.max(1, Math.floor(params.page || 1));
   const pageSize = Math.min(200, Math.max(1, Math.floor(params.pageSize || 50)));
-
-  let query = supabase
-    .from('eventos_honorario')
-    .select(
-      'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
-    )
-    .gte('fecha_servicio', desde)
-    .lte('fecha_servicio', hasta)
-    .not('estado', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
-    .order('fecha_servicio', { ascending: true });
-
   const doctorFiltro = params.doctor_id || params.soloDoctorId || null;
-  if (doctorFiltro) query = query.eq('doctor_id', doctorFiltro);
 
-  // Consultas independientes que se resuelven en paralelo (eventos, doctores y
-  // tipo de período) en lugar de en serie: 3 round-trips → 1.
-  const doctoresQ = supabase
-    .from('doctores')
-    .select('id, alias')
-    .limit(500);
+  const eventosP = leerTodo<EventoRow>((a, b) => {
+    let q = supabase
+      .from('eventos_honorario')
+      .select(
+        'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
+      )
+      .gte('fecha_servicio', rangoConsulta.desde)
+      .lte('fecha_servicio', rangoConsulta.hasta)
+      .not('estado', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`);
+    if (doctorFiltro) q = q.eq('doctor_id', doctorFiltro);
+    return q
+      .order('fecha_servicio', { ascending: true })
+      .order('id', { ascending: true })
+      .range(a, b);
+  });
 
-  const [eventosRes, doctoresRes, periodoTipo] = await Promise.all([
-    query,
+  // Con doctor fijo solo hace falta su alias (no los 500 doctores).
+  const doctoresQ = doctorFiltro
+    ? supabase.from('doctores').select('id, alias').eq('id', doctorFiltro)
+    : supabase.from('doctores').select('id, alias').limit(500);
+
+  // eventos ‖ doctores ‖ tipo de periodo: 1 sola ronda.
+  const [eventosTodos, doctoresRes, periodoTipo] = await Promise.all([
+    eventosP.catch((err: Error) => {
+      throw new Error(`Error al listar honorarios: ${err.message}`);
+    }),
     doctoresQ,
     periodoP,
   ]);
 
-  if (eventosRes.error) {
-    throw new Error(`Error al listar honorarios: ${eventosRes.error.message}`);
+  let desde = rangoConsulta.desde;
+  let hasta = rangoConsulta.hasta;
+  if (params.referencia) {
+    const rango = getPeriodRange(params.referencia, periodoTipo);
+    desde = rango.inicio;
+    hasta = rango.fin;
   }
-
-  const rows = (eventosRes.data || []) as EventoRow[];
+  const rows = params.referencia
+    ? eventosTodos.filter((r) => r.fecha_servicio >= desde && r.fecha_servicio <= hasta)
+    : eventosTodos;
 
   const nombres = new Map(
     (doctoresRes.data || []).map((d) => [d.id as string, d.alias as string])
@@ -438,21 +404,25 @@ export async function editarMontoHonorario(
     throw Object.assign(new Error('Error al actualizar monto'), { status: 500 });
   }
 
-  await supabase.from('bitacora_honorarios').insert({
+  const bitacoraP = supabase.from('bitacora_honorarios').insert({
     tabla: 'eventos_honorario',
     registro_id: id,
     accion: 'MONTO',
     valor_anterior: { monto_devengado: Number(evento.monto_devengado) || 0 },
     valor_nuevo: { monto_devengado: monto },
   });
+  const periodoP = leerTipoPeriodo();
 
-  const { data: actualizado, error: errLeer } = await supabase
-    .from('eventos_honorario')
-    .select(
-      'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
-    )
-    .eq('id', id)
-    .maybeSingle();
+  const [{ data: actualizado, error: errLeer }] = await Promise.all([
+    supabase
+      .from('eventos_honorario')
+      .select(
+        'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    bitacoraP,
+  ]);
 
   if (errLeer || !actualizado) {
     throw Object.assign(new Error('Honorario no encontrado tras actualizar'), {
@@ -460,15 +430,12 @@ export async function editarMontoHonorario(
     });
   }
 
-  const { data: doctor } = await supabase
-    .from('doctores')
-    .select('alias')
-    .eq('id', actualizado.doctor_id)
-    .maybeSingle();
-
-  const periodoTipoActual = await leerTipoPeriodo();
+  const [{ data: doctor }, periodoTipoActual, origenBatch] = await Promise.all([
+    supabase.from('doctores').select('alias').eq('id', actualizado.doctor_id).maybeSingle(),
+    periodoP,
+    resolverOrigenBatch([actualizado as EventoRow]),
+  ]);
   const rangoFila = getPeriodRange(actualizado.fecha_servicio, periodoTipoActual);
-  const origenBatch = await resolverOrigenBatch([actualizado as EventoRow]);
   const montoNuevo = Number(actualizado.monto_devengado) || 0;
   const metricas = (actualizado.metricas_ligados || {}) as HonorarioLigaFila['metricas_ligados'];
 
@@ -555,16 +522,17 @@ export async function pagarHonorarios(
 
     pagados = aPagar.length;
 
-    for (const id of aPagar) {
-      await supabase.from('bitacora_honorarios').insert({
+    // Bitácora en un solo INSERT (antes 1 viaje por honorario pagado).
+    await supabase.from('bitacora_honorarios').insert(
+      aPagar.map((id) => ({
         tabla: 'eventos_honorario',
         registro_id: id,
         accion: 'PAGO',
         valor_anterior: { estado: 'DEVENGADO' },
         valor_nuevo: { estado: 'PAGADO', fecha_pago: fechaPago },
         usuario_id: pagadoPor,
-      });
-    }
+      }))
+    );
   }
 
   return { pagados, omitidos };
@@ -575,13 +543,11 @@ export async function panelDoctorHonorarios(
   referencia?: string | null,
   page = 1,
   pageSize = 10,
-  rango?: { desde?: string | null; hasta?: string | null }
+  rango?: { desde?: string | null; hasta?: string | null },
+  opciones?: { doctorVerificado?: boolean }
 ): Promise<HonorariosListado> {
   const supabase = getSupabaseAdmin();
   const conRango = !!(rango?.desde && rango?.hasta);
-  // El guard del doctor y la consulta de la liga corren en paralelo: si el doctor
-  // no existe se descarta la liga (caso raro) y se ahorra 1 round-trip en el camino normal.
-  const doctorP = supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle();
   const ligaP = listarHonorariosLiga({
     soloDoctorId: doctorId,
     ...(conRango
@@ -591,7 +557,12 @@ export async function panelDoctorHonorarios(
     pageSize,
   });
 
-  const { data: doctor } = await doctorP;
+  // Quien ya resolvió el doctor (p. ej. /mis-honorarios) se ahorra el guard.
+  if (opciones?.doctorVerificado) return ligaP;
+
+  // El guard del doctor y la liga corren en paralelo: si el doctor no existe se
+  // descarta la liga (caso raro) y se ahorra 1 round-trip en el camino normal.
+  const { data: doctor } = await supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle();
 
   if (!doctor) {
     void ligaP.catch(() => undefined);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
 import { agregarMetricas, listarResumenHonorarios } from '@/lib/productividad';
 
@@ -19,8 +19,8 @@ export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
-  if (roleError) return roleError;
+  // El rol se verifica en paralelo con la lectura (ver leerConRol).
+  const rolP = requireRole(auth.user, ['admin']);
 
   const { searchParams } = new URL(request.url);
   const { desde, hasta } = rangoPersonalizado(
@@ -31,15 +31,23 @@ export async function GET(request: Request) {
   const formato = (searchParams.get('formato') || 'json').toLowerCase();
 
   if (desde > hasta) {
+    const roleError = await rolP;
+    if (roleError) return roleError;
     return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
   }
 
   try {
     const supabase = getSupabaseAdmin();
-    const [filas, doctoresRes] = await Promise.all([
-      listarResumenHonorarios({ desde, hasta, doctor_id: doctorId || undefined }),
-      supabase.from('doctores').select('id, alias').limit(500),
-    ]);
+    const r = await leerConRol(rolP, () =>
+      Promise.all([
+        listarResumenHonorarios({ desde, hasta, doctor_id: doctorId || undefined }),
+        doctorId
+          ? supabase.from('doctores').select('id, alias').eq('id', doctorId)
+          : supabase.from('doctores').select('id, alias').limit(500),
+      ])
+    );
+    if ('denegado' in r) return r.denegado;
+    const [filas, doctoresRes] = r.datos;
     const nombres = new Map(
       (doctoresRes.data || []).map((d) => [d.id as string, d.alias as string])
     );

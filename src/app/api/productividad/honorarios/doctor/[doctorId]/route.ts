@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { panelDoctorHonorarios } from '@/lib/productividad';
 
 export async function GET(
@@ -11,8 +11,8 @@ export async function GET(
   const authStart = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
-  if (roleError) return roleError;
+  // El rol se verifica en paralelo con la lectura (ver leerConRol).
+  const rolP = requireRole(auth.user, ['admin']);
   const authDur = performance.now() - authStart;
 
   const { doctorId } = await params;
@@ -29,18 +29,24 @@ export async function GET(
   );
 
   if (conRango && desde > hasta) {
+    const roleError = await rolP;
+    if (roleError) return roleError;
     return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
   }
 
   const dbStart = performance.now();
   try {
-    const data = await panelDoctorHonorarios(
-      doctorId,
-      referencia,
-      page,
-      pageSize,
-      conRango ? { desde, hasta } : undefined
+    const r = await leerConRol(rolP, () =>
+      panelDoctorHonorarios(
+        doctorId,
+        referencia,
+        page,
+        pageSize,
+        conRango ? { desde, hasta } : undefined
+      )
     );
+    if ('denegado' in r) return r.denegado;
+    const data = r.datos;
     const response = NextResponse.json(data);
     response.headers.set(
       'Server-Timing',

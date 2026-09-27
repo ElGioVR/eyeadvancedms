@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -50,7 +50,14 @@ export default function MisHonorariosPage() {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
 
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancela la petición anterior al cambiar filtros/página y conserva los datos
+  // visibles mientras llega la nueva (sin volver al skeleton).
   const fetchData = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setError(null);
     try {
@@ -59,22 +66,27 @@ export default function MisHonorariosPage() {
         params.set('desde', desde);
         params.set('hasta', hasta);
       }
-      const res = await fetch(`/api/productividad/mis-honorarios?${params.toString()}`);
+      const res = await fetch(`/api/productividad/mis-honorarios?${params.toString()}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || 'No se pudieron cargar tus honorarios');
       }
-      setData((await res.json()) as Payload);
+      const json = (await res.json()) as Payload;
+      if (!controller.signal.aborted) setData(json);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setData(null);
       setError(err instanceof Error ? err.message : 'Error inesperado');
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) setLoading(false);
     }
   }, [page, desde, hasta]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
+    return () => abortRef.current?.abort();
   }, [fetchData]);
 
   const cambiarRango = (siguienteDesde: string, siguienteHasta: string, desdeAtajo = false) => {
