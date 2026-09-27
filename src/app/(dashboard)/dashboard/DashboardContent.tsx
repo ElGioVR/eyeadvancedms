@@ -139,7 +139,37 @@ export default function DashboardContent({
     right: number;
   } | null>(null);
   const [doctorDropdownOpen, setDoctorDropdownOpen] = useState(false);
+  // «Ver como» se abre en un portal (igual que el nivel de festividad): la
+  // tarjeta del saludo tiene overflow-hidden y recortaba la lista.
+  const doctorButtonRef = useRef<HTMLButtonElement>(null);
+  const [doctorPos, setDoctorPos] = useState<{
+    top: number;
+    right: number;
+    maxHeight: number;
+  } | null>(null);
   const [chartData, setChartData] = useState<ChartData | null>(null);
+
+  // Los menús en portal usan position: fixed; al hacer scroll o cambiar el
+  // tamaño se cierran para no quedar flotando lejos de su botón.
+  useEffect(() => {
+    if (!doctorDropdownOpen && !nivelDropdownOpen) return;
+    const cerrar = () => {
+      setDoctorDropdownOpen(false);
+      setNivelDropdownOpen(false);
+    };
+    // El scroll dentro del propio menú (lista larga de doctores) no lo cierra.
+    const alScroll = (e: Event) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest("[data-menu-portal]")) return;
+      cerrar();
+    };
+    window.addEventListener("resize", cerrar);
+    window.addEventListener("scroll", alScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("resize", cerrar);
+      window.removeEventListener("scroll", alScroll, { capture: true });
+    };
+  }, [doctorDropdownOpen, nivelDropdownOpen]);
 
   useEffect(() => {
     const tijuanaNow = new Date(
@@ -436,6 +466,7 @@ export default function DashboardContent({
                       onClick={() => setNivelDropdownOpen(false)}
                     />
                     <div
+                      data-menu-portal
                       className="fixed z-50 w-60 bg-surface border border-line rounded-xl shadow-lg overflow-hidden"
                       style={{ top: nivelPos.top, right: nivelPos.right }}
                     >
@@ -498,7 +529,20 @@ export default function DashboardContent({
             {userRol !== "doctor" && (
               <div className="relative">
                 <button
-                  onClick={() => setDoctorDropdownOpen(!doctorDropdownOpen)}
+                  ref={doctorButtonRef}
+                  onClick={() => {
+                    const rect = doctorButtonRef.current?.getBoundingClientRect();
+                    if (rect)
+                      setDoctorPos({
+                        top: rect.bottom + 6,
+                        right: Math.max(8, window.innerWidth - rect.right),
+                        // Con muchos doctores la lista hace scroll dentro de la pantalla
+                        maxHeight: Math.max(160, window.innerHeight - rect.bottom - 18),
+                      });
+                    setDoctorDropdownOpen(!doctorDropdownOpen);
+                  }}
+                  aria-haspopup="menu"
+                  aria-expanded={doctorDropdownOpen}
                   className={cn(
                     "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     festivoMostrado
@@ -510,19 +554,26 @@ export default function DashboardContent({
                   Ver como
                   <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 </button>
-                {doctorDropdownOpen && (
+                {doctorDropdownOpen &&
+                  doctorPos &&
+                  createPortal(
                   <>
                     <div
                       className="fixed inset-0 z-40"
                       onClick={() => setDoctorDropdownOpen(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-64 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div
+                      role="menu"
+                      data-menu-portal
+                      className="fixed z-50 flex w-64 max-w-[calc(100vw-16px)] flex-col bg-surface border border-line rounded-xl shadow-lg overflow-hidden"
+                      style={{ top: doctorPos.top, right: doctorPos.right, maxHeight: doctorPos.maxHeight }}
+                    >
                       <div className="px-3 py-2 border-b border-line/70">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
                           Filtrar por doctor
                         </p>
                       </div>
-                      <div className="p-1">
+                      <div className="min-h-0 overflow-y-auto overscroll-contain p-1">
                         <button
                           onClick={() => {
                             router.push("/dashboard");
@@ -552,7 +603,8 @@ export default function DashboardContent({
                         ))}
                       </div>
                     </div>
-                  </>
+                  </>,
+                  document.body,
                 )}
               </div>
             )}
