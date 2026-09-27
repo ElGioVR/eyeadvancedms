@@ -39,6 +39,18 @@
   box-sizing: border-box;
 }
 
+/* Opciones de <select> nativos: la lista desplegable toma el fondo del select.
+   Con `bg-transparent` (p. ej. «Cambiar origen») Chrome/Windows la pintaba blanca
+   con el texto claro del modo oscuro → ilegible. Fondo y texto explícitos. */
+select option,
+select optgroup {
+  background-color: rgb(var(--surface));
+  color: rgb(var(--fg));
+}
+select option:disabled {
+  color: rgb(var(--muted));
+}
+
 html {
   -webkit-tap-highlight-color: transparent;
 }
