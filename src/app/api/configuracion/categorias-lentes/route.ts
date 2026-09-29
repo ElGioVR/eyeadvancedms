@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { leerJSON } from '@/lib/api/validar';
+import { idDeQuery, respuestaErrorDb, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
 
 const categoriaCreateSchema = z.object({
-  nombre: z.string().min(1).max(255),
-  descripcion: z.string().optional(),
+  nombre: z.string().trim().min(1).max(255),
+  descripcion: textoLargo.optional(),
 }).strict();
 
 const categoriaUpdateSchema = z.object({
   id: z.string().uuid(),
-  nombre: z.string().min(1).max(255).optional(),
-  descripcion: z.string().optional().nullable(),
+  nombre: z.string().trim().min(1).max(255).optional(),
+  descripcion: textoLargo.optional().nullable(),
 }).strict();
 
 export async function GET() {
@@ -25,10 +26,11 @@ export async function GET() {
   const { data, error } = await supabase
     .from('categorias_lentes')
     .select('id, nombre, descripcion, created_at')
-    .order('nombre');
+    .order('nombre')
+    .limit(1000);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.categorias-lentes');
   }
 
   return NextResponse.json(data);
@@ -40,22 +42,10 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, categoriaCreateSchema);
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = categoriaCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
 
   const { data: categoria, error } = await supabase
     .from('categorias_lentes')
@@ -67,7 +57,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.categorias-lentes');
   }
 
   return NextResponse.json(categoria, { status: 201 });
@@ -79,25 +69,13 @@ export async function PATCH(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, categoriaUpdateSchema);
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = categoriaUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
   const { id, ...updates } = data;
 
-  const profileUpdates: Record<string, any> = {};
+  const profileUpdates: Record<string, unknown> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre.trim();
   if (updates.descripcion !== undefined) profileUpdates.descripcion = updates.descripcion?.trim() || null;
 
@@ -111,7 +89,7 @@ export async function PATCH(request: Request) {
     .eq('id', id);
 
   if (profileError) {
-    return NextResponse.json({ error: errorTranslations[profileError.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(profileError, 'configuracion.categorias-lentes');
   }
 
   return NextResponse.json({ success: true });
@@ -123,13 +101,10 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  const id = idDeQuery(request, 'Falta el ID de la categoría');
+  if (id instanceof NextResponse) return id;
 
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID de la categoría' }, { status: 400 });
-  }
+  const supabase = getSupabaseAdmin();
 
   const { error } = await supabase
     .from('categorias_lentes')
@@ -137,7 +112,7 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.categorias-lentes');
   }
 
   return NextResponse.json({ success: true });

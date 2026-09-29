@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { fechaISO, leerJSON, uuid, validarId } from '@/lib/api/validar';
+
+interface CobroJoin {
+  monto: number | null;
+  moneda: string | null;
+  metodo_pago: string | null;
+  pagado: boolean | null;
+}
 
 export async function GET(
   request: Request,
@@ -13,56 +22,50 @@ export async function GET(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de paciente');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  // Get patient
-  const { data: patient, error: patientError } = await supabase
-    .from('pacientes')
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at')
-    .eq('id', id)
-    .single();
+  // Paciente (+ nombre de aseguranza) y consultas (+ doctor + cobros) en paralelo:
+  // 1 viaje en lugar de 4 en serie.
+  const [pacienteRes, consultasRes] = await Promise.all([
+    supabase
+      .from('pacientes')
+      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at, aseguranzas:aseguranza_id (nombre)')
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
+      .from('consultas')
+      .select(`
+        id, folio, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita,
+        diagnostico, estudio_1, estudio_2, estudio_3, procedimiento, notas,
+        doctores:doctor_id (alias, especialidad),
+        cobros (monto, moneda, metodo_pago, pagado)
+      `)
+      .eq('paciente_id', id)
+      .order('fecha', { ascending: false })
+      .limit(200),
+  ]);
 
-  if (patientError || !patient) {
+  const patient = pacienteRes.data;
+  if (pacienteRes.error || !patient) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
-
-  // Get consultations for this patient with doctor info
-  const { data: consultas } = await supabase
-    .from('consultas')
-    .select(`
-      id, folio, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita,
-      diagnostico, estudio_1, estudio_2, estudio_3, procedimiento, notas,
-      doctores:doctor_id (alias, especialidad)
-    `)
-    .eq('paciente_id', id)
-    .order('fecha', { ascending: false })
-    .limit(200);
-
-  // Get cobros for this patient
-  const consultaIds = (consultas || []).map((c) => c.id);
-  const { data: cobros } = await supabase
-    .from('cobros')
-    .select('id, consulta_id, monto, moneda, metodo_pago, pagado')
-    .in('consulta_id', consultaIds);
-
-  const cobrosMap = new Map((cobros || []).map((cobro) => [cobro.consulta_id, cobro]));
+  const consultas = consultasRes.data;
 
   const nombre = patient.nombre_completo || '';
   const iniciales = nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
 
-  let aseguradoraNombre: string | null = null;
-  if (patient.aseguranza_id) {
-    const { data: aseguranza } = await supabase
-      .from('aseguranzas')
-      .select('nombre')
-      .eq('id', patient.aseguranza_id)
-      .maybeSingle();
-    aseguradoraNombre = aseguranza?.nombre || null;
-  }
+  const asegJoin = (patient as { aseguranzas?: { nombre?: string | null } | { nombre?: string | null }[] | null }).aseguranzas;
+  const aseguradoraNombre: string | null = patient.aseguranza_id
+    ? (Array.isArray(asegJoin) ? asegJoin[0]?.nombre : asegJoin?.nombre) || null
+    : null;
 
   const consultasResult = (consultas || []).map((c) => {
-    const doctor = c.doctores as any;
-    const cobro = cobrosMap.get(c.id);
+    const doctor = (Array.isArray(c.doctores) ? c.doctores[0] : c.doctores) as { alias?: string; especialidad?: string } | null;
+    const cobrosConsulta = (c as { cobros?: CobroJoin[] | CobroJoin | null }).cobros;
+    // Antes: Map por consulta_id → ganaba el último cobro de la lista
+    const cobro = Array.isArray(cobrosConsulta) ? cobrosConsulta[cobrosConsulta.length - 1] : cobrosConsulta || undefined;
     const estudios = [c.estudio_1, c.estudio_2, c.estudio_3].filter(Boolean);
 
     return {
@@ -112,15 +115,15 @@ export async function GET(
 
 const pacienteUpdateSchema = z
   .object({
-    nombre_completo: z.string().min(1).max(255).optional(),
+    nombre_completo: z.string().trim().min(1).max(255).optional(),
     sexo: z.enum(['H', 'M', 'MASCULINO', 'FEMENINO', 'OTRO']).optional(),
-    fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    fecha_nacimiento: fechaISO.optional(),
     telefono: z.string().max(20).optional().nullable(),
     email: z.string().email().max(255).optional().nullable(),
     direccion: z.string().max(1000).optional().nullable(),
     contacto_emergencia: z.string().max(255).optional().nullable(),
     tel_emergencia: z.string().max(20).optional().nullable(),
-    aseguranza_id: z.string().uuid().optional().nullable(),
+    aseguranza_id: uuid.optional().nullable(),
     numero_poliza: z.string().max(100).optional().nullable(),
     numero_afiliacion: z.string().max(100).optional().nullable(),
   })
@@ -136,21 +139,11 @@ export async function PATCH(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de paciente');
+  if (idError) return idError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = pacienteUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
+  const data = await leerJSON(request, pacienteUpdateSchema, { maxBytes: 20_000 });
+  if (data instanceof NextResponse) return data;
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (data.nombre_completo !== undefined) updates.nombre_completo = data.nombre_completo.trim();
   if (data.sexo !== undefined) updates.sexo = data.sexo;
@@ -165,10 +158,19 @@ export async function PATCH(
   if (data.numero_afiliacion !== undefined) updates.numero_afiliacion = data.numero_afiliacion?.trim() || null;
 
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from('pacientes').update(updates).eq('id', id);
+  const { data: actualizado, error } = await supabase
+    .from('pacientes')
+    .update(updates)
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: 'Error al actualizar el paciente' }, { status: 500 });
+    const { mensaje, traducido } = handleSupabaseError(error, 'pacientes.actualizar');
+    return NextResponse.json({ error: traducido ? mensaje : 'Error al actualizar el paciente' }, { status: 500 });
+  }
+  if (!actualizado) {
+    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
 
   return NextResponse.json({ success: true });

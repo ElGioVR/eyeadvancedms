@@ -1,24 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { leerJSON } from '@/lib/api/validar';
+import { emailOpcional, idDeQuery, respuestaErrorDb, textoCorto, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
 
 const proveedorCreateSchema = z.object({
-  nombre: z.string().min(1).max(255),
-  telefono: z.string().max(20).optional(),
-  email: z.string().email().max(255).optional(),
-  direccion: z.string().optional(),
-  contacto: z.string().max(255).optional(),
+  nombre: z.string().trim().min(1).max(255),
+  telefono: textoCorto(20).optional(),
+  email: emailOpcional.optional(),
+  direccion: textoLargo.optional(),
+  contacto: textoCorto(255).optional(),
 }).strict();
 
 const proveedorUpdateSchema = z.object({
   id: z.string().uuid(),
-  nombre: z.string().min(1).max(255).optional(),
-  telefono: z.string().max(20).optional().nullable(),
-  email: z.string().email().max(255).optional().nullable(),
-  direccion: z.string().optional().nullable(),
-  contacto: z.string().max(255).optional().nullable(),
+  nombre: z.string().trim().min(1).max(255).optional(),
+  telefono: textoCorto(20).optional().nullable(),
+  email: emailOpcional.optional().nullable(),
+  direccion: textoLargo.optional().nullable(),
+  contacto: textoCorto(255).optional().nullable(),
   activo: z.boolean().optional(),
 }).strict();
 
@@ -33,10 +34,11 @@ export async function GET() {
     .from('proveedores')
     .select('id, nombre, contacto, email, telefono, direccion, activo')
     .eq('activo', true)
-    .order('nombre');
+    .order('nombre')
+    .limit(1000);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.proveedores');
   }
 
   return NextResponse.json(data);
@@ -48,22 +50,10 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, proveedorCreateSchema);
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = proveedorCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
 
   const { data: proveedor, error } = await supabase
     .from('proveedores')
@@ -78,7 +68,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.proveedores');
   }
 
   return NextResponse.json(proveedor, { status: 201 });
@@ -90,25 +80,13 @@ export async function PATCH(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, proveedorUpdateSchema);
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = proveedorUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
   const { id, ...updates } = data;
 
-  const profileUpdates: Record<string, any> = {};
+  const profileUpdates: Record<string, unknown> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre.trim();
   if (updates.telefono !== undefined) profileUpdates.telefono = updates.telefono?.trim() || null;
   if (updates.email !== undefined) profileUpdates.email = updates.email?.trim() || null;
@@ -126,7 +104,7 @@ export async function PATCH(request: Request) {
     .eq('id', id);
 
   if (profileError) {
-    return NextResponse.json({ error: errorTranslations[profileError.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(profileError, 'configuracion.proveedores');
   }
 
   return NextResponse.json({ success: true });
@@ -138,13 +116,10 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  const id = idDeQuery(request, 'Falta el ID del proveedor');
+  if (id instanceof NextResponse) return id;
 
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID del proveedor' }, { status: 400 });
-  }
+  const supabase = getSupabaseAdmin();
 
   const { error } = await supabase
     .from('proveedores')
@@ -152,7 +127,7 @@ export async function DELETE(request: Request) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.proveedores');
   }
 
   return NextResponse.json({ success: true });

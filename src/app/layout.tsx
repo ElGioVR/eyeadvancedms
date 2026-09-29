@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import Script from 'next/script';
+import SWRProvider from '@/components/providers/SWRProvider';
 import './globals.css';
 
 const inter = Inter({
@@ -53,7 +54,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="theme">
-          {children}
+          <SWRProvider>{children}</SWRProvider>
         </ThemeProvider>
         <Script id="sw-register" strategy="afterInteractive">
           {`

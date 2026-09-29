@@ -1,11 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import { ArrowLeft, CheckCircle2, DollarSign, Pencil, Users, Wallet, X } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import Skeleton from '@/components/ui/Skeleton';
 import StatCard from '@/components/ui/StatCard';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { useToast } from '@/components/ui/Toast';
+import { useInvalidar } from '@/hooks';
+import { enviarJSON } from '@/lib/fetcher';
 import { formatCurrency } from '@/lib/money';
 import { formatFechaCsv } from '@/lib/rangos';
 import type { MetricasPayload } from '@/lib/productividad/metricas';
@@ -41,6 +45,11 @@ interface HonorariosPayload {
 
 const PAGE_SIZE_HONORARIOS = 10;
 
+function mensajeError(err: unknown, fallback: string): string | null {
+  if (!err) return null;
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function DoctorDetalle({
   doctorId,
   nombre,
@@ -54,113 +63,71 @@ export default function DoctorDetalle({
   hasta: string;
   onCerrar: () => void;
 }) {
-  const [metricas, setMetricas] = useState<MetricasPayload | null>(null);
-  const [honorarios, setHonorarios] = useState<HonorarioLigaFila[]>([]);
-  const [honPage, setHonPage] = useState(1);
-  const [honTotal, setHonTotal] = useState(0);
-  const [honPageSize, setHonPageSize] = useState(PAGE_SIZE_HONORARIOS);
-  const [honCargando, setHonCargando] = useState(false);
+  const { toast } = useToast();
+  const invalidar = useInvalidar();
+  const listo = !!doctorId && !!desde && !!hasta;
+  const filtro = `${doctorId}|${desde}|${hasta}`;
+
+  // Página de honorarios ligada al filtro: al cambiar doctor/rango vuelve a 1
+  // sin pedir antes la página anterior del filtro nuevo.
+  const [paginado, setPaginado] = useState({ filtro, page: 1 });
+  const honPage = paginado.filtro === filtro ? paginado.page : 1;
+
   const [honAviso, setHonAviso] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [accionBusy, setAccionBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMonto, setEditMonto] = useState('');
   const [editBusy, setEditBusy] = useState(false);
-  const [agenda, setAgenda] = useState<EventoAgenda[]>([]);
-  const [agendaTotal, setAgendaTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const obtenerHonorarios = useCallback(
-    async (pagina: number): Promise<HonorariosPayload> => {
-      const qs = new URLSearchParams({
+  // Misma URL (y orden de parámetros) que la vista de métricas con doctor → caché compartida.
+  const urlMetricas = listo
+    ? `/api/productividad/metricas?${new URLSearchParams({ desde, hasta, doctor_id: doctorId })}`
+    : null;
+  const urlAgenda = listo
+    ? `/api/agenda?${new URLSearchParams({ fechaDesde: desde, fechaHasta: hasta, doctorId, pageSize: '100' })}`
+    : null;
+  const urlHonorarios = listo
+    ? `/api/productividad/honorarios?${new URLSearchParams({
         desde,
         hasta,
         doctor_id: doctorId,
-        page: String(pagina),
+        page: String(honPage),
         pageSize: String(PAGE_SIZE_HONORARIOS),
-      });
-      const res = await fetch(`/api/productividad/honorarios?${qs}`);
-      if (!res.ok) throw new Error('No se pudieron cargar los honorarios');
-      const json = (await res.json()) as HonorariosPayload;
-      return {
-        items: json.items || [],
-        total: Number(json.total) || 0,
-        page: Number(json.page) || pagina,
-        pageSize: Number(json.pageSize) || PAGE_SIZE_HONORARIOS,
-      };
-    },
-    [desde, hasta, doctorId]
-  );
+      })}`
+    : null;
 
-  const aplicarHonorarios = useCallback((json: HonorariosPayload) => {
-    setHonorarios(json.items);
-    setHonTotal(json.total);
-    setHonPage(json.page);
-    setHonPageSize(json.pageSize);
-  }, []);
+  const metricasSwr = useSWR<MetricasPayload>(urlMetricas);
+  const agendaSwr = useSWR<{ data: EventoAgenda[]; total: number }>(urlAgenda);
+  const honSwr = useSWR<HonorariosPayload>(urlHonorarios);
+  const { mutate: mutateHon } = honSwr;
 
-  // Id de la última carga: descarta respuestas de rangos/doctores anteriores.
-  const cargaRef = useRef(0);
+  const metricas = metricasSwr.data ?? null;
+  const agenda = agendaSwr.data?.data || [];
+  const agendaTotal = agendaSwr.data?.total || 0;
+  const honorarios = useMemo(() => honSwr.data?.items || [], [honSwr.data]);
+  const honTotal = Number(honSwr.data?.total) || 0;
+  const honPageSize = Number(honSwr.data?.pageSize) || PAGE_SIZE_HONORARIOS;
+  const honCargando = honSwr.isValidating;
+  const validandoDetalle = metricasSwr.isValidating || agendaSwr.isValidating;
+  const error =
+    mensajeError(metricasSwr.error, 'Error al cargar el detalle') ||
+    mensajeError(agendaSwr.error, 'No se pudo cargar el detalle del doctor');
+  const errorHon = mensajeError(honSwr.error, 'Error al cargar honorarios');
 
-  const cargar = useCallback(async () => {
-    if (!doctorId || !desde || !hasta) return;
-    const carga = ++cargaRef.current;
-    setLoading(true);
-    setError(null);
-    setHonAviso(null);
+  // Cambio de doctor o rango: limpia selección/edición (los datos previos se ven atenuados).
+  useEffect(() => {
     setSeleccion(new Set());
     setEditingId(null);
-    try {
-      const qs = new URLSearchParams({ desde, hasta, doctor_id: doctorId });
-      const agendaQs = new URLSearchParams({
-        fechaDesde: desde,
-        fechaHasta: hasta,
-        doctorId,
-        pageSize: '100',
-      });
-      const [resMetricas, resAgenda, honorariosPayload] = await Promise.all([
-        fetch(`/api/productividad/metricas?${qs}`),
-        fetch(`/api/agenda?${agendaQs}`),
-        obtenerHonorarios(1),
-      ]);
-      if (!resMetricas.ok || !resAgenda.ok) {
-        throw new Error('No se pudo cargar el detalle del doctor');
-      }
-      const [jsonMetricas, jsonAgenda] = (await Promise.all([
-        resMetricas.json(),
-        resAgenda.json(),
-      ])) as [MetricasPayload, { data: EventoAgenda[]; total: number }];
-      if (carga !== cargaRef.current) return;
-      setMetricas(jsonMetricas);
-      aplicarHonorarios(honorariosPayload);
-      setAgenda(jsonAgenda.data || []);
-      setAgendaTotal(jsonAgenda.total || 0);
-    } catch (err) {
-      if (carga !== cargaRef.current) return;
-      setError(err instanceof Error ? err.message : 'Error al cargar el detalle');
-    } finally {
-      if (carga === cargaRef.current) setLoading(false);
-    }
-  }, [doctorId, desde, hasta, obtenerHonorarios, aplicarHonorarios]);
-
-  useEffect(() => {
-    void cargar();
-  }, [cargar]);
+    setHonAviso(null);
+  }, [filtro]);
 
   const cambiarPaginaHon = useCallback(
-    async (pagina: number) => {
-      setHonCargando(true);
+    (pagina: number) => {
       setHonAviso(null);
-      try {
-        aplicarHonorarios(await obtenerHonorarios(pagina));
-      } catch (err) {
-        setHonAviso(err instanceof Error ? err.message : 'Error al cargar honorarios');
-      } finally {
-        setHonCargando(false);
-      }
+      setPaginado({ filtro, page: pagina });
     },
-    [obtenerHonorarios, aplicarHonorarios]
+    [filtro]
   );
 
   const toggleSeleccion = useCallback((id: string) => {
@@ -172,12 +139,12 @@ export default function DoctorDetalle({
     });
   }, []);
 
-  const visiblesPagina = honorarios.filter((h) => h.estado_pago === 'POR_PAGAR');
+  const visiblesPagina = useMemo(() => honorarios.filter((h) => h.estado_pago === 'POR_PAGAR'), [honorarios]);
   const todasSeleccionadas =
     visiblesPagina.length > 0 && visiblesPagina.every((h) => seleccion.has(h.id));
 
   const alternarSeleccionPagina = useCallback(() => {
-    const visibles = honorarios.filter((h) => h.estado_pago === 'POR_PAGAR').map((h) => h.id);
+    const visibles = visiblesPagina.map((h) => h.id);
     const todas = visibles.length > 0 && visibles.every((id) => seleccion.has(id));
     setSeleccion((prev) => {
       const next = new Set(prev);
@@ -187,37 +154,35 @@ export default function DoctorDetalle({
       }
       return next;
     });
-  }, [honorarios, seleccion]);
-
-  const refrescar = useCallback(async () => {
-    const qs = new URLSearchParams({ desde, hasta, doctor_id: doctorId });
-    const [honorariosActualizados, resMetricas] = await Promise.all([
-      obtenerHonorarios(honPage),
-      fetch(`/api/productividad/metricas?${qs}`),
-    ]);
-    aplicarHonorarios(honorariosActualizados);
-    if (resMetricas.ok) setMetricas((await resMetricas.json()) as MetricasPayload);
-  }, [honPage, desde, hasta, doctorId, obtenerHonorarios, aplicarHonorarios]);
+  }, [visiblesPagina, seleccion]);
 
   const pagar = useCallback(
     async (ids: string[]) => {
-      if (!ids.length) return;
+      if (!ids.length || accionBusy) return;
       setAccionBusy(true);
       setHonAviso(null);
+      const marcar = new Set(ids);
+      const previo = honSwr.data;
+      // Optimista: las filas quedan como PAGADO al instante; el servidor confirma.
+      if (previo) {
+        void mutateHon(
+          {
+            ...previo,
+            items: previo.items.map((h) =>
+              marcar.has(h.id) && h.estado_pago === 'POR_PAGAR' ? { ...h, estado_pago: 'PAGADO' as const } : h
+            ),
+          },
+          { revalidate: false }
+        );
+      }
       try {
-        const res = await fetch('/api/productividad/honorarios/pagar', {
-          method: 'POST',
-          body: JSON.stringify({ ids }),
-        });
-        const body = (await res.json().catch(() => null)) as
-          | { pagados?: number; omitidos?: Array<{ id: string; motivo: string }>; error?: string }
-          | null;
-        if (!res.ok) throw new Error(body?.error || 'Error al pagar');
-
-        await refrescar();
+        const body = await enviarJSON<{ pagados?: number; omitidos?: Array<{ id: string; motivo: string }> } | null>(
+          '/api/productividad/honorarios/pagar',
+          'POST',
+          { ids }
+        );
         setSeleccion(new Set());
         setEditingId(null);
-
         const pagados = body?.pagados || 0;
         const omitidos = body?.omitidos?.length || 0;
         setHonAviso(
@@ -226,12 +191,15 @@ export default function DoctorDetalle({
             : `${pagados} pago(s) registrados`
         );
       } catch (err) {
-        setHonAviso(err instanceof Error ? err.message : 'Error al pagar');
+        if (previo) void mutateHon(previo, { revalidate: false });
+        toast(err instanceof Error ? err.message : 'Error al pagar', 'error');
       } finally {
         setAccionBusy(false);
+        // Métricas, honorarios, pagos y listados de productividad se revalidan en segundo plano.
+        void invalidar('/api/productividad');
       }
     },
-    [refrescar]
+    [accionBusy, honSwr.data, mutateHon, invalidar, toast]
   );
 
   const iniciarEdicion = useCallback((fila: HonorarioLigaFila) => {
@@ -241,36 +209,38 @@ export default function DoctorDetalle({
   }, []);
 
   const guardarMonto = useCallback(async () => {
-    if (!editingId) return;
+    if (!editingId || editBusy) return;
     const n = Number(editMonto);
-    if (!Number.isFinite(n) || n < 0) {
+    if (editMonto.trim() === '' || !Number.isFinite(n) || n < 0) {
       setHonAviso('Monto inválido');
       return;
     }
+    const monto = Math.round(n * 100) / 100;
     setEditBusy(true);
     setHonAviso(null);
+    const previo = honSwr.data;
+    if (previo) {
+      void mutateHon(
+        { ...previo, items: previo.items.map((h) => (h.id === editingId ? { ...h, monto } : h)) },
+        { revalidate: false }
+      );
+    }
     try {
-      const res = await fetch(`/api/productividad/honorarios/${editingId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ monto: Math.round(n * 100) / 100 }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || 'Error al guardar monto');
-      }
+      await enviarJSON(`/api/productividad/honorarios/${editingId}`, 'PATCH', { monto });
       setEditingId(null);
-      await refrescar();
       setHonAviso('Monto actualizado');
     } catch (err) {
-      setHonAviso(err instanceof Error ? err.message : 'Error al guardar monto');
+      if (previo) void mutateHon(previo, { revalidate: false });
+      toast(err instanceof Error ? err.message : 'Error al guardar monto', 'error');
     } finally {
       setEditBusy(false);
+      void invalidar('/api/productividad');
     }
-  }, [editingId, editMonto, refrescar]);
+  }, [editingId, editBusy, editMonto, honSwr.data, mutateHon, invalidar, toast]);
 
-  if (loading) {
+  if (!metricas && !error) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" aria-busy="true">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
@@ -281,9 +251,9 @@ export default function DoctorDetalle({
     );
   }
 
-  if (error || !metricas) {
+  if (!metricas) {
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900/50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+      <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900/50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
         {error || 'Sin datos'}
       </div>
     );
@@ -292,13 +262,14 @@ export default function DoctorDetalle({
   const k = metricas.kpis;
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4 animate-fadeIn" aria-busy={validandoDetalle}>
+      <BarraRevalidando activo={validandoDetalle} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onCerrar}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-fg-2 hover:bg-surface-2"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2"
           >
             <ArrowLeft className="w-4 h-4" /> Doctores
           </button>
@@ -311,7 +282,11 @@ export default function DoctorDetalle({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {error && (
+        <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+
+      <div className="valor-suave grid grid-cols-2 lg:grid-cols-4 gap-4" data-validando={metricasSwr.isValidating}>
         <StatCard
           icon={DollarSign}
           label="Devengado"
@@ -359,7 +334,8 @@ export default function DoctorDetalle({
         hasta={hasta}
       />
 
-      <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+      <div className="relative rounded-2xl border border-line bg-surface overflow-hidden">
+        <BarraRevalidando activo={honCargando} />
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-line/70">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-bold text-fg">
@@ -374,7 +350,7 @@ export default function DoctorDetalle({
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Pagar seleccionados ({seleccion.size})
+            {accionBusy ? 'Pagando…' : `Pagar seleccionados (${seleccion.size})`}
           </button>
         </div>
 
@@ -387,13 +363,20 @@ export default function DoctorDetalle({
           </p>
         )}
 
+        {errorHon && (
+          <p role="alert" className="px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 border-b border-line/70">
+            {errorHon}
+          </p>
+        )}
+
         {honorarios.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted">
             Sin eventos de honorarios en el rango seleccionado.
           </p>
         ) : (
           <div
-            className={`overflow-x-auto ${honCargando ? 'opacity-60' : ''}`}
+            className="valor-suave overflow-x-auto"
+            data-validando={honCargando}
             aria-busy={honCargando}
           >
             <table className="w-full">
@@ -422,7 +405,7 @@ export default function DoctorDetalle({
                   const seleccionable = h.estado_pago === 'POR_PAGAR';
                   const editable = h.estado_pago !== 'PAGADO' && h.estado_pago !== 'CANCELADO';
                   return (
-                    <tr key={h.id} className="hover:bg-surface-2">
+                    <tr key={h.id} className="transition-colors hover:bg-surface-2">
                       <td className="px-4 py-3">
                         {seleccionable && (
                           <input
@@ -518,7 +501,7 @@ export default function DoctorDetalle({
               total={honTotal}
               pageSize={honPageSize}
               totalItems={honTotal}
-              onPageChange={(p) => void cambiarPaginaHon(p)}
+              onPageChange={cambiarPaginaHon}
               label="honorarios del doctor"
             />
           </div>

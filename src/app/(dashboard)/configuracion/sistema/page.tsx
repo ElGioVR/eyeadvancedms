@@ -13,21 +13,12 @@ export default function SistemaPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  // El tema solo se conoce en el cliente: hasta montar, ninguna opción aparece marcada
+  // (sin skeleton de pantalla completa; el resto de la página es estático).
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) {
-    return (
-      <div className="space-y-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-32 rounded-xl bg-gray-200 dark:bg-surface-2" />
-          <div className="h-48 rounded-xl bg-gray-200 dark:bg-surface-2" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
         <div className="border-b border-line/70 px-6 py-4">
           <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">Apariencia</h3>
@@ -38,18 +29,20 @@ export default function SistemaPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {themes.map((t) => {
               const Icon = t.icon;
-              const isActive = theme === t.id;
+              const isActive = mounted && theme === t.id;
               return (
                 <button
                   key={t.id}
+                  type="button"
+                  aria-pressed={isActive}
                   onClick={() => setTheme(t.id)}
-                  className={`relative flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${
+                  className={`relative flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-colors duration-150 ${
                     isActive
                       ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                       : 'border-line bg-surface-2 hover:border-gray-300 dark:hover:border-line-strong'
                   }`}
                 >
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors duration-150 ${
                     isActive
                       ? 'bg-primary-600 text-white'
                       : 'bg-gray-200 dark:bg-surface-2 text-muted'
@@ -63,7 +56,7 @@ export default function SistemaPage() {
                     <p className="text-xs text-muted mt-0.5">{t.description}</p>
                   </div>
                   {isActive && (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-white">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-white animate-popIn">
                       <Check className="h-3.5 w-3.5" />
                     </div>
                   )}

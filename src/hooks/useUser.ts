@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { mutate as mutateGlobal } from 'swr';
 import { clearPrefetched } from '@/lib/prefetch';
 
 export interface User {
@@ -111,6 +112,8 @@ export function clearUserCache(): void {
   cache = undefined;
   inflight = null;
   clearPrefetched();
+  // Vacía la caché de datos de SWR (sin revalidar): el siguiente usuario no ve datos del anterior.
+  void mutateGlobal(() => true, undefined, { revalidate: false });
   if (typeof window !== 'undefined' && 'caches' in window) {
     caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
   }

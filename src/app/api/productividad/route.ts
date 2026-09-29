@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerQuery } from '@/lib/api/validar';
+import { leerTodo } from '@/lib/productividad/lotes';
+import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
+import { z } from 'zod';
 import {
   CSV_BOM,
   formatFechaCsv,
@@ -12,6 +16,36 @@ import { listarResumenHonorarios, type ResumenFila } from '@/lib/productividad';
 type TabId = 'honorarios' | 'por_doctor' | 'cirugias' | 'entradas_salidas' | 'estudios' | 'pagos' | 'tarifas' | 'periodos' | 'sync';
 
 const TABS: TabId[] = ['honorarios', 'por_doctor', 'cirugias', 'entradas_salidas', 'estudios', 'pagos', 'tarifas', 'periodos', 'sync'];
+
+// Pantalla: primeras 200 filas por pestaña. CSV: todas (paginado en bloques de
+// 1000 hasta este tope) — antes el CSV también se cortaba en 200 sin avisar.
+const LIMITE_PANTALLA = 200;
+const MAX_FILAS_CSV = 20000;
+
+const querySchema = z.object({
+  desde: fechaReal.optional(),
+  hasta: fechaReal.optional(),
+  doctor_id: uuidOpcional,
+  formato: z.string().max(10).optional(),
+  tab: z.string().max(40).optional(),
+});
+
+/** Lee `LIMITE_PANTALLA` filas o, para CSV, todas paginando con `.range()`. */
+async function leerFilas<T>(
+  construir: (desde: number, hasta: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+  completo: boolean
+): Promise<T[]> {
+  if (completo) {
+    return leerTodo<T>(
+      (a, b) => construir(a, b) as PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+      MAX_FILAS_CSV
+    );
+  }
+  // En pantalla, como antes, un fallo deja la pestaña vacía (el CSV sí falla).
+  const { data, error } = await construir(0, LIMITE_PANTALLA - 1);
+  if (error) console.error('[productividad] lectura de pestaña', error.message);
+  return (data || []) as T[];
+}
 
 function sanitizeCsvCell(value: string | number | null | undefined): string {
   const raw = value == null ? '' : String(value);
@@ -128,7 +162,8 @@ async function cargarTabs(
   desde: string,
   hasta: string,
   doctorId: string | null,
-  tabs: TabId[]
+  tabs: TabId[],
+  completo = false
 ) {
   const supabase = getSupabaseAdmin();
   const need = (t: TabId) => tabs.includes(t);
@@ -141,7 +176,7 @@ async function cargarTabs(
       ? listarResumenHonorarios({ desde, hasta, doctor_id: doctorId || undefined })
       : Promise.resolve([] as ResumenFila[]),
     need('cirugias')
-      ? (async () => {
+      ? leerFilas<Record<string, unknown>>((a, b) => {
           let q = supabase
             .from('cirugia_productividad')
             .select(
@@ -155,16 +190,15 @@ async function cargarTabs(
             .neq('estado', 'ANULADO')
             .neq('agenda.estado', 'cancelada')
             .order('fecha', { referencedTable: 'agenda_cirugias', ascending: false })
-            .limit(200);
+            .order('id', { ascending: true });
           if (doctorId) {
             q = q.eq('participante.medico_id', doctorId);
           }
-          const { data } = await q;
-          return data || [];
-        })()
+          return q.range(a, b);
+        }, completo)
       : Promise.resolve([]),
     need('entradas_salidas')
-      ? (async () => {
+      ? leerFilas<Record<string, unknown>>((a, b) => {
           let q = supabase
             .from('consultas')
             .select(
@@ -181,14 +215,13 @@ async function cargarTabs(
             .lte('fecha', hasta)
             .order('fecha', { ascending: false })
             .order('hora_inicio', { ascending: false })
-            .limit(200);
+            .order('id', { ascending: true });
           if (doctorId) q = q.eq('doctor_id', doctorId);
-          const { data } = await q;
-          return consolidarConsultas((data || []) as Array<Record<string, unknown>>);
-        })()
+          return q.range(a, b);
+        }, completo).then(consolidarConsultas)
       : Promise.resolve([]),
     need('estudios')
-      ? (async () => {
+      ? leerFilas<Record<string, unknown>>((a, b) => {
           let q = supabase
             .from('consulta_conceptos')
             .select(
@@ -202,14 +235,13 @@ async function cargarTabs(
             .gte('consulta.fecha', desde)
             .lte('consulta.fecha', hasta)
             .order('fecha', { referencedTable: 'consultas', ascending: false })
-            .limit(200);
+            .order('id', { ascending: true });
           if (doctorId) q = q.eq('doctor_id', doctorId);
-          const { data } = await q;
-          return data || [];
-        })()
+          return q.range(a, b);
+        }, completo)
       : Promise.resolve([]),
     needNombres
-      ? supabase.from('doctores').select('id, alias').limit(500)
+      ? supabase.from('doctores').select('id, alias').order('id').limit(1000)
       : Promise.resolve({ data: [] as Array<{ id: string; alias: string }> }),
   ]);
 
@@ -474,39 +506,32 @@ export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  // El rol se verifica en paralelo con la lectura (ver leerConRol).
-  const rolP = requireRole(auth.user, ['admin']);
+  // requireRole ya no cuesta un viaje extra (perfil cacheado): se espera antes
+  // de leer para no gastar BD en usuarios sin permiso.
+  const roleError = await requireRole(auth.user, ['admin']);
+  if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const { desde, hasta } = rangoPersonalizado(
-    searchParams.get('desde'),
-    searchParams.get('hasta')
-  );
-  const doctorId = searchParams.get('doctor_id');
-  const formato = (searchParams.get('formato') || 'json').toLowerCase();
-  const tabRaw = searchParams.get('tab') || 'honorarios';
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
+  const { desde, hasta } = rangoPersonalizado(q.desde, q.hasta);
+  const doctorId = q.doctor_id ?? null;
+  const formato = (q.formato || 'json').toLowerCase();
+  const tabRaw = q.tab || 'honorarios';
   const tab = (TABS.includes(tabRaw as TabId) ? tabRaw : 'honorarios') as TabId;
 
-  if (desde > hasta) {
-    const roleError = await rolP;
-    if (roleError) return roleError;
-    return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
-  }
+  const rangoError = validarRango(desde, hasta);
+  if (rangoError) return rangoError;
 
   const supabase = getSupabaseAdmin();
 
   try {
-    // Validación del doctor y carga de la pestaña en paralelo (antes en serie).
-    const r = await leerConRol(rolP, () =>
-      Promise.all([
-        doctorId
-          ? Promise.resolve(supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle())
-          : Promise.resolve({ data: { id: '' } }),
-        cargarTabs(desde, hasta, doctorId, [tab]),
-      ])
-    );
-    if ('denegado' in r) return r.denegado;
-    const [{ data: doc }, data] = r.datos;
+    // Validación del doctor y carga de la pestaña en paralelo.
+    const [{ data: doc }, data] = await Promise.all([
+      doctorId
+        ? Promise.resolve(supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle())
+        : Promise.resolve({ data: { id: '' } }),
+      cargarTabs(desde, hasta, doctorId, [tab], formato === 'csv'),
+    ]);
     if (!doc) {
       return NextResponse.json({ error: 'Doctor no encontrado' }, { status: 404 });
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import DoctorBottomNav from '@/components/layout/DoctorBottomNav';
@@ -15,6 +16,7 @@ export default function DashboardLayout({
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <ToastProvider>
@@ -35,7 +37,10 @@ export default function DashboardLayout({
         >
           <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
           <main className="flex-1 overflow-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8">
-            {children}
+            {/* Entrada suave al cambiar de módulo (solo opacidad: sin transform, no rompe elementos fixed) */}
+            <div key={pathname} className="animate-fadeIn">
+              {children}
+            </div>
           </main>
         </div>
 

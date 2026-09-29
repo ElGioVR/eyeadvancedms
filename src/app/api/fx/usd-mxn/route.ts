@@ -1,8 +1,29 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/server';
 
+// Caché por instancia + deduplicación de peticiones simultáneas.
 let cachedRate: { rate: number; timestamp: number } | null = null;
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+let enCurso: Promise<number> | null = null;
+/** Tras un fallo no se reintenta la API externa hasta esta marca (evita esperar el timeout en cada request). */
+let reintentarDesde = 0;
+const ESPERA_TRAS_FALLO = 5 * 60 * 1000;
+const CACHE_TTL = 60 * 60 * 1000; // 1 hora
+const TIMEOUT_MS = 3000;
+const RATE_RESPALDO = 20.5;
+
+async function obtenerTipoCambio(): Promise<number> {
+  const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
+    next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error('Error fetching rate');
+  const data = (await res.json()) as { rates?: Record<string, unknown> };
+  const rate = Number(data?.rates?.MXN);
+  // Validación de cordura: descarta respuestas corruptas
+  if (!Number.isFinite(rate) || rate <= 1 || rate >= 100) throw new Error('MXN rate not found');
+  return rate;
+}
 
 export async function GET() {
   const auth = await requireAuth();
@@ -13,18 +34,24 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD', { next: { revalidate: 3600 } });
-    if (!res.ok) throw new Error('Error fetching rate');
-    const data = await res.json();
-    const rate = data.rates?.MXN;
-    if (!rate) throw new Error('MXN rate not found');
+    if (Date.now() < reintentarDesde) throw new Error('backoff');
+    if (!enCurso) {
+      enCurso = obtenerTipoCambio().finally(() => {
+        enCurso = null;
+      });
+    }
+    const rate = await enCurso;
 
     cachedRate = { rate, timestamp: Date.now() };
     return NextResponse.json({ rate, source: 'live', updated_at: new Date().toISOString() });
-  } catch {
+  } catch (err) {
+    if (!(err instanceof Error && err.message === 'backoff')) {
+      reintentarDesde = Date.now() + ESPERA_TRAS_FALLO;
+      console.error('[fx.usd-mxn]', err instanceof Error ? err.message : err);
+    }
     if (cachedRate) {
       return NextResponse.json({ rate: cachedRate.rate, source: 'stale-cache', updated_at: new Date(cachedRate.timestamp).toISOString() });
     }
-    return NextResponse.json({ rate: 20.5, source: 'estimado', warning: 'Rate from fallback, may not reflect current market', updated_at: new Date().toISOString() });
+    return NextResponse.json({ rate: RATE_RESPALDO, source: 'estimado', warning: 'Rate from fallback, may not reflect current market', updated_at: new Date().toISOString() });
   }
 }

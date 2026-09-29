@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { validarId } from '@/lib/api/validar';
+
+interface AseguranzaJoin {
+  id: string;
+  nombre: string;
+}
 
 export async function GET(
   request: Request,
@@ -12,22 +18,18 @@ export async function GET(
   if (roleError) return roleError;
 
   const { id } = params;
+  const idError = validarId(id, 'ID de paciente');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  const { data: paciente, error: pacienteError } = await supabase
-    .from('pacientes')
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, aseguranza_id, numero_poliza, numero_afiliacion, created_at')
-    .eq('id', id)
-    .single();
-
-  if (pacienteError || !paciente) {
-    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
-  }
-
-  const [aseguranzaResult, ultimaConsultaResult, consultasCountResult, cirugiasCountResult] = await Promise.all([
-    paciente.aseguranza_id
-      ? supabase.from('aseguranzas').select('id, nombre').eq('id', paciente.aseguranza_id).single()
-      : Promise.resolve({ data: null }),
+  // Todo en un solo viaje en paralelo (la aseguranza va embebida en el paciente).
+  // Si el paciente no existe, los demás resultados se descartan.
+  const [pacienteResult, ultimaConsultaResult, consultasCountResult, cirugiasCountResult] = await Promise.all([
+    supabase
+      .from('pacientes')
+      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, aseguranza_id, numero_poliza, numero_afiliacion, created_at, aseguranzas:aseguranza_id (id, nombre)')
+      .eq('id', id)
+      .maybeSingle(),
     supabase
       .from('consultas')
       .select('fecha, diagnostico')
@@ -38,6 +40,16 @@ export async function GET(
     supabase.from('consultas').select('id', { count: 'exact', head: true }).eq('paciente_id', id),
     supabase.from('agenda_cirugias').select('id', { count: 'exact', head: true }).eq('paciente_id', id),
   ]);
+
+  const { data: paciente, error: pacienteError } = pacienteResult;
+  if (pacienteError || !paciente) {
+    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  const asegJoin = (paciente as { aseguranzas?: AseguranzaJoin | AseguranzaJoin[] | null }).aseguranzas;
+  const aseguranza = paciente.aseguranza_id
+    ? (Array.isArray(asegJoin) ? asegJoin[0] : asegJoin) ?? null
+    : null;
 
   const resumen = {
     paciente: {
@@ -53,7 +65,7 @@ export async function GET(
       numero_afiliacion: paciente.numero_afiliacion,
       created_at: paciente.created_at,
     },
-    aseguranza: aseguranzaResult.data,
+    aseguranza,
     ultima_consulta: ultimaConsultaResult.data || null,
     consultas_previas: consultasCountResult.count || 0,
     cirugias_previas: cirugiasCountResult.count || 0,

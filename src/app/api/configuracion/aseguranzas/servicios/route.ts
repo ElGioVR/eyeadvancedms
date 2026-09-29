@@ -1,52 +1,65 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError } from '@/lib/supabase/handle-error';
-import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerJSON, leerQuery } from '@/lib/api/validar';
+import { monto, respuestaErrorDb } from '@/lib/api/configuracion';
+import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
+
+const TIPOS = ['ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA'] as const;
+
+// La pantalla de servicios filtra en cliente: se devuelve la matriz completa
+// de la aseguradora, con un tope defensivo.
+const LIMITE_LISTADO = 5000;
+
+const querySchema = z.object({
+  aseguranza_id: z.string().uuid('ID de aseguranza no válido').optional(),
+  tipo: z.enum(TIPOS).optional(),
+  search: z.string().max(200).optional(),
+});
 
 const createSchema = z.object({
   aseguranza_id: z.string().uuid(),
-  tipo: z.enum(['ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA']),
-  nombre: z.string().min(1).max(500),
-  costo: z.number().min(0).default(0),
-  porcentaje_cobertura: z.number().min(0).max(100).default(0),
+  tipo: z.enum(TIPOS),
+  nombre: z.string().trim().min(1).max(500),
+  costo: monto.default(0),
+  porcentaje_cobertura: z.number().finite().min(0).max(100).default(0),
 }).strict();
 
 const updateSchema = z.object({
   id: z.string().uuid(),
-  nombre: z.string().min(1).max(500).optional(),
-  costo: z.number().min(0).optional(),
-  porcentaje_cobertura: z.number().min(0).max(100).optional(),
+  nombre: z.string().trim().min(1).max(500).optional(),
+  costo: monto.optional(),
+  porcentaje_cobertura: z.number().finite().min(0).max(100).optional(),
   activo: z.boolean().optional(),
 }).strict();
 
 function normalize(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  const { searchParams } = new URL(request.url);
-  const aseguranzaId = searchParams.get('aseguranza_id');
-  const tipo = searchParams.get('tipo');
-  const search = searchParams.get('search');
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
 
   const supabase = getSupabaseAdmin();
   let query = supabase
     .from('aseguranza_servicios')
-    .select('*, aseguranzas:aseguranza_id(nombre)')
+    .select('id, aseguranza_id, tipo, nombre, costo, porcentaje_cobertura, activo, created_at, updated_at, aseguranzas:aseguranza_id(nombre)')
     .eq('activo', true)
-    .order('nombre');
+    .order('nombre')
+    .limit(LIMITE_LISTADO);
 
-  if (aseguranzaId) query = query.eq('aseguranza_id', aseguranzaId);
-  if (tipo) query = query.eq('tipo', tipo);
-  if (search) query = query.ilike('nombre', `%${search.replace(/[%_]/g, (c) => '\\' + c)}%`);
+  if (q.aseguranza_id) query = query.eq('aseguranza_id', q.aseguranza_id);
+  if (q.tipo) query = query.eq('tipo', q.tipo);
+  const search = q.search ? sanitizarBusqueda(q.search, 100) : '';
+  if (search) query = query.ilike('nombre', `%${search}%`);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+  if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.servicios.listar');
 
   return NextResponse.json({ data });
 }
@@ -57,19 +70,10 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const data = await leerJSON(request, createSchema);
+  if (data instanceof NextResponse) return data;
 
-  const validation = createSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
-  }
-
-  const data = validation.data;
   const supabase = getSupabaseAdmin();
-
   const { error } = await supabase.from('aseguranza_servicios').insert({
     aseguranza_id: data.aseguranza_id,
     tipo: data.tipo,
@@ -80,10 +84,10 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json({ error: 'Este servicio ya existe para esta aseguradora' }, { status: 409 });
-    }
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return respuestaErrorDb(error, 'configuracion.aseguranzas.servicios.crear', {
+      duplicado: 'Este servicio ya existe para esta aseguradora',
+      referencia: 'La aseguradora seleccionada no existe',
+    });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
@@ -95,18 +99,9 @@ export async function PATCH(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = updateSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
-  }
-
-  const { id, ...updates } = validation.data;
-  const supabase = getSupabaseAdmin();
+  const body = await leerJSON(request, updateSchema);
+  if (body instanceof NextResponse) return body;
+  const { id, ...updates } = body;
 
   const updateData: Record<string, unknown> = {};
   if (updates.nombre !== undefined) { updateData.nombre = updates.nombre.trim(); updateData.nombre_norm = normalize(updates.nombre); }
@@ -115,8 +110,13 @@ export async function PATCH(request: Request) {
   if (updates.activo !== undefined) updateData.activo = updates.activo;
   updateData.updated_at = new Date().toISOString();
 
+  const supabase = getSupabaseAdmin();
   const { error } = await supabase.from('aseguranza_servicios').update(updateData).eq('id', id);
-  if (error) return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+  if (error) {
+    return respuestaErrorDb(error, 'configuracion.aseguranzas.servicios.actualizar', {
+      duplicado: 'Este servicio ya existe para esta aseguradora',
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

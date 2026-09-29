@@ -3,20 +3,28 @@ import { notificarAsignacion } from '@/services/notificaciones';
 import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { consumirLIO } from '@/lib/inventario';
+import { errorInterno, fechaISO, horaHHMM, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
+
+/** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
+const ojoSchema = z
+  .string()
+  .max(10)
+  .transform((v) => v.trim().toUpperCase())
+  .refine((v) => v === '' || v === 'OD' || v === 'OI' || v === 'OU', 'Ojo no válido (OD, OI u OU)');
 
 const cirugiaCreateSchema = z.object({
   paciente_id: z.string().uuid().optional().nullable(),
   nombre_paciente: z.string().min(1).max(255),
   expediente: z.string().max(50).optional().nullable(),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
+  fecha: fechaISO.optional().nullable(),
+  hora: horaHHMM.optional().nullable(),
   jornada: z.string().max(100).optional().nullable(),
   diagnostico: z.string().max(500).optional().nullable(),
   procedimiento: z.string().max(255).optional().nullable(),
-  ojo: z.string().max(10).optional().nullable(),
+  ojo: ojoSchema.optional().nullable(),
   lio: z.string().max(100).optional().nullable(),
   marca_lio: z.string().max(100).optional().nullable(),
   tiempo_estimado: z.string().max(50).optional().nullable(),
@@ -25,9 +33,21 @@ const cirugiaCreateSchema = z.object({
   estado: z.enum(['agendada', 'aplazada', 'completada', 'cancelada']).optional(),
   procedencia: z.string().max(255).optional().nullable(),
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
-  notas: z.string().optional().nullable(),
+  notas: z.string().max(5000).optional().nullable(),
   inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
+
+/** Los `null` del body equivalen a «no enviado» (comportamiento previo). */
+function quitarNulos(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(quitarNulos);
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v)) if (val !== null) out[k] = quitarNulos(val);
+    return out;
+  }
+  return v;
+}
+const cirugiaCreateBodySchema = z.preprocess(quitarNulos, cirugiaCreateSchema);
 
 const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
   BORRADOR: 'agendada',
@@ -41,44 +61,80 @@ const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
   CANCELADA: 'cancelada',
 };
 
+/** Rango máximo (días) que puede pedir el calendario/productividad sin búsqueda. */
+const MAX_DIAS_RANGO = 731; // igual que los reportes de productividad (DoctorDetalle)
+/** Tope de filas por fuente (cirugías / consultas) antes de fusionar y paginar. */
+const MAX_FILAS_FUENTE = 2000;
+
+const ESTADOS_AGENDA = ['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada'] as const;
+
+const agendaQuerySchema = z.object({
+  page: z.coerce.number().int().catch(1).transform((n) => Math.min(100_000, Math.max(1, n))),
+  // El front pide 500; valores mayores se recortan (antes: Math.min(500, …)).
+  pageSize: z.coerce.number().int().catch(50).transform((n) => Math.min(500, Math.max(1, n))),
+  fechaDesde: fechaISO.optional(),
+  fechaHasta: fechaISO.optional(),
+  doctorId: uuid.optional(),
+  estado: z.enum(ESTADOS_AGENDA).optional(),
+  tipo: z.enum(['cirugia', 'consulta', 'estudio']).optional(),
+  search: z.string().max(100).optional(),
+});
+
+function diasEntre(desde: string, hasta: string): number {
+  return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
+}
+
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const authDur = performance.now() - startedAt;
 
-  const { searchParams } = new URL(request.url);
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const pageSize = Math.min(500, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
+  const q = leerQuery(request, agendaQuerySchema);
+  if (q instanceof NextResponse) return q;
+  const { page, pageSize, fechaDesde, fechaHasta, doctorId, estado, tipo, search } = q;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const fechaDesde = searchParams.get('fechaDesde');
-  const fechaHasta = searchParams.get('fechaHasta');
-  const doctorId = searchParams.get('doctorId');
-  const estado = searchParams.get('estado');
-  const tipo = searchParams.get('tipo');
-  const search = searchParams.get('search');
+  const searchSeguro = search ? sanitizarBusqueda(search) : '';
+
+  // Rango obligatorio y acotado salvo búsqueda (evita barrer toda la agenda).
+  if (!searchSeguro) {
+    if (!fechaDesde || !fechaHasta) {
+      return NextResponse.json({ error: 'El rango de fechas (fechaDesde y fechaHasta) es obligatorio' }, { status: 400 });
+    }
+  }
+  if (fechaDesde && fechaHasta) {
+    const dias = diasEntre(fechaDesde, fechaHasta);
+    if (Number.isNaN(dias) || dias < 0) {
+      return NextResponse.json({ error: 'Rango de fechas no válido' }, { status: 400 });
+    }
+    if (dias > MAX_DIAS_RANGO) {
+      return NextResponse.json({ error: `El rango de fechas no puede exceder ${MAX_DIAS_RANGO} días` }, { status: 400 });
+    }
+  }
 
   const supabase = getSupabaseAdmin();
 
-  // RBAC en una sola ronda: el mismo SELECT de `usuarios` valida rol/activo
-  // (equivalente a requireRole) y trae las preferencias; el doctor en paralelo.
-  // Antes: requireRole → (perfil ‖ doctor) = 2 viajes en serie.
-  const [{ data: profile }, { data: doctorProfile }] = await Promise.all([
-    supabase.from('usuarios').select('rol, activo, preferencias').eq('id', auth.user.id).maybeSingle(),
-    supabase.from('doctores').select('id').eq('usuario_id', auth.user.id).maybeSingle(),
-  ]);
+  // RBAC con el perfil que ya trae requireAuth (sin otra consulta a `usuarios`).
+  const profile = auth.perfil;
   const ROLES_AGENDA = ['admin', 'doctor', 'recepcionista'];
   if (!profile || profile.activo !== true || !ROLES_AGENDA.includes(profile.rol)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
   const userRole = profile.rol;
-  const sessionDoctorId = doctorProfile?.id ?? null;
-  const focus = userRole === 'admin'
-    && typeof profile?.preferencias === 'object'
-    && profile.preferencias !== null
-    && (profile.preferencias as Record<string, unknown>).modo_focus === true;
+  const focus = userRole === 'admin' && profile.preferencias?.modo_focus === true;
+
+  // El vínculo usuario → doctores solo se consulta cuando filtra (doctor o admin en modo focus).
+  let sessionDoctorId: string | null = null;
+  if (userRole === 'doctor' || focus) {
+    const { data: doctorProfile } = await supabase
+      .from('doctores')
+      .select('id')
+      .eq('usuario_id', auth.user.id)
+      .maybeSingle();
+    sessionDoctorId = doctorProfile?.id ?? null;
+  }
   const filtrarPorDoctor = userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
 
@@ -87,15 +143,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: [], total: 0, page, pageSize });
   }
 
-  const searchSeguro = search ? sanitizarBusqueda(search) : '';
-
   // ── Cirugías ──
   let queryCirugias = supabase
     .from('agenda_cirugias')
     .select(`
       id, paciente_id, nombre_paciente, fecha, hora, doctor_id, estado,
-      procedimiento, tiempo_estimado,
-      doctores:doctor_id (alias)
+      procedimiento, procedencia, tiempo_estimado,
+      doctores:doctor_id (alias),
+      origen:origen_id (nombre),
+      servicio:servicio_id (nombre)
     `);
 
   if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
@@ -122,22 +178,25 @@ export async function GET(request: Request) {
   if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
   if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
   if (doctorFiltro) queryConsultas = queryConsultas.eq('doctor_id', doctorFiltro);
-  // Con `!inner` el filtro sobre pacientes sí reduce las consultas (antes solo
-  // vaciaba el join y devolvía todas las consultas del rango sin nombre).
+  // Con `!inner` el filtro sobre pacientes sí reduce las consultas.
   if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
 
   const shouldQueryCirugias = !tipo || tipo === 'cirugia';
   const shouldQueryConsultas = !tipo || tipo === 'consulta' || tipo === 'estudio';
 
   const [{ data: cirugias, error: errorCirugias }, { data: consultas, error: errorConsultas }] = await Promise.all([
-    shouldQueryCirugias ? queryCirugias.order('fecha', { ascending: true }).order('hora', { ascending: true }) : Promise.resolve({ data: [], error: null }),
-    shouldQueryConsultas ? queryConsultas.order('fecha', { ascending: true }).order('hora_inicio', { ascending: true }) : Promise.resolve({ data: [], error: null }),
+    shouldQueryCirugias
+      ? queryCirugias.order('fecha', { ascending: true }).order('hora', { ascending: true }).limit(MAX_FILAS_FUENTE)
+      : Promise.resolve({ data: [], error: null }),
+    shouldQueryConsultas
+      ? queryConsultas.order('fecha', { ascending: true }).order('hora_inicio', { ascending: true }).limit(MAX_FILAS_FUENTE)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const dbDur = performance.now() - startedAt - authDur;
 
   if (errorCirugias || errorConsultas) {
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+    return errorInterno(errorCirugias || errorConsultas, 'agenda.listar');
   }
 
   const eventosCirugias = (cirugias || []).map((c) => ({
@@ -149,7 +208,9 @@ export async function GET(request: Request) {
     doctor_id: c.doctor_id,
     doctor_nombre: (c as any).doctores?.alias || null,
     estado: c.estado,
-    procedimiento: c.procedimiento || null,
+    // Cirugías homologadas (RPC) no traen texto libre: se usa el catálogo.
+    procedimiento: c.procedimiento || (c as any).servicio?.nombre || null,
+    procedencia: c.procedencia || (c as any).origen?.nombre || null,
     tiempo_estimado: c.tiempo_estimado || null,
     tipo: 'cirugia' as const,
   }));
@@ -196,26 +257,10 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, cirugiaCreateBodySchema);
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const clean = JSON.parse(JSON.stringify(body), (_key, value) =>
-    value === null ? undefined : value
-  );
-
-  const validation = cirugiaCreateSchema.safeParse(clean);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
 
   // Validaciones de doctor y paciente en paralelo (antes en serie).
   const [{ data: doctorCheck }, { data: pacienteCheck }] = await Promise.all([
@@ -270,9 +315,9 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) {
+  if (error || !cirugia) {
     return NextResponse.json(
-      { error: errorTranslations[error.message] || 'Error interno del servidor' },
+      { error: handleSupabaseError(error, 'agenda.crear').mensaje },
       { status: 500 }
     );
   }
@@ -285,7 +330,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Notifica al doctor asignado (resuelve doctores.usuario_id)
+  // Notifica al doctor asignado (best-effort: un fallo no invalida la cirugía ya creada)
   await notificarAsignacion({
     doctorId: cirugia.doctor_id,
     tipoServicio: 'Cirugía',
@@ -295,7 +340,7 @@ export async function POST(request: Request) {
     entidadTipo: 'agenda_cirugia',
     entidadId: cirugia.id,
     actorUserId: auth.user.id,
-  });
+  }).catch(() => undefined);
 
   return NextResponse.json(cirugia, { status: 201 });
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
+import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock, User, Stethoscope, Eye, FileText, AlertTriangle, CheckCircle2, Printer } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -48,30 +49,18 @@ function Field({ label, value, full }: { label: string; value: string | null | u
 export default function CirugiaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [cirugia, setCirugia] = useState<CirugiaDetalle | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Detalle puntual (no toda la agenda): la ruta legacy solo redirige al detalle homologado.
+  const { data: cirugia, error: errorSWR } = useSWR<CirugiaDetalle>(id ? `/api/agenda/${id}` : null, { revalidateOnFocus: false });
+  const error = errorSWR ? (errorSWR instanceof Error ? errorSWR.message : 'Error desconocido') : null;
+  const loading = !error;
 
-  const fetchCirugia = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/agenda?pageSize=999`);
-      if (!res.ok) throw new Error('Error al cargar');
-      const data = await res.json();
-      const found = data.data?.find((c: CirugiaDetalle) => c.id === id);
-      if (!found) throw new Error('Cirugía no encontrada');
-      setCirugia(found);
-      // B11: integrar con el detalle homologado de cirugía
-      router.push(`/cirugias/${id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-      setLoading(false);
-    }
-  }, [id, router]);
-
-  useEffect(() => { fetchCirugia(); }, [fetchCirugia]);
+  useEffect(() => {
+    // B11: integrar con el detalle homologado de cirugía
+    if (cirugia) router.push(`/cirugias/${id}`);
+  }, [cirugia, id, router]);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
+    return <div className="flex items-center justify-center h-64 animate-fadeIn" aria-busy="true" aria-label="Cargando"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
   }
 
   if (error || !cirugia) {

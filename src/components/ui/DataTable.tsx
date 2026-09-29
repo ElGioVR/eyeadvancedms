@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import BarraRevalidando from './BarraRevalidando';
 
 interface Column {
   key: string;
@@ -14,6 +15,10 @@ interface DataTableProps {
   data: any[];
   onRowClick?: (row: any) => void;
   emptyMessage?: string;
+  /** Revalidando en segundo plano: barra fina arriba, el contenido se queda. */
+  validating?: boolean;
+  /** Campo con el id estable de cada fila (por defecto `id`). */
+  rowKey?: string;
 }
 
 export default function DataTable({
@@ -21,9 +26,12 @@ export default function DataTable({
   data,
   onRowClick,
   emptyMessage = 'No hay datos disponibles',
+  validating = false,
+  rowKey = 'id',
 }: DataTableProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+    <div className="relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+      <BarraRevalidando activo={validating} />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
@@ -54,11 +62,15 @@ export default function DataTable({
             ) : (
               data.map((row, rowIndex) => (
                 <tr
-                  key={rowIndex}
+                  // Clave estable: al refrescar solo se re-renderizan las filas que cambian
+                  // y únicamente las filas nuevas hacen la animación de entrada.
+                  key={row?.[rowKey] ?? rowIndex}
                   onClick={() => onRowClick?.(row)}
+                  onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(row); } : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
                   className={cn(
-                    'transition-colors hover:bg-surface-2/70',
-                    onRowClick && 'cursor-pointer'
+                    'animate-fadeIn transition-colors hover:bg-surface-2/70',
+                    onRowClick && 'cursor-pointer focus-visible:bg-surface-2/70 focus-visible:outline-none'
                   )}
                 >
                   {columns.map((col) => (

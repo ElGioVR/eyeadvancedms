@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { ArrowLeft, Save, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { useInvalidar } from '@/hooks/useFetch';
 import { ParsedLabel } from '@/lib/parseLabel';
 
 const LabelScanner = dynamic(() => import('./LabelScanner'), { ssr: false });
@@ -66,6 +67,7 @@ interface LenteFormProps {
 export default function LenteForm({ initialData, mode }: LenteFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const invalidar = useInvalidar();
   const [form, setForm] = useState<LenteData>(initialData || emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -100,6 +102,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
   }, [toast]);
 
   async function handleSave() {
+    if (saving) return;
     if (!validate()) return;
     setSaving(true);
     try {
@@ -130,11 +133,14 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         body: mode === 'edit' ? JSON.stringify({ id: initialData?.id, ...payload }) : JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setErrors({ general: data.error || 'Error al guardar' });
         return;
       }
+
+      // Lista, ficha y KPIs se revalidan en segundo plano (sin vaciar la lista al volver).
+      invalidar('/api/inventario', '/api/dashboard');
 
       if (mode === 'edit') toast('Lente actualizado correctamente');
       else if (data.fusionado) toast(`Ya existía ${data.folio || 'este lente'}: se sumó ${data.agregado ?? 1} al stock (ahora ${data.stock})`);

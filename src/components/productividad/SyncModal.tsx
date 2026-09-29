@@ -1,32 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import useSWR from 'swr';
 import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { useInvalidar } from '@/hooks';
+import ProgresoSync from './ProgresoSync';
+import {
+  ejecutarSync,
+  urlPreviewSync,
+  useSegundosTranscurridos,
+  type SyncPreview,
+  type SyncResultado,
+} from './sync';
 
 type Fase = 'loading' | 'ready' | 'sync' | 'done' | 'error';
-
-interface DoctorFila {
-  doctor_id: string;
-  doctor_nombre: string;
-  origen: string;
-  ref: string;
-  eventos?: number;
-}
-
-interface SyncResultado {
-  consultas_verificadas?: number;
-  cirugias_verificadas?: number;
-  eventos_creados?: number;
-  eventos_existentes?: number;
-  consultas_desplegadas?: number;
-  cirugias_desplegadas?: number;
-  doctores_sin_evento?: DoctorFila[];
-  doctores_en_modulo?: DoctorFila[];
-  doctores_total?: number;
-  errores?: string[];
-  duracion_ms?: number;
-}
 
 interface SyncModalProps {
   isOpen: boolean;
@@ -37,59 +26,68 @@ interface SyncModalProps {
 }
 
 export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado }: SyncModalProps) {
-  const [fase, setFase] = useState<Fase>('loading');
-  const [preview, setPreview] = useState<{
-    consultas_pendientes?: number;
-    cirugias_pendientes?: number;
-    doctores_sin_evento?: DoctorFila[];
-    doctores_en_modulo?: DoctorFila[];
-    doctores_total?: number;
-  } | null>(null);
+  const invalidar = useInvalidar();
+  const {
+    data: preview,
+    error: errorPreview,
+    isValidating: validandoPreview,
+    mutate: recargarPreview,
+  } = useSWR<SyncPreview>(isOpen ? urlPreviewSync(desde, hasta) : null);
   const [resultado, setResultado] = useState<SyncResultado | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorSync, setErrorSync] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const enCursoRef = useRef(false);
+  const segundos = useSegundosTranscurridos(sincronizando);
 
-  const cargarPreview = useCallback(async () => {
-    setFase('loading');
-    setError(null);
-    setResultado(null);
-    setPreview(null);
-    try {
-      const params = new URLSearchParams({ preview: '1' });
-      if (desde) params.set('desde', desde);
-      if (hasta) params.set('hasta', hasta);
-      const res = await fetch(`/api/productividad/sync?${params}`);
-      if (!res.ok) throw new Error('No se pudo cargar el preview');
-      setPreview(await res.json());
-      setFase('ready');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error en preview');
-      setFase('error');
-    }
-  }, [desde, hasta]);
-
+  // Cada apertura empieza limpia (el preview sale de caché y se revalida).
   useEffect(() => {
-    if (isOpen) void cargarPreview();
-  }, [isOpen, cargarPreview]);
+    if (isOpen && !enCursoRef.current) {
+      setResultado(null);
+      setErrorSync(null);
+    }
+  }, [isOpen]);
+
+  const fase: Fase = sincronizando
+    ? 'sync'
+    : resultado
+      ? 'done'
+      : errorSync || (errorPreview && !preview)
+        ? 'error'
+        : !preview
+          ? 'loading'
+          : 'ready';
+  const error =
+    errorSync ||
+    (errorPreview ? (errorPreview instanceof Error ? errorPreview.message : 'Error en preview') : null);
+
+  const cargarPreview = useCallback(() => {
+    setErrorSync(null);
+    setResultado(null);
+    void recargarPreview();
+  }, [recargarPreview]);
 
   const ejecutar = useCallback(async () => {
-    setFase('sync');
-    setError(null);
+    if (enCursoRef.current) return; // evita doble envío
+    enCursoRef.current = true;
+    setSincronizando(true);
+    setErrorSync(null);
     try {
-      const res = await fetch('/api/productividad/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha_desde: desde, fecha_hasta: hasta }),
-      });
-      const data = (await res.json().catch(() => null)) as { sync?: SyncResultado; error?: string } | null;
-      if (!res.ok) throw new Error(data?.error || 'Error en sync');
-      setResultado(data?.sync || null);
-      setFase('done');
+      const r = await ejecutarSync({ fecha_desde: desde, fecha_hasta: hasta });
+      setResultado(r);
+      void invalidar('/api/productividad');
       onCompletado?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error en sync');
-      setFase('error');
+      setErrorSync(err instanceof Error ? err.message : 'Error en sync');
+    } finally {
+      enCursoRef.current = false;
+      setSincronizando(false);
     }
-  }, [desde, hasta, onCompletado]);
+  }, [desde, hasta, onCompletado, invalidar]);
+
+  // Mientras corre el sync no se permite cerrar (evita perder el resultado).
+  const cerrar = useCallback(() => {
+    if (!enCursoRef.current) onClose();
+  }, [onClose]);
 
   const pendientes = preview?.doctores_sin_evento || [];
   const enModulo = preview?.doctores_en_modulo || [];
@@ -97,8 +95,9 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
   const finalesModulo = resultado?.doctores_en_modulo || [];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl">
-      <div className="space-y-4">
+    <Modal isOpen={isOpen} onClose={cerrar} maxWidth="max-w-2xl">
+      <div className="relative space-y-4" aria-busy={fase === 'loading' || fase === 'sync'}>
+        <BarraRevalidando activo={validandoPreview && !!preview && fase === 'ready'} />
         <div className="flex items-start justify-between gap-4 pr-6">
           <div>
             <h2 className="text-lg font-bold text-fg">Sync de honorarios</h2>
@@ -115,15 +114,10 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
           </div>
         )}
 
-        {fase === 'sync' && (
-          <div className="flex items-center gap-3 rounded-lg bg-primary-50 dark:bg-primary-950/30 border border-primary-200 dark:border-primary-900 px-4 py-3 text-sm text-primary-800 dark:text-primary-300">
-            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-            Generando honorarios de cada doctor… no cierres el modal.
-          </div>
-        )}
+        {fase === 'sync' && <ProgresoSync segundos={segundos} />}
 
         {fase === 'error' && error && (
-          <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+          <div role="alert" className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-4 py-3 text-sm text-rose-700 dark:text-rose-300 animate-fadeIn">
             {error}
           </div>
         )}
@@ -154,8 +148,8 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
                   Encontrados (pendientes) — {fase === 'done' ? finalesPendientes.length : pendientes.length}
                 </p>
                 <ul className="divide-y divide-line/70 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                  {(fase === 'done' ? finalesPendientes : pendientes).slice(0, 50).map((d, i) => (
-                    <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                  {(fase === 'done' ? finalesPendientes : pendientes).slice(0, 50).map((d) => (
+                    <li key={`${d.doctor_id}-${d.origen}-${d.ref}`} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
                       <span className="font-medium text-fg">{d.doctor_nombre}</span>
                       <span className="text-xs text-gray-500">{d.origen}</span>
                     </li>
@@ -171,8 +165,8 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
                   Ya en el módulo — {fase === 'done' ? finalesModulo.length : enModulo.length}
                 </p>
                 <ul className="divide-y divide-line/70 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
-                  {(fase === 'done' ? finalesModulo : enModulo).slice(0, 50).map((d, i) => (
-                    <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                  {(fase === 'done' ? finalesModulo : enModulo).slice(0, 50).map((d) => (
+                    <li key={`${d.doctor_id}-${d.origen}-${d.ref}`} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
                       <span className="font-medium text-fg">{d.doctor_nombre}</span>
                       <span className="text-xs text-gray-500">
                         {d.origen}
@@ -215,23 +209,24 @@ export default function SyncModal({ isOpen, onClose, desde, hasta, onCompletado 
 
         <div className="flex justify-end gap-2 pt-2">
           <button
-              type="button"
-              onClick={() => void cargarPreview()}
-              className="px-4 py-2 text-sm font-medium border border-line rounded-lg hover:bg-surface-2"
-            >
-              Actualizar preview
-            </button>
+            type="button"
+            onClick={cargarPreview}
+            disabled={fase === 'sync'}
+            className="px-4 py-2 text-sm font-medium border border-line rounded-lg transition-colors hover:bg-surface-2 disabled:opacity-50"
+          >
+            Actualizar preview
+          </button>
           <button
             type="button"
             onClick={
               fase === 'done'
-                ? onClose
+                ? cerrar
                 : fase === 'error'
-                  ? () => void cargarPreview()
+                  ? cargarPreview
                   : () => void ejecutar()
             }
             disabled={fase === 'sync' || fase === 'loading'}
-            className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-50 ${
+            className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold text-white transition-colors disabled:opacity-50 ${
               fase === 'done'
                 ? 'bg-gray-500 hover:bg-gray-600'
                 : 'bg-primary-600 hover:bg-primary-700'

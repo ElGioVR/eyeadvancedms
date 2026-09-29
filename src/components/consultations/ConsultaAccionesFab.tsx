@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarClock, CalendarPlus, CalendarX2, X, Loader2, Plus, Clock } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 
 type Accion = 'aplazar' | 'reagendar' | 'cancelar';
 
@@ -27,6 +28,12 @@ const titulos: Record<Accion, string> = {
   cancelar: 'Cancelar consulta',
 };
 
+const exitoLabels: Record<Accion, string> = {
+  aplazar: 'Consulta aplazada',
+  reagendar: 'Consulta reagendada',
+  cancelar: 'Consulta cancelada',
+};
+
 const confirmLabels: Record<Accion, string> = {
   aplazar: 'Aplazar',
   reagendar: 'Reagendar',
@@ -48,6 +55,7 @@ export default function ConsultaAccionesFab({
   const [nuevaHora, setNuevaHora] = useState(horaInicio.slice(0, 5));
   const [nuevaHoraFin, setNuevaHoraFin] = useState('');
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
 
   if (!visible) return null;
@@ -69,7 +77,7 @@ export default function ConsultaAccionesFab({
   }
 
   async function confirmar() {
-    if (!accion) return;
+    if (!accion || saving) return;
     const motivoLimpio = motivo.trim();
     if (!motivoLimpio) {
       setError('El motivo es obligatorio');
@@ -108,6 +116,7 @@ export default function ConsultaAccionesFab({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Error al aplicar la acción');
       }
+      toast(exitoLabels[accion]);
       setAccion(null);
       onDone();
     } catch (err) {
@@ -121,7 +130,7 @@ export default function ConsultaAccionesFab({
     <>
       <div className="fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-3 no-print">
         {open && (
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-2 animate-fadeIn">
             {opciones.map(({ accion: a, label, icon: Icon, color }) => (
               <button
                 key={a}
@@ -139,6 +148,7 @@ export default function ConsultaAccionesFab({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label="Acciones de consulta"
+          aria-expanded={open}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-xl transition-colors hover:bg-primary-700"
         >
           {open ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
@@ -226,7 +236,7 @@ export default function ConsultaAccionesFab({
               />
             </label>
 
-            {error && <p className="text-xs font-bold text-red-600">{error}</p>}
+            {error && <p role="alert" className="text-xs font-bold text-red-600 animate-fadeIn">{error}</p>}
 
             <div className="flex justify-end gap-3 pt-1">
               <button
@@ -241,6 +251,7 @@ export default function ConsultaAccionesFab({
                 type="button"
                 onClick={confirmar}
                 disabled={saving}
+                aria-busy={saving}
                 className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 ${
                   accion === 'cancelar'
                     ? 'bg-red-600 hover:bg-red-700'

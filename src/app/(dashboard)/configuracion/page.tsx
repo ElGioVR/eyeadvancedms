@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Save, Loader2, X, Bell, BellOff } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useUser } from '@/hooks/useUser';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Camera, Save, Loader2, X, Bell } from 'lucide-react';
+import useSWR from 'swr';
+import { useUser, refreshUser } from '@/hooks/useUser';
+import { enviarJSON } from '@/lib/fetcher';
+import Skeleton from '@/components/ui/Skeleton';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { useToast } from '@/components/ui/Toast';
 import dynamic from 'next/dynamic';
@@ -36,51 +38,59 @@ function formatTime(dateStr: string | null, now: Date): string {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+interface PrefsResp {
+  data?: { tipo_evento: string; canal?: string; activo: boolean }[];
+}
+
 export default function PerfilPage() {
   const { user, loading } = useUser();
   const { toast } = useToast();
-  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
-  const [notifLoading, setNotifLoading] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setNow(new Date()); setMounted(true); }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    fetch('/api/notificaciones/preferencias')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.data) {
-          const prefs: Record<string, boolean> = {};
-          for (const p of data.data) {
-            prefs[p.tipo_evento] = p.activo;
-          }
-          setNotifPrefs(prefs);
-        }
-      })
-      .catch(() => {});
-  }, [user]);
+  // Preferencias de notificación (SWR): el toggle es optimista y se revierte si falla.
+  const { data: prefsResp, mutate: mutatePrefs } = useSWR<PrefsResp>(user ? '/api/notificaciones/preferencias' : null);
+  const notifPrefs = useMemo(() => {
+    const prefs: Record<string, boolean> = {};
+    for (const p of prefsResp?.data ?? []) prefs[p.tipo_evento] = p.activo;
+    return prefs;
+  }, [prefsResp]);
 
   const toggleNotifPref = useCallback(async (tipo: string) => {
     const next = !notifPrefs[tipo];
-    setNotifPrefs((p) => ({ ...p, [tipo]: next }));
+    const conCambio = (actual: PrefsResp | undefined): PrefsResp => {
+      const lista = actual?.data ?? [];
+      const existe = lista.some((p) => p.tipo_evento === tipo);
+      return {
+        ...(actual ?? {}),
+        data: existe
+          ? lista.map((p) => (p.tipo_evento === tipo ? { ...p, activo: next } : p))
+          : [...lista, { tipo_evento: tipo, canal: 'IN_APP', activo: next }],
+      };
+    };
     try {
-      await fetch('/api/notificaciones/preferencias', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferencias: [{ tipo_evento: tipo, canal: 'IN_APP', activo: next }] }),
-      });
-    } catch {
-      setNotifPrefs((p) => ({ ...p, [tipo]: !next }));
+      await mutatePrefs(
+        async (actual) => {
+          await enviarJSON('/api/notificaciones/preferencias', 'PATCH', {
+            preferencias: [{ tipo_evento: tipo, canal: 'IN_APP', activo: next }],
+          });
+          return conCambio(actual);
+        },
+        { optimisticData: conCambio, rollbackOnError: true, populateCache: true, revalidate: false }
+      );
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'No se pudo guardar la preferencia', 'error');
     }
-  }, [notifPrefs]);
-  const router = useRouter();
+  }, [notifPrefs, mutatePrefs, toast]);
   const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   // Form state
   const [nombre, setNombre] = useState('');
   const [initialized, setInitialized] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -99,23 +109,29 @@ export default function PerfilPage() {
   const handleRemoveAvatar = avatar.eliminar;
 
   const handleSaveProfile = async () => {
-    if (!user) return;
+    if (!user || saving) return;
+    const nombreLimpio = nombre.trim();
+    if (!nombreLimpio) {
+      toast('El nombre es obligatorio', 'error');
+      return;
+    }
+    if (nombreLimpio.length > 120) {
+      toast('El nombre no puede exceder 120 caracteres', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const supabase = await getSupabaseBrowser();
       const { error } = await supabase.auth.updateUser({
-        data: { nombre },
+        data: { nombre: nombreLimpio },
       });
       if (error) throw error;
 
-      await fetch('/api/configuracion/usuarios', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, nombre }),
-      });
+      await enviarJSON('/api/configuracion/usuarios', 'PATCH', { id: user.id, nombre: nombreLimpio });
 
       toast('Perfil actualizado');
-      router.refresh();
+      // Solo se refresca el perfil compartido (Sidebar, TopBar…), sin recargar la pantalla.
+      await refreshUser();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al guardar';
       toast(message, 'error');
@@ -125,44 +141,56 @@ export default function PerfilPage() {
   };
 
   const handleChangePassword = async () => {
+    if (!user || savingPassword) return;
+    if (!currentPassword) {
+      toast('Escribe tu contraseña actual', 'error');
+      return;
+    }
     if (!newPassword || !confirmPassword) return;
     if (newPassword !== confirmPassword) {
       toast('Las contraseñas no coinciden', 'error');
       return;
     }
-    if (newPassword.length < 6) {
-      toast('La contraseña debe tener al menos 6 caracteres', 'error');
+    if (newPassword.length < 8) {
+      toast('La contraseña debe tener al menos 8 caracteres', 'error');
       return;
     }
-    setSaving(true);
+    if (newPassword.length > 72) {
+      toast('La contraseña no puede exceder 72 caracteres', 'error');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast('La nueva contraseña debe ser distinta de la actual', 'error');
+      return;
+    }
+    setSavingPassword(true);
     try {
-      const res = await fetch('/api/configuracion/usuarios', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user!.id, password: newPassword }),
+      await enviarJSON('/api/configuracion/usuarios', 'PATCH', {
+        id: user.id,
+        password_actual: currentPassword,
+        password: newPassword,
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
-      }
       toast('Contraseña actualizada');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al cambiar contraseña';
+      const message = err instanceof Error && err.message ? err.message : 'Error al cambiar contraseña';
       toast(message, 'error');
     } finally {
-      setSaving(false);
+      setSavingPassword(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-40 rounded-xl bg-gray-200 dark:bg-surface-2" />
-          <div className="h-64 rounded-xl bg-gray-200 dark:bg-surface-2" />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" aria-busy="true" aria-label="Cargando perfil">
+        <div className="space-y-6">
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
         </div>
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
@@ -179,7 +207,7 @@ export default function PerfilPage() {
 
   return (
     <>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] animate-fadeIn">
         {/* Main form */}
         <div className="space-y-6">
           {/* Photo */}
@@ -211,6 +239,7 @@ export default function PerfilPage() {
                   <button
                     onClick={handleAvatarClick}
                     disabled={uploading}
+                    aria-label="Cambiar foto de perfil"
                     className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
                   >
                     {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
@@ -256,6 +285,7 @@ export default function PerfilPage() {
                     type="text"
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
+                    maxLength={120}
                     className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm font-medium text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
@@ -288,13 +318,27 @@ export default function PerfilPage() {
             </div>
             <div className="p-6 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
+                  <label htmlFor="password-actual" className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Contraseña Actual</label>
+                  <input
+                    id="password-actual"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Tu contraseña actual"
+                    className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Nueva Contraseña</label>
                   <input
                     type="password"
+                    autoComplete="new-password"
+                    maxLength={72}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                     className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   />
                 </div>
@@ -302,6 +346,8 @@ export default function PerfilPage() {
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Confirmar Contraseña</label>
                   <input
                     type="password"
+                    autoComplete="new-password"
+                    maxLength={72}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repetir contraseña"
@@ -315,11 +361,11 @@ export default function PerfilPage() {
               <div className="flex justify-end">
                 <button
                   onClick={handleChangePassword}
-                  disabled={!newPassword || !confirmPassword || saving || newPassword !== confirmPassword}
+                  disabled={!currentPassword || !newPassword || !confirmPassword || savingPassword || newPassword !== confirmPassword}
                   className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors disabled:opacity-50"
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Cambiar Contraseña
+                  {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {savingPassword ? 'Guardando…' : 'Cambiar Contraseña'}
                 </button>
               </div>
             </div>
@@ -328,11 +374,11 @@ export default function PerfilPage() {
           <div className="flex justify-end">
             <button
               onClick={handleSaveProfile}
-              disabled={saving || !nombre}
+              disabled={saving || !nombre.trim()}
               className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Guardar Cambios
+              {saving ? 'Guardando…' : 'Guardar Cambios'}
             </button>
           </div>
         </div>
@@ -396,6 +442,9 @@ export default function PerfilPage() {
                 </div>
                 <button
                   onClick={() => toggleNotifPref(item.key)}
+                  role="switch"
+                  aria-checked={!!notifPrefs[item.key]}
+                  aria-label={item.label}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${notifPrefs[item.key] ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${notifPrefs[item.key] ? 'translate-x-5.5 ml-0.5' : 'translate-x-0.5'}`} />

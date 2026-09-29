@@ -1,57 +1,102 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { invalidarPerfil, requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
+import { leerJSON } from '@/lib/api/validar';
+import { idDeQuery } from '@/lib/api/configuracion';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
+function esUrlStoragePropio(v: string): boolean {
+  try {
+    const url = new URL(v);
+    const base = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://invalid.local');
+    return url.protocol === 'https:' && url.host === base.host && url.pathname.startsWith('/storage/v1/');
+  } catch {
+    return false;
+  }
+}
+
 const usuarioCreateSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(6),
-  nombre: z.string().min(1).max(255),
+  email: z.string().trim().email().max(255),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(72),
+  nombre: z.string().trim().min(1).max(255),
   rol: z.enum(['admin', 'doctor', 'recepcionista']),
 }).strict();
 
 const usuarioUpdateSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email().max(255).optional(),
-  password: z.string().min(6).optional(),
-  nombre: z.string().min(1).max(255).optional(),
+  email: z.string().trim().email().max(255).optional(),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(72).optional(),
+  // Obligatoria cuando el propio usuario cambia su contraseña (autoservicio)
+  password_actual: z.string().min(1).max(128).optional(),
+  nombre: z.string().trim().min(1).max(255).optional(),
   rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
   activo: z.boolean().optional(),
-  avatar_url: z.string().max(2048).optional().nullable(),
+  // Solo URLs https del Storage del propio proyecto (evita rastreo / contenido externo)
+  avatar_url: z
+    .string()
+    .max(2048)
+    .refine((v) => v === '' || esUrlStoragePropio(v), 'URL de avatar no válida')
+    .optional()
+    .nullable(),
 }).strict();
 
 async function checkLastAdmin(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
 ): Promise<NextResponse | null> {
-  const { data: target, error: targetError } = await supabase
-    .from('usuarios')
-    .select('rol, activo')
-    .eq('id', userId)
-    .maybeSingle();
+  // Usuario objetivo y conteo de admins activos en paralelo (antes: en serie)
+  const [{ data: target, error: targetError }, { count, error: countError }] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('rol, activo')
+      .eq('id', userId)
+      .maybeSingle(),
+    supabase
+      .from('usuarios')
+      .select('id', { count: 'exact', head: true })
+      .eq('rol', 'admin')
+      .eq('activo', true),
+  ]);
 
   if (targetError) {
     return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
   }
 
   if (target?.rol === 'admin' && target.activo === true) {
-    const { count, error: countError } = await supabase
-      .from('usuarios')
-      .select('id', { count: 'exact', head: true })
-      .eq('rol', 'admin')
-      .eq('activo', true);
-
     if (countError || count === null) {
       return NextResponse.json({ error: 'No se pudo verificar el estado de administradores' }, { status: 500 });
     }
 
-    if (count === 1) {
+    if (count <= 1) {
       return NextResponse.json({ error: 'No puedes desactivar al último administrador' }, { status: 409 });
     }
   }
 
   return null;
+}
+
+/**
+ * Verifica la contraseña actual con un cliente anónimo que NO persiste sesión
+ * (no toca las cookies de la sesión en curso).
+ */
+async function passwordActualValida(email: string, password: string): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return false;
+  try {
+    const cliente = createSupabaseClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await cliente.auth.signInWithPassword({ email, password });
+    const ok = !error && !!data.user;
+    // Revoca la sesión auxiliar recién creada (no afecta la sesión del navegador)
+    if (ok) void cliente.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function GET() {
@@ -62,18 +107,22 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
 
-  // List auth users
-  const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+  // Usuarios de Auth y perfiles activos en paralelo (antes: en serie).
+  // listUsers pagina de 50 en 50 por defecto: se pide una página amplia.
+  const [{ data: authUsers, error: authError }, { data: profiles, error: profileError }] = await Promise.all([
+    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    supabase
+      .from('usuarios')
+      .select('id, nombre, rol, activo')
+      .eq('activo', true)
+      .limit(1000),
+  ]);
   if (authError) {
+    console.error('[configuracion.usuarios.listar] auth', authError.message);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
-
-  // Get active local user profiles
-  const { data: profiles, error: profileError } = await supabase
-    .from('usuarios')
-    .select('id, email, nombre, rol, activo, created_at, updated_at')
-    .eq('activo', true);
   if (profileError) {
+    console.error('[configuracion.usuarios.listar] perfiles', profileError.message);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 
@@ -104,22 +153,10 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, usuarioCreateSchema, { maxBytes: 16_000 });
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = usuarioCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
 
   // 1. Create auth user
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -149,14 +186,21 @@ export async function POST(request: Request) {
     });
 
   if (profileError) {
-    console.error('Error al insertar perfil de usuario');
+    // Sin perfil el usuario no puede operar (requireAuth no encuentra rol) y el
+    // correo quedaría ocupado: se revierte el alta en Auth y se informa el error.
+    console.error('[configuracion.usuarios.crear] perfil', profileError.message);
+    await supabase.auth.admin.deleteUser(authData.user.id).catch(() => undefined);
+    return NextResponse.json(
+      { error: errorTranslations[profileError.message] || 'No se pudo crear el perfil del usuario' },
+      { status: 500 },
+    );
   }
 
   // 3. Los doctores NO se crean automáticamente al crear un usuario.
   // El vínculo usuario↔doctor se gestiona desde la ficha del doctor
   // (Configuración → Doctores → Vincular usuario), aceptando roles
   // doctor o administrador.
-  let doctorId: string | null = null;
+  const doctorId: string | null = null;
 
   return NextResponse.json({
     id: authData.user.id,
@@ -172,28 +216,18 @@ export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
+  const data = await leerJSON(request, usuarioUpdateSchema, { maxBytes: 16_000 });
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
-
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = usuarioUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
-  const { id, ...updates } = data;
+  const { id, password_actual: passwordActual, ...updates } = data;
   const isSelfService = id === auth.user.id;
-  const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in body);
+  const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in data);
 
   if (isSelfService && !hasAdministrativeFields) {
-    const invalidFields = Object.keys(body).filter((field) => !['id', 'nombre', 'password', 'avatar_url'].includes(field));
+    const invalidFields = Object.keys(data).filter(
+      (field) => !['id', 'nombre', 'password', 'password_actual', 'avatar_url'].includes(field),
+    );
     if (invalidFields.length > 0) {
       return NextResponse.json({ error: 'Solo puedes actualizar nombre y password' }, { status: 400 });
     }
@@ -206,16 +240,26 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Autoservicio: cambiar la propia contraseña exige la actual (una sesión
+  // robada/abierta no basta). Un admin cambiando la de OTRO usuario no la necesita.
+  if (isSelfService && updates.password) {
+    const emailActual = auth.user.email || auth.perfil?.email;
+    if (!passwordActual || !emailActual || !(await passwordActualValida(emailActual, passwordActual))) {
+      return NextResponse.json({ error: 'La contraseña actual no es correcta' }, { status: 400 });
+    }
+  }
+
   if (updates.activo === false) {
     const lastAdminError = await checkLastAdmin(supabase, id);
     if (lastAdminError) return lastAdminError;
   }
 
-  // 1. Update auth user metadata
-  const authUpdates: Record<string, any> = {};
+  // 1. Auth: metadata, email y contraseña en UNA sola llamada (antes: dos)
+  const authUpdates: { user_metadata?: Record<string, unknown>; email?: string; password?: string } = {};
   if (updates.nombre) authUpdates.user_metadata = { ...authUpdates.user_metadata, nombre: updates.nombre };
   if (updates.rol) authUpdates.user_metadata = { ...authUpdates.user_metadata, rol: updates.rol };
   if (updates.email) authUpdates.email = updates.email;
+  if (updates.password) authUpdates.password = updates.password;
 
   if (Object.keys(authUpdates).length > 0) {
     const { error: authError } = await supabase.auth.admin.updateUserById(id, authUpdates);
@@ -225,7 +269,7 @@ export async function PATCH(request: Request) {
   }
 
   // 2. Update profile
-  const profileUpdates: Record<string, any> = {};
+  const profileUpdates: Record<string, unknown> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre;
   if (updates.rol) profileUpdates.rol = updates.rol;
   if (updates.email) profileUpdates.email = updates.email;
@@ -242,29 +286,9 @@ export async function PATCH(request: Request) {
     }
   }
 
-  // 3. Reset password if provided
-  if (updates.password) {
-    const { error: pwError } = await supabase.auth.admin.updateUserById(id, {
-      password: updates.password,
-    });
-    if (pwError) {
-      return NextResponse.json({ error: errorTranslations[pwError.message] || 'Error interno del servidor' }, { status: 500 });
-    }
-  }
-
-  // 4. Handle doctor role change
-  if (updates.rol) {
-    // Get current user data
-    const { data: currentUser } = await supabase
-      .from('usuarios')
-      .select('rol, nombre')
-      .eq('id', id)
-      .maybeSingle();
-
-    // Nota: los doctores NO se crean ni se vinculan automáticamente aquí.
-    // El vínculo usuario↔doctor se gestiona desde Configuración → Doctores.
-    // (Los roles doctor/admin pueden estar ligados a un doctor.)
-  }
+  // Rol/estado/nombre cambian lo que autoriza cada request: olvidar la caché.
+  // (El vínculo usuario↔doctor se gestiona desde Configuración → Doctores.)
+  invalidarPerfil(id);
 
   return NextResponse.json({ success: true });
 }
@@ -275,13 +299,10 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  const id = idDeQuery(request, 'ID de usuario no válido');
+  if (id instanceof NextResponse) return id;
 
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID del usuario' }, { status: 400 });
-  }
+  const supabase = getSupabaseAdmin();
 
   // Reuse last-admin protection (same as PATCH with activo=false)
   const lastAdminError = await checkLastAdmin(supabase, id);
@@ -297,5 +318,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: errorTranslations[updateError.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
+  invalidarPerfil(id);
   return NextResponse.json({ success: true });
 }

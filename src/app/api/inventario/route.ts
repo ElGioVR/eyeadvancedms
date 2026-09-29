@@ -3,7 +3,20 @@ import { notificarRoles } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { translateError } from '@/lib/supabase/errors';
+import { registrarMovimiento, siguienteFolioLente } from '@/lib/inventario';
+import { esquemaPaginacion, leerJSON, leerQuery, validarId } from '@/lib/api/validar';
 import { z } from 'zod';
+
+/** Caracteres permitidos en códigos de barras (evita inyección en filtros PostgREST). */
+const CODIGO_RE = /^[\w\-./+ ()]*$/;
+/** Quita el separador GS (\x1d) que envían algunos lectores GS1. */
+const limpiarCodigo = (v: string) => v.replace(/\x1d/g, '').trim();
+
+const listaQuerySchema = z.object({
+  ...esquemaPaginacion(15, 100),
+  id: z.string().uuid('ID no válido').optional(),
+  barcode: z.string().transform(limpiarCodigo).pipe(z.string().min(1).max(100).regex(CODIGO_RE, 'Código de barras no válido')).optional(),
+});
 
 const lenteBaseSchema = z.object({
   manufacturer: z.string().min(1).max(255),
@@ -16,14 +29,14 @@ const lenteBaseSchema = z.object({
   nozzle: z.string().max(10).optional().nullable(),
   serial_number: z.string().max(100).optional().nullable(),
   expiration_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  barcode: z.string().max(100).optional().nullable(),
+  barcode: z.string().transform(limpiarCodigo).pipe(z.string().max(100).regex(CODIGO_RE, 'Código de barras no válido')).optional().nullable(),
   barcode_format: z.string().max(20).optional().nullable(),
-  stock: z.number().int().min(0).optional(),
-  stock_minimo: z.number().int().min(0).optional(),
+  stock: z.number().int().min(0).max(100000).optional(),
+  stock_minimo: z.number().int().min(0).max(100000).optional(),
   precio_compra: z.number().min(0).max(99999999.99).optional().nullable(),
   precio_venta: z.number().min(0).max(99999999.99).optional().nullable(),
   lote: z.string().max(100).optional().nullable(),
-  notas: z.string().optional().nullable(),
+  notas: z.string().max(2000).optional().nullable(),
   categoria_id: z.string().uuid().optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
 }).strict();
@@ -32,6 +45,8 @@ const lenteCreateSchema = lenteBaseSchema;
 
 const lenteUpdateSchema = z.object({
   id: z.string().uuid(),
+  // Ajuste relativo (+/-): seguro ante movimientos simultáneos. Preferible a `stock` absoluto.
+  ajuste_stock: z.number().int().min(-100000).max(100000).refine((n) => n !== 0, 'El ajuste no puede ser 0').optional(),
 }).merge(lenteBaseSchema.partial()).strict();
 
 function mapLente(l: any) {
@@ -72,16 +87,15 @@ export async function GET(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
+  const q = leerQuery(request, listaQuerySchema);
+  if (q instanceof NextResponse) return q;
   const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const barcode = searchParams.get('barcode');
-  const itemId = searchParams.get('id');
 
-  if (itemId) {
+  if (q.id) {
     const { data, error } = await supabase
       .from('inventario_items')
       .select(SELECT)
-      .eq('id', itemId)
+      .eq('id', q.id)
       .maybeSingle();
 
     if (error || !data) {
@@ -90,21 +104,24 @@ export async function GET(request: Request) {
     return NextResponse.json(mapLente(data));
   }
 
-  if (barcode) {
+  if (q.barcode) {
+    // El alta por etiqueta guarda `barcode`; los ítems migrados usan `codigo_barras`.
+    const codigo = q.barcode.replace(/"/g, '');
     const { data, error } = await supabase
       .from('inventario_items')
       .select(SELECT)
-      .eq('codigo_barras', barcode)
-      .single();
+      .or(`barcode.eq."${codigo}",codigo_barras.eq."${codigo}"`)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (error || !data) {
-      return NextResponse.json({ error: 'No se encontro el ítem con ese codigo de barras' }, { status: 404 });
+      return NextResponse.json({ error: 'No se encontró el ítem con ese código de barras' }, { status: 404 });
     }
     return NextResponse.json(mapLente(data));
   }
 
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '15', 10)));
+  const { page, pageSize } = q;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -131,20 +148,9 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = lenteCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
+  const data = await leerJSON(request, lenteCreateSchema);
+  if (data instanceof NextResponse) return data;
+  if (data.barcode === '') data.barcode = null;
   const cantidad = data.stock ?? 1;
   const serie = data.serial_number?.trim() || null;
   const escaparIlike = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -183,62 +189,41 @@ export async function POST(request: Request) {
   const { data: igual } = await qIgual.order('created_at', { ascending: true }).limit(1).maybeSingle();
 
   if (igual) {
-    // Actualización optimista: si otro usuario sumó al mismo tiempo, se reintenta
-    let actual = igual;
-    for (let intento = 0; intento < 3; intento += 1) {
-      const nuevoStock = (Number(actual.stock) || 0) + cantidad;
-      const cambios: Record<string, unknown> = { stock: nuevoStock };
-      // Caducidad: se conserva la más próxima (primero en caducar, primero en usarse)
-      if (data.expiration_date && (!actual.expiration_date || data.expiration_date < actual.expiration_date)) {
-        cambios.expiration_date = data.expiration_date;
-      }
-      if (data.precio_venta !== undefined && data.precio_venta !== null) cambios.precio_venta = data.precio_venta;
-      if (!actual.barcode && data.barcode) {
-        cambios.barcode = data.barcode;
-        cambios.barcode_format = data.barcode_format ?? null;
-      }
-      const { data: actualizado, error: errUpd } = await supabase
-        .from('inventario_items')
-        .update(cambios)
-        .eq('id', actual.id)
-        .eq('stock', actual.stock)
-        .select(SELECT)
-        .maybeSingle();
+    // Datos descriptivos (sin stock): caducidad más próxima, precio, código
+    const cambios: Record<string, unknown> = {};
+    if (data.expiration_date && (!igual.expiration_date || data.expiration_date < igual.expiration_date)) {
+      cambios.expiration_date = data.expiration_date;
+    }
+    if (data.precio_venta !== undefined && data.precio_venta !== null) cambios.precio_venta = data.precio_venta;
+    if (!igual.barcode && data.barcode) {
+      cambios.barcode = data.barcode;
+      cambios.barcode_format = data.barcode_format ?? null;
+    }
+    if (Object.keys(cambios).length > 0) {
+      const { error: errUpd } = await supabase.from('inventario_items').update(cambios).eq('id', igual.id);
       if (errUpd) {
         return NextResponse.json({ error: translateError(errUpd.message) }, { status: 500 });
       }
-      if (actualizado) {
-        await supabase.from('inventario_movimientos').insert({
-          inventario_item_id: actual.id,
-          tipo: 'ENTRADA',
-          cantidad,
-          stock_resultante: nuevoStock,
-          usuario_id: auth.user.id,
-          referencia_tipo: 'COMPRA',
-          motivo: motivoEntrada,
-        });
-        return NextResponse.json({ ...mapLente(actualizado), fusionado: true, agregado: cantidad });
-      }
-      const { data: releido } = await supabase
-        .from('inventario_items')
-        .select('id, stock, expiration_date, precio_venta, barcode')
-        .eq('id', actual.id)
-        .maybeSingle();
-      if (!releido) break;
-      actual = releido;
     }
-    return NextResponse.json({ error: 'El stock cambió mientras se guardaba. Intenta de nuevo.' }, { status: 409 });
+
+    // Stock + Kardex en una sola operación atómica (sin perder sumas simultáneas)
+    const mov = await registrarMovimiento({
+      itemId: igual.id,
+      delta: cantidad,
+      tipo: 'ENTRADA',
+      usuarioId: auth.user.id,
+      referenciaTipo: 'COMPRA',
+      motivo: motivoEntrada,
+    });
+    if (!mov.ok) {
+      return NextResponse.json({ error: mov.error }, { status: mov.status });
+    }
+    const { data: actualizado } = await supabase.from('inventario_items').select(SELECT).eq('id', igual.id).single();
+    return NextResponse.json({ ...mapLente(actualizado), fusionado: true, agregado: cantidad });
   }
 
-  const year = new Date().getFullYear().toString().slice(-2);
-  const { count } = await supabase
-    .from('inventario_items')
-    .select('id', { count: 'exact', head: true });
-  const seq = ((count || 0) + 1).toString().padStart(5, '0');
-  const folio = `LEN-${year}-${seq}`;
-
+  // El stock inicial entra por el Kardex (movimiento ENTRADA), no directo.
   const insert: Record<string, any> = {
-    folio,
     manufacturer: data.manufacturer,
     product_name: data.product_name ?? null,
     model: data.model,
@@ -251,7 +236,7 @@ export async function POST(request: Request) {
     expiration_date: data.expiration_date ?? null,
     barcode: data.barcode ?? null,
     barcode_format: data.barcode_format ?? null,
-    stock: cantidad,
+    stock: 0,
     stock_minimo: data.stock_minimo ?? 0,
     precio_compra: data.precio_compra ?? null,
     precio_venta: data.precio_venta ?? null,
@@ -261,28 +246,40 @@ export async function POST(request: Request) {
     proveedor_id: data.proveedor_id ?? null,
   };
 
-  const { data: lente, error } = await supabase
-    .from('inventario_items')
-    .insert(insert)
-    .select(SELECT)
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+  // Folio consecutivo; si otro usuario tomó el mismo al mismo tiempo, reintenta.
+  let lente: any = null;
+  for (let intento = 0; intento < 4 && !lente; intento += 1) {
+    const folio = await siguienteFolioLente(intento);
+    const { data: creado, error } = await supabase
+      .from('inventario_items')
+      .insert({ ...insert, folio })
+      .select('id')
+      .single();
+    if (error) {
+      if (error.code === '23505' && intento < 3) continue;
+      return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
+    }
+    lente = creado;
   }
 
   // Kardex: entrada inicial (también sirve para detectar series ya registradas)
   if (cantidad > 0) {
-    await supabase.from('inventario_movimientos').insert({
-      inventario_item_id: lente.id,
+    const mov = await registrarMovimiento({
+      itemId: lente.id,
+      delta: cantidad,
       tipo: 'ENTRADA',
-      cantidad,
-      stock_resultante: cantidad,
-      usuario_id: auth.user.id,
-      referencia_tipo: 'COMPRA',
+      usuarioId: auth.user.id,
+      referenciaTipo: 'COMPRA',
       motivo: motivoEntrada,
     });
+    if (!mov.ok) {
+      await supabase.from('inventario_items').delete().eq('id', lente.id);
+      return NextResponse.json({ error: mov.error }, { status: mov.status });
+    }
   }
+
+  const { data: completo } = await supabase.from('inventario_items').select(SELECT).eq('id', lente.id).single();
+  lente = completo ?? lente;
 
   return NextResponse.json({ ...mapLente(lente), fusionado: false, agregado: cantidad }, { status: 201 });
 }
@@ -295,21 +292,13 @@ export async function PATCH(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  const data = await leerJSON(request, lenteUpdateSchema);
+  if (data instanceof NextResponse) return data;
+  const { id, ajuste_stock, ...updates } = data;
+  if (updates.barcode === '') updates.barcode = null;
+  if (ajuste_stock !== undefined && updates.stock !== undefined) {
+    return NextResponse.json({ error: 'Envía stock o ajuste_stock, no ambos' }, { status: 400 });
   }
-
-  const validation = lenteUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
-  const { id, ...updates } = data;
 
   const cleanUpdates: Record<string, any> = {};
   const allowed = [
@@ -327,51 +316,56 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (Object.keys(cleanUpdates).length === 0) {
+  if (Object.keys(cleanUpdates).length === 0 && ajuste_stock === undefined) {
     return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
   }
 
-  // Fetch current stock before update if stock is changing
+  // El stock NO se escribe directo: el ajuste pasa por el Kardex de forma atómica.
+  const stockObjetivo: number | undefined = cleanUpdates.stock;
+  delete cleanUpdates.stock;
+
   let stockAnterior: number | null = null;
-  if (cleanUpdates.stock !== undefined) {
-    const { data: current } = await supabase
-      .from('inventario_items')
-      .select('stock')
-      .eq('id', id)
-      .single();
-    stockAnterior = current?.stock ?? null;
-  }
-
-  const { data: lente, error } = await supabase
-    .from('inventario_items')
-    .update(cleanUpdates)
-    .eq('id', id)
-    .select(SELECT)
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: translateError(error.message) }, { status: 500 });
-  }
-
-  // Register Kardex movement if stock changed
-  if (stockAnterior !== null && cleanUpdates.stock !== undefined && cleanUpdates.stock !== stockAnterior) {
-    const diff = cleanUpdates.stock - stockAnterior;
-    const tipo = diff > 0 ? 'ENTRADA' : 'SALIDA';
-    await supabase.from('inventario_movimientos').insert({
-      inventario_item_id: id,
-      tipo,
-      cantidad: Math.abs(diff),
-      stock_resultante: cleanUpdates.stock,
-      usuario_id: auth.user.id,
-      referencia_tipo: 'AJUSTE_MANUAL',
-      motivo: `Ajuste manual de stock: ${stockAnterior} → ${cleanUpdates.stock}`,
+  if (ajuste_stock !== undefined) {
+    const mov = await registrarMovimiento({
+      itemId: id,
+      delta: ajuste_stock,
+      tipo: ajuste_stock > 0 ? 'ENTRADA' : 'SALIDA',
+      usuarioId: auth.user.id,
+      referenciaTipo: 'AJUSTE_MANUAL',
+      motivo: `Ajuste manual de stock: ${ajuste_stock > 0 ? '+' : ''}${ajuste_stock}`,
     });
+    if (!mov.ok) return NextResponse.json({ error: mov.error }, { status: mov.status });
+    stockAnterior = mov.stock - ajuste_stock;
+  } else if (stockObjetivo !== undefined) {
+    const { data: current } = await supabase.from('inventario_items').select('stock').eq('id', id).maybeSingle();
+    if (!current) return NextResponse.json({ error: 'Ítem no encontrado' }, { status: 404 });
+    stockAnterior = Number(current.stock) || 0;
+    const diff = stockObjetivo - stockAnterior;
+    if (diff !== 0) {
+      const mov = await registrarMovimiento({
+        itemId: id,
+        delta: diff,
+        tipo: diff > 0 ? 'ENTRADA' : 'SALIDA',
+        usuarioId: auth.user.id,
+        referenciaTipo: 'AJUSTE_MANUAL',
+        motivo: `Ajuste manual de stock: ${stockAnterior} → ${stockObjetivo}`,
+      });
+      if (!mov.ok) return NextResponse.json({ error: mov.error }, { status: mov.status });
+    }
+  }
+
+  const { data: lente, error } = Object.keys(cleanUpdates).length > 0
+    ? await supabase.from('inventario_items').update(cleanUpdates).eq('id', id).select(SELECT).single()
+    : await supabase.from('inventario_items').select(SELECT).eq('id', id).single();
+
+  if (error || !lente) {
+    return NextResponse.json({ error: error ? translateError(error.message) : 'Ítem no encontrado' }, { status: error ? 500 : 404 });
   }
 
   // Aviso de stock bajo: solo al CRUZAR el mínimo (evita repetir el aviso en cada ajuste)
   const minimo = Number(lente.stock_minimo) || 0;
   const cruzoMinimo =
-    cleanUpdates.stock !== undefined &&
+    (stockObjetivo !== undefined || ajuste_stock !== undefined) &&
     minimo > 0 &&
     lente.stock <= minimo &&
     (stockAnterior === null || stockAnterior > minimo);
@@ -400,9 +394,8 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
-  if (!id) {
-    return NextResponse.json({ error: 'ID es obligatorio' }, { status: 400 });
-  }
+  const idError = validarId(id);
+  if (idError) return idError;
 
   const { error } = await supabase.from('inventario_items').delete().eq('id', id);
 

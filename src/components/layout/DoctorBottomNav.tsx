@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Calendar, Package, TrendingUp, User, Users, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
@@ -35,7 +36,6 @@ interface DoctorBottomNavProps {
 
 export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useUser();
   const [isMobile, setIsMobile] = useState(false);
   // Admin con doctor ligado + Modo Focus activo → interfaz de doctor en móvil
@@ -75,9 +75,10 @@ export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
-            <button
+            // Link (no router.push): Next precarga la ruta → cambio de módulo instantáneo
+            <Link
               key={item.href}
-              onClick={() => router.push(item.href)}
+              href={item.href}
               className="group relative flex flex-1 flex-col items-center justify-center gap-1 transition-transform active:scale-95"
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
@@ -100,7 +101,7 @@ export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
               >
                 {item.label}
               </span>
-            </button>
+            </Link>
           );
         })}
         {!modoDoctor && onMenuOpen && (

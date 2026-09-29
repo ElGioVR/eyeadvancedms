@@ -38,21 +38,34 @@ export default function DashboardCharts({
   estatusChartData,
   procChartData,
   agendaChartData,
+  cargando = false,
+  validando = false,
 }: {
   estatusChartData: Array<{ name: string; count: number }>;
   procChartData: Array<{ name: string; count: number }>;
   agendaChartData: Array<{ name: string; count: number }>;
+  /** Primera carga sin datos: área con la forma final (no «Sin datos»). */
+  cargando?: boolean;
+  /** Revalidando con datos en pantalla: se atenúan suavemente. */
+  validando?: boolean;
 }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div
+      className="valor-suave grid gap-4 lg:grid-cols-3"
+      data-validando={validando}
+      aria-busy={cargando || validando}
+    >
       <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
         <div className="border-b border-line/70 px-5 py-3.5">
           <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Consultas por Estatus (30 días)</h2>
         </div>
         <div className="p-4">
-          {estatusChartData.length === 0 ? (
+          {cargando ? (
+            <div className="h-[160px] w-full animate-pulse rounded-lg bg-surface-2" />
+          ) : estatusChartData.length === 0 ? (
             <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin datos</p>
           ) : (
+            <div className="animate-fadeIn">
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={estatusChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.18} vertical={false} />
@@ -66,6 +79,7 @@ export default function DashboardCharts({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            </div>
           )}
         </div>
       </section>
@@ -75,9 +89,12 @@ export default function DashboardCharts({
           <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Top Procedimientos</h2>
         </div>
         <div className="p-4">
-          {procChartData.length === 0 ? (
+          {cargando ? (
+            <div className="h-[160px] w-full animate-pulse rounded-lg bg-surface-2" />
+          ) : procChartData.length === 0 ? (
             <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin datos</p>
           ) : (
+            <div className="animate-fadeIn">
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={procChartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.18} horizontal={false} />
@@ -87,6 +104,7 @@ export default function DashboardCharts({
                 <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           )}
         </div>
       </section>
@@ -96,9 +114,12 @@ export default function DashboardCharts({
           <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Actividad de Agenda (7 días)</h2>
         </div>
         <div className="p-4">
-          {agendaChartData.length === 0 ? (
+          {cargando ? (
+            <div className="h-[160px] w-full animate-pulse rounded-lg bg-surface-2" />
+          ) : agendaChartData.length === 0 ? (
             <p className="h-[160px] flex items-center justify-center text-sm text-muted">Sin cirugías programadas</p>
           ) : (
+            <div className="animate-fadeIn">
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={agendaChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.18} vertical={false} />
@@ -108,6 +129,7 @@ export default function DashboardCharts({
                 <Bar dataKey="count" fill="#1D9BF0" radius={[6, 6, 0, 0]} barSize={26} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           )}
         </div>
       </section>

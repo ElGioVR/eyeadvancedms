@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { validarId } from '@/lib/api/validar';
+
+type Embed<T> = T | T[] | null | undefined;
+function primero<T>(v: Embed<T>): T | null {
+  return (Array.isArray(v) ? v[0] : v) ?? null;
+}
 
 export async function GET(
   request: Request,
@@ -8,13 +14,18 @@ export async function GET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
+  // Consulta → paciente → aseguradora en un solo viaje (antes: 2 en serie)
   const { data: consulta } = await supabase
     .from('consultas')
-    .select('paciente_id')
+    .select('paciente_id, pacientes:paciente_id (aseguranza_id, aseguradoras:aseguranza_id (id, nombre))')
     .eq('id', id)
     .maybeSingle();
 
@@ -22,17 +33,15 @@ export async function GET(
     return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
   }
 
-  const { data: paciente } = await supabase
-    .from('pacientes')
-    .select('aseguranza_id, aseguradoras:aseguranza_id (id, nombre)')
-    .eq('id', consulta.paciente_id)
-    .maybeSingle();
+  const paciente = primero(
+    (consulta as { pacientes?: Embed<{ aseguranza_id: string | null; aseguradoras?: Embed<{ id: string; nombre: string }> }> }).pacientes,
+  );
 
   if (!paciente?.aseguranza_id) {
     return NextResponse.json({ aseguradora: null, cobertura: null, servicios: [] });
   }
 
-  const aseguradora = Array.isArray(paciente.aseguradoras) ? paciente.aseguradoras[0] : paciente.aseguradoras;
+  const aseguradora = primero(paciente.aseguradoras);
 
   const { data: cobertura } = await supabase
     .from('coberturas_aseguranza')

@@ -1,31 +1,47 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
-import { eliminarArchivoDeStorage, subirArchivoACirugia } from '@/lib/storage-cirugia';
+import { eliminarArchivoDeStorage, MAX_TAMANO_ARCHIVO, subirArchivoACirugia } from '@/lib/storage-cirugia';
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
+import { validarId } from '@/lib/api/validar';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+
+/** Margen del multipart (boundary + tipo_documento) sobre el tamaño máximo del archivo. */
+const MARGEN_MULTIPART = 64 * 1024;
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const supabase = getSupabaseAdmin();
+
+  // Lectura en paralelo con el permiso; si se deniega, el resultado se descarta.
+  // No se exponen storage_path / nombre_storage (estructura interna del bucket).
+  const listadoP = Promise.resolve(
+    supabase
+      .from('cirugia_archivos')
+      .select('id, cirugia_id, nombre_original, mime_type, size, tipo_documento, uploaded_by, created_at')
+      .eq('cirugia_id', id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(100)
+  );
   const permisoListar = await verificarPermisoArchivo(auth.user.id, 'ver');
   if (!permisoListar.permitido) {
+    void listadoP.catch(() => undefined);
     return NextResponse.json({ error: 'No tienes permiso para ver archivos' }, { status: 403 });
   }
 
-  const { id } = await params;
-  const supabase = getSupabaseAdmin();
-
-  const { data, error } = await supabase
-    .from('cirugia_archivos')
-    .select('id, cirugia_id, nombre_original, nombre_storage, mime_type, size, storage_path, tipo_documento, uploaded_by, created_at')
-    .eq('cirugia_id', id)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+  const { data, error } = await listadoP;
 
   if (error) {
+    handleSupabaseError(error, 'cirugias.archivos.listar');
     return NextResponse.json({ error: 'Error al listar archivos' }, { status: 500 });
   }
 
@@ -36,25 +52,44 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const supabase = getSupabaseAdmin();
+
+  // Verificar que la cirugía existe (solo lectura, en paralelo con el permiso)
+  const cirugiaP = Promise.resolve(
+    supabase
+      .from('agenda_cirugias')
+      .select('id, codigo')
+      .eq('id', id)
+      .maybeSingle()
+  );
   const permisoSubir = await verificarPermisoArchivo(auth.user.id, 'subir');
   if (!permisoSubir.permitido) {
+    void cirugiaP.catch(() => undefined);
     return NextResponse.json({ error: 'No tienes permiso para subir archivos' }, { status: 403 });
   }
 
-  const { id } = await params;
-  const supabase = getSupabaseAdmin();
-
-  // Verificar que la cirugía existe
-  const { data: cirugia, error: cirugiaError } = await supabase
-    .from('agenda_cirugias')
-    .select('id, codigo')
-    .eq('id', id)
-    .maybeSingle();
+  const { data: cirugia, error: cirugiaError } = await cirugiaP;
 
   if (cirugiaError || !cirugia) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
+  }
+
+  // Rechazo temprano por tamaño/tipo declarado, antes de leer el multipart a memoria.
+  const largo = Number(request.headers.get('content-length') || 0);
+  if (largo > MAX_TAMANO_ARCHIVO + MARGEN_MULTIPART) {
+    return NextResponse.json(
+      { error: `El archivo excede el tamaño máximo permitido (${Math.round(MAX_TAMANO_ARCHIVO / 1024 / 1024)} MB)` },
+      { status: 413 }
+    );
+  }
+  if (!(request.headers.get('content-type') || '').includes('multipart/form-data')) {
+    return NextResponse.json({ error: 'FormData inválido' }, { status: 400 });
   }
 
   let formData: FormData;
@@ -78,6 +113,9 @@ export async function POST(
   if (tipoDocumento.trim().length > 100) {
     return NextResponse.json({ error: 'El tipo de documento es demasiado largo' }, { status: 400 });
   }
+  if (/[\u0000-\u001f\u007f<>]/.test(tipoDocumento)) {
+    return NextResponse.json({ error: 'El tipo de documento contiene caracteres no permitidos' }, { status: 400 });
+  }
 
   const upload = await subirArchivoACirugia(id, archivo, auth.user.id);
   if (!upload.ok) {
@@ -98,10 +136,11 @@ export async function POST(
       tipo_documento: tipoDocumento.trim(),
       uploaded_by: auth.user.id,
     })
-    .select()
+    .select('id, cirugia_id, nombre_original, mime_type, size, tipo_documento, uploaded_by, created_at')
     .single();
 
   if (insertError) {
+    handleSupabaseError(insertError, 'cirugias.archivos.insertar');
     // Evitar huérfano en Storage
     await eliminarArchivoDeStorage(datos.storagePath).catch(() => {});
     return NextResponse.json({ error: 'Error al guardar metadata del archivo' }, { status: 500 });

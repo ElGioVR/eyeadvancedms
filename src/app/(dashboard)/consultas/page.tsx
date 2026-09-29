@@ -15,7 +15,9 @@ import {
   ClipboardList,
   CreditCard,
 } from "lucide-react";
-import { useFetch, useDebounce } from "@/hooks";
+import { useFetch, useDebounce, useInvalidar } from "@/hooks";
+import { enviarJSON } from "@/lib/fetcher";
+import BarraRevalidando from "@/components/ui/BarraRevalidando";
 import StatCard from "@/components/ui/StatCard";
 import SearchInput from "@/components/ui/SearchInput";
 import FilterSelect from "@/components/ui/FilterSelect";
@@ -101,9 +103,11 @@ export default function ConsultasPage() {
   const {
     data: consultas,
     loading,
+    validating,
     error,
     total,
     page: currentPage,
+    mutate,
   } = useFetch<ConsultaAPI>("/api/consultas", {
     page: String(page),
     pageSize: "15",
@@ -115,6 +119,7 @@ export default function ConsultasPage() {
 
   useEffect(() => { setToday(new Date().toISOString().split('T')[0]); }, []);
   const [pagando, setPagando] = useState(false);
+  const invalidar = useInvalidar();
 
   const debouncedSearch = useDebounce(search);
 
@@ -175,26 +180,38 @@ export default function ConsultasPage() {
         borderColor: "border-amber-100",
       },
     ];
-  }, [consultas, total]);
+  }, [consultas, total, today]);
 
   async function handlePago() {
-    if (!pagoConsulta) return;
+    if (!pagoConsulta || pagando) return;
+    const objetivo = pagoConsulta;
     setPagando(true);
+    // Marca la fila como pagada en la caché de esta página (se revierte si el servidor falla).
+    const marcarPagada = (actual: unknown) => {
+      const resp = actual as { data?: ConsultaAPI[] } | undefined;
+      if (!resp || !Array.isArray(resp.data)) return actual;
+      return {
+        ...resp,
+        data: resp.data.map((c) => (c.id === objetivo.id ? { ...c, estatus_pago: "PAGADO" } : c)),
+      };
+    };
     try {
-      const res = await fetch(`/api/consultas/${pagoConsulta.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          estatus_pago: "PAGADO",
-          monto_pagado: pagoConsulta.costo_total,
-          fecha_pago: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) throw new Error("Error al procesar pago");
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/consultas/${objetivo.id}`, "PATCH", {
+            estatus_pago: "PAGADO",
+            monto_pagado: objetivo.costo_total,
+            fecha_pago: new Date().toISOString(),
+          });
+          return marcarPagada(actual);
+        },
+        { optimisticData: marcarPagada, rollbackOnError: true, populateCache: true, revalidate: false },
+      );
       toast("Pago registrado exitosamente");
       setPagoConsulta(null);
-    } catch {
-      toast("Error al procesar el pago", "error");
+      void invalidar("/api/consultas", "/api/dashboard", "/api/pacientes");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Error al procesar el pago", "error");
     } finally {
       setPagando(false);
     }
@@ -241,6 +258,8 @@ export default function ConsultasPage() {
         </div>
       </div>
 
+      <div className="relative" aria-busy={loading || validating}>
+      <BarraRevalidando activo={validating && !loading} className="-top-2" />
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
@@ -259,7 +278,7 @@ export default function ConsultasPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 animate-fadeIn">
           {error}
         </div>
       ) : filtered.length === 0 ? (
@@ -294,7 +313,7 @@ export default function ConsultasPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/60">
+              <tbody className="divide-y divide-line/60 anim-lista">
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
@@ -367,11 +386,12 @@ export default function ConsultasPage() {
           />
         </div>
       )}
+      </div>
 
       {/* Modal de Confirmación de Pago */}
       {pagoConsulta && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => !pagando && setPagoConsulta(null)}>
-          <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 animate-fadeIn" onClick={() => !pagando && setPagoConsulta(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Registrar pago" className="bg-surface rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-md shadow-xl animate-popIn" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                 <CreditCard className="h-5 w-5 text-emerald-600" />

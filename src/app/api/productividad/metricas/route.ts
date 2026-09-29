@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerQuery } from '@/lib/api/validar';
+import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
+import { z } from 'zod';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
 import { agregarMetricas, listarResumenHonorarios } from '@/lib/productividad';
+
+const querySchema = z.object({
+  desde: fechaReal.optional(),
+  hasta: fechaReal.optional(),
+  doctor_id: uuidOpcional,
+  formato: z.string().max(10).optional(),
+});
 
 function csvCell(value: string | number | null | undefined): string {
   const raw = value == null ? '' : String(value);
@@ -19,35 +29,27 @@ export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  // El rol se verifica en paralelo con la lectura (ver leerConRol).
-  const rolP = requireRole(auth.user, ['admin']);
+  // requireRole ya no cuesta un viaje extra: se espera antes de leer.
+  const roleError = await requireRole(auth.user, ['admin']);
+  if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const { desde, hasta } = rangoPersonalizado(
-    searchParams.get('desde'),
-    searchParams.get('hasta')
-  );
-  const doctorId = searchParams.get('doctor_id');
-  const formato = (searchParams.get('formato') || 'json').toLowerCase();
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
+  const { desde, hasta } = rangoPersonalizado(q.desde, q.hasta);
+  const doctorId = q.doctor_id ?? null;
+  const formato = (q.formato || 'json').toLowerCase();
 
-  if (desde > hasta) {
-    const roleError = await rolP;
-    if (roleError) return roleError;
-    return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
-  }
+  const rangoError = validarRango(desde, hasta);
+  if (rangoError) return rangoError;
 
   try {
     const supabase = getSupabaseAdmin();
-    const r = await leerConRol(rolP, () =>
-      Promise.all([
-        listarResumenHonorarios({ desde, hasta, doctor_id: doctorId || undefined }),
-        doctorId
-          ? supabase.from('doctores').select('id, alias').eq('id', doctorId)
-          : supabase.from('doctores').select('id, alias').limit(500),
-      ])
-    );
-    if ('denegado' in r) return r.denegado;
-    const [filas, doctoresRes] = r.datos;
+    const [filas, doctoresRes] = await Promise.all([
+      listarResumenHonorarios({ desde, hasta, doctor_id: doctorId || undefined }),
+      doctorId
+        ? supabase.from('doctores').select('id, alias').eq('id', doctorId)
+        : supabase.from('doctores').select('id, alias').order('id').limit(1000),
+    ]);
     const nombres = new Map(
       (doctoresRes.data || []).map((d) => [d.id as string, d.alias as string])
     );

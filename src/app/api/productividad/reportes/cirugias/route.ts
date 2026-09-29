@@ -3,12 +3,27 @@ import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { CSV_BOM, rangoPersonalizado } from '@/lib/rangos';
+import { leerQuery } from '@/lib/api/validar';
+import { CONCURRENCIA_BD, mapConLimite } from '@/lib/productividad/lotes';
+import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
+import { z } from 'zod';
+
+// Un reporte de meses puede requerir decenas de páginas + lotes.
+export const maxDuration = 60;
+
+const querySchema = z.object({
+  desde: fechaReal.optional(),
+  hasta: fechaReal.optional(),
+  doctor_id: uuidOpcional,
+  formato: z.string().max(10).optional(),
+});
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
 const PAGE_SIZE = 1000;
 const MAX_FILAS = 10000;
-const CHUNK_IN = 200;
+// ~120 uuids/nombres por `.in()` mantiene la URL bajo ~8 KB (límite típico del gateway).
+const CHUNK_IN = 120;
 
 const ENCABEZADOS = [
   'FECHA',
@@ -118,6 +133,7 @@ async function listarCirugias(
       .lte('fecha', hasta)
       .order('fecha', { ascending: true })
       .order('hora', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
       .range(inicio, inicio + PAGE_SIZE - 1);
     if (doctorId) q = q.eq('doctor_id', doctorId);
     const { data, error } = await q;
@@ -135,13 +151,17 @@ async function cargarCirujanos(
   const mapa = new Map<string, string[]>();
   const ids = filas.map((f) => f.id);
   if (ids.length === 0) return mapa;
-  for (const chunk of enChunks(ids)) {
+  // Lotes en paralelo (antes en serie); el orden de fusión es el de los lotes.
+  const lotes = await mapConLimite(enChunks(ids), CONCURRENCIA_BD, async (chunk) => {
     const { data, error } = await supabase
       .from('agenda_cirugia_doctores')
       .select('cirugia_id, doctor_id, rol, doctores:doctor_id(alias)')
-      .in('cirugia_id', chunk);
-    if (error) continue;
-    for (const row of (data || []) as Array<{
+      .in('cirugia_id', chunk)
+      .order('id', { ascending: true });
+    return error ? [] : data || [];
+  });
+  for (const data of lotes) {
+    for (const row of data as Array<{
       cirugia_id: string;
       rol: string | null;
       doctores: { alias?: string } | null;
@@ -168,13 +188,16 @@ async function cargarPacientesPorNombre(
   }
   if (pendientes.size === 0) return mapa;
 
-  for (const chunk of enChunks([...pendientes.values()])) {
+  const lotes = await mapConLimite(enChunks([...pendientes.values()]), CONCURRENCIA_BD, async (chunk) => {
     const { data, error } = await supabase
       .from('pacientes')
       .select('id, nombre_completo, sexo, fecha_nacimiento')
       .in('nombre_completo', chunk)
-      .limit(500);
-    if (error) continue;
+      .order('id', { ascending: true })
+      .limit(1000);
+    return error ? [] : data || [];
+  });
+  for (const data of lotes) {
     const porNombre = new Map<string, Array<{ sexo: string | null; fecha_nacimiento: string | null }>>();
     for (const p of (data || []) as Array<{
       nombre_completo: string;
@@ -200,13 +223,13 @@ export async function GET(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const { desde, hasta } = rangoPersonalizado(searchParams.get('desde'), searchParams.get('hasta'));
-  const doctorId = searchParams.get('doctor_id');
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
+  const { desde, hasta } = rangoPersonalizado(q.desde, q.hasta);
+  const doctorId = q.doctor_id ?? null;
 
-  if (desde > hasta) {
-    return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
-  }
+  const rangoError = validarRango(desde, hasta);
+  if (rangoError) return rangoError;
 
   const dur = () => (performance.now() - startedAt).toFixed(1);
 

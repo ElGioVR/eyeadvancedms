@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { validarId } from '@/lib/api/validar';
 import { editarMontoHonorario } from '@/lib/productividad';
+import { leerJSONTolerante, MONTO_MAXIMO } from '@/lib/productividad/validacion';
 import { z } from 'zod';
 
-const patchSchema = z.object({
-  monto: z.number().min(0),
-});
+const patchSchema = z
+  .object({
+    monto: z
+      .number({ invalid_type_error: 'Monto inválido' })
+      .finite('Monto inválido')
+      .min(0, 'El monto no puede ser negativo')
+      .max(MONTO_MAXIMO, 'Monto demasiado alto'),
+  })
+  .strict();
 
 export async function PATCH(
   request: Request,
@@ -18,23 +26,15 @@ export async function PATCH(
   if (roleError) return roleError;
 
   const { id } = await params;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const idError = validarId(id, 'Honorario');
+  if (idError) return idError;
 
-  const validation = patchSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { error: validation.error.errors[0]?.message || 'Datos inválidos' },
-      { status: 400 }
-    );
-  }
+  // Tolerante: el panel envía el body sin cabecera Content-Type.
+  const body = await leerJSONTolerante(request, patchSchema);
+  if (body instanceof NextResponse) return body;
 
   try {
-    const item = await editarMontoHonorario(id, validation.data.monto);
+    const item = await editarMontoHonorario(id, body.monto);
     return NextResponse.json({ item });
   } catch (err) {
     const message = mensajeSeguro(err, 'productividad.honorarios.[id]', 'Error interno del servidor');

@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { fechaISO, leerJSON } from '@/lib/api/validar';
+import { idDeQuery, monto, respuestaErrorDb } from '@/lib/api/configuracion';
 import { z } from 'zod';
+
+const CONTEXTO = 'configuracion/coberturas-aseguranza';
+const COLUMNAS =
+  'id, aseguranza_id, porcentaje_cobertura, monto_maximo, copago_fijo, aplica_estudios, aplica_procedimientos, activo, vigente_desde, vigente_hasta, created_at, updated_at';
 
 const baseSchema = z.object({
   aseguranza_id: z.string().uuid(),
-  porcentaje_cobertura: z.number().min(0).max(100),
-  monto_maximo: z.number().min(0).max(99999999.99).optional().nullable(),
-  copago_fijo: z.number().min(0).max(99999999.99).optional(),
+  porcentaje_cobertura: z.number().finite().min(0).max(100),
+  monto_maximo: monto.optional().nullable(),
+  copago_fijo: monto.optional(),
   aplica_estudios: z.boolean().optional(),
   aplica_procedimientos: z.boolean().optional(),
   activo: z.boolean().optional(),
-  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_desde: fechaISO.optional().nullable(),
+  vigente_hasta: fechaISO.optional().nullable(),
 }).strict();
 
 const createSchema = baseSchema;
@@ -22,6 +27,12 @@ const updateSchema = z.object({
   id: z.string().uuid(),
 }).merge(baseSchema.partial()).strict();
 
+const DUPLICADO = 'Ya existe una cobertura para esta aseguranza';
+
+function vigenciaInvalida(desde?: string | null, hasta?: string | null): boolean {
+  return !!desde && !!hasta && desde > hasta;
+}
+
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -29,20 +40,19 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('coberturas_aseguranza')
-    .select(`
-      *,
-      aseguranzas:aseguranza_id (nombre)
-    `)
-    .order('created_at', { ascending: false });
+    .select(`${COLUMNAS}, aseguranzas:aseguranza_id (nombre)`)
+    .order('created_at', { ascending: false })
+    .limit(1000);
 
-  if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/coberturas-aseguranza').mensaje }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, CONTEXTO);
 
-  const result = (data || []).map((c) => ({
-    ...c,
-    aseguranza_nombre: (c.aseguranzas as any)?.nombre || '',
-  }));
+  const result = (data || []).map((c) => {
+    const aseg = Array.isArray(c.aseguranzas) ? c.aseguranzas[0] : c.aseguranzas;
+    return {
+      ...c,
+      aseguranza_nombre: (aseg as { nombre?: string } | null)?.nombre || '',
+    };
+  });
 
   return NextResponse.json(result);
 }
@@ -53,38 +63,26 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  const validado = await leerJSON(request, createSchema);
+  if (validado instanceof NextResponse) return validado;
+  if (vigenciaInvalida(validado.vigente_desde, validado.vigente_hasta)) {
+    return NextResponse.json({ error: 'La vigencia inicial no puede ser posterior a la final' }, { status: 400 });
   }
 
-  const validation = createSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0]?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
+  // UNIQUE(aseguranza_id) en BD: el duplicado se detecta en el propio INSERT
+  // (antes: SELECT previo + INSERT, con carrera entre ambos).
   const supabase = getSupabaseAdmin();
-
-  const { data: exists } = await supabase
-    .from('coberturas_aseguranza')
-    .select('id')
-    .eq('aseguranza_id', validation.data.aseguranza_id)
-    .maybeSingle();
-
-  if (exists) {
-    return NextResponse.json({ error: 'Ya existe una cobertura para esta aseguranza' }, { status: 409 });
-  }
-
   const { data, error } = await supabase
     .from('coberturas_aseguranza')
-    .insert(validation.data)
+    .insert(validado)
     .select()
     .single();
 
   if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/coberturas-aseguranza').mensaje }, { status: 500 });
+    return respuestaErrorDb(error, CONTEXTO, {
+      duplicado: DUPLICADO,
+      referencia: 'La aseguranza seleccionada no existe',
+    });
   }
 
   return NextResponse.json(data, { status: 201 });
@@ -96,19 +94,13 @@ export async function PUT(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  const validado = await leerJSON(request, updateSchema);
+  if (validado instanceof NextResponse) return validado;
+  if (vigenciaInvalida(validado.vigente_desde, validado.vigente_hasta)) {
+    return NextResponse.json({ error: 'La vigencia inicial no puede ser posterior a la final' }, { status: 400 });
   }
 
-  const validation = updateSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0]?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const { id, ...updates } = validation.data;
+  const { id, ...updates } = validado;
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
@@ -119,7 +111,11 @@ export async function PUT(request: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/coberturas-aseguranza').mensaje }, { status: 500 });
+    return respuestaErrorDb(error, CONTEXTO, {
+      duplicado: DUPLICADO,
+      referencia: 'La aseguranza seleccionada no existe',
+      noEncontrado: 'Cobertura no encontrada',
+    });
   }
 
   return NextResponse.json(data);
@@ -131,11 +127,8 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  if (!id) {
-    return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
-  }
+  const id = idDeQuery(request, 'ID requerido');
+  if (id instanceof NextResponse) return id;
 
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
@@ -143,9 +136,7 @@ export async function DELETE(request: Request) {
     .delete()
     .eq('id', id);
 
-  if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/coberturas-aseguranza').mensaje }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, CONTEXTO);
 
   return NextResponse.json({ success: true });
 }

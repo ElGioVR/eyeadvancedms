@@ -1,10 +1,16 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Search, X, Loader2, ShieldCheck, Upload, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useParams } from 'next/navigation';
+import useSWR from 'swr';
+import { useFetch } from '@/hooks/useFetch';
+import { useDebounce } from '@/hooks/useDebounce';
+import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { SkeletonTabla } from '@/components/ui/Skeleton';
 import PageHeader from '@/components/ui/PageHeader';
 import Modal from '@/components/ui/Modal';
 
@@ -24,6 +30,12 @@ interface AseguranzaAPI {
   nombre: string;
 }
 
+interface ServiciosResp {
+  data?: ServicioAPI[];
+}
+
+const msg = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
 const TIPOS = ['Todos', 'ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA'] as const;
 
 const tipoBadge: Record<string, string> = {
@@ -35,10 +47,21 @@ const tipoBadge: Record<string, string> = {
 export default function ServiciosPage() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const [servicios, setServicios] = useState<ServicioAPI[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [insuranceName, setInsuranceName] = useState('');
+  // Servicios (respuesta { data }) y nombre de la aseguranza (lista compartida/precargada).
+  const serviciosKey = id ? `/api/configuracion/aseguranzas/servicios?aseguranza_id=${encodeURIComponent(id)}` : null;
+  const {
+    data: serviciosResp,
+    error: serviciosError,
+    isLoading: serviciosLoading,
+    isValidating: serviciosValidating,
+    mutate: mutateServicios,
+  } = useSWR<ServiciosResp>(serviciosKey);
+  const servicios = useMemo(() => serviciosResp?.data ?? [], [serviciosResp]);
+  const loading = serviciosLoading && !serviciosResp;
+  const error = serviciosError ? msg(serviciosError, 'Error al cargar datos') : null;
+  const { data: aseguranzas } = useFetch<AseguranzaAPI>('/api/configuracion/aseguranzas');
+  const insuranceName = useMemo(() => aseguranzas.find((a) => a.id === id)?.nombre ?? '', [aseguranzas, id]);
+
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('Todos');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,6 +70,8 @@ export default function ServiciosPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // El input se limpia al elegir archivo (para poder re-elegir el mismo): se guarda aquí para confirmar.
+  const archivoRef = useRef<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<{
     validos: number;
@@ -76,49 +101,22 @@ export default function ServiciosPage() {
     URL.revokeObjectURL(url);
   }, []);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [servRes, segRes] = await Promise.all([
-          fetch(`/api/configuracion/aseguranzas/servicios?aseguranza_id=${id}`),
-          fetch('/api/configuracion/aseguranzas'),
-        ]);
-        if (servRes.ok) {
-          const servJson = await servRes.json();
-          setServicios(Array.isArray(servJson) ? servJson : servJson.data ?? []);
-        }
-        if (segRes.ok) {
-          const segJson = await segRes.json();
-          const list: AseguranzaAPI[] = Array.isArray(segJson) ? segJson : segJson.data ?? [];
-          const match = list.find((s) => s.id === id);
-          if (match) setInsuranceName(match.nombre);
-        }
-      } catch {
-        setError('Error al cargar datos');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [id]);
-
   const counts = useMemo(() => {
     const c: Record<string, number> = { Todos: servicios.length, ESTUDIO: 0, PROCEDIMIENTO: 0, CONSULTA: 0 };
     servicios.forEach((s) => { c[s.tipo] = (c[s.tipo] || 0) + 1; });
     return c;
   }, [servicios]);
 
+  const debouncedSearch = useDebounce(search);
   const filtered = useMemo(() => {
     let list = servicios;
     if (filterTipo !== 'Todos') list = list.filter((s) => s.tipo === filterTipo);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((s) => s.nombre.toLowerCase().includes(q));
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter((s) => (s.nombre || '').toLowerCase().includes(q));
     }
     return list;
-  }, [servicios, filterTipo, search]);
+  }, [servicios, filterTipo, debouncedSearch]);
 
   const startEdit = useCallback((s: ServicioAPI) => {
     setEditingId(s.id);
@@ -133,31 +131,32 @@ export default function ServiciosPage() {
   }, []);
 
   const saveEdit = useCallback(async (servId: string) => {
+    if (savingId) return;
+    const costo = editCosto.trim() === '' ? 0 : Number(editCosto);
+    const cobertura = editCobertura.trim() === '' ? 0 : Number(editCobertura);
+    if (!Number.isFinite(costo) || costo < 0) { toast('El costo debe ser un número mayor o igual a 0', 'error'); return; }
+    if (!Number.isFinite(cobertura) || cobertura < 0 || cobertura > 100) { toast('La cobertura debe estar entre 0 y 100', 'error'); return; }
+    const aplicar = (actual: ServiciosResp | undefined): ServiciosResp => ({
+      ...(actual ?? {}),
+      data: (actual?.data ?? []).map((s) => (s.id === servId ? { ...s, costo, porcentaje_cobertura: cobertura } : s)),
+    });
     setSavingId(servId);
     try {
-      const costo = parseFloat(editCosto) || 0;
-      const cobertura = parseFloat(editCobertura) || 0;
-      const res = await fetch('/api/configuracion/aseguranzas/servicios', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: servId, costo, porcentaje_cobertura: cobertura }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast(err.error || 'Error al guardar', 'error');
-        return;
-      }
-      setServicios((prev) =>
-        prev.map((s) => (s.id === servId ? { ...s, costo, porcentaje_cobertura: cobertura } : s))
+      await mutateServicios(
+        async (actual) => {
+          await enviarJSON('/api/configuracion/aseguranzas/servicios', 'PATCH', { id: servId, costo, porcentaje_cobertura: cobertura });
+          return aplicar(actual);
+        },
+        { optimisticData: aplicar, rollbackOnError: true, populateCache: true, revalidate: false }
       );
       toast('Servicio actualizado');
       cancelEdit();
-    } catch {
-      toast('Error de red', 'error');
+    } catch (err) {
+      toast(msg(err, 'Error al guardar'), 'error');
     } finally {
       setSavingId(null);
     }
-  }, [editCosto, editCobertura, toast, cancelEdit]);
+  }, [savingId, editCosto, editCobertura, toast, cancelEdit, mutateServicios]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent, servId: string) => {
     if (e.key === 'Enter') saveEdit(servId);
@@ -168,6 +167,7 @@ export default function ServiciosPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+    archivoRef.current = file;
 
     setImporting(true);
     try {
@@ -180,7 +180,7 @@ export default function ServiciosPage() {
         body: formData,
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast(err.error || 'Error al procesar archivo', 'error');
         return;
       }
@@ -195,10 +195,14 @@ export default function ServiciosPage() {
   }, [id, toast]);
 
   const handleConfirmImport = useCallback(async () => {
+    if (importing) return;
+    const file = archivoRef.current;
+    if (!file) {
+      toast('Vuelve a seleccionar el archivo', 'error');
+      return;
+    }
     setImporting(true);
     try {
-      const file = fileInputRef.current?.files?.[0];
-      if (!file) return;
 
       const formData = new FormData();
       formData.append('file', file);
@@ -211,7 +215,7 @@ export default function ServiciosPage() {
         body: formData,
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast(err.error || 'Error al importar', 'error');
         return;
       }
@@ -223,22 +227,20 @@ export default function ServiciosPage() {
       }
       setShowImportModal(false);
       setImportPreview(null);
-
-      const servRes = await fetch(`/api/configuracion/aseguranzas/servicios?aseguranza_id=${id}`);
-      if (servRes.ok) {
-        const servJson = await servRes.json();
-        setServicios(Array.isArray(servJson) ? servJson : servJson.data ?? []);
-      }
+      archivoRef.current = null;
+      // Revalida la matriz en segundo plano (la tabla actual se mantiene hasta que llega).
+      mutateServicios();
     } catch {
       toast('Error de red', 'error');
     } finally {
       setImporting(false);
     }
-  }, [id, toast, importModo]);
+  }, [id, toast, importModo, importing, mutateServicios]);
 
   const handleCloseImportModal = useCallback(() => {
     setShowImportModal(false);
     setImportPreview(null);
+    archivoRef.current = null;
   }, []);
 
   return (
@@ -316,21 +318,22 @@ export default function ServiciosPage() {
         </div>
       </div>
 
-      {error && (
+      {error && !serviciosResp && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       )}
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-surface p-12 flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+        <div aria-busy="true">
+          <SkeletonTabla filas={6} columnas={5} />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface p-12 text-center">
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center animate-fadeIn">
           <ShieldCheck className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
           <p className="text-sm font-medium text-muted">No se encontraron servicios</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+        <div className="relative rounded-2xl border border-line bg-surface overflow-hidden animate-fadeIn" aria-busy={serviciosValidating}>
+          <BarraRevalidando activo={serviciosValidating} />
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -342,7 +345,7 @@ export default function ServiciosPage() {
                   <th className="text-right px-5 py-3 text-xs font-bold text-muted uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="anim-lista">
                 {filtered.map((s) => (
                   <tr key={s.id} className="border-b border-gray-50 dark:border-line last:border-0 hover:bg-surface-2 transition-colors">
                     <td className="px-5 py-3 font-medium text-fg">{s.nombre}</td>
@@ -394,6 +397,7 @@ export default function ServiciosPage() {
                           <button
                             onClick={cancelEdit}
                             disabled={savingId === s.id}
+                            aria-label="Cancelar edición"
                             className="text-xs font-bold text-muted hover:text-gray-600 dark:hover:text-fg disabled:opacity-50"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -568,7 +572,7 @@ export default function ServiciosPage() {
               importModo === 'reemplazar' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
             )}
           >
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : importModo === 'reemplazar' ? 'Limpiar y cargar' : 'Confirmar importación'}
+            {importing ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importando…</span> : importModo === 'reemplazar' ? 'Limpiar y cargar' : 'Confirmar importación'}
           </button>
         </div>
       </Modal>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
+import { hoyTijuana } from '@/lib/rangos';
 
 // Proyecciones tolerantes a esquema: legacy (marca/modelo/lote/fecha_caducidad)
 // y nuevo (manufacturer/model/product_name/sphere/serial_number/expiration_date).
@@ -14,6 +15,11 @@ type ModoTipo = 'solo_lio' | 'campos_lio' | 'todos';
 
 const MODOS: ModoTipo[] = ['solo_lio', 'campos_lio', 'todos'];
 
+/** Valores del enum tipo_inventario (migración 1800000000050). */
+const TIPOS_VALIDOS = ['LENTE_VISION', 'LENTE_INTRAOCULAR'];
+/** Tope del selector (lista desplegable). */
+const LIMITE = 500;
+
 function esFechaCaducada(item: Record<string, unknown>, hoy: string): boolean {
   const cad = (item.fecha_caducidad || item.expiration_date || null) as string | null;
   if (!cad) return false;
@@ -25,10 +31,14 @@ export async function GET(request: Request) {
   if (auth instanceof NextResponse) return auth;
 
   const { searchParams } = new URL(request.url);
-  const tipo = searchParams.get('tipo');
+  const tipo = searchParams.get('tipo') || null;
+  if (tipo !== null && !TIPOS_VALIDOS.includes(tipo)) {
+    return NextResponse.json({ error: 'Tipo de inventario no válido' }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
-  const hoy = new Date().toISOString().slice(0, 10);
+  // Caducidad según el día en la clínica (antes: UTC)
+  const hoy = hoyTijuana();
 
   // Estrategia: 1) esquema legacy con filtro tipo (?tipo=LENTE_INTRAOCULAR);
   // 2) si la consulta falla por columnas inexistentes (esquema nuevo) se
@@ -68,7 +78,8 @@ export async function GET(request: Request) {
       .eq('estado', 'DISPONIBLE')
       .gt('stock', 0)
       .or(`fecha_caducidad.is.null,fecha_caducidad.gt.${hoy}`)
-      .order('marca', { ascending: true });
+      .order('marca', { ascending: true })
+      .limit(LIMITE);
 
     query = aplicarModo(query, modo);
 
@@ -98,7 +109,8 @@ export async function GET(request: Request) {
           .eq('estado', 'DISPONIBLE')
           .gt('stock', 0)
           .or(`expiration_date.is.null,expiration_date.gt.${hoy}`)
-          .order('manufacturer', { ascending: true });
+          .order('manufacturer', { ascending: true })
+          .limit(LIMITE);
 
         query = aplicarModo(query, modo);
 

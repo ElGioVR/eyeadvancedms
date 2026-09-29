@@ -39,20 +39,22 @@ export async function verificarPermisoArchivo(
 ): Promise<{ permitido: boolean; rol: string }> {
   const supabase = getSupabaseAdmin();
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('rol')
-    .eq('id', usuarioId)
-    .maybeSingle();
+  // Rol y override son independientes: en paralelo (antes 2 viajes en serie).
+  const [{ data: usuario }, { data: override }] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('id', usuarioId)
+      .maybeSingle(),
+    supabase
+      .from('permisos_archivo')
+      .select('permitido')
+      .eq('usuario_id', usuarioId)
+      .eq('accion', accion)
+      .maybeSingle(),
+  ]);
 
   const rol = usuario?.rol || '';
-
-  const { data: override } = await supabase
-    .from('permisos_archivo')
-    .select('permitido')
-    .eq('usuario_id', usuarioId)
-    .eq('accion', accion)
-    .maybeSingle();
 
   if (override) {
     return { permitido: override.permitido, rol };

@@ -69,7 +69,7 @@ export async function notificarUsuarios(userIds: Array<string | null | undefined
         user_id,
         tipo: SEVERIDAD[params.tipo],
         titulo: params.titulo.slice(0, 255),
-        mensaje: params.mensaje,
+        mensaje: params.mensaje.slice(0, 2000),
         entidad_tipo: params.entidadTipo ?? null,
         entidad_id: params.entidadId ?? null,
       })),
@@ -90,8 +90,13 @@ export async function usuariosDeDoctores(doctorIds: Array<string | null | undefi
   const ids = Array.from(new Set(doctorIds.filter((d): d is string => !!d)));
   const mapa = new Map<string, string>();
   if (ids.length === 0) return mapa;
-  const { data } = await getSupabaseAdmin().from('doctores').select('id, usuario_id').in('id', ids);
-  for (const d of data ?? []) if (d.usuario_id) mapa.set(d.id, d.usuario_id);
+  try {
+    const { data, error } = await getSupabaseAdmin().from('doctores').select('id, usuario_id').in('id', ids);
+    if (error) console.error('[notificaciones] doctores', { code: error.code, message: error.message });
+    for (const d of data ?? []) if (d.usuario_id) mapa.set(d.id, d.usuario_id);
+  } catch (err) {
+    console.error('[notificaciones] doctores', err);
+  }
   return mapa;
 }
 
@@ -103,8 +108,22 @@ export async function notificarDoctores(doctorIds: Array<string | null | undefin
 
 /** Notifica a todos los usuarios activos con alguno de los roles. */
 export async function notificarRoles(roles: string[], params: NotificarParams): Promise<number> {
-  const { data } = await getSupabaseAdmin().from('usuarios').select('id').in('rol', roles).eq('activo', true);
-  return notificarUsuarios((data ?? []).map((u) => u.id), params);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('usuarios')
+      .select('id')
+      .in('rol', roles)
+      .eq('activo', true)
+      .limit(500);
+    if (error) {
+      console.error('[notificaciones] roles', { code: error.code, message: error.message });
+      return 0;
+    }
+    return notificarUsuarios((data ?? []).map((u) => u.id), params);
+  } catch (err) {
+    console.error('[notificaciones] roles', err);
+    return 0;
+  }
 }
 
 // ── Helpers de dominio ─────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import useSWR from 'swr';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -30,6 +31,19 @@ import FiltrosReporte from '@/components/productividad/FiltrosReporte';
 import ModalRangoFechas, { type RangoFechas } from '@/components/productividad/ModalRangoFechas';
 import Embudo from '@/components/productividad/Embudo';
 import PagosHistorial from '@/components/productividad/PagosHistorial';
+import ProgresoSync from '@/components/productividad/ProgresoSync';
+import {
+  ejecutarSync,
+  esAbort,
+  urlPreviewSync,
+  useSegundosTranscurridos,
+  type SyncPreview,
+  type SyncResultado,
+} from '@/components/productividad/sync';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { useToast } from '@/components/ui/Toast';
+import { useDebounce, useInvalidar } from '@/hooks';
+import { ApiError, enviarJSON, fetchJSON } from '@/lib/fetcher';
 import { formatCurrency } from '@/lib/money';
 import { formatFechaCsv, rangoMesActual } from '@/lib/rangos';
 import { useUser } from '@/hooks/useUser';
@@ -153,72 +167,64 @@ function metricasTexto(m: HonorarioLigaFila['metricas_ligados']): string {
   return parts.length ? parts.join(' · ') : '—';
 }
 
+interface SyncLogFila {
+  id: string | number;
+  fecha_inicio?: string;
+  consultas_verificadas?: number;
+  cirugias_verificadas?: number;
+  eventos_creados?: number;
+  errores?: number;
+  duracion_ms?: number;
+}
+
 function SyncTab() {
   const { user } = useUser();
   const isAdmin = user?.rol === 'admin';
-  const [syncResult, setSyncResult] = useState<{
-    consultas_verificadas?: number;
-    cirugias_verificadas?: number;
-    eventos_creados?: number;
-    eventos_existentes?: number;
-    consultas_desplegadas?: number;
-    cirugias_desplegadas?: number;
-    pendientes_antes?: { consultas?: number; cirugias?: number; doctores_sin_evento?: number };
-    doctores_sin_evento?: Array<{ doctor_id: string; doctor_nombre: string; origen: string; ref: string }>;
-    errores?: string[];
-  } | null>(null);
+  const { toast } = useToast();
+  const invalidar = useInvalidar();
+  const [syncResult, setSyncResult] = useState<SyncResultado | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<Array<Record<string, unknown>>>([]);
+  const [modoSync, setModoSync] = useState<'rango' | 'pendientes' | null>(null);
+  const enCursoRef = useRef(false);
+  const segundos = useSegundosTranscurridos(loading);
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
-  const [preview, setPreview] = useState<{
-    consultas_pendientes?: number;
-    cirugias_pendientes?: number;
-    doctores_sin_evento?: Array<{ doctor_id: string; doctor_nombre: string; origen: string; ref: string }>;
-  } | null>(null);
+  // El preview se pide cuando el usuario deja de cambiar fechas (~300 ms).
+  const desdePreview = useDebounce(fechaDesde, 300);
+  const hastaPreview = useDebounce(fechaHasta, 300);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    fetch('/api/productividad/sync')
-      .then((r) => r.json())
-      .then((data) => { setLogs(Array.isArray(data) ? data : []); })
-      .catch(() => {});
-  }, [isAdmin]);
-
-  const cargarPreview = async () => {
-    try {
-      const params = new URLSearchParams({ preview: '1' });
-      if (fechaDesde) params.set('desde', fechaDesde);
-      if (fechaHasta) params.set('hasta', fechaHasta);
-      const res = await fetch(`/api/productividad/sync?${params}`);
-      if (res.ok) setPreview(await res.json());
-    } catch {
-      setPreview(null);
-    }
-  };
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    void cargarPreview();
-  }, [isAdmin, fechaDesde, fechaHasta]);
+  const { data: logsData, isValidating: validandoLogs } = useSWR<SyncLogFila[]>(isAdmin ? '/api/productividad/sync' : null);
+  const logs = Array.isArray(logsData) ? logsData : [];
+  const { data: preview, isValidating: validandoPreview } = useSWR<SyncPreview>(
+    isAdmin ? urlPreviewSync(desdePreview, hastaPreview) : null
+  );
 
   const handleSync = async (soloPendientes = false) => {
+    if (enCursoRef.current) return; // evita doble envío
+    enCursoRef.current = true;
     setLoading(true);
-    const body: Record<string, unknown> = {};
+    setModoSync(soloPendientes ? 'pendientes' : 'rango');
+    setSyncError(null);
+    const body: { fecha_desde?: string; fecha_hasta?: string; solo_pendientes?: boolean } = {};
     if (fechaDesde) body.fecha_desde = fechaDesde;
     if (fechaHasta) body.fecha_hasta = fechaHasta;
     if (soloPendientes) body.solo_pendientes = true;
-    const res = await fetch(`/api/productividad/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    setSyncResult(data.sync || data);
-    setLoading(false);
-    const logsRes = await fetch('/api/productividad/sync').then((r) => r.json());
-    setLogs(Array.isArray(logsRes) ? logsRes : []);
-    void cargarPreview();
+    try {
+      const r = await ejecutarSync(body);
+      setSyncResult(r);
+      toast(`Sync completado · ${r.eventos_creados ?? 0} evento(s) creados`, 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error en sync';
+      setSyncError(msg);
+      toast(msg, 'error');
+    } finally {
+      enCursoRef.current = false;
+      setLoading(false);
+      setModoSync(null);
+      // Historial, preview, honorarios y métricas se revalidan sin vaciar la pantalla.
+      void invalidar('/api/productividad');
+    }
   };
 
   if (!isAdmin) return <EmptyState icon={Lock} title="Acceso restringido" description="Este módulo solo está disponible para administradores." />;
@@ -226,23 +232,24 @@ function SyncTab() {
   const sinEvento = preview?.doctores_sin_evento || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <PageHeader title="Sync" subtitle="Desplegar honorarios a productividad (flag deployed_to_performance)" />
-      <div className="rounded-2xl border border-line bg-surface p-4 space-y-4">
+      <div className="relative rounded-2xl border border-line bg-surface p-4 space-y-4" aria-busy={loading}>
+        <BarraRevalidando activo={validandoPreview && !loading} />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} placeholder="Desde" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm" />
-          <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} placeholder="Hasta" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm" />
+          <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} disabled={loading} aria-label="Desde" placeholder="Desde" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm disabled:opacity-60" />
+          <input type="date" value={fechaHasta} min={fechaDesde || undefined} onChange={(e) => setFechaHasta(e.target.value)} disabled={loading} aria-label="Hasta" placeholder="Hasta" className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm disabled:opacity-60" />
         </div>
         {preview && (
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-sm">
+          <div className="valor-suave rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-sm" data-validando={validandoPreview}>
             <p className="font-semibold text-amber-800 dark:text-amber-300 mb-1">Pendientes de despliegue</p>
             <p className="text-amber-700 dark:text-amber-400">
               {preview.consultas_pendientes || 0} consultas · {preview.cirugias_pendientes || 0} cirugías · {sinEvento.length} doctor(es) sin evento de honorario
             </p>
             {sinEvento.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs max-h-40 overflow-y-auto">
-                {sinEvento.slice(0, 20).map((d, i) => (
-                  <li key={i} className="text-amber-900 dark:text-amber-200">
+                {sinEvento.slice(0, 20).map((d) => (
+                  <li key={`${d.doctor_id}-${d.origen}-${d.ref}`} className="text-amber-900 dark:text-amber-200">
                     {d.doctor_nombre} — {d.origen} · {d.ref.slice(0, 8)}
                   </li>
                 ))}
@@ -253,17 +260,23 @@ function SyncTab() {
             )}
           </div>
         )}
+        {loading && <ProgresoSync segundos={segundos} />}
+        {syncError && !loading && (
+          <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 animate-fadeIn dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+            {syncError}
+          </div>
+        )}
         <div className="flex flex-wrap gap-3">
-          <button onClick={() => handleSync(false)} disabled={loading} className="inline-flex items-center gap-2 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-bold text-sm disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {loading ? 'Sincronizando...' : 'Ejecutar Sync (rango)'}
+          <button type="button" onClick={() => void handleSync(false)} disabled={loading} className="inline-flex items-center gap-2 px-6 py-2 bg-primary-600 text-white rounded-lg transition-colors hover:bg-primary-700 font-bold text-sm disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${modoSync === 'rango' ? 'animate-spin' : ''}`} /> {modoSync === 'rango' ? 'Sincronizando...' : 'Ejecutar Sync (rango)'}
           </button>
-          <button onClick={() => handleSync(true)} disabled={loading} className="inline-flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold text-sm disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {loading ? 'Desplegando...' : 'Desplegar solo pendientes'}
+          <button type="button" onClick={() => void handleSync(true)} disabled={loading} className="inline-flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg transition-colors hover:bg-emerald-700 font-bold text-sm disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${modoSync === 'pendientes' ? 'animate-spin' : ''}`} /> {modoSync === 'pendientes' ? 'Desplegando...' : 'Desplegar solo pendientes'}
           </button>
         </div>
       </div>
       {syncResult && (
-        <div className="rounded-2xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4 animate-fadeIn">
           <h3 className="text-sm font-bold mb-2">Resultado de Sync</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div><p className="text-xs text-gray-500">Consultas verificadas</p><p className="text-lg font-bold">{syncResult.consultas_verificadas}</p></div>
@@ -277,21 +290,22 @@ function SyncTab() {
             <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3">
               <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Doctores sin honorario previo al sync</p>
               <ul className="text-xs space-y-1 max-h-32 overflow-y-auto">
-                {syncResult.doctores_sin_evento.map((d, i) => (
-                  <li key={i} className="text-amber-900 dark:text-amber-200">{d.doctor_nombre} — {d.origen}</li>
+                {syncResult.doctores_sin_evento.map((d) => (
+                  <li key={`${d.doctor_id}-${d.origen}-${d.ref}`} className="text-amber-900 dark:text-amber-200">{d.doctor_nombre} — {d.origen}</li>
                 ))}
               </ul>
             </div>
           )}
           {syncResult.errores && syncResult.errores.length > 0 && (
             <div className="mt-2 space-y-1">
-              {syncResult.errores.map((e: string, i: number) => <p key={i} className="text-xs text-rose-600">{e}</p>)}
+              {syncResult.errores.map((e: string, i: number) => <p key={`${i}-${e}`} className="text-xs text-rose-600">{e}</p>)}
             </div>
           )}
         </div>
       )}
       {logs.length > 0 && (
-        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
+        <div className="relative rounded-2xl border border-line bg-surface overflow-hidden">
+          <BarraRevalidando activo={validandoLogs} />
           <h3 className="text-sm font-bold p-4 border-b border-line">Historial de Sync</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -307,7 +321,7 @@ function SyncTab() {
               </thead>
               <tbody className="divide-y divide-line/60">
                 {logs.map((l) => (
-                  <tr key={String(l.id)} className="hover:bg-surface-2">
+                  <tr key={String(l.id)} className="transition-colors hover:bg-surface-2">
                     <td className={td}>{String(l.fecha_inicio)}</td>
                     <td className={td}>{String(l.consultas_verificadas)}</td>
                     <td className={td}>{String(l.cirugias_verificadas)}</td>
@@ -331,28 +345,57 @@ const thR = 'px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider
 const td = 'px-4 py-3 text-sm text-fg-2';
 const tdR = 'px-4 py-3 text-right text-sm font-semibold text-fg';
 
+function mensajeError(err: unknown, fallback: string): string | null {
+  if (!err || esAbort(err)) return null;
+  return err instanceof Error ? err.message : fallback;
+}
+
+/** Sin reintento para peticiones canceladas por obsoletas; resto según la política global. */
+function reintentarSiNoAbort(err: unknown): boolean {
+  if (esAbort(err)) return false;
+  return !(err instanceof ApiError) || err.status >= 500;
+}
+
+/** Marca como PAGADO (optimista) las filas POR_PAGAR indicadas y ajusta el resumen. */
+function marcarPagados(d: HonorariosListado, ids: Set<string>): HonorariosListado {
+  let delta = 0;
+  const items = d.items.map((f) => {
+    if (!ids.has(f.id) || f.estado_pago !== 'POR_PAGAR') return f;
+    delta += Number(f.monto) || 0;
+    return { ...f, estado_pago: 'PAGADO' as const };
+  });
+  if (!d.resumen) return { ...d, items };
+  return {
+    ...d,
+    items,
+    resumen: { ...d.resumen, por_pagar: d.resumen.por_pagar - delta, pagado: d.resumen.pagado + delta },
+  };
+}
+
+function cambiarMonto(d: HonorariosListado, id: string, monto: number): HonorariosListado {
+  return { ...d, items: d.items.map((f) => (f.id === id ? { ...f, monto } : f)) };
+}
+
 export default function ProductividadPage() {
   const { user, loading: userLoading } = useUser();
   const isAdmin = user?.rol === 'admin';
+  const { toast } = useToast();
+  const invalidar = useInvalidar();
 
   const [vista, setVista] = useState<VistaId>('metricas');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [doctorId, setDoctorId] = useState('');
-  const [doctores, setDoctores] = useState<DoctorOption[]>([]);
-  const [liga, setLiga] = useState<HonorariosListado | null>(null);
-  const [metricas, setMetricas] = useState<MetricasPayload | null>(null);
-  const [cargandoMetricas, setCargandoMetricas] = useState(true);
+  // `loading` = hay una petición de honorarios en curso (la última; las obsoletas se cancelan).
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+  const [pageLiga, setPageLiga] = useState(1);
+  const [pagePanel, setPagePanel] = useState(1);
   const [fuente, setFuente] = useState('');
   const [estado, setEstado] = useState('');
   const [vistaAgrup, setVistaAgrup] = useState<'detalle' | TipoAgrupacionLiga>('detalle');
   const [doctorSel, setDoctorSel] = useState<DoctorOption | null>(null);
-  const [periodoTipo, setPeriodoTipo] = useState<TipoPeriodoPago>('MENSUAL');
+  const [periodoPendiente, setPeriodoPendiente] = useState<TipoPeriodoPago | null>(null);
   const [panelDoctor, setPanelDoctor] = useState<{ id: string; nombre: string } | null>(null);
-  const [panelData, setPanelData] = useState<HonorariosListado | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMonto, setEditMonto] = useState('');
@@ -361,215 +404,171 @@ export default function ProductividadPage() {
   const [reporteCargando, setReporteCargando] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const abortLigaRef = useRef<AbortController | null>(null);
-  const abortMetricasRef = useRef<AbortController | null>(null);
-  const abortPanelRef = useRef<AbortController | null>(null);
+  const urlLigaEnCursoRef = useRef<string | null>(null);
+  const abortReporteRef = useRef<AbortController | null>(null);
 
-  const fetchMetricas = useCallback(
-    async (fdesde: string, fhasta: string, fdoctor: string, signal?: AbortSignal) => {
-      if (!fdesde || !fhasta) return;
-      abortMetricasRef.current?.abort();
-      const controller = new AbortController();
-      abortMetricasRef.current = controller;
-      if (signal) {
-        if (signal.aborted) controller.abort();
-        else signal.addEventListener('abort', () => controller.abort());
-      }
-      setCargandoMetricas(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams({ desde: fdesde, hasta: fhasta });
-        if (fdoctor) params.set('doctor_id', fdoctor);
-        const res = await fetch(`/api/productividad/metricas?${params}`, { signal: controller.signal });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error || `Error ${res.status}`);
-        }
-        const json = (await res.json()) as MetricasPayload;
-        if (!controller.signal.aborted) setMetricas(json);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : 'Error al cargar métricas');
-          setMetricas(null);
-        }
-      } finally {
-        if (!controller.signal.aborted) setCargandoMetricas(false);
-      }
-    },
-    []
-  );
-
-  const fetchLiga = useCallback(
-    async (
-      fdesde: string,
-      fhasta: string,
-      fdoctor: string,
-      fpage: number,
-      ffuente: string,
-      festado: string,
-      fagrup: 'detalle' | TipoAgrupacionLiga,
-      signal?: AbortSignal
-    ) => {
-      if (!fdesde || !fhasta) return;
-      abortLigaRef.current?.abort();
-      const controller = new AbortController();
-      abortLigaRef.current = controller;
-      if (signal) {
-        if (signal.aborted) controller.abort();
-        else signal.addEventListener('abort', () => controller.abort());
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams({
-          desde: fdesde,
-          hasta: fhasta,
-          page: String(fpage),
-          pageSize: '10',
-        });
-        if (fdoctor) params.set('doctor_id', fdoctor);
-        if (ffuente) params.set('fuente', ffuente);
-        if (festado) params.set('estado', festado);
-        if (fagrup !== 'detalle') params.set('agrupar_por', fagrup);
-        const res = await fetch(`/api/productividad/honorarios?${params}`, { signal: controller.signal });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error || `Error ${res.status}`);
-        }
-        const json = (await res.json()) as HonorariosListado;
-        if (!controller.signal.aborted) {
-          setLiga(json);
-          setPeriodoTipo(json.periodo_tipo);
-          setSelected(new Set());
-          const pResp = Math.floor(Number(json.page) || 0);
-          if (pResp > 0) setPage(pResp);
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : 'Error al cargar honorarios');
-          setLiga(null);
-        }
-      } finally {
-        if (abortLigaRef.current === controller) setLoading(false);
-      }
-    },
-    []
-  );
+  const page = panelDoctor ? pagePanel : pageLiga;
+  const rangoListo = isAdmin && !!desde && !!hasta;
 
   useEffect(() => {
     if (userLoading || !isAdmin) return;
     const r = rangoMesActual();
-    setDesde(r.desde);
-    setHasta(r.hasta);
+    setDesde((d) => d || r.desde);
+    setHasta((h) => h || r.hasta);
+  }, [userLoading, isAdmin]);
 
-    const ac = new AbortController();
-    void fetchMetricas(r.desde, r.hasta, '', ac.signal);
+  // ---- Lecturas (SWR): claves por rango/doctor/filtros → volver a un filtro ya visto es instantáneo
+  const { data: doctoresRaw } = useSWR<Array<{ id: string; alias?: string; nombre?: string }>>(
+    isAdmin ? '/api/configuracion/doctores' : null
+  );
+  const doctores = useMemo<DoctorOption[]>(
+    () =>
+      (Array.isArray(doctoresRaw) ? doctoresRaw : []).map((d) => ({
+        id: d.id,
+        nombre: d.alias || d.nombre || d.id,
+      })),
+    [doctoresRaw]
+  );
 
-    fetch('/api/configuracion/doctores')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((docs: Array<{ id: string; alias?: string; nombre?: string }>) =>
-        setDoctores(
-          (docs || []).map((d) => ({
-            id: d.id,
-            nombre: d.alias || d.nombre || d.id,
-          }))
-        )
-      )
-      .catch(() => setDoctores([]));
+  const { data: configPeriodo, mutate: mutateConfigPeriodo } = useSWR<{ tipo?: TipoPeriodoPago }>(
+    isAdmin ? '/api/productividad/config-periodo' : null
+  );
 
-    fetch('/api/productividad/config-periodo')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json: { tipo?: TipoPeriodoPago } | null) => {
-        if (json?.tipo) setPeriodoTipo(json.tipo);
-      })
-      .catch(() => {});
+  let urlMetricas: string | null = null;
+  if (rangoListo && (vista === 'metricas' || vista === 'doctores')) {
+    const params = new URLSearchParams({ desde, hasta });
+    if (doctorId) params.set('doctor_id', doctorId);
+    urlMetricas = `/api/productividad/metricas?${params}`;
+  }
+  const {
+    data: metricasData,
+    error: metricasError,
+    isValidating: validandoMetricas,
+  } = useSWR<MetricasPayload>(urlMetricas);
+  const metricas = metricasData ?? null;
 
-    return () => ac.abort();
-  }, [userLoading, isAdmin, fetchMetricas]);
+  let urlLiga: string | null = null;
+  if (rangoListo && vista === 'honorarios') {
+    const params = new URLSearchParams({
+      desde,
+      hasta,
+      page: String(pageLiga),
+      pageSize: '10',
+    });
+    if (doctorId) params.set('doctor_id', doctorId);
+    if (fuente) params.set('fuente', fuente);
+    if (estado) params.set('estado', estado);
+    if (vistaAgrup !== 'detalle') params.set('agrupar_por', vistaAgrup);
+    urlLiga = `/api/productividad/honorarios?${params}`;
+  }
+  const urlLigaRef = useRef(urlLiga);
+  urlLigaRef.current = urlLiga;
 
-  const fetchPanelDoctor = useCallback(async (id: string, p: number, fdesde: string, fhasta: string) => {
-    // Solo cuenta la última petición: las respuestas fuera de orden se descartan.
-    abortPanelRef.current?.abort();
+  // Cancela la petición de otra combinación de filtros que siga en vuelo; SWR descarta
+  // respuestas fuera de orden y conserva los datos visibles mientras llega la nueva.
+  const fetcherLiga = useCallback(async (url: string) => {
+    if (abortLigaRef.current && urlLigaEnCursoRef.current !== url) abortLigaRef.current.abort();
     const controller = new AbortController();
-    abortPanelRef.current = controller;
+    abortLigaRef.current = controller;
+    urlLigaEnCursoRef.current = url;
+    setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(p) });
-      if (fdesde) params.set('desde', fdesde);
-      if (fhasta) params.set('hasta', fhasta);
-      const res = await fetch(`/api/productividad/honorarios/doctor/${id}?pageSize=10&${params}`, {
-        signal: controller.signal,
-      });
-      const json = res.ok ? ((await res.json()) as HonorariosListado) : null;
-      if (!controller.signal.aborted) setPanelData(json);
-    } catch {
-      if (!controller.signal.aborted) setPanelData(null);
+      return await fetchJSON<HonorariosListado>(url, { signal: controller.signal });
+    } finally {
+      if (abortLigaRef.current === controller) setLoading(false);
     }
   }, []);
 
+  const {
+    data: liga,
+    error: ligaError,
+    isValidating: validandoLiga,
+    mutate: mutateLiga,
+  } = useSWR<HonorariosListado>(urlLiga, fetcherLiga, {
+    shouldRetryOnError: reintentarSiNoAbort,
+    onSuccess: (json, key) => {
+      if (key !== urlLigaRef.current) return;
+      // El servidor puede ajustar la página solicitada (fuera de rango).
+      const pResp = Math.floor(Number(json.page) || 0);
+      if (pResp > 0) setPageLiga((p) => (p === pResp ? p : pResp));
+    },
+  });
+
+  let urlPanel: string | null = null;
+  if (isAdmin && panelDoctor && vista === 'honorarios') {
+    const params = new URLSearchParams({ page: String(pagePanel) });
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
+    urlPanel = `/api/productividad/honorarios/doctor/${encodeURIComponent(panelDoctor.id)}?pageSize=10&${params}`;
+  }
+  const {
+    data: panelDataSwr,
+    error: panelError,
+    isValidating: validandoPanel,
+    mutate: mutatePanel,
+  } = useSWR<HonorariosListado>(urlPanel);
+  const panelData = panelDoctor ? panelDataSwr ?? null : null;
+
+  const periodoTipo: TipoPeriodoPago =
+    periodoPendiente ?? liga?.periodo_tipo ?? configPeriodo?.tipo ?? 'MENSUAL';
+
+  // Cambió la lista mostrada (filtro, página, panel) → la selección previa ya no aplica.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [urlLiga, urlPanel]);
+
+  const error =
+    (vista === 'metricas' || vista === 'doctores'
+      ? mensajeError(metricasError, 'Error al cargar métricas')
+      : null) ||
+    (vista === 'honorarios'
+      ? mensajeError(panelDoctor ? panelError : ligaError, 'Error al cargar honorarios')
+      : null);
+
   const handleFilter = useCallback(
     (f: { fecha_desde?: string; fecha_hasta?: string; doctor_id?: string }) => {
-      const fd = f.fecha_desde || desde;
-      const fh = f.fecha_hasta || hasta;
-      const doc = f.doctor_id !== undefined ? f.doctor_id : doctorId;
-      setDesde(fd);
-      setHasta(fh);
-      setDoctorId(doc);
-      setPage(1);
-      if (!fd || !fh) return;
-      if (panelDoctor) void fetchPanelDoctor(panelDoctor.id, 1, fd, fh);
-      if (vista === 'honorarios') {
-        void fetchLiga(fd, fh, doc, 1, fuente, estado, vistaAgrup);
-      } else if (vista === 'metricas' || vista === 'doctores') {
-        void fetchMetricas(fd, fh, doc);
+      if (f.fecha_desde) setDesde(f.fecha_desde);
+      if (f.fecha_hasta) setHasta(f.fecha_hasta);
+      if (f.doctor_id !== undefined) setDoctorId(f.doctor_id);
+      setPageLiga(1);
+      setPagePanel(1);
+    },
+    []
+  );
+
+  const handleVista = useCallback((next: string) => {
+    const id = (VISTAS.some((v) => v.id === next) ? next : 'metricas') as VistaId;
+    setVista(id);
+    setPageLiga(1);
+  }, []);
+
+  const cambiarPeriodo = useCallback(
+    async (tipo: TipoPeriodoPago) => {
+      setPeriodoPendiente(tipo);
+      try {
+        await enviarJSON('/api/productividad/config-periodo', 'PUT', { tipo });
+        void mutateConfigPeriodo((c) => ({ ...(c ?? {}), tipo }), { revalidate: false });
+        await invalidar('/api/productividad/honorarios');
+      } catch (err) {
+        toast(err instanceof ApiError || err instanceof Error ? err.message : 'No se pudo cambiar el período', 'error');
+      } finally {
+        setPeriodoPendiente(null);
       }
     },
-    [desde, hasta, doctorId, panelDoctor, vista, fuente, estado, vistaAgrup, fetchLiga, fetchMetricas, fetchPanelDoctor]
+    [mutateConfigPeriodo, invalidar, toast]
   );
 
-  const handleVista = useCallback(
-    (next: string) => {
-      const id = (VISTAS.some((v) => v.id === next) ? next : 'metricas') as VistaId;
-      setVista(id);
-      if (!desde || !hasta || !isAdmin) return;
-      setPage(1);
-      if (id === 'honorarios') void fetchLiga(desde, hasta, doctorId, 1, fuente, estado, vistaAgrup);
-      if (id === 'metricas' || id === 'doctores') void fetchMetricas(desde, hasta, doctorId);
-    },
-    [desde, hasta, doctorId, fuente, estado, vistaAgrup, isAdmin, fetchLiga, fetchMetricas]
-  );
-
-  const cambiarPeriodo = useCallback(async (tipo: TipoPeriodoPago) => {
-    setPeriodoTipo(tipo);
-    try {
-      await fetch('/api/productividad/config-periodo', {
-        method: 'PUT',
-        body: JSON.stringify({ tipo }),
-      });
-      if (desde && hasta) void fetchLiga(desde, hasta, doctorId, page, fuente, estado, vistaAgrup);
-    } catch {
-      // el valor optimista se reconcilia en el próximo fetch
-    }
-  }, [desde, hasta, doctorId, page, fuente, estado, vistaAgrup, fetchLiga]);
-
-  const abrirPanelDoctor = useCallback(
-    async (id: string, nombre: string) => {
-      setPage(1);
-      setPanelDoctor({ id, nombre });
-      setSelected(new Set());
-      await fetchPanelDoctor(id, 1, desde, hasta);
-    },
-    [fetchPanelDoctor, desde, hasta]
-  );
+  const abrirPanelDoctor = useCallback((id: string, nombre: string) => {
+    setPagePanel(1);
+    setPanelDoctor({ id, nombre });
+    setSelected(new Set());
+  }, []);
 
   const cerrarPanel = useCallback(() => {
     setPanelDoctor(null);
-    setPanelData(null);
     setSelected(new Set());
-    setPage(1);
-    if (desde && hasta) void fetchLiga(desde, hasta, doctorId, 1, fuente, estado, vistaAgrup);
-  }, [desde, hasta, doctorId, fuente, estado, vistaAgrup, fetchLiga]);
+    setPageLiga(1);
+  }, []);
 
   const iniciarEdicion = useCallback((fila: HonorarioLigaFila) => {
     setEditingId(fila.id);
@@ -577,31 +576,31 @@ export default function ProductividadPage() {
   }, []);
 
   const guardarMonto = useCallback(async () => {
-    if (!editingId) return;
+    if (!editingId || editBusy) return;
     const n = Number(editMonto);
-    if (!Number.isFinite(n) || n < 0) return;
+    if (editMonto.trim() === '' || !Number.isFinite(n) || n < 0) {
+      toast('Monto inválido: captura un número mayor o igual a 0', 'warning');
+      return;
+    }
+    const monto = Math.round(n * 100) / 100;
     setEditBusy(true);
+    const previoLiga = liga;
+    const previoPanel = panelDataSwr;
+    // Optimista: el monto cambia en la fila al instante; se revierte si el servidor falla.
+    if (previoLiga) void mutateLiga(cambiarMonto(previoLiga, editingId, monto), { revalidate: false });
+    if (previoPanel && urlPanel) void mutatePanel(cambiarMonto(previoPanel, editingId, monto), { revalidate: false });
     try {
-      const res = await fetch(`/api/productividad/honorarios/${editingId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ monto: Math.round(n * 100) / 100 }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || 'Error al guardar monto');
-      }
+      await enviarJSON(`/api/productividad/honorarios/${editingId}`, 'PATCH', { monto });
       setEditingId(null);
-      if (panelDoctor) {
-        await fetchPanelDoctor(panelDoctor.id, page, desde, hasta);
-      } else if (desde && hasta) {
-        void fetchLiga(desde, hasta, doctorId, page, fuente, estado, vistaAgrup);
-      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar monto');
+      if (previoLiga) void mutateLiga(previoLiga, { revalidate: false });
+      if (previoPanel && urlPanel) void mutatePanel(previoPanel, { revalidate: false });
+      toast(err instanceof Error ? err.message : 'Error al guardar monto', 'error');
     } finally {
       setEditBusy(false);
+      void invalidar('/api/productividad');
     }
-  }, [editingId, editMonto, panelDoctor, desde, hasta, doctorId, page, fuente, estado, vistaAgrup, fetchLiga, fetchPanelDoctor]);
+  }, [editingId, editBusy, editMonto, liga, panelDataSwr, urlPanel, mutateLiga, mutatePanel, invalidar, toast]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
@@ -613,42 +612,53 @@ export default function ProductividadPage() {
   }, []);
 
   const pagarSeleccionados = useCallback(async (ids: string[]) => {
-    if (!ids.length) return;
+    if (!ids.length || actionBusy) return;
     setActionBusy(true);
+    const marcar = new Set(ids);
+    const previoLiga = liga;
+    const previoPanel = panelDataSwr;
+    // Optimista: las filas pasan a PAGADO y el resumen se ajusta sin recargar.
+    if (previoLiga) void mutateLiga(marcarPagados(previoLiga, marcar), { revalidate: false });
+    if (previoPanel && urlPanel) void mutatePanel(marcarPagados(previoPanel, marcar), { revalidate: false });
     try {
-      const res = await fetch('/api/productividad/honorarios/pagar', {
-        method: 'POST',
-        body: JSON.stringify({ ids }),
-      });
-      const body = (await res.json().catch(() => null)) as
-        | { pagados?: number; omitidos?: Array<{ id: string; motivo: string }>; error?: string }
-        | null;
-      if (!res.ok) throw new Error(body?.error || 'Error al pagar');
+      const body = await enviarJSON<{ pagados?: number; omitidos?: Array<{ id: string; motivo: string }> } | null>(
+        '/api/productividad/honorarios/pagar',
+        'POST',
+        { ids }
+      );
       setSelected(new Set());
-      if (panelDoctor) {
-        await fetchPanelDoctor(panelDoctor.id, page, desde, hasta);
-      } else if (desde && hasta) {
-        void fetchLiga(desde, hasta, doctorId, page, fuente, estado, vistaAgrup);
-      }
+      const pagados = body?.pagados || 0;
+      const omitidos = body?.omitidos?.length || 0;
+      toast(
+        omitidos > 0 ? `${pagados} pago(s) registrados · ${omitidos} omitido(s)` : `${pagados} pago(s) registrados`,
+        omitidos > 0 ? 'warning' : 'success'
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al pagar');
+      if (previoLiga) void mutateLiga(previoLiga, { revalidate: false });
+      if (previoPanel && urlPanel) void mutatePanel(previoPanel, { revalidate: false });
+      toast(err instanceof Error ? err.message : 'Error al pagar', 'error');
     } finally {
       setActionBusy(false);
+      // Honorarios, panel, métricas y pagos se revalidan en segundo plano.
+      void invalidar('/api/productividad');
     }
-  }, [panelDoctor, desde, hasta, doctorId, page, fuente, estado, vistaAgrup, fetchLiga, fetchPanelDoctor]);
+  }, [actionBusy, liga, panelDataSwr, urlPanel, mutateLiga, mutatePanel, invalidar, toast]);
 
   const cambiarPagina = useCallback(
     (pRaw: number) => {
       const p = Math.max(1, Math.floor(Number(pRaw) || 1));
-      setPage(p);
       if (panelDoctor) {
-        void fetchPanelDoctor(panelDoctor.id, p, desde, hasta);
+        setPagePanel(p);
         return;
       }
       const rangoActivo = desde && hasta ? { desde, hasta } : (liga?.rango ?? rangoMesActual());
-      void fetchLiga(rangoActivo.desde, rangoActivo.hasta, doctorId, p, fuente, estado, vistaAgrup);
+      if (!desde || !hasta) {
+        setDesde(rangoActivo.desde);
+        setHasta(rangoActivo.hasta);
+      }
+      setPageLiga(p);
     },
-    [panelDoctor, fetchPanelDoctor, desde, hasta, liga, doctorId, fuente, estado, vistaAgrup, fetchLiga]
+    [panelDoctor, desde, hasta, liga]
   );
 
   const descargarReporte = useCallback(
@@ -656,6 +666,9 @@ export default function ProductividadPage() {
       const fdesde = rango?.desde || desde;
       const fhasta = rango?.hasta || hasta;
       if (!fdesde || !fhasta) return;
+      abortReporteRef.current?.abort();
+      const controller = new AbortController();
+      abortReporteRef.current = controller;
       setReporteCargando(true);
       try {
         const params = new URLSearchParams({ desde: fdesde, hasta: fhasta, formato: 'csv' });
@@ -677,8 +690,11 @@ export default function ProductividadPage() {
           url = `/api/productividad?${params}`;
           nombre = `productividad-${tipo}-${fdesde}_${fhasta}.csv`;
         }
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('No se pudo generar el CSV');
+        const res = await fetch(url, { signal: controller.signal, credentials: 'same-origin' });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error || 'No se pudo generar el CSV');
+        }
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -690,13 +706,20 @@ export default function ProductividadPage() {
         URL.revokeObjectURL(objectUrl);
         setReporteModal(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al descargar CSV');
+        if (esAbort(err)) return;
+        toast(err instanceof Error ? err.message : 'Error al descargar CSV', 'error');
       } finally {
-        setReporteCargando(false);
+        if (abortReporteRef.current === controller) setReporteCargando(false);
       }
     },
-    [desde, hasta, doctorId]
+    [desde, hasta, doctorId, toast]
   );
+
+  const cerrarReporte = useCallback(() => {
+    abortReporteRef.current?.abort();
+    setReporteCargando(false);
+    setReporteModal(null);
+  }, []);
 
   const confirmarReporte = useCallback(
     (rango: RangoFechas, doctorSel?: string) => {
@@ -738,6 +761,8 @@ export default function ProductividadPage() {
   const filasLiga = panelDoctor ? panelData?.items || [] : liga?.items || [];
   const totalLiga = panelDoctor ? panelData?.total || 0 : liga?.total || 0;
   const pageSizeLiga = panelDoctor ? panelData?.pageSize || 10 : liga?.pageSize || 10;
+  const validandoTabla = panelDoctor ? validandoPanel : validandoLiga;
+  const sinDatosTabla = panelDoctor ? !panelData : !liga;
 
   return (
     <div className="space-y-6">
@@ -766,7 +791,7 @@ export default function ProductividadPage() {
         }
       />
 
-      <FiltrosReporte onFilter={handleFilter} showDoctor doctores={doctores} loading={loading || cargandoMetricas} />
+      <FiltrosReporte onFilter={handleFilter} showDoctor doctores={doctores} loading={loading || validandoMetricas} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Secciones de productividad">
@@ -798,7 +823,9 @@ export default function ProductividadPage() {
             <select
               value={periodoTipo}
               onChange={(e) => void cambiarPeriodo(e.target.value as TipoPeriodoPago)}
-              className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm"
+              disabled={periodoPendiente !== null}
+              aria-label="Período de pago"
+              className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm disabled:opacity-60"
             >
               {PERIODOS.map((p) => (
                 <option key={p} value={p}>{p}</option>
@@ -820,15 +847,18 @@ export default function ProductividadPage() {
       )}
 
       {vista === 'metricas' && (
-        <div>
-          {cargandoMetricas && !metricas ? (
+        <div className="relative animate-fadeIn" aria-busy={validandoMetricas}>
+          <BarraRevalidando activo={validandoMetricas && !!metricas} className="-top-2" />
+          {!metricas && !metricasError ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Skeleton key={i} className="h-28 rounded-xl" />
               ))}
             </div>
           ) : metricas ? (
-            <MetricasSeccion data={metricas} />
+            <div className="valor-suave" data-validando={validandoMetricas}>
+              <MetricasSeccion data={metricas} />
+            </div>
           ) : (
             <EmptyState
               icon={BarChart3}
@@ -840,7 +870,8 @@ export default function ProductividadPage() {
       )}
 
       {vista === 'doctores' && (
-        <div>
+        <div className="relative animate-fadeIn" aria-busy={validandoMetricas}>
+          {!doctorSel && <BarraRevalidando activo={validandoMetricas && !!metricas} className="-top-2" />}
           {doctorSel ? (
             <DoctorDetalle
               doctorId={doctorSel.id}
@@ -849,14 +880,14 @@ export default function ProductividadPage() {
               hasta={hasta}
               onCerrar={() => setDoctorSel(null)}
             />
-          ) : cargandoMetricas && !metricas ? (
+          ) : !metricas && !metricasError ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : metricas && metricas.por_doctor.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="valor-suave anim-lista grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-validando={validandoMetricas}>
               {metricas.por_doctor.map((d) => (
                 <button
                   key={d.doctor_id}
@@ -901,15 +932,15 @@ export default function ProductividadPage() {
       {vista === 'sync' && <SyncTab />}
 
       {vista === 'honorarios' && (
-        <div className="space-y-6">
-          {loading && !liga ? (
+        <div className="space-y-6 animate-fadeIn">
+          {!liga && !ligaError ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Skeleton key={i} className="h-28 rounded-xl" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="valor-suave grid grid-cols-2 lg:grid-cols-4 gap-4" data-validando={validandoLiga}>
               {cardsHonorarios.map((c) => (
                 <StatCard key={c.label} icon={c.icon} label={c.label} value={c.value} color={c.color} bgColor={c.bgColor} />
               ))}
@@ -925,10 +956,10 @@ export default function ProductividadPage() {
                 type="button"
                 onClick={() => {
                   setFuente('');
-                  setPage(1);
-                  void fetchLiga(desde, hasta, doctorId, 1, '', estado, vistaAgrup);
+                  setPageLiga(1);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!fuente ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
+                aria-pressed={!fuente}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${!fuente ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
               >
                 Todas
               </button>
@@ -938,10 +969,10 @@ export default function ProductividadPage() {
                   type="button"
                   onClick={() => {
                     setFuente(f);
-                    setPage(1);
-                    void fetchLiga(desde, hasta, doctorId, 1, f, estado, vistaAgrup);
+                    setPageLiga(1);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${fuente === f ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
+                  aria-pressed={fuente === f}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${fuente === f ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
                 >
                   {f}
                 </button>
@@ -954,10 +985,10 @@ export default function ProductividadPage() {
                 type="button"
                 onClick={() => {
                   setEstado('');
-                  setPage(1);
-                  void fetchLiga(desde, hasta, doctorId, 1, fuente, '', vistaAgrup);
+                  setPageLiga(1);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${!estado ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
+                aria-pressed={!estado}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${!estado ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
               >
                 Todos
               </button>
@@ -967,10 +998,10 @@ export default function ProductividadPage() {
                   type="button"
                   onClick={() => {
                     setEstado(e);
-                    setPage(1);
-                    void fetchLiga(desde, hasta, doctorId, 1, fuente, e, vistaAgrup);
+                    setPageLiga(1);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${estado === e ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
+                  aria-pressed={estado === e}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${estado === e ? 'bg-primary-600 border-primary-600 text-white' : 'border-line text-gray-600 dark:text-fg-2'}`}
                 >
                   {e}
                 </button>
@@ -984,8 +1015,7 @@ export default function ProductividadPage() {
                 onChange={(e) => {
                   const v = e.target.value as 'detalle' | TipoAgrupacionLiga;
                   setVistaAgrup(v);
-                  setPage(1);
-                  void fetchLiga(desde, hasta, doctorId, 1, fuente, estado, v);
+                  setPageLiga(1);
                 }}
                 className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm"
               >
@@ -1012,15 +1042,15 @@ export default function ProductividadPage() {
                   type="button"
                   onClick={() => void pagarSeleccionados([...selected])}
                   disabled={actionBusy || selected.size === 0}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors hover:bg-emerald-700 disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Pagar seleccionados ({selected.size})
+                  {actionBusy ? 'Pagando…' : `Pagar seleccionados (${selected.size})`}
                 </button>
                 <button
                   type="button"
                   onClick={cerrarPanel}
-                  className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-muted hover:text-gray-900"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-muted transition-colors hover:text-gray-900 dark:hover:text-fg"
                 >
                   Cerrar
                 </button>
@@ -1028,8 +1058,9 @@ export default function ProductividadPage() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-line bg-surface overflow-hidden">
-            {loading && !liga ? (
+          <div className="relative rounded-2xl border border-line bg-surface overflow-hidden" aria-busy={validandoTabla}>
+            <BarraRevalidando activo={validandoTabla && !sinDatosTabla} />
+            {sinDatosTabla && !error ? (
               <div className="p-6 space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-8 w-full" />
@@ -1052,7 +1083,7 @@ export default function ProductividadPage() {
                     </thead>
                     <tbody className="divide-y divide-line/60">
                       {agrupado.map((a) => (
-                        <tr key={a.label} className="hover:bg-surface-2">
+                        <tr key={a.label} className="transition-colors hover:bg-surface-2">
                           <td className={`${td} font-semibold`}>
                             {vistaAgrup === 'dia' ? formatFechaCsv(a.label) : a.label}
                           </td>
@@ -1100,7 +1131,7 @@ export default function ProductividadPage() {
                       const editable = f.estado_pago !== 'PAGADO' && f.estado_pago !== 'CANCELADO';
                       const seleccionable = f.estado_pago === 'POR_PAGAR';
                       return (
-                        <tr key={f.id} className="hover:bg-surface-2">
+                        <tr key={f.id} className="transition-colors hover:bg-surface-2">
                           <td className="px-4 py-3">
                             {seleccionable && (
                               <input
@@ -1116,7 +1147,7 @@ export default function ProductividadPage() {
                           <td className={`${td} font-semibold`}>
                             <button
                               type="button"
-                              onClick={() => void abrirPanelDoctor(f.doctor_id, f.doctor_nombre)}
+                              onClick={() => abrirPanelDoctor(f.doctor_id, f.doctor_nombre)}
                               className="hover:text-primary-600 underline-offset-2 hover:underline"
                             >
                               {f.doctor_nombre}
@@ -1134,6 +1165,12 @@ export default function ProductividadPage() {
                                   step="0.01"
                                   value={editMonto}
                                   onChange={(e) => setEditMonto(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void guardarMonto();
+                                    if (e.key === 'Escape') setEditingId(null);
+                                  }}
+                                  disabled={editBusy}
+                                  aria-label="Monto"
                                   className="w-28 rounded-lg border border-line bg-surface-2 px-2 py-1 text-right text-sm"
                                 />
                                 <button
@@ -1203,7 +1240,7 @@ export default function ProductividadPage() {
         </div>
       )}
 
-      {vista === 'honorarios' && !loading && (
+      {vista === 'honorarios' && !sinDatosTabla && (
         <div className="flex items-center gap-2 text-xs text-gray-400">
           <ChevronLeft className="w-3 h-3" />
           <span>
@@ -1215,7 +1252,7 @@ export default function ProductividadPage() {
 
       <ModalRangoFechas
         isOpen={reporteAbierto}
-        onClose={() => setReporteModal(null)}
+        onClose={cerrarReporte}
         titulo={infoReporte?.titulo || 'Reporte'}
         descripcion={infoReporte?.descripcion}
         desde={desde}

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Clock, Loader2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { useRouter } from 'next/navigation';
+import { useInvalidar } from '@/hooks/useFetch';
 
 interface AgendarEstudioModalProps {
   isOpen: boolean;
@@ -26,7 +26,7 @@ interface AgendarEstudioModalProps {
 }
 
 export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estudio, consulta }: AgendarEstudioModalProps) {
-  const router = useRouter();
+  const invalidar = useInvalidar();
   const { toast } = useToast();
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
@@ -43,6 +43,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
   }, [isOpen]);
 
   const handleSubmit = async () => {
+    if (loading) return;
     if (!fecha || !hora) {
       toast('Seleccione fecha y hora', 'error');
       return;
@@ -71,7 +72,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
       });
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(errData.error || 'Error al agendar estudio');
       }
 
@@ -98,7 +99,8 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
       if (nuevaConsultaId) onScheduled?.(nuevaConsultaId);
       toast('Estudio agendado correctamente', 'success');
       onClose();
-      router.refresh();
+      // Solo se revalidan los datos afectados (agenda, listas, resúmenes); sin recargar la ruta.
+      void invalidar('/api/consultas', '/api/agenda', '/api/dashboard');
     } catch (error) {
       toast(
         error instanceof Error ? error.message : 'Error al agendar estudio',

@@ -1,17 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import {
   AlertTriangle,
   ArrowUpRight,
   Calendar,
   CheckCircle2,
   Clock,
-  Loader2,
   RefreshCw,
   TrendingUp,
 } from 'lucide-react';
 import Skeleton from '@/components/ui/Skeleton';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import Pagination from '@/components/ui/Pagination';
 import { cn } from '@/lib/utils';
 import { rangoMesActual, rangoMesAnterior } from '@/lib/rangos';
@@ -43,51 +44,31 @@ function fmtFecha(iso: string) {
 }
 
 export default function MisHonorariosPage() {
-  const [data, setData] = useState<Payload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Cancela la petición anterior al cambiar filtros/página y conserva los datos
-  // visibles mientras llega la nueva (sin volver al skeleton).
-  const fetchData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
-      if (desde && hasta) {
-        params.set('desde', desde);
-        params.set('hasta', hasta);
-      }
-      const res = await fetch(`/api/productividad/mis-honorarios?${params.toString()}`, {
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || 'No se pudieron cargar tus honorarios');
-      }
-      const json = (await res.json()) as Payload;
-      if (!controller.signal.aborted) setData(json);
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setData(null);
-      setError(err instanceof Error ? err.message : 'Error inesperado');
-    } finally {
-      if (abortRef.current === controller) setLoading(false);
-    }
-  }, [page, desde, hasta]);
-
-  useEffect(() => {
-    void fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
+  // Caché por página/rango: volver a un periodo ya visto es instantáneo y, al
+  // cambiar, se conservan los datos visibles mientras llega la respuesta nueva.
+  const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+  if (desde && hasta) {
+    params.set('desde', desde);
+    params.set('hasta', hasta);
+  }
+  const {
+    data: dataSwr,
+    error: errorSwr,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR<Payload>(`/api/productividad/mis-honorarios?${params.toString()}`);
+  const data = dataSwr ?? null;
+  const loading = isLoading;
+  const error = errorSwr
+    ? errorSwr instanceof Error
+      ? errorSwr.message
+      : 'No se pudieron cargar tus honorarios'
+    : null;
 
   const cambiarRango = (siguienteDesde: string, siguienteHasta: string, desdeAtajo = false) => {
     if (!desdeAtajo) setPresetActivo(null);
@@ -133,17 +114,18 @@ export default function MisHonorariosPage() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="mx-auto max-w-[600px] py-12 text-center">
         <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-amber-400" />
         <p className="text-sm font-bold text-fg">{error}</p>
         <button
           type="button"
-          onClick={() => fetchData()}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-line dark:text-fg dark:hover:bg-surface-2"
+          onClick={() => void mutate()}
+          disabled={isValidating}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-line dark:text-fg dark:hover:bg-surface-2 transition-colors disabled:opacity-60"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={cn('h-4 w-4', isValidating && 'animate-spin')} />
           Reintentar
         </button>
       </div>
@@ -153,7 +135,7 @@ export default function MisHonorariosPage() {
   const resumen = data?.resumen;
 
   return (
-    <div className="mx-auto max-w-[600px] space-y-5">
+    <div className="mx-auto max-w-[600px] space-y-5 animate-fadeIn">
       <div>
         <h1 className="text-xl font-extrabold text-fg">Mis Honorarios</h1>
         <p className="text-sm text-muted">
@@ -244,7 +226,20 @@ export default function MisHonorariosPage() {
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-3">
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+          <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{error}</p>
+          <button
+            type="button"
+            onClick={() => void mutate()}
+            className="shrink-0 text-xs font-semibold text-rose-700 underline-offset-2 hover:underline dark:text-rose-300"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <div className="valor-suave grid grid-cols-2 gap-3" data-validando={isValidating}>
         <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
           <div className="mb-2 h-8 w-8 rounded-full bg-amber-500/15 flex items-center justify-center">
             <Clock className="h-4 w-4 text-amber-500" />
@@ -265,7 +260,7 @@ export default function MisHonorariosPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="valor-suave grid grid-cols-2 gap-3" data-validando={isValidating}>
         <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-line dark:bg-surface">
           <p className="text-lg font-extrabold text-fg">
             {fmtMoney(resumen?.total_filtrado || 0)}
@@ -289,7 +284,8 @@ export default function MisHonorariosPage() {
         </div>
       )}
 
-      <div>
+      <div className="relative" aria-busy={isValidating}>
+        <BarraRevalidando activo={isValidating} className="-top-2" />
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-extrabold uppercase tracking-widest text-fg">
             Movimientos
@@ -307,7 +303,7 @@ export default function MisHonorariosPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="valor-suave anim-lista space-y-2" data-validando={isValidating}>
             {data.items.map((ev) => {
               const badge = estadoBadge[ev.estado_pago] || estadoBadge.PENDIENTE;
               return (
@@ -340,13 +336,6 @@ export default function MisHonorariosPage() {
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {loading && (
-          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Actualizando…
           </div>
         )}
 

@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { esquemaPaginacion, fechaISO, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
+import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
 
 const pacienteCreateSchema = z
   .object({
-    nombre_completo: z.string().min(1).max(255).optional(),
-    nombre: z.string().min(1).max(255).optional(),
+    nombre_completo: z.string().trim().min(1).max(255).optional(),
+    nombre: z.string().trim().min(1).max(255).optional(),
     sexo: z.enum(['H', 'M', 'MASCULINO', 'FEMENINO', 'OTRO']).optional(),
-    fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    fecha_nacimiento: fechaISO.optional(),
     edad: z.number().int().min(0).max(150).optional(),
     telefono: z.string().max(20).optional(),
     email: z.string().email().max(255).optional(),
     direccion: z.string().max(1000).optional(),
     contacto_emergencia: z.string().max(255).optional(),
     tel_emergencia: z.string().max(20).optional(),
-    aseguranza_id: z.string().uuid().optional().nullable(),
+    aseguranza_id: uuid.optional().nullable(),
     numero_poliza: z.string().max(100).optional().nullable(),
     numero_afiliacion: z.string().max(100).optional().nullable(),
   })
@@ -25,57 +27,145 @@ const pacienteCreateSchema = z
     message: 'El nombre del paciente es obligatorio',
   });
 
+const listadoQuerySchema = z.object({
+  ...esquemaPaginacion(15, 100),
+  // Búsqueda opcional por nombre / teléfono / email (se sanea antes de ir a PostgREST)
+  search: z.string().max(100).optional(),
+});
+
+const COLUMNAS_PACIENTE =
+  'id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at';
+
+interface PacienteFila {
+  id: string;
+  nombre_completo: string | null;
+  sexo: string | null;
+  fecha_nacimiento: string | null;
+  edad: number | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  contacto_emergencia: string | null;
+  tel_emergencia: string | null;
+  aseguranza_id: string | null;
+  numero_poliza: string | null;
+  numero_afiliacion: string | null;
+  created_at: string;
+}
+
+type Embed<T> = T | T[] | null | undefined;
+function primero<T>(v: Embed<T>): T | null {
+  if (Array.isArray(v)) return v[0] ?? null;
+  return v ?? null;
+}
+
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '15', 10)));
+  const query = leerQuery(request, listadoQuerySchema);
+  if (query instanceof NextResponse) return query;
+  const { page, pageSize } = query;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const busqueda = query.search ? sanitizarBusqueda(query.search) : '';
+  const patron = busqueda ? `%${busqueda}%` : '';
 
   const supabase = getSupabaseAdmin();
-  const { data, error, count } = await supabase
+
+  // Un solo viaje: pacientes + nombre de la aseguranza + conteo de consultas
+  // + fecha de la última consulta (limitada a 1 fila por paciente).
+  let consulta = supabase
     .from('pacientes')
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at', { count: 'exact' })
+    .select(
+      `${COLUMNAS_PACIENTE},
+      aseguranzas:aseguranza_id (nombre, activo),
+      consultas_count:consultas (count),
+      ultima:consultas (fecha)`,
+      { count: 'exact' },
+    )
     .order('created_at', { ascending: false })
+    .order('fecha', { referencedTable: 'ultima', ascending: false })
+    .limit(1, { referencedTable: 'ultima' })
     .range(from, to);
-
-  if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+  if (patron) {
+    consulta = consulta.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron}`);
   }
 
-  // Get consultation counts and last visit for each patient
-  const patientIds = data.map((p) => p.id);
-  const [consultasResult, aseguranzasResult] = await Promise.all([
-    supabase
-      .from('consultas')
-      .select('paciente_id, fecha')
-      .in('paciente_id', patientIds),
-    supabase
-      .from('aseguranzas')
-      .select('id, nombre')
-      .eq('activo', true),
-  ]);
+  const { data, error, count } = await consulta;
 
-  const consultas = consultasResult.data;
-  const aseguranzasList = aseguranzasResult.data || [];
+  type Enriquecido = PacienteFila & {
+    aseguradora: string | null;
+    consultas_count: number;
+    ultima_visita: string | null;
+  };
+  let filas: Enriquecido[];
+  let total = count || 0;
 
-  const aseguranzasMap = new Map(aseguranzasList.map((a) => [a.id, a.nombre]));
-
-  const consultasMap = new Map<string, { count: number; ultimaVisita: string }>();
-  for (const c of consultas || []) {
-    const existing = consultasMap.get(c.paciente_id) || { count: 0, ultimaVisita: '' };
-    existing.count++;
-    if (c.fecha > existing.ultimaVisita) existing.ultimaVisita = c.fecha;
-    consultasMap.set(c.paciente_id, existing);
+  if (!error) {
+    filas = (data as unknown as Array<
+      PacienteFila & {
+        aseguranzas: Embed<{ nombre: string | null; activo: boolean | null }>;
+        consultas_count: Embed<{ count: number }>;
+        ultima: Embed<{ fecha: string | null }>;
+      }
+    >).map((p) => {
+      const aseg = primero(p.aseguranzas);
+      return {
+        ...p,
+        // Igual que antes: solo se muestra el nombre si la aseguranza está activa
+        aseguradora: aseg && aseg.activo ? aseg.nombre ?? null : null,
+        consultas_count: primero(p.consultas_count)?.count ?? 0,
+        ultima_visita: primero(p.ultima)?.fecha ?? null,
+      };
+    });
+  } else {
+    // Respaldo si el servidor PostgREST no admite el conteo embebido:
+    // mismo resultado con consultas acotadas a los pacientes de la página.
+    handleSupabaseError(error, 'pacientes.listar.embed');
+    let base = supabase
+      .from('pacientes')
+      .select(COLUMNAS_PACIENTE, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (patron) {
+      base = base.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron}`);
+    }
+    const r = await base;
+    if (r.error) {
+      return NextResponse.json({ error: handleSupabaseError(r.error, 'pacientes.listar').mensaje }, { status: 500 });
+    }
+    const pacientes = (r.data || []) as PacienteFila[];
+    total = r.count || 0;
+    const ids = pacientes.map((p) => p.id);
+    const asegIds = [...new Set(pacientes.map((p) => p.aseguranza_id).filter((v): v is string => !!v))];
+    const [consultasRes, asegRes] = await Promise.all([
+      ids.length
+        ? supabase.from('consultas').select('paciente_id, fecha').in('paciente_id', ids)
+        : Promise.resolve({ data: [] as Array<{ paciente_id: string; fecha: string }> }),
+      asegIds.length
+        ? supabase.from('aseguranzas').select('id, nombre').in('id', asegIds).eq('activo', true)
+        : Promise.resolve({ data: [] as Array<{ id: string; nombre: string }> }),
+    ]);
+    const asegMap = new Map((asegRes.data || []).map((a) => [a.id, a.nombre]));
+    const cMap = new Map<string, { count: number; ultima: string }>();
+    for (const c of consultasRes.data || []) {
+      const e = cMap.get(c.paciente_id) || { count: 0, ultima: '' };
+      e.count++;
+      if (c.fecha > e.ultima) e.ultima = c.fecha;
+      cMap.set(c.paciente_id, e);
+    }
+    filas = pacientes.map((p) => ({
+      ...p,
+      aseguradora: p.aseguranza_id ? asegMap.get(p.aseguranza_id) || null : null,
+      consultas_count: cMap.get(p.id)?.count || 0,
+      ultima_visita: cMap.get(p.id)?.ultima || null,
+    }));
   }
 
-  const result = data.map((p) => {
-    const c = consultasMap.get(p.id);
+  const result = filas.map((p) => {
     const nombre = p.nombre_completo || '';
     const iniciales = nombre
       .split(' ')
@@ -97,16 +187,16 @@ export async function GET(request: Request) {
       contacto_emergencia: p.contacto_emergencia,
       tel_emergencia: p.tel_emergencia,
       aseguranza_id: p.aseguranza_id || null,
-      aseguradora: p.aseguranza_id ? (aseguranzasMap.get(p.aseguranza_id) || null) : null,
+      aseguradora: p.aseguranza_id ? p.aseguradora : null,
       numero_poliza: p.numero_poliza || null,
       numero_afiliacion: p.numero_afiliacion || null,
-      consultas_count: c?.count || 0,
-      ultima_visita: c?.ultimaVisita || null,
+      consultas_count: p.consultas_count || 0,
+      ultima_visita: p.ultima_visita || null,
       created_at: p.created_at,
     };
   });
 
-  return NextResponse.json({ data: result, total: count || 0, page, pageSize });
+  return NextResponse.json({ data: result, total, page, pageSize });
 }
 
 export async function POST(request: Request) {
@@ -115,24 +205,12 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, pacienteCreateSchema, { maxBytes: 20_000 });
+  if (data instanceof NextResponse) return data;
+
   const supabase = getSupabaseAdmin();
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = pacienteCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
-
-  const insertData: Record<string, any> = {
+  const insertData: Record<string, unknown> = {
     nombre_completo: data.nombre_completo || data.nombre,
     sexo: 'MASCULINO',
     fecha_nacimiento: '2000-01-01',
@@ -155,11 +233,11 @@ export async function POST(request: Request) {
   const { data: paciente, error } = await supabase
     .from('pacientes')
     .insert(insertData)
-    .select()
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, aseguranza_id, numero_poliza, numero_afiliacion, created_at')
     .single();
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: handleSupabaseError(error, 'pacientes.crear').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({

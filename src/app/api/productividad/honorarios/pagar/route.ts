@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
 import { notificarPagoHonorarios } from '@/services/notificaciones';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { pagarHonorarios } from '@/lib/productividad';
+import { leerJSONTolerante, MAX_IDS_PAGO } from '@/lib/productividad/validacion';
 import { z } from 'zod';
 
-const pagarSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1),
-});
+const pagarSchema = z
+  .object({
+    ids: z
+      .array(z.string().uuid('ID no válido'))
+      .min(1, 'Selecciona al menos un honorario')
+      .max(MAX_IDS_PAGO, `Máximo ${MAX_IDS_PAGO} honorarios por pago`),
+  })
+  .strict();
 
 export async function POST(request: Request) {
   const auth = await requireAuth();
@@ -16,34 +21,19 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = pagarSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { error: validation.error.errors[0]?.message || 'Datos inválidos' },
-      { status: 400 }
-    );
-  }
+  // Tolerante: el panel envía el body sin cabecera Content-Type.
+  const body = await leerJSONTolerante(request, pagarSchema);
+  if (body instanceof NextResponse) return body;
 
   try {
-    const result = await pagarHonorarios(validation.data.ids, auth.user.id);
+    const { detalle, ...result } = await pagarHonorarios(body.ids, auth.user.id);
 
-    // Notifica a cada doctor el total pagado (best-effort)
+    // Notifica a cada doctor el total pagado (best-effort). Usa las filas que
+    // devolvió el UPDATE (antes se releían de la BD).
     if (result.pagados > 0) {
       try {
-        const { data: pagados } = await getSupabaseAdmin()
-          .from('eventos_honorario')
-          .select('doctor_id, monto_devengado')
-          .in('id', validation.data.ids)
-          .eq('estado', 'PAGADO');
         const porDoctor = new Map<string, { monto: number; eventos: number }>();
-        for (const e of pagados ?? []) {
+        for (const e of detalle) {
           const acc = porDoctor.get(e.doctor_id) ?? { monto: 0, eventos: 0 };
           acc.monto += Number(e.monto_devengado) || 0;
           acc.eventos += 1;

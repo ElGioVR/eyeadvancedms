@@ -10,9 +10,12 @@ import {
   Maximize2, Minimize2, SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFetch } from '@/hooks/useFetch';
-import { prefetchJSON, takePrefetched } from '@/lib/prefetch';
+import useSWR, { preload, useSWRConfig } from 'swr';
+import { useFetch, useInvalidar, construirUrl } from '@/hooks/useFetch';
+import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
 import { useAutosave } from '@/hooks/useAutosave';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
@@ -87,11 +90,25 @@ function desplazarVista(vista: VistaCalendario, prev: Date, dir: number): Date {
 
 /** Misma forma de URL que arma useFetch (orden de parámetros incluido) para que la precarga coincida. */
 function urlAgenda(params: Record<string, string>): string {
-  return `/api/agenda?${new URLSearchParams(params).toString()}`;
+  return construirUrl('/api/agenda', params);
 }
 
-// Ventana corta para reutilizar precargas de periodos vecinos (evita datos viejos).
-const PRECARGA_AGENDA_MS = 30_000;
+interface RespuestaAgenda { data: AgendaCirugia[]; total: number; page: number; pageSize: number }
+
+/** Aplica `cambios` al evento `id` dentro de la respuesta cacheada (paginada o arreglo). */
+function aplicarCambiosEvento(json: unknown, id: string, cambios: Partial<AgendaCirugia>): unknown {
+  const map = (arr: AgendaCirugia[]) => arr.map((c) => (c.id === id ? { ...c, ...cambios } : c));
+  if (Array.isArray(json)) return map(json as AgendaCirugia[]);
+  if (json && typeof json === 'object' && Array.isArray((json as RespuestaAgenda).data)) {
+    const r = json as RespuestaAgenda;
+    return { ...r, data: map(r.data) };
+  }
+  return json;
+}
+
+function mensajeError(err: unknown, porDefecto = 'No se pudo guardar el cambio'): string {
+  return err instanceof Error && err.message ? err.message : porDefecto;
+}
 function getDoctorInitials(name: string) { return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase(); }
 const docColors = ['bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'];
 function getDocColor(name: string) { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return docColors[Math.abs(h) % docColors.length]; }
@@ -370,30 +387,66 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const fetchParams = paramsPara(currentDate);
   const { fechaDesde, fechaHasta } = fetchParams;
 
-  const { data: cirugias, loading, refetch: refetchAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams, {
-    prefetchMaxAgeMs: PRECARGA_AGENDA_MS,
-  });
+  const { data: cirugias, loading, validating, refetch: refetchAgenda, mutate: mutateAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams);
+  const urlActual = urlAgenda(fetchParams);
+  const invalidar = useInvalidar();
+  const { cache } = useSWRConfig();
+  const { toast } = useToast();
 
-  // Precarga del periodo anterior y siguiente: navegar con ← / → es instantáneo.
+  // Precarga (SWR) del periodo anterior y siguiente: navegar con ← / → es instantáneo.
+  // Si hubo una mutación después de precargar, esa precarga puede no incluir el
+  // cambio: al llegar a ese periodo se revalida una vez.
   const precargadasRef = useRef(new Set<string>());
+  const suciasRef = useRef(new Set<string>());
   useEffect(() => {
     if (loading || searchQuery) return;
     const t = window.setTimeout(() => {
       for (const dir of [1, -1]) {
         const url = urlAgenda(paramsPara(desplazarVista(calendarView, currentDate, dir)));
+        if (precargadasRef.current.has(url) || cache.get(url)?.data !== undefined) continue;
         precargadasRef.current.add(url);
-        void prefetchJSON(url, PRECARGA_AGENDA_MS);
+        void preload(url, swrFetcher).catch(() => precargadasRef.current.delete(url));
       }
     }, 150);
     return () => window.clearTimeout(t);
-  }, [loading, searchQuery, calendarView, currentDate, paramsPara]);
+  }, [loading, searchQuery, calendarView, currentDate, paramsPara, cache]);
 
-  // Tras una mutación se descartan las precargas (podrían no incluir el cambio).
-  const refetch = useCallback((extra?: Record<string, string>) => {
-    for (const url of precargadasRef.current) void takePrefetched(url);
+  useEffect(() => {
+    if (!suciasRef.current.has(urlActual)) return;
+    suciasRef.current.delete(urlActual);
+    void refetchAgenda();
+  }, [urlActual, refetchAgenda]);
+
+  /** Tras una mutación: revalida en segundo plano todas las vistas de agenda cacheadas. */
+  const refetch = useCallback(() => {
+    for (const url of precargadasRef.current) suciasRef.current.add(url);
     precargadasRef.current.clear();
-    return refetchAgenda(extra);
-  }, [refetchAgenda]);
+    detailCacheRef.current.clear();
+    void invalidar('/api/agenda', '/api/dashboard', '/api/inventario');
+  }, [invalidar]);
+
+  /** PATCH de un evento con actualización optimista en la vista actual (revierte si falla). */
+  const actualizarEvento = useCallback(async (id: string, cambios: Partial<AgendaCirugia>): Promise<boolean> => {
+    try {
+      await mutateAgenda(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/agenda/${id}`, 'PATCH', cambios);
+          return aplicarCambiosEvento(actual, id, cambios);
+        },
+        {
+          optimisticData: (actual: unknown) => aplicarCambiosEvento(actual, id, cambios),
+          rollbackOnError: true,
+          populateCache: true,
+          revalidate: false,
+        }
+      );
+      refetch();
+      return true;
+    } catch (err) {
+      toast(mensajeError(err), 'error');
+      return false;
+    }
+  }, [mutateAgenda, refetch, toast]);
 
   const cirugiasFiltradas = useMemo(() => {
     return cirugias.filter(c => filterTipos.has(c.tipo || 'cirugia') && filterEstados.has(c.estado || 'agendada'));
@@ -514,9 +567,12 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
     if (cached || c.tipo === 'estudio') return;
 
-    const response = await fetch(`/api/agenda/${c.id}`);
-    if (!response.ok) return;
-    const detail = await response.json() as AgendaCirugia;
+    let detail: AgendaCirugia;
+    try {
+      detail = await fetchJSON<AgendaCirugia>(`/api/agenda/${c.id}`);
+    } catch {
+      return; // se queda con los datos de la lista
+    }
     detailCacheRef.current.set(c.id, detail);
     setDetailCirugia((current) => current?.id === c.id ? detail : current);
   }, [router]);
@@ -539,15 +595,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     setDragOverDate(null);
     setDraggingId(null);
     if (!id) return;
-    try {
-      await fetch(`/api/agenda/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha: ds }),
-      });
-      refetch();
-    } catch { /* ignore */ }
-  }, [refetch]);
+    const evento = cirugias.find((c) => c.id === id);
+    if (evento && evento.fecha === ds) return; // soltado en el mismo día
+    await actualizarEvento(id, { fecha: ds });
+  }, [cirugias, actualizarEvento]);
 
   const miniMonth = useMemo(() => {
     const y = currentDate.getFullYear();
@@ -895,7 +946,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           </div>
 
           {/* Mobile Calendar View (iOS style) */}
-          <div className="lg:hidden">
+          <div className="relative lg:hidden" aria-busy={loading || validating}>
+            <BarraRevalidando activo={validating} />
             <MobileCalendarView
               cirugiasPorFecha={cirugiasPorFecha}
               loading={loading}
@@ -913,7 +965,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           </div>
 
           {/* Desktop View Container with transition */}
-          <div className="hidden lg:block relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col">
+          <div className="hidden lg:block relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col" aria-busy={loading || validating}>
+            <BarraRevalidando activo={validating} />
 
             {/* MONTH VIEW */}
             {calendarView === 'month' && (
@@ -1325,13 +1378,23 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           userRol={userRol}
           onEdit={() => { setDetailCirugia(null); setDetailPosition(null); setEditingId(detailCirugia.id); setShowForm(true); }}
           onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
-          onRefetch={() => { refetch(); setDetailCirugia(null); setDetailPosition(null); }}
+          onEstado={async (s) => {
+            const id = detailCirugia.id;
+            setDetailCirugia(null); setDetailPosition(null);
+            await actualizarEvento(id, { estado: s });
+          }}
         />
       )}
 
       {/* Sidebar Form */}
       <SidebarPanel isOpen={showForm} onClose={() => { setShowForm(false); setEditingId(null); setQuickAddDate(null); }} title={editingId ? 'Editar Cirugía' : 'Nueva Cirugía'}>
-        <CirugiaForm cirugiaId={editingId} doctores={doctores} userRol={userRol} initialDate={quickAddDate} initialHour={quickAddHour} onClose={() => { setShowForm(false); setEditingId(null); setQuickAddDate(null); }} onSaved={() => { setShowForm(false); setEditingId(null); setQuickAddDate(null); refetch(); }} />
+        <CirugiaForm key={editingId ?? 'nueva'} cirugiaId={editingId} doctores={doctores} userRol={userRol} initialDate={quickAddDate} initialHour={quickAddHour} onClose={() => { setShowForm(false); setEditingId(null); setQuickAddDate(null); }} onSaved={(id, cambios) => {
+          setShowForm(false); setEditingId(null); setQuickAddDate(null);
+          // Edición: el evento se ve actualizado al instante; la revalidación confirma.
+          if (id && cambios) void mutateAgenda((actual: unknown) => aplicarCambiosEvento(actual, id, cambios), { revalidate: false });
+          refetch();
+          toast(id ? 'Evento actualizado' : 'Evento creado', 'success');
+        }} />
       </SidebarPanel>
 
       {/* Import Modal */}
@@ -1500,9 +1563,9 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
 }
 
 /* ───────── Detail Popover Card (Google Calendar style) ───────── */
-function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefetch }: {
+function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEstado }: {
   cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
-  onEdit: () => void; onClose: () => void; onRefetch: () => void;
+  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado) => Promise<void>;
 }) {
   const router = useRouter();
   const [updating, setUpdating] = useState(false);
@@ -1532,10 +1595,10 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
   }, [onClose]);
 
   const updateEstado = async (s: AgendaCirugiaEstado) => {
+    if (updating) return;
     setUpdating(true);
     try {
-      await fetch(`/api/agenda/${cirugia.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: s }) });
-      onRefetch();
+      await onEstado(s); // optimista en la agenda; el error se muestra en un toast
     } finally { setUpdating(false); }
   };
 
@@ -1688,7 +1751,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onRefe
 /* ───────── Quick Add / Form ───────── */
 function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, onClose, onSaved }: {
   cirugiaId: string | null; doctores: Doctor[]; userRol: string; initialDate?: string | null; initialHour?: string;
-  onClose: () => void; onSaved: () => void;
+  onClose: () => void; onSaved: (id: string | null, cambios?: Partial<AgendaCirugia>) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1720,28 +1783,32 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
     }
     return defaultCirugiaForm;
   });
-  const [loadingCirugia, setLoadingCirugia] = useState(!!cirugiaId);
+  const [formCargado, setFormCargado] = useState(!cirugiaId);
 
   const { clearDraft } = useAutosave(isEditing ? '' : 'nueva-cirugia', form, isEditing ? 999999 : 1500);
 
-  useState(() => {
-    if (cirugiaId) {
-      fetch(`/api/agenda/${cirugiaId}`).then(r => r.json()).then(data => {
-        setForm({
-          nombre_paciente: data.nombre_paciente || '', expediente: data.expediente || '', fecha: data.fecha || '',
-          hora: data.hora?.slice(0, 5) || '', jornada: data.jornada || '', diagnostico: data.diagnostico || '',
-          procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
-          inventario_item_id: data.inventario_item_id || '',
-          tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
-          notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
-        });
-        setLoadingCirugia(false);
-      }).catch(() => {
-        setError('Error al cargar la cirugía');
-        setLoadingCirugia(false);
-      });
-    }
-  });
+  // Detalle del evento a editar (caché compartida con el popover de la agenda).
+  const { data: detalle, error: errorDetalle } = useSWR<AgendaCirugia>(
+    cirugiaId ? `/api/agenda/${cirugiaId}` : null,
+    { revalidateOnFocus: false }
+  );
+  useEffect(() => {
+    if (errorDetalle && !formCargado) { setError('Error al cargar la cirugía'); setFormCargado(true); }
+  }, [errorDetalle, formCargado]);
+  useEffect(() => {
+    if (!detalle || formCargado) return;
+    const data = detalle;
+    setForm({
+      nombre_paciente: data.nombre_paciente || '', expediente: data.expediente || '', fecha: data.fecha || '',
+      hora: data.hora?.slice(0, 5) || '', jornada: data.jornada || '', diagnostico: data.diagnostico || '',
+      procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
+      inventario_item_id: data.inventario_item_id || '',
+      tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
+      notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
+    });
+    setFormCargado(true);
+  }, [detalle, formCargado]);
+  const loadingCirugia = !formCargado;
 
   const handleLIOSelect = (itemId: string | null) => {
     setForm(f => ({
@@ -1754,7 +1821,10 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
   };
 
   const handleSubmit = async () => {
+    if (saving) return;
     if (!form.nombre_paciente.trim()) { setError('El nombre del paciente es obligatorio'); return; }
+    if (form.nombre_paciente.trim().length > 200) { setError('El nombre del paciente es demasiado largo (máx. 200 caracteres)'); return; }
+    if (form.notas.length > 2000) { setError('Las notas son demasiado largas (máx. 2000 caracteres)'); return; }
     setSaving(true); setError(null);
     try {
       const body: Record<string, unknown> = {
@@ -1767,14 +1837,28 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         motivo_aplazamiento: form.motivo_aplazamiento || null,
       };
       const url = cirugiaId ? `/api/agenda/${cirugiaId}` : '/api/agenda';
-      const res = await fetch(url, { method: cirugiaId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Error al guardar'); }
+      await enviarJSON(url, cirugiaId ? 'PATCH' : 'POST', body);
       clearDraft();
-      onSaved();
+      const doctor = doctores.find((d) => d.id === form.doctor_id);
+      onSaved(cirugiaId, cirugiaId ? {
+        ...(body as Partial<AgendaCirugia>),
+        ...(userRol !== 'doctor' ? { doctor_nombre: doctor?.alias ?? null } : {}),
+      } : undefined);
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error desconocido'); } finally { setSaving(false); }
   };
 
-  if (loadingCirugia) return <div className="animate-pulse space-y-4 py-4"><div className="h-8 bg-gray-200 dark:bg-surface-2 rounded" /></div>;
+  if (loadingCirugia) {
+    return (
+      <div className="animate-pulse space-y-4 py-1" aria-busy="true" aria-label="Cargando">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-3 w-24 rounded bg-surface-3/70" />
+            <div className="h-10 rounded-lg bg-surface-2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const inputCls = "w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500";
   const labelCls = "block text-xs font-bold text-muted mb-1";
@@ -1820,8 +1904,8 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
       <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
       <div className="flex gap-3 pt-3 border-t border-line/70">
         <button onClick={onClose} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
-        <button onClick={handleSubmit} disabled={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
-          {saving ? 'Guardando...' : cirugiaId ? 'ACTUALIZAR' : 'GUARDAR'}
+        <button onClick={handleSubmit} disabled={saving} aria-busy={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
+          {saving ? 'Guardando…' : cirugiaId ? 'ACTUALIZAR' : 'GUARDAR'}
         </button>
       </div>
     </div>

@@ -16,7 +16,10 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFetch } from '@/hooks/useFetch';
+import useSWR from 'swr';
+import { useFetch, useInvalidar } from '@/hooks/useFetch';
+import { useDebounce } from '@/hooks/useDebounce';
+import { enviarJSON, fetchJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
@@ -24,6 +27,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import PageHeader from '@/components/ui/PageHeader';
 import { FormInput, FormSelect } from '@/components/ui/FormField';
 import Skeleton from '@/components/ui/Skeleton';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 
 interface PacienteAPI {
   id: string;
@@ -36,6 +40,16 @@ interface PacienteAPI {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  /** true = viene de /api/search (sin edad/sexo/aseguranza); se completa al seleccionarlo. */
+  parcial?: boolean;
+  subtitulo?: string;
+}
+
+interface BusquedaPacienteResult {
+  tipo: string;
+  id: string;
+  titulo: string;
+  subtitulo: string;
 }
 
 interface DoctorAPI {
@@ -127,6 +141,48 @@ type ServicioPaciente = {
   porcentaje_cobertura?: number | null;
 };
 
+interface PacienteDetalleAPI {
+  id: string;
+  nombre_completo: string;
+  edad?: number | null;
+  sexo?: string | null;
+  aseguradora?: string | null;
+  aseguranza_id?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+}
+
+/** GET /api/pacientes/[id] → forma que usa el selector (sexo H/M). */
+function normalizarPacienteDetalle(p: PacienteDetalleAPI): PacienteAPI {
+  const sexo = p.sexo === 'MASCULINO' ? 'H' : p.sexo === 'FEMENINO' ? 'M' : (p.sexo ?? null);
+  return {
+    id: p.id,
+    nombre: p.nombre_completo,
+    nombre_completo: p.nombre_completo,
+    edad: p.edad ?? null,
+    sexo,
+    aseguradora: p.aseguradora ?? null,
+    aseguranza_id: p.aseguranza_id ?? null,
+    telefono: p.telefono ?? null,
+    email: p.email ?? null,
+    direccion: p.direccion ?? null,
+  };
+}
+
+function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: string; telefono: string; email: string; direccion: string }): string | null {
+  const nombre = p.nombre_completo.trim();
+  if (!nombre) return 'El nombre es requerido';
+  if (nombre.length > 255) return 'El nombre admite máximo 255 caracteres';
+  if (!p.fecha_nacimiento) return 'La fecha de nacimiento es requerida';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.fecha_nacimiento)) return 'La fecha de nacimiento no es válida';
+  if (p.telefono.trim().length > 20) return 'El teléfono admite máximo 20 caracteres';
+  const email = p.email.trim();
+  if (email && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Email inválido';
+  if (p.direccion.trim().length > 1000) return 'La dirección admite máximo 1000 caracteres';
+  return null;
+}
+
 function getInitials(name: string | null | undefined): string {
   if (!name) return '??';
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
@@ -169,14 +225,16 @@ function PreviewField({ label, value, full }: { label: string; value: string; fu
 function NuevaConsultaContent() {
   const router = useRouter();
   const { toast } = useToast();
-  const { data: pacientes, loading: loadingPacientes } = useFetch<PacienteAPI>('/api/pacientes');
+  const invalidar = useInvalidar();
+  // Primera página (pacientes recientes): misma URL que la precarga de /bienvenida.
+  const { data: pacientes, loading: loadingPacientes } = useFetch<PacienteAPI>('/api/pacientes', { page: '1', pageSize: '15' });
   const { data: doctoresRaw, loading: loadingDoctores } = useFetch<DoctorAPI>('/api/configuracion/doctores');
   // El API devuelve `alias` (nombre de presentación) y `nombre` (nombre real, puede ser null).
   const doctores = useMemo(
     () => doctoresRaw.map((d) => ({ ...d, nombre: d.alias || d.nombre || d.id })),
     [doctoresRaw],
   );
-  const [matrizCostos, setMatrizCostos] = useState<MatrizCosto[]>([]);
+  const { data: matrizCostos } = useFetch<MatrizCosto>('/api/configuracion/matriz-costos');
   const [catalogoConsultas, setCatalogoConsultas] = useState<CatalogoConsulta[]>([]);
   const [catalogoEstudios, setCatalogoEstudios] = useState<CatalogoEstudio[]>([]);
   const [catalogoProcedimientos, setCatalogoProcedimientos] = useState<CatalogoProcedimiento[]>([]);
@@ -184,13 +242,16 @@ function NuevaConsultaContent() {
   const [estudiosSeleccionados, setEstudiosSeleccionados] = useState<EstudioSeleccionado[]>([]);
   const [procedimientosSeleccionados, setProcedimientosSeleccionados] = useState<ProcedimientoSeleccionado[]>([]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
-  const [aseguranzas, setAseguranzas] = useState<AseguranzaAPI[]>([]);
+  const { data: aseguranzas } = useFetch<AseguranzaAPI>('/api/configuracion/aseguranzas');
   const [editingMontos, setEditingMontos] = useState(false);
   const [costoBaseEdit, setCostoBaseEdit] = useState<string>('');
   const [costosEstudiosEdit, setCostosEstudiosEdit] = useState<Record<number, string>>({});
   const [costosProcsEdit, setCostosProcsEdit] = useState<Record<number, string>>({});
 
+  // Ignora respuestas fuera de orden si el origen cambia rápido.
+  const serviciosReqRef = useRef(0);
   const cargarServiciosOrigen = useCallback(async (origenId: string | null) => {
+    const reqId = ++serviciosReqRef.current;
     if (!origenId) {
       setServiciosPaciente([]);
       setCatalogoConsultas([]);
@@ -200,7 +261,8 @@ function NuevaConsultaContent() {
     }
 
     try {
-      const res = await fetch(`/api/catalogo-servicios?aseguranza_id=${origenId}`);
+      const res = await fetch(`/api/catalogo-servicios?aseguranza_id=${encodeURIComponent(origenId)}`);
+      if (reqId !== serviciosReqRef.current) return;
       if (!res.ok) {
         setServiciosPaciente([]);
         setCatalogoConsultas([]);
@@ -209,6 +271,7 @@ function NuevaConsultaContent() {
         return;
       }
       const data = await res.json();
+      if (reqId !== serviciosReqRef.current) return;
       const servicios = (Array.isArray(data?.servicios) ? data.servicios : []) as ServicioPaciente[];
       setServiciosPaciente(servicios);
       setCatalogoConsultas(
@@ -227,6 +290,7 @@ function NuevaConsultaContent() {
           .map((s) => ({ id: s.id, nombre: s.nombre, descripcion: null, costo: s.costo ?? 0, por_ojo: false, activo: true }))
       );
     } catch {
+      if (reqId !== serviciosReqRef.current) return;
       setServiciosPaciente([]);
       setCatalogoConsultas([]);
       setCatalogoEstudios([]);
@@ -235,24 +299,20 @@ function NuevaConsultaContent() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/configuracion/matriz-costos')
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setMatrizCostos(data); })
-      .catch(() => {});
-    fetch('https://api.exchangerate-api.com/v4/latest/USD')
+    const ctrl = new AbortController();
+    fetch('https://api.exchangerate-api.com/v4/latest/USD', { signal: ctrl.signal })
       .then((r) => r.json())
       .then((data) => { if (data?.rates?.MXN) setTipoCambio(data.rates.MXN); })
       .catch(() => {});
-    fetch('/api/configuracion/aseguranzas')
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setAseguranzas(data); })
-      .catch(() => {});
+    return () => ctrl.abort();
   }, []);
 
   const [searchPaciente, setSearchPaciente] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNewPatientForm, setShowNewPatientForm] = useState(false);
+  const [savingPaciente, setSavingPaciente] = useState(false);
+  const [newPatientError, setNewPatientError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showExitDraftModal, setShowExitDraftModal] = useState(false);
   const [pendingExitHref, setPendingExitHref] = useState<string | null>(null);
@@ -334,23 +394,10 @@ function NuevaConsultaContent() {
   useEffect(() => {
     if (!draftHydrated || !pacienteParamId || pacienteParamApplied.current) return;
     pacienteParamApplied.current = true;
-    fetch(`/api/pacientes/${pacienteParamId}`)
-      .then((r) => (r.ok ? r.json() : null))
+    fetchJSON<PacienteDetalleAPI>(`/api/pacientes/${encodeURIComponent(pacienteParamId)}`)
       .then((p) => {
         if (!p?.id) return;
-        const sexo = p.sexo === 'MASCULINO' ? 'H' : p.sexo === 'FEMENINO' ? 'M' : p.sexo;
-        setPacienteSeleccionado({
-          id: p.id,
-          nombre: p.nombre_completo,
-          nombre_completo: p.nombre_completo,
-          edad: p.edad ?? null,
-          sexo,
-          aseguradora: p.aseguradora ?? null,
-          aseguranza_id: p.aseguranza_id ?? null,
-          telefono: p.telefono ?? null,
-          email: p.email ?? null,
-          direccion: p.direccion ?? null,
-        });
+        setPacienteSeleccionado(normalizarPacienteDetalle(p));
         setSearchPaciente('');
         setShowDropdown(false);
         setEstudiosSeleccionados([]);
@@ -528,15 +575,50 @@ function NuevaConsultaContent() {
     });
   }, [catalogoConsultas]);
 
+  // Búsqueda remota (con debounce) para encontrar pacientes fuera de la primera página.
+  // /api/search?cirugia=todos devuelve solo pacientes (id, nombre, contacto; máx. 5).
+  const debouncedSearchPaciente = useDebounce(searchPaciente.trim(), 300);
+  const busquedaRemotaUrl = debouncedSearchPaciente.length >= 2 && debouncedSearchPaciente.length <= 60
+    ? `/api/search?q=${encodeURIComponent(debouncedSearchPaciente)}&cirugia=todos`
+    : null;
+  const { data: busquedaRemota, isLoading: buscandoRemoto, isValidating: validandoRemoto } = useSWR<{ results?: BusquedaPacienteResult[] }>(
+    busquedaRemotaUrl,
+    { keepPreviousData: true, revalidateOnFocus: false },
+  );
+  const buscandoPacientes = searchPaciente.trim().length >= 2 && (
+    searchPaciente.trim() !== debouncedSearchPaciente || buscandoRemoto || validandoRemoto
+  );
+
   const filteredPacientes = useMemo(() => {
-    if (!searchPaciente) return pacientes;
-    const term = searchPaciente.toLowerCase();
-    return pacientes.filter(
+    const termRaw = searchPaciente.trim();
+    if (!termRaw) return pacientes;
+    const term = termRaw.toLowerCase();
+    const locales = pacientes.filter(
       (p) =>
-        (p.nombre || '').toLowerCase().includes(term) ||
-        (p.email && p.email.toLowerCase().includes(term))
+        (p.nombre || p.nombre_completo || '').toLowerCase().includes(term) ||
+        (p.email && p.email.toLowerCase().includes(term)) ||
+        (p.telefono && p.telefono.toLowerCase().includes(term))
     );
-  }, [pacientes, searchPaciente]);
+    if (!busquedaRemotaUrl) return locales;
+    const vistos = new Set(locales.map((p) => p.id));
+    const remotos: PacienteAPI[] = (busquedaRemota?.results || [])
+      .filter((r) => r.tipo === 'paciente' && !vistos.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        nombre: r.titulo,
+        nombre_completo: r.titulo,
+        edad: null,
+        sexo: null,
+        aseguradora: null,
+        aseguranza_id: null,
+        telefono: null,
+        email: null,
+        direccion: null,
+        parcial: true,
+        subtitulo: r.subtitulo,
+      }));
+    return [...locales, ...remotos];
+  }, [pacientes, searchPaciente, busquedaRemota, busquedaRemotaUrl]);
 
   const [searchEstudio, setSearchEstudio] = useState('');
   const [showEstudioDropdown, setShowEstudioDropdown] = useState(false);
@@ -763,6 +845,36 @@ function NuevaConsultaContent() {
     }
   }, [cargarServiciosOrigen]);
 
+  const pacienteSelIdRef = useRef<string | null>(null);
+  useEffect(() => { pacienteSelIdRef.current = pacienteSeleccionado?.id ?? null; }, [pacienteSeleccionado]);
+
+  const seleccionarPaciente = useCallback((p: PacienteAPI) => {
+    pacienteSelIdRef.current = p.id;
+    setPacienteSeleccionado(p);
+    setSearchPaciente('');
+    setShowDropdown(false);
+    setEstudiosSeleccionados([]);
+    setProcedimientosSeleccionados([]);
+    updateConsultation('origenId', p.aseguranza_id || '');
+    if (!p.parcial) return;
+    // Resultado de la búsqueda remota: completar edad/sexo/aseguranza con el detalle.
+    fetchJSON<PacienteDetalleAPI>(`/api/pacientes/${encodeURIComponent(p.id)}`)
+      .then((detalle) => {
+        if (!detalle?.id) return;
+        const completo = normalizarPacienteDetalle(detalle);
+        if (pacienteSelIdRef.current !== completo.id) return; // el usuario ya eligió otro
+        setPacienteSeleccionado(completo);
+        if (completo.aseguranza_id) updateConsultation('origenId', completo.aseguranza_id);
+      })
+      .catch((err) => {
+        if (pacienteSelIdRef.current === p.id) {
+          pacienteSelIdRef.current = null;
+          setPacienteSeleccionado(null);
+        }
+        toast(err instanceof Error && err.message ? err.message : 'No se pudieron cargar los datos del paciente', 'error');
+      });
+  }, [updateConsultation, toast]);
+
   useEffect(() => {
     if (matrizCostos.length > 0) {
       setConsultationData((prev) => ({ ...prev, costo: '' }));
@@ -842,8 +954,13 @@ function NuevaConsultaContent() {
   }, [pendingExitAction, pendingExitHref, router]);
 
   const handleCreate = useCallback(async () => {
+    if (saving) return;
     if (!pacienteSeleccionado) {
       setFormError('Debe seleccionar un paciente');
+      return;
+    }
+    if (pacienteSeleccionado.parcial) {
+      setFormError('Cargando datos del paciente, intente de nuevo en un momento');
       return;
     }
     if (!consultationData.doctorId) {
@@ -900,20 +1017,24 @@ function NuevaConsultaContent() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al crear la consulta');
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        const msg = err.error || 'Error al crear la consulta';
+        setFormError(msg);
+        toast(msg, 'error');
         return;
       }
 
       toast('Consulta creada exitosamente');
       try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+      // Las pantallas afectadas se refrescan en segundo plano (sin recargar ni vaciar).
+      void invalidar('/api/consultas', '/api/agenda', '/api/dashboard', '/api/pacientes');
       router.push('/agenda');
     } catch {
       setFormError('Error de conexión con el servidor');
     } finally {
       setSaving(false);
     }
-  }, [pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError]);
+  }, [saving, pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError, invalidar]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -949,11 +1070,17 @@ function NuevaConsultaContent() {
                   value={searchPaciente}
                   onChange={(e) => { setSearchPaciente(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
-                  placeholder="Buscar por nombre..."
+                  placeholder="Buscar por nombre, teléfono o email..."
+                  aria-label="Buscar paciente"
+                  autoComplete="off"
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface-2 dark:text-fg dark:placeholder-muted transition-all"
                 />
                 {showDropdown && (
-                  <div className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface">
+                  <div
+                    className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-line dark:bg-surface animate-fadeIn"
+                    aria-busy={buscandoPacientes}
+                  >
+                    <BarraRevalidando activo={buscandoPacientes} />
                     {filteredPacientes.length > 0 ? (
                       filteredPacientes.map((p) => {
                         const initials = getInitials(p.nombre_completo);
@@ -961,26 +1088,26 @@ function NuevaConsultaContent() {
                         return (
                           <button
                             key={p.id}
-                            onClick={() => {
-                              setPacienteSeleccionado(p);
-                              setSearchPaciente('');
-                              setShowDropdown(false);
-                              setEstudiosSeleccionados([]);
-                              setProcedimientosSeleccionados([]);
-                              updateConsultation('origenId', p.aseguranza_id || '');
-                            }}
+                            type="button"
+                            onClick={() => seleccionarPaciente(p)}
                             className="flex w-full items-center gap-3 px-4 py-3 hover:bg-surface-2 transition-colors text-left"
                           >
                             <Avatar initials={initials} className={color} />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-bold text-fg truncate">{p.nombre_completo}</div>
-                              <div className="text-xs text-muted">{p.edad ? `${p.edad} años` : ''} {p.sexo ? `• ${p.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''} {p.aseguradora ? `• ${p.aseguradora}` : ''}</div>
+                              <div className="text-xs text-muted truncate">
+                                {p.parcial
+                                  ? p.subtitulo
+                                  : <>{p.edad ? `${p.edad} años` : ''} {p.sexo ? `• ${p.sexo === 'M' ? 'Mujer' : 'Hombre'}` : ''} {p.aseguradora ? `• ${p.aseguradora}` : ''}</>}
+                              </div>
                             </div>
                           </button>
                         );
                       })
                     ) : (
-                      <div className="px-4 py-3 text-sm text-muted">No se encontraron pacientes</div>
+                      <div className="px-4 py-3 text-sm text-muted">
+                        {buscandoPacientes ? 'Buscando pacientes…' : 'No se encontraron pacientes'}
+                      </div>
                     )}
                     <button
                       onClick={() => { setShowNewPatientForm(true); setShowDropdown(false); }}
@@ -998,7 +1125,7 @@ function NuevaConsultaContent() {
                 )}
               </div>
               {pacienteSeleccionado && !showDropdown && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-muted">
+                <div key={pacienteSeleccionado.id} className="mt-3 animate-fadeIn flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-muted">
                   <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="sm" />
                   <span className="font-medium text-fg">{pacienteSeleccionado.nombre_completo}</span>
                   {pacienteSeleccionado.edad && <span className="hidden sm:inline">{pacienteSeleccionado.edad} años</span>}
@@ -1009,7 +1136,7 @@ function NuevaConsultaContent() {
 
               {/* New Patient Form — inline below search */}
               {showNewPatientForm && (
-                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-line dark:bg-surface-2">
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-line dark:bg-surface-2 animate-fadeIn">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200">
@@ -1030,33 +1157,54 @@ function NuevaConsultaContent() {
                     <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
                     <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
                   </div>
+                  {newPatientError && (
+                    <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 animate-fadeIn dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                      {newPatientError}
+                    </p>
+                  )}
                   <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-line">
-                    <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">CANCELAR</button>
+                    <button type="button" onClick={() => { setShowNewPatientForm(false); setNewPatientError(null); }} className="rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors">CANCELAR</button>
                     <button
+                      type="button"
                       onClick={async () => {
-                        if (!newPatient.nombre_completo.trim()) return;
+                        if (savingPaciente) return;
+                        const error = validarNuevoPaciente(newPatient);
+                        if (error) { setNewPatientError(error); return; }
+                        setNewPatientError(null);
+                        // No enviar campos vacíos (el servidor rechaza p. ej. email '').
+                        const payload: Record<string, string> = {
+                          nombre_completo: newPatient.nombre_completo.trim(),
+                          sexo: newPatient.sexo,
+                        };
+                        if (newPatient.fecha_nacimiento) payload.fecha_nacimiento = newPatient.fecha_nacimiento;
+                        if (newPatient.telefono.trim()) payload.telefono = newPatient.telefono.trim();
+                        if (newPatient.email.trim()) payload.email = newPatient.email.trim();
+                        if (newPatient.direccion.trim()) payload.direccion = newPatient.direccion.trim();
+                        setSavingPaciente(true);
                         try {
-                          const res = await fetch('/api/pacientes', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(newPatient),
-                          });
-                          if (res.ok) {
-                            const created = await res.json();
-                            setPacienteSeleccionado(created);
-                            setShowNewPatientForm(false);
-                            setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '' });
-                            setEstudiosSeleccionados([]);
-                            setProcedimientosSeleccionados([]);
-                            updateConsultation('origenId', created?.aseguranza_id || '');
-                            toast('Paciente creado exitosamente');
-                          }
-                        } catch {}
+                          const created = await enviarJSON<PacienteAPI>('/api/pacientes', 'POST', payload);
+                          pacienteSelIdRef.current = created.id;
+                          setPacienteSeleccionado(created);
+                          setShowNewPatientForm(false);
+                          setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '' });
+                          setEstudiosSeleccionados([]);
+                          setProcedimientosSeleccionados([]);
+                          updateConsultation('origenId', created?.aseguranza_id || '');
+                          toast('Paciente creado exitosamente');
+                          void invalidar('/api/pacientes', '/api/search', '/api/dashboard');
+                        } catch (err) {
+                          const msg = err instanceof Error && err.message ? err.message : 'No se pudo crear el paciente';
+                          setNewPatientError(msg);
+                          toast(msg, 'error');
+                        } finally {
+                          setSavingPaciente(false);
+                        }
                       }}
-                      disabled={!newPatient.nombre_completo.trim()}
-                      className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+                      disabled={savingPaciente || !newPatient.nombre_completo.trim()}
+                      aria-busy={savingPaciente}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
                     >
-                      GUARDAR Y SELECCIONAR
+                      {savingPaciente ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : 'GUARDAR Y SELECCIONAR'}
                     </button>
                   </div>
                 </div>

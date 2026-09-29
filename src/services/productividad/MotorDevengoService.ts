@@ -6,6 +6,7 @@ import {
   resolverFuenteHonorario,
   type MetricasLigados,
 } from '@/lib/productividad/resolver-fuente';
+import { inEnLotes, leerTodo, leerTodoEnLotes } from '@/lib/productividad/lotes';
 
 type OrigenTipo = 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO' | 'CITA' | 'OPERACION';
 type RolDoctor = 'PRINCIPAL' | 'AYUDANTE' | 'ANESTESIOLOGO' | 'INTERPRETACION' | 'REFERIDOR' | 'CIRUJANO_PRINCIPAL' | 'INSTRUMENTISTA' | 'CIRCULANTE';
@@ -23,14 +24,6 @@ interface EventoDevengoInput {
   moneda?: string;
   cantidad?: number;
   metricas_ligados?: MetricasLigados;
-}
-
-interface ConfigHonorarios {
-  aseguranza_afecta_honorarios: boolean;
-  base_calculo_honorario: 'COBRO_TOTAL' | 'PARTE_PACIENTE';
-  tipo_cambio_default: number;
-  devengo_automatico: boolean;
-  periodo_pago?: string;
 }
 
 function normalizarMoneda(valor?: string | null): string {
@@ -75,25 +68,16 @@ function resultadoVacio(): ResultadoDevengo {
   };
 }
 
+const ESTATUS_DEVENGABLES = ['AGENDADA', 'PROCESADA', 'COMPLETADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA'];
+
 export class MotorDevengoService {
   private supabase = getSupabaseAdmin();
-
-  private async getConfig(): Promise<ConfigHonorarios> {
-    const { data } = await this.supabase
-      .from('configuracion_sistema')
-      .select('valor')
-      .eq('clave', 'honorarios')
-      .maybeSingle();
-
-    return {
-      aseguranza_afecta_honorarios: false,
-      base_calculo_honorario: 'COBRO_TOTAL',
-      tipo_cambio_default: 17.50,
-      devengo_automatico: true,
-      periodo_pago: 'MENSUAL',
-      ...(data?.valor as Partial<ConfigHonorarios> || {}),
-    };
-  }
+  /**
+   * Periodo de pago por fecha de servicio, memorizado durante la vida de la
+   * instancia (un request): en un sync muchas filas comparten fecha y antes
+   * se hacía 1 viaje por evento creado.
+   */
+  private periodoPorFecha = new Map<string, Promise<string | null>>();
 
   async marcarDeployed(tabla: 'consultas' | 'agenda_cirugias', id: string): Promise<void> {
     await this.supabase
@@ -116,19 +100,31 @@ export class MotorDevengoService {
     const gte = fechaDesde || '1970-01-01';
     const lte = fechaHasta || '2999-12-31';
 
-    const [{ data: consultas }, { data: cirugias }] = await Promise.all([
-      supabase
-        .from('consultas')
-        .select('id, doctor_id, fecha, estatus, deployed_to_performance')
-        .gte('fecha', gte)
-        .lte('fecha', lte)
-        .in('estatus', ['AGENDADA', 'PROCESADA', 'COMPLETADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA']),
-      supabase
-        .from('agenda_cirugias')
-        .select('id, doctor_id, fecha, estado, deployed_to_performance, consulta_id')
-        .gte('fecha', gte)
-        .lte('fecha', lte)
-        .neq('estado', 'cancelada'),
+    // Paginado: antes un rango con >1000 filas se truncaba en silencio
+    // (límite por defecto de PostgREST) y los conteos salían cortos.
+    const [consultas, cirugias] = await Promise.all([
+      leerTodo<{ id: string; doctor_id: string | null; fecha: string; estatus: string; deployed_to_performance: boolean | null }>(
+        (a, b) =>
+          supabase
+            .from('consultas')
+            .select('id, doctor_id, fecha, estatus, deployed_to_performance')
+            .gte('fecha', gte)
+            .lte('fecha', lte)
+            .in('estatus', ESTATUS_DEVENGABLES)
+            .order('id', { ascending: true })
+            .range(a, b)
+      ),
+      leerTodo<{ id: string; doctor_id: string | null; fecha: string; estado: string; deployed_to_performance: boolean | null; consulta_id: string | null }>(
+        (a, b) =>
+          supabase
+            .from('agenda_cirugias')
+            .select('id, doctor_id, fecha, estado, deployed_to_performance, consulta_id')
+            .gte('fecha', gte)
+            .lte('fecha', lte)
+            .neq('estado', 'cancelada')
+            .order('id', { ascending: true })
+            .range(a, b)
+      ),
     ]);
 
     const doctoresSinEvento: Array<{ doctor_id: string; doctor_nombre: string; origen: string; ref: string }> = [];
@@ -136,96 +132,104 @@ export class MotorDevengoService {
     const doctorIds = new Set<string>();
 
     // ── Precarga batch (evita N+1): conceptos, doctores de cirugía y eventos ──
-    const consultaIds = (consultas || []).map((c) => c.id);
-    const cirugiaIds = (cirugias || []).map((c) => c.id);
+    const consultaIds = consultas.map((c) => c.id);
+    const cirugiaIds = cirugias.map((c) => c.id);
+
+    // Las 4 lecturas son independientes: en paralelo, cada una por lotes de ids
+    // y paginada (un lote de 150 consultas puede tener >1000 conceptos).
+    const [ccRows, agdRows, partRows, evs] = await Promise.all([
+      leerTodoEnLotes<{ id: string; consulta_id: string; doctor_id: string | null }>(consultaIds, (l, a, b) =>
+        supabase
+          .from('consulta_conceptos')
+          .select('id, consulta_id, doctor_id')
+          .in('consulta_id', l)
+          .order('id', { ascending: true })
+          .range(a, b)
+      ),
+      leerTodoEnLotes<{ id: string; cirugia_id: string; doctor_id: string | null }>(cirugiaIds, (l, a, b) =>
+        supabase
+          .from('agenda_cirugia_doctores')
+          .select('id, cirugia_id, doctor_id')
+          .in('cirugia_id', l)
+          .order('id', { ascending: true })
+          .range(a, b)
+      ),
+      leerTodoEnLotes<{ id: string; cirugia_id: string; medico_id: string | null }>(cirugiaIds, (l, a, b) =>
+        supabase
+          .from('cirugia_participantes')
+          .select('id, cirugia_id, medico_id')
+          .in('cirugia_id', l)
+          .order('id', { ascending: true })
+          .range(a, b)
+      ),
+      // Eventos existentes por (origen_tipo, origen_id, doctor_id)
+      leerTodoEnLotes<{ id: string; origen_tipo: string; origen_id: string; doctor_id: string | null }>(
+        [...consultaIds, ...cirugiaIds],
+        (l, a, b) =>
+          supabase
+            .from('eventos_honorario')
+            .select('id, origen_tipo, origen_id, doctor_id')
+            .in('origen_tipo', ['CONSULTA', 'OPERACION'])
+            .in('origen_id', l)
+            .neq('estado', 'CANCELADO')
+            .order('id', { ascending: true })
+            .range(a, b)
+      ),
+    ]);
 
     const conceptosPorConsulta = new Map<string, Array<{ doctor_id: string | null }>>();
-    for (let i = 0; i < consultaIds.length; i += 500) {
-      const chunk = consultaIds.slice(i, i + 500);
-      if (chunk.length === 0) continue;
-      const { data: ccRows } = await supabase
-        .from('consulta_conceptos')
-        .select('consulta_id, doctor_id')
-        .in('consulta_id', chunk);
-      for (const cc of ccRows || []) {
-        const arr = conceptosPorConsulta.get(cc.consulta_id) || [];
-        arr.push({ doctor_id: cc.doctor_id });
-        conceptosPorConsulta.set(cc.consulta_id, arr);
-      }
+    for (const cc of ccRows) {
+      const arr = conceptosPorConsulta.get(cc.consulta_id) || [];
+      arr.push({ doctor_id: cc.doctor_id });
+      conceptosPorConsulta.set(cc.consulta_id, arr);
     }
 
     const agdPorCirugia = new Map<string, Set<string>>();
     const partPorCirugia = new Map<string, Set<string>>();
-    for (let i = 0; i < cirugiaIds.length; i += 500) {
-      const chunk = cirugiaIds.slice(i, i + 500);
-      if (chunk.length === 0) continue;
-      const [{ data: agd }, { data: part }] = await Promise.all([
-        supabase.from('agenda_cirugia_doctores').select('cirugia_id, doctor_id').in('cirugia_id', chunk),
-        supabase.from('cirugia_participantes').select('cirugia_id, medico_id').in('cirugia_id', chunk),
-      ]);
-      for (const r of agd || []) {
-        if (!r.doctor_id) continue;
-        if (!agdPorCirugia.has(r.cirugia_id)) agdPorCirugia.set(r.cirugia_id, new Set());
-        agdPorCirugia.get(r.cirugia_id)!.add(r.doctor_id);
-      }
-      for (const r of part || []) {
-        if (!r.medico_id) continue;
-        if (!partPorCirugia.has(r.cirugia_id)) partPorCirugia.set(r.cirugia_id, new Set());
-        partPorCirugia.get(r.cirugia_id)!.add(r.medico_id);
-      }
+    for (const r of agdRows) {
+      if (!r.doctor_id) continue;
+      if (!agdPorCirugia.has(r.cirugia_id)) agdPorCirugia.set(r.cirugia_id, new Set());
+      agdPorCirugia.get(r.cirugia_id)!.add(r.doctor_id);
+    }
+    for (const r of partRows) {
+      if (!r.medico_id) continue;
+      if (!partPorCirugia.has(r.cirugia_id)) partPorCirugia.set(r.cirugia_id, new Set());
+      partPorCirugia.get(r.cirugia_id)!.add(r.medico_id);
     }
 
-    // Eventos existentes por (origen_tipo, origen_id, doctor_id) en batch
     const eventosConsultaPorDoctor = new Map<string, number>(); // `${origen_id}|${doctor_id}` → n
     const eventosCirugiaPorDoctor = new Map<string, Set<string>>();
-    const todosOrigenes: Array<{ tipo: string; id: string }> = [
-      ...consultaIds.map((id) => ({ tipo: 'CONSULTA', id })),
-      ...cirugiaIds.map((id) => ({ tipo: 'OPERACION', id })),
-    ];
-    for (let i = 0; i < todosOrigenes.length; i += 500) {
-      const chunk = todosOrigenes.slice(i, i + 500);
-      if (chunk.length === 0) continue;
-      const { data: evs } = await supabase
-        .from('eventos_honorario')
-        .select('origen_tipo, origen_id, doctor_id')
-        .in('origen_tipo', ['CONSULTA', 'OPERACION'])
-        .in('origen_id', chunk.map((o) => o.id))
-        .neq('estado', 'CANCELADO');
-      for (const e of evs || []) {
-        if (!e.doctor_id) continue;
-        const key = `${e.origen_id}|${e.doctor_id}`;
-        if (e.origen_tipo === 'CONSULTA') {
-          eventosConsultaPorDoctor.set(key, (eventosConsultaPorDoctor.get(key) || 0) + 1);
-        } else {
-          if (!eventosCirugiaPorDoctor.has(e.origen_id)) eventosCirugiaPorDoctor.set(e.origen_id, new Set());
-          eventosCirugiaPorDoctor.get(e.origen_id)!.add(e.doctor_id);
-        }
+    for (const e of evs) {
+      if (!e.doctor_id) continue;
+      const key = `${e.origen_id}|${e.doctor_id}`;
+      if (e.origen_tipo === 'CONSULTA') {
+        eventosConsultaPorDoctor.set(key, (eventosConsultaPorDoctor.get(key) || 0) + 1);
+      } else {
+        if (!eventosCirugiaPorDoctor.has(e.origen_id)) eventosCirugiaPorDoctor.set(e.origen_id, new Set());
+        eventosCirugiaPorDoctor.get(e.origen_id)!.add(e.doctor_id);
       }
     }
 
-    for (const c of consultas || []) {
+    for (const c of consultas) {
       if (c.doctor_id) doctorIds.add(c.doctor_id);
       for (const cc of conceptosPorConsulta.get(c.id) || []) {
         if (cc.doctor_id) doctorIds.add(cc.doctor_id);
       }
     }
 
-    for (const cir of cirugias || []) {
+    for (const cir of cirugias) {
       if (cir.doctor_id) doctorIds.add(cir.doctor_id);
       for (const r of agdPorCirugia.get(cir.id) || []) doctorIds.add(r);
       for (const r of partPorCirugia.get(cir.id) || []) doctorIds.add(r);
     }
 
     const nombres = new Map<string, string>();
-    if (doctorIds.size > 0) {
-      const { data: docs } = await supabase
-        .from('doctores')
-        .select('id, alias')
-        .in('id', [...doctorIds]);
-      for (const d of docs || []) nombres.set(d.id, d.alias);
-    }
+    const docs = await inEnLotes<{ id: string; alias: string }>(doctorIds, (l) =>
+      supabase.from('doctores').select('id, alias').in('id', l)
+    );
+    for (const d of docs) nombres.set(d.id, d.alias);
 
-    for (const c of consultas || []) {
+    for (const c of consultas) {
       if (!c.doctor_id) continue;
       const n = eventosConsultaPorDoctor.get(`${c.id}|${c.doctor_id}`) || 0;
       if (n === 0 && !c.deployed_to_performance) {
@@ -246,7 +250,7 @@ export class MotorDevengoService {
       }
     }
 
-    for (const cir of cirugias || []) {
+    for (const cir of cirugias) {
       const esperados = new Set<string>();
       if (cir.doctor_id) esperados.add(cir.doctor_id);
       for (const r of agdPorCirugia.get(cir.id) || []) esperados.add(r);
@@ -275,8 +279,8 @@ export class MotorDevengoService {
     }
 
     return {
-      consultas_pendientes: (consultas || []).filter((c) => !c.deployed_to_performance).length,
-      cirugias_pendientes: (cirugias || []).filter((c) => !c.deployed_to_performance).length,
+      consultas_pendientes: consultas.filter((c) => !c.deployed_to_performance).length,
+      cirugias_pendientes: cirugias.filter((c) => !c.deployed_to_performance).length,
       doctores_sin_evento: doctoresSinEvento.slice(0, 200),
       doctores_en_modulo: doctoresEnModulo.slice(0, 200),
       doctores_total: doctorIds.size,
@@ -285,13 +289,20 @@ export class MotorDevengoService {
 
   async generarDesdeConsulta(consultaId: string): Promise<ResultadoDevengo> {
     const resultado = resultadoVacio();
-    await this.getConfig();
 
-    const { data: consulta, error: e1 } = await this.supabase
-      .from('consultas')
-      .select('id, paciente_id, doctor_id, fecha, estatus')
-      .eq('id', consultaId)
-      .single();
+    // consulta (+ nombre del paciente embebido) ‖ conceptos: antes 4 viajes en
+    // serie (config sin usar → consulta → conceptos → paciente), ahora 1 ronda.
+    const [{ data: consulta, error: e1 }, { data: conceptos }] = await Promise.all([
+      this.supabase
+        .from('consultas')
+        .select('id, paciente_id, doctor_id, fecha, estatus, pacientes:paciente_id(nombre_completo)')
+        .eq('id', consultaId)
+        .single(),
+      this.supabase
+        .from('consulta_conceptos')
+        .select('id, tipo_concepto, doctor_id, cantidad')
+        .eq('consulta_id', consultaId),
+    ]);
 
     if (e1 || !consulta) throw new Error(`Consulta ${consultaId} no encontrada`);
 
@@ -299,11 +310,6 @@ export class MotorDevengoService {
       resultado.ligados_sin_linea += 1;
       return resultado;
     }
-
-    const { data: conceptos } = await this.supabase
-      .from('consulta_conceptos')
-      .select('id, tipo_concepto, doctor_id, cantidad')
-      .eq('consulta_id', consultaId);
 
     const metricas = contarMetricasConceptos(conceptos || []);
 
@@ -319,38 +325,38 @@ export class MotorDevengoService {
       return resultado;
     }
 
-    const { data: paciente } = consulta.paciente_id
-      ? await this.supabase
-          .from('pacientes')
-          .select('nombre_completo')
-          .eq('id', consulta.paciente_id)
-          .maybeSingle()
-      : { data: null };
+    const pacienteEmb = consulta.pacientes as
+      | { nombre_completo?: string | null }
+      | Array<{ nombre_completo?: string | null }>
+      | null;
+    const paciente = Array.isArray(pacienteEmb) ? pacienteEmb[0] ?? null : pacienteEmb;
+    const pacienteNombre = consulta.paciente_id ? paciente?.nombre_completo ?? null : null;
 
-    const creado = await this.crearEvento({
-      origen_tipo: 'CONSULTA',
-      origen_id: fuente.origenId,
-      doctor_id: fuente.doctorId,
-      rol: 'PRINCIPAL',
-      paciente_id: consulta.paciente_id,
-      fecha_servicio: consulta.fecha,
-      monto_base: 0,
-      cantidad: 1,
-      tarifa_snapshot: {
-        sin_tarifa: true,
-        paciente_nombre: paciente?.nombre_completo ?? null,
+    const inserciones: Array<Promise<'creado' | 'existe' | 'omitido'>> = [
+      this.crearEvento({
+        origen_tipo: 'CONSULTA',
+        origen_id: fuente.origenId,
+        doctor_id: fuente.doctorId,
+        rol: 'PRINCIPAL',
+        paciente_id: consulta.paciente_id,
+        fecha_servicio: consulta.fecha,
+        monto_base: 0,
+        cantidad: 1,
+        tarifa_snapshot: {
+          sin_tarifa: true,
+          paciente_nombre: pacienteNombre,
+          metricas_ligados: metricas,
+        },
         metricas_ligados: metricas,
-      },
-      metricas_ligados: metricas,
-    });
-
-    if (creado === 'creado') resultado.eventos_creados += 1;
-    else if (creado === 'existe') resultado.eventos_existentes += 1;
+      }),
+    ];
 
     const doctorConsulta = consulta.doctor_id;
     const vistos = new Set<string>();
     if (doctorConsulta) vistos.add(doctorConsulta);
 
+    // La decisión por concepto es síncrona (mismo orden que antes); solo los
+    // INSERT, independientes entre sí (dedupe_key distinto), van en paralelo.
     for (const cc of conceptos || []) {
       if (!cc.doctor_id || vistos.has(cc.doctor_id)) continue;
       vistos.add(cc.doctor_id);
@@ -364,25 +370,30 @@ export class MotorDevengoService {
       });
 
       if (fConcepto.crearLinea && fConcepto.origenId && fConcepto.doctorId) {
-        const cCreado = await this.crearEvento({
-          origen_tipo: cc.tipo_concepto === 'ESTUDIO' ? 'ESTUDIO' : 'PROCEDIMIENTO',
-          origen_id: cc.id,
-          doctor_id: fConcepto.doctorId,
-          rol: 'PRINCIPAL',
-          paciente_id: consulta.paciente_id,
-          fecha_servicio: consulta.fecha,
-          monto_base: 0,
-          cantidad: Math.max(1, cc.cantidad || 1),
-          tarifa_snapshot: { sin_tarifa: true, paciente_nombre: paciente?.nombre_completo ?? null },
-          metricas_ligados: metricasVacias(),
-        });
-        if (cCreado === 'creado') resultado.eventos_creados += 1;
-        else if (cCreado === 'existe') resultado.eventos_existentes += 1;
+        inserciones.push(
+          this.crearEvento({
+            origen_tipo: cc.tipo_concepto === 'ESTUDIO' ? 'ESTUDIO' : 'PROCEDIMIENTO',
+            origen_id: cc.id,
+            doctor_id: fConcepto.doctorId,
+            rol: 'PRINCIPAL',
+            paciente_id: consulta.paciente_id,
+            fecha_servicio: consulta.fecha,
+            monto_base: 0,
+            cantidad: Math.max(1, cc.cantidad || 1),
+            tarifa_snapshot: { sin_tarifa: true, paciente_nombre: pacienteNombre },
+            metricas_ligados: metricasVacias(),
+          })
+        );
       }
 
       if (fConcepto.reportarDoctorDistinto) {
         resultado.reportar_doctor_distinto.push(cc.doctor_id);
       }
+    }
+
+    for (const creado of await Promise.all(inserciones)) {
+      if (creado === 'creado') resultado.eventos_creados += 1;
+      else if (creado === 'existe') resultado.eventos_existentes += 1;
     }
 
     resultado.ligados_sin_linea =
@@ -397,14 +408,58 @@ export class MotorDevengoService {
     return resultado;
   }
 
+  /**
+   * Aseguranza (origen) de una cirugía con la misma prioridad que antes:
+   * `agenda_cirugias.origen_id` → aseguranza de la consulta raíz → del paciente.
+   * Antes hasta 6 viajes en serie; ahora ≤ 2 rondas (consulta ‖ paciente, luego nombre).
+   */
+  private async resolverAseguranzaCirugia(
+    origenId: string | null,
+    consultaRaiz: string | null,
+    pacienteId: string | null
+  ): Promise<{ origenAsegId: string | null; origenNombre: string | null }> {
+    let origenAsegId = origenId;
+    if (!origenAsegId) {
+      const [consultaRes, pacienteRes] = await Promise.all([
+        consultaRaiz
+          ? this.supabase.from('consultas').select('aseguranza_id').eq('id', consultaRaiz).maybeSingle()
+          : Promise.resolve({ data: null as { aseguranza_id: string | null } | null }),
+        pacienteId
+          ? this.supabase.from('pacientes').select('aseguranza_id').eq('id', pacienteId).maybeSingle()
+          : Promise.resolve({ data: null as { aseguranza_id: string | null } | null }),
+      ]);
+      origenAsegId = consultaRes.data?.aseguranza_id || pacienteRes.data?.aseguranza_id || null;
+    }
+    if (!origenAsegId) return { origenAsegId: null, origenNombre: null };
+
+    const { data: aseg } = await this.supabase
+      .from('aseguranzas')
+      .select('nombre')
+      .eq('id', origenAsegId)
+      .maybeSingle();
+    return { origenAsegId, origenNombre: aseg?.nombre ?? null };
+  }
+
   async generarDesdeCirugia(cirugiaId: string): Promise<ResultadoDevengo> {
     const resultado = resultadoVacio();
 
-    const { data: cirugia, error: e1 } = await this.supabase
-      .from('agenda_cirugias')
-      .select('id, paciente_id, doctor_id, fecha, procedimiento, servicio_id, origen_id, consulta_id, estado')
-      .eq('id', cirugiaId)
-      .single();
+    // cirugía ‖ participantes (ambos solo dependen del id): 1 ronda en vez de 2.
+    const [{ data: cirugia, error: e1 }, { data: participantesAgenda }, { data: participantesCirugia }] =
+      await Promise.all([
+        this.supabase
+          .from('agenda_cirugias')
+          .select('id, paciente_id, doctor_id, fecha, procedimiento, servicio_id, origen_id, consulta_id, estado')
+          .eq('id', cirugiaId)
+          .single(),
+        this.supabase
+          .from('agenda_cirugia_doctores')
+          .select('doctor_id, rol, porcentaje_participacion')
+          .eq('cirugia_id', cirugiaId),
+        this.supabase
+          .from('cirugia_participantes')
+          .select('medico_id, rol_id')
+          .eq('cirugia_id', cirugiaId),
+      ]);
 
     if (e1 || !cirugia) throw new Error(`Cirugía ${cirugiaId} no encontrada`);
 
@@ -414,6 +469,7 @@ export class MotorDevengoService {
     }
 
     const consultaRaiz = cirugia.consulta_id ?? null;
+    let metricaP: Promise<void> = Promise.resolve();
 
     if (consultaRaiz) {
       const fuente = resolverFuenteHonorario({
@@ -427,20 +483,9 @@ export class MotorDevengoService {
 
       if (!fuente.crearLinea) {
         resultado.ligados_sin_linea += 1;
-        await this.incrementarMetricaConsulta(consultaRaiz, { cirugias_ligadas: 1 });
+        metricaP = this.incrementarMetricaConsulta(consultaRaiz, { cirugias_ligadas: 1 });
       }
     }
-
-    const [{ data: participantesAgenda }, { data: participantesCirugia }] = await Promise.all([
-      this.supabase
-        .from('agenda_cirugia_doctores')
-        .select('doctor_id, rol, porcentaje_participacion')
-        .eq('cirugia_id', cirugiaId),
-      this.supabase
-        .from('cirugia_participantes')
-        .select('medico_id, rol_id')
-        .eq('cirugia_id', cirugiaId),
-    ]);
 
     const doctoresMap = new Map<string, RolDoctor>();
 
@@ -460,71 +505,40 @@ export class MotorDevengoService {
       doctoresMap.set(cirugia.doctor_id, 'CIRUJANO_PRINCIPAL');
     }
 
-    let origenNombre: string | null = null;
-    let origenAsegId: string | null = (cirugia.origen_id as string | null) ?? null;
+    // Métrica de la consulta raíz ‖ aseguranza (independientes).
+    const [, { origenAsegId, origenNombre }] = await Promise.all([
+      metricaP,
+      this.resolverAseguranzaCirugia(
+        (cirugia.origen_id as string | null) ?? null,
+        consultaRaiz,
+        cirugia.paciente_id ?? null
+      ),
+    ]);
 
-    if (origenAsegId) {
-      const { data: aseg } = await this.supabase
-        .from('aseguranzas')
-        .select('nombre')
-        .eq('id', origenAsegId)
-        .maybeSingle();
-      origenNombre = aseg?.nombre ?? null;
-    }
+    // Un INSERT por doctor, en paralelo (dedupe_key distinto por doctor).
+    const creados = await Promise.all(
+      [...doctoresMap].map(([doctorId, rol]) =>
+        this.crearEvento({
+          origen_tipo: 'OPERACION',
+          origen_id: cirugiaId,
+          doctor_id: doctorId,
+          rol,
+          paciente_id: cirugia.paciente_id,
+          fecha_servicio: cirugia.fecha,
+          monto_base: 0,
+          cantidad: 1,
+          tarifa_snapshot: {
+            sin_tarifa: true,
+            origen_nombre: origenNombre,
+            origen_id: origenAsegId,
+            procedimiento: cirugia.procedimiento ?? null,
+          },
+          metricas_ligados: metricasVacias(),
+        })
+      )
+    );
 
-    if (!origenAsegId && consultaRaiz) {
-      const { data: consulta } = await this.supabase
-        .from('consultas')
-        .select('aseguranza_id')
-        .eq('id', consultaRaiz)
-        .maybeSingle();
-      if (consulta?.aseguranza_id) {
-        origenAsegId = consulta.aseguranza_id;
-        const { data: aseg } = await this.supabase
-          .from('aseguranzas')
-          .select('nombre')
-          .eq('id', origenAsegId)
-          .maybeSingle();
-        origenNombre = aseg?.nombre ?? null;
-      }
-    }
-
-    if (!origenAsegId && cirugia.paciente_id) {
-      const { data: paciente } = await this.supabase
-        .from('pacientes')
-        .select('aseguranza_id')
-        .eq('id', cirugia.paciente_id)
-        .maybeSingle();
-      if (paciente?.aseguranza_id) {
-        origenAsegId = paciente.aseguranza_id;
-        const { data: aseg } = await this.supabase
-          .from('aseguranzas')
-          .select('nombre')
-          .eq('id', origenAsegId)
-          .maybeSingle();
-        origenNombre = aseg?.nombre ?? null;
-      }
-    }
-
-    for (const [doctorId, rol] of doctoresMap) {
-      const creado = await this.crearEvento({
-        origen_tipo: 'OPERACION',
-        origen_id: cirugiaId,
-        doctor_id: doctorId,
-        rol,
-        paciente_id: cirugia.paciente_id,
-        fecha_servicio: cirugia.fecha,
-        monto_base: 0,
-        cantidad: 1,
-        tarifa_snapshot: {
-          sin_tarifa: true,
-          origen_nombre: origenNombre,
-          origen_id: origenAsegId,
-          procedimiento: cirugia.procedimiento ?? null,
-        },
-        metricas_ligados: metricasVacias(),
-      });
-
+    for (const creado of creados) {
       if (creado === 'creado') resultado.eventos_creados += 1;
       else if (creado === 'existe') resultado.eventos_existentes += 1;
     }
@@ -658,14 +672,22 @@ export class MotorDevengoService {
     return 'creado';
   }
 
-  private async resolverPeriodo(fecha: string): Promise<string | null> {
-    const { data } = await this.supabase
-      .from('periodos_pago')
-      .select('id')
-      .lte('fecha_desde', fecha)
-      .gte('fecha_hasta', fecha)
-      .in('estado', ['ABIERTO', 'EN_REVISION'])
-      .maybeSingle();
-    return data?.id ?? null;
+  private resolverPeriodo(fecha: string): Promise<string | null> {
+    const cache = this.periodoPorFecha.get(fecha);
+    if (cache) return cache;
+    const p = (async () => {
+      const { data } = await this.supabase
+        .from('periodos_pago')
+        .select('id')
+        .lte('fecha_desde', fecha)
+        .gte('fecha_hasta', fecha)
+        .in('estado', ['ABIERTO', 'EN_REVISION'])
+        .maybeSingle();
+      return data?.id ?? null;
+    })();
+    // Un fallo de red no debe quedar memorizado.
+    p.catch(() => this.periodoPorFecha.delete(fecha));
+    this.periodoPorFecha.set(fecha, p);
+    return p;
   }
 }

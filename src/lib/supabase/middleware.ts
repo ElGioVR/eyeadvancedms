@@ -44,12 +44,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims(): verifica la firma del JWT localmente (JWKS) cuando el proyecto
+  // usa llaves asimétricas; si no, cae a getUser(). Refresca el token si expiró.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const sub = claimsData?.claims?.sub;
+  const user = typeof sub === 'string' ? { id: sub } : null;
 
   // Reenvía a los Server Components el id verificado para que no repitan
-  // auth.getUser() (otro viaje a Supabase Auth). Siempre se borra el valor que
+  // la verificación. Siempre se borra el valor que
   // venga del cliente, así no se puede falsificar.
   const forwarded = new Headers(request.headers);
   forwarded.delete(VERIFIED_USER_HEADER);

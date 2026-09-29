@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { hoyTijuana } from '@/lib/rangos';
 
 // Dashboard operativo: sólo información de valor del momento.
 // Los costos/ingresos viven en el módulo de Productividad.
@@ -43,19 +44,15 @@ export interface DashboardData {
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = getSupabaseAdmin();
 
-  const now = new Date();
-  const tijuanaNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Tijuana' }));
-  const today = tijuanaNow.toISOString().slice(0, 10);
-
-  const dayOfWeek = tijuanaNow.getDay();
+  // "Hoy" y la semana (lunes–domingo) en la zona de la clínica (America/Tijuana),
+  // con aritmética de fechas en UTC para no depender de la zona del servidor.
+  const today = hoyTijuana();
+  const base = new Date(`${today}T00:00:00Z`);
+  const dayOfWeek = base.getUTCDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(tijuanaNow);
-  monday.setDate(tijuanaNow.getDate() + mondayOffset);
+  const monday = new Date(base.getTime() + mondayOffset * 86_400_000);
   const weekStart = monday.toISOString().slice(0, 10);
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const weekEnd = sunday.toISOString().slice(0, 10);
+  const weekEnd = new Date(monday.getTime() + 6 * 86_400_000).toISOString().slice(0, 10);
 
   const [
     pacientesResult,
@@ -70,13 +67,15 @@ export async function getDashboardData(): Promise<DashboardData> {
 
     supabase
       .from('consultas')
-      .select(`
-        id, folio, hora_inicio, tipo_consulta, tipo_visita, diagnostico,
+      .select(
+        `id, hora_inicio, tipo_visita, diagnostico,
         paciente:paciente_id (nombre_completo),
-        doctor:doctor_id (id, alias)
-      `)
+        doctor:doctor_id (alias)`,
+        { count: 'exact' },
+      )
       .eq('fecha', today)
-      .order('hora_inicio'),
+      .order('hora_inicio')
+      .limit(300),
 
     supabase
       .from('consultas')
@@ -88,7 +87,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     // legacy (marca/modelo) → nuevo (manufacturer/model) → nuevo sin filtro tipo.
     supabase
       .from('inventario_items')
-      .select('id, marca, modelo, grado_esferico, color, stock, stock_minimo, tipo')
+      .select('id, marca, modelo, grado_esferico, color, stock, stock_minimo')
       .eq('tipo', 'LENTE_INTRAOCULAR')
       .gt('stock', 0)
       .order('stock', { ascending: true })
@@ -97,7 +96,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase
       .from('doctores')
       .select('id, alias, especialidad')
-      .eq('activo', true),
+      .eq('activo', true)
+      .order('alias')
+      .limit(200),
   ]);
 
   let lentesRaw: Record<string, unknown>[] = [];
@@ -164,7 +165,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     id: d.id,
     nombre: d.alias,
     especialidad: d.especialidad ?? '',
-    iniciales: d.alias
+    iniciales: (d.alias || '')
       .split(' ')
       .map((n: string) => n[0])
       .slice(0, 2)
@@ -175,7 +176,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   return {
     stats: {
       totalPacientes,
-      consultasHoy: consultasHoyResult.data?.length ?? 0,
+      consultasHoy: consultasHoyResult.count ?? consultasHoyResult.data?.length ?? 0,
       consultasSemana: consultasSemanaResult.count ?? 0,
       lentesBajoStock: lentesBajoStock.length,
     },

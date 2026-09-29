@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
 
 const configSchema = z.object({
   aseguranza_afecta_honorarios: z.boolean().optional(),
   base_calculo_honorario: z.enum(['COBRO_TOTAL', 'PARTE_PACIENTE']).optional(),
-  tipo_cambio_default: z.number().positive().optional(),
+  tipo_cambio_default: z.number().finite().positive().max(1000).optional(),
   devengo_automatico: z.boolean().optional(),
   periodo_pago: z.enum(['SEMANAL', 'QUINCENAL', 'MENSUAL', 'TRIMESTRAL']).optional(),
 }).strict();
@@ -61,27 +62,23 @@ export async function PUT(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = configSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0]?.message || 'Datos inválidos' }, { status: 400 });
-  }
+  const validado = await leerJSON(request, configSchema);
+  if (validado instanceof NextResponse) return validado;
 
   const supabase = getSupabaseAdmin();
 
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from('configuracion_sistema')
     .select('valor')
     .eq('clave', 'honorarios')
     .maybeSingle();
 
-  const currentValor = existing?.valor ?? {
+  // Si la lectura falla no se sobrescribe la configuración con los valores por defecto
+  if (readError) {
+    return NextResponse.json({ error: handleSupabaseError(readError, 'honorarios-settings.put').mensaje }, { status: 500 });
+  }
+
+  const currentValor = (existing?.valor as Record<string, unknown> | null) ?? {
     aseguranza_afecta_honorarios: false,
     base_calculo_honorario: 'COBRO_TOTAL',
     tipo_cambio_default: 17.50,
@@ -89,7 +86,8 @@ export async function PUT(request: Request) {
     periodo_pago: 'MENSUAL',
   };
 
-  const mergedValor = { ...currentValor, ...validation.data };
+  const mergedValor = { ...currentValor, ...validado };
+  const ahora = new Date().toISOString();
 
   const { error: upsertError } = await supabase
     .from('configuracion_sistema')
@@ -98,7 +96,7 @@ export async function PUT(request: Request) {
         clave: 'honorarios',
         valor: mergedValor,
         updated_by: auth.user.id,
-        updated_at: new Date().toISOString(),
+        updated_at: ahora,
       },
       { onConflict: 'clave' }
     );
@@ -107,5 +105,5 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: handleSupabaseError(upsertError, 'honorarios-settings.put').mensaje }, { status: 500 });
   }
 
-  return NextResponse.json({ valor: mergedValor, updated_at: new Date().toISOString() });
+  return NextResponse.json({ valor: mergedValor, updated_at: ahora });
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -9,6 +10,10 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 import { useUser } from '@/hooks/useUser';
+import { useInvalidar } from '@/hooks/useFetch';
+import { enviarJSON } from '@/lib/fetcher';
+import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
@@ -67,6 +72,21 @@ interface ConsultaDetalle {
   pacientes?: PacienteInfo | null;
 }
 
+interface DetalleRespuesta {
+  consulta?: ConsultaDetalle | null;
+  aseguranza?: { id: string; nombre: string } | null;
+  cobertura?: { porcentaje_cobertura: number; copago_fijo: number | null; aplica_estudios: boolean; aplica_procedimientos: boolean } | null;
+}
+
+interface CirugiaRelacionada {
+  id: string;
+  codigo: string | null;
+  estado: string;
+  fecha: string | null;
+  ojo: string | null;
+  servicio?: { nombre?: string } | null;
+}
+
 interface HistorialEvento {
   id: string;
   tipo_evento: string;
@@ -74,6 +94,9 @@ interface HistorialEvento {
   created_at: string;
   usuario_nombre: string | null;
 }
+
+const SIN_EVENTOS: HistorialEvento[] = [];
+const SIN_CIRUGIAS: CirugiaRelacionada[] = [];
 
 const estatusConfig: Record<string, { bg: string; text: string; dot: string }> = {
   BORRADOR: { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' },
@@ -180,13 +203,56 @@ export default function ConsultaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useUser();
-  const [consulta, setConsulta] = useState<ConsultaDetalle | null>(null);
-  const [historial, setHistorial] = useState<HistorialEvento[]>([]);
-  const [aseguradoraData, setAseguradoraData] = useState<{ aseguradora: { id: string; nombre: string } | null; cobertura: { porcentaje_cobertura: number; copago_fijo: number | null; aplica_estudios: boolean; aplica_procedimientos: boolean } | null } | null>(null);
-  const [cirugiasRelacionadas, setCirugiasRelacionadas] = useState<{ id: string; codigo: string | null; estado: string; fecha: string | null; ojo: string | null; servicio?: { nombre?: string } | null }[]>([]);
-  const [estudiosAgendados, setEstudiosAgendados] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const invalidar = useInvalidar();
+
+  // Lecturas con caché compartida (SWR): al volver a la pantalla o tras guardar
+  // solo se refrescan los datos; nunca se vacía la vista.
+  const consultaKey = id ? `/api/consultas/${id}` : null;
+  const {
+    data: detalle,
+    error: detalleError,
+    isLoading: loading,
+    isValidating: validandoDetalle,
+    mutate: mutateDetalle,
+  } = useSWR<DetalleRespuesta>(consultaKey);
+  const { data: historialResp, mutate: mutateHistorial } = useSWR<{ data?: HistorialEvento[] }>(
+    id ? `/api/consultas/${id}/historial` : null
+  );
+  const { data: cirugiasResp } = useSWR<{ data?: CirugiaRelacionada[] }>(
+    id ? `/api/cirugias?consulta_id=${id}` : null
+  );
+
+  const consulta = detalle?.consulta ?? null;
+  const historial = historialResp?.data ?? SIN_EVENTOS;
+  const cirugiasRelacionadas = cirugiasResp?.data ?? SIN_CIRUGIAS;
+  const aseguradoraData = detalle && (detalle.aseguranza || detalle.cobertura)
+    ? { aseguradora: detalle.aseguranza ?? null, cobertura: detalle.cobertura ?? null }
+    : null;
+  const error = detalleError
+    ? (detalleError instanceof Error && detalleError.message ? detalleError.message : 'Error al cargar')
+    : detalle && !detalle.consulta
+      ? 'Consulta no encontrada'
+      : null;
+
+  const { data: consultasPaciente, mutate: mutateConsultasPaciente } = useSWR<{ data?: Array<{ id: string; tipo_consulta?: string | null; estudio_1?: string | null; estudio_2?: string | null; estudio_3?: string | null }> }>(
+    consulta?.paciente_id ? `/api/consultas?paciente_id=${consulta.paciente_id}&pageSize=200` : null
+  );
+  // Estudios recién agendados desde esta pantalla (se muestran al instante).
+  const [estudiosAgendadosLocal, setEstudiosAgendadosLocal] = useState<Record<string, string>>({});
+  const estudiosAgendados = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const c of consultasPaciente?.data || []) {
+      if (c.tipo_consulta?.toUpperCase() === 'ESTUDIO') {
+        if (c.estudio_1) mapa.set(c.estudio_1, c.id);
+        if (c.estudio_2) mapa.set(c.estudio_2, c.id);
+        if (c.estudio_3) mapa.set(c.estudio_3, c.id);
+      }
+    }
+    for (const [nombre, cid] of Object.entries(estudiosAgendadosLocal)) mapa.set(nombre, cid);
+    return mapa;
+  }, [consultasPaciente, estudiosAgendadosLocal]);
+
   const [showPatientDetails, setShowPatientDetails] = useState(false);
   const [estudioAAgendar, setEstudioAAgendar] = useState<{
     nombre: string;
@@ -202,68 +268,30 @@ export default function ConsultaDetailPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
 
-  const fetchConsulta = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/consultas/${id}`);
-      if (!res.ok) throw new Error('Error al cargar');
-      const data = await res.json();
-      if (!data.consulta) throw new Error('Consulta no encontrada');
-      setConsulta(data.consulta);
-      if (data.aseguranza || data.cobertura) {
-        setAseguradoraData({ aseguradora: data.aseguranza, cobertura: data.cobertura });
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    }
-  }, [id]);
-
-  const fetchHistorial = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/consultas/${id}/historial`);
-      if (res.ok) {
-        const data = await res.json();
-        setHistorial(data.data || []);
-      }
-    } catch { /* silent */ }
-  }, [id]);
-
-  const fetchCirugiasRelacionadas = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/cirugias?consulta_id=${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCirugiasRelacionadas(data.data || []);
-      }
-    } catch { /* silent */ }
-  }, [id]);
-
-  const fetchEstudiosAgendados = useCallback(async (pacienteId: string) => {
-    try {
-      const res = await fetch(`/api/consultas?paciente_id=${pacienteId}&pageSize=200`);
-      if (res.ok) {
-        const data = await res.json();
-        const mapa = new Map<string, string>();
-        for (const c of data.data || []) {
-          if (c.tipo_consulta?.toUpperCase() === 'ESTUDIO') {
-            if (c.estudio_1) mapa.set(c.estudio_1, c.id);
-            if (c.estudio_2) mapa.set(c.estudio_2, c.id);
-            if (c.estudio_3) mapa.set(c.estudio_3, c.id);
-          }
-        }
-        setEstudiosAgendados(mapa);
-      }
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => {
-    Promise.all([fetchConsulta(), fetchHistorial(), fetchCirugiasRelacionadas()]).finally(() => setLoading(false));
-  }, [fetchConsulta, fetchHistorial, fetchCirugiasRelacionadas]);
-
-  useEffect(() => {
-    if (consulta?.paciente_id) {
-      fetchEstudiosAgendados(consulta.paciente_id);
-    }
-  }, [consulta?.paciente_id, fetchEstudiosAgendados]);
+  /**
+   * PATCH optimista: aplica `cambios` a la consulta en caché, envía, fusiona la
+   * respuesta del servidor y revierte si falla. Luego refresca historial y las
+   * listas/resúmenes afectados en segundo plano.
+   */
+  const patchConsulta = useCallback(async (body: Record<string, unknown>, cambios: Partial<ConsultaDetalle>) => {
+    if (!consultaKey) return;
+    const aplicar = (actual: DetalleRespuesta | undefined, extra: Partial<ConsultaDetalle>): DetalleRespuesta | undefined =>
+      actual?.consulta ? { ...actual, consulta: { ...actual.consulta, ...extra } } : actual;
+    await mutateDetalle(
+      async (actual) => {
+        const updated = await enviarJSON<Partial<ConsultaDetalle>>(consultaKey, 'PATCH', body);
+        return aplicar(actual, { ...cambios, ...(updated || {}) });
+      },
+      {
+        optimisticData: (actual) => aplicar(actual, cambios) as DetalleRespuesta,
+        rollbackOnError: true,
+        populateCache: true,
+        revalidate: false,
+      },
+    );
+    void mutateHistorial();
+    void invalidar('/api/consultas', '/api/agenda', '/api/dashboard', '/api/pacientes');
+  }, [consultaKey, mutateDetalle, mutateHistorial, invalidar]);
 
   useEffect(() => {
     if (consulta?.paciente_fecha_nacimiento) {
@@ -277,22 +305,14 @@ export default function ConsultaDetailPage() {
   }
 
   async function handleMarkPaid() {
+    if (paying) return;
     setPaying(true);
     try {
-      const res = await fetch(`/api/consultas/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estatus_pago: 'PAGADO', monto_pagado: consulta?.costo_total || 0 }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error al registrar el pago');
-      }
-      const updated = await res.json();
-      setConsulta((current) => current ? { ...current, ...updated } : current);
-      await fetchHistorial();
+      const monto = consulta?.costo_total || 0;
+      await patchConsulta({ estatus_pago: 'PAGADO', monto_pagado: monto }, { estatus_pago: 'PAGADO', monto_pagado: monto });
+      toast('Pago registrado');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al registrar el pago');
+      toast(err instanceof Error && err.message ? err.message : 'Error al registrar el pago', 'error');
     } finally {
       setPaying(false);
     }
@@ -306,29 +326,20 @@ export default function ConsultaDetailPage() {
   }
 
   async function handleComplete() {
+    if (completing) return;
     setCompleting(true);
     try {
-      const res = await fetch(`/api/consultas/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estatus: 'COMPLETADA' }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error al completar la consulta');
-      }
-      const updated = await res.json();
-      setConsulta((current) => (current ? { ...current, ...updated } : current));
-      await fetchHistorial();
+      await patchConsulta({ estatus: 'COMPLETADA' }, { estatus: 'COMPLETADA' });
+      toast('Consulta completada');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al completar la consulta');
+      toast(err instanceof Error && err.message ? err.message : 'Error al completar la consulta', 'error');
     } finally {
       setCompleting(false);
     }
   }
 
   async function handleSaveEdit() {
-    if (!consulta) return;
+    if (!consulta || savingEdit) return;
     const body: Record<string, unknown> = {};
     if ((consulta.notas || '') !== editNotas) body.notas = editNotas;
     if (consulta.estatus_pago !== 'PAGADO') {
@@ -347,33 +358,25 @@ export default function ConsultaDetailPage() {
     setSavingEdit(true);
     setEditError(null);
     try {
-      const res = await fetch(`/api/consultas/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error al guardar');
-      }
-      const updated = await res.json();
-      setConsulta((current) => (current ? { ...current, ...updated } : current));
+      await patchConsulta(body, body as Partial<ConsultaDetalle>);
       setEditing(false);
-      await fetchHistorial();
+      toast('Cambios guardados');
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'Error al guardar');
+      const msg = err instanceof Error && err.message ? err.message : 'Error al guardar';
+      setEditError(msg);
+      toast(msg, 'error');
     } finally {
       setSavingEdit(false);
     }
   }
 
-  if (loading) {
+  if (loading && !consulta) {
     return <ConsultaDetailSkeleton />;
   }
 
-  if (error || !consulta) {
+  if (!consulta) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-12 animate-fadeIn">
         <p className="text-gray-500 dark:text-gray-400">{error || 'Consulta no encontrada'}</p>
         <button onClick={() => router.push('/agenda')} className="mt-4 text-primary-600 hover:text-primary-700 text-sm font-semibold">
           Volver a Consultas
@@ -385,7 +388,8 @@ export default function ConsultaDetailPage() {
   const consultaCerrada = consulta.estatus === 'COMPLETADA' || consulta.estatus === 'CANCELADA';
 
   return (
-    <div className="print-page">
+    <div className="print-page relative" aria-busy={validandoDetalle}>
+      <BarraRevalidando activo={validandoDetalle} className="-top-2 no-print" />
       <PageHeader
         title={`Consulta ${consulta.folio || consulta.id.slice(0, 8)}`}
         subtitle={`${consulta.paciente || 'Sin paciente'} — ${consulta.fecha}`}
@@ -812,7 +816,7 @@ export default function ConsultaDetailPage() {
             {cirugiasRelacionadas.length === 0 ? (
               <p className="text-sm text-muted">No hay cirugías vinculadas a esta consulta.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 anim-lista">
                 {cirugiasRelacionadas.map((c) => (
                   <button
                     key={c.id}
@@ -905,8 +909,10 @@ export default function ConsultaDetailPage() {
           onClose={() => setEstudioAAgendar(null)}
           estudio={estudioAAgendar}
           onScheduled={(consultaId) => {
-            setEstudiosAgendados((current) => new Map(current).set(estudioAAgendar.nombre, consultaId));
-            fetchHistorial();
+            setEstudiosAgendadosLocal((current) => ({ ...current, [estudioAAgendar.nombre]: consultaId }));
+            void mutateHistorial();
+            void mutateConsultasPaciente();
+            void invalidar('/api/consultas', '/api/agenda', '/api/dashboard');
           }}
           consulta={{
             id: consulta.id,
@@ -926,8 +932,9 @@ export default function ConsultaDetailPage() {
         horaFin={consulta.hora_fin}
         visible={!editing && !consultaCerrada}
         onDone={() => {
-          fetchConsulta();
-          fetchHistorial();
+          void mutateDetalle();
+          void mutateHistorial();
+          void invalidar('/api/consultas', '/api/agenda', '/api/dashboard');
         }}
       />
     </div>

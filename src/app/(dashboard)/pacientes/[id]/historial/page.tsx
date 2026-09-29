@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import useSWR from 'swr';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -20,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
@@ -80,29 +82,35 @@ export default function HistorialMedicoPage() {
   const params = useParams();
   const id = params.id as string;
   const [activeTab, setActiveTab] = useState('Resumen');
-  const [paciente, setPaciente] = useState<PacienteData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // Caché compartida: al volver a esta pantalla se muestra lo último y se revalida en segundo plano.
+  const { data: paciente, error: swrError, isLoading: loading, isValidating } = useSWR<PacienteData>(
+    id ? `/api/pacientes/${id}` : null
+  );
+  const error = swrError ? (swrError instanceof Error && swrError.message ? swrError.message : 'Error al cargar paciente') : '';
 
-  useEffect(() => {
-    async function fetchPaciente() {
-      try {
-        const res = await fetch(`/api/pacientes/${id}`);
-        if (!res.ok) throw new Error('No se encontró el paciente');
-        const data = await res.json();
-        setPaciente(data);
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar paciente');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchPaciente();
-  }, [id]);
+  const derivados = useMemo(() => {
+    const consultas = paciente?.consultas || [];
+    return {
+      consultas,
+      consultasConProcedimiento: consultas.filter((c) => c.procedimiento),
+      estudiosFromConsultas: consultas.flatMap((c) =>
+        (c.estudios || []).map((est, j) => ({
+          id: `${c.id}-${j}`,
+          fecha: c.fecha,
+          estudio: est,
+          doctor: c.doctor,
+          ojo: 'OD / OI',
+          resultado: c.diagnostico,
+        }))
+      ),
+      // Unique diagnoses from consultations
+      diagnosticos: Array.from(new Set(consultas.map((c) => c.diagnostico).filter(Boolean))),
+    };
+  }, [paciente]);
 
-  if (loading) {
+  if (loading && !paciente) {
     return (
-      <div className="mx-auto max-w-[1440px] space-y-6">
+      <div className="mx-auto max-w-[1440px] space-y-6" aria-busy="true">
         <div className="flex items-center gap-4">
           <Skeleton className="h-10 w-24 rounded-lg" />
           <div className="space-y-2 min-w-0">
@@ -153,9 +161,9 @@ export default function HistorialMedicoPage() {
     );
   }
 
-  if (error || !paciente) {
+  if (!paciente) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh] animate-fadeIn">
         <div className="text-center space-y-3">
           <p className="text-sm font-bold text-red-600">{error || 'Paciente no encontrado'}</p>
           <Link href="/pacientes" className="inline-flex items-center gap-2 text-sm font-bold text-primary-600 hover:text-primary-800">
@@ -166,24 +174,11 @@ export default function HistorialMedicoPage() {
     );
   }
 
-  const consultas = paciente.consultas || [];
-  const consultasConProcedimiento = consultas.filter((c) => c.procedimiento);
-  const estudiosFromConsultas = consultas.flatMap((c, i) =>
-    c.estudios.map((est, j) => ({
-      id: `${c.id}-${j}`,
-      fecha: c.fecha,
-      estudio: est,
-      doctor: c.doctor,
-      ojo: 'OD / OI',
-      resultado: c.diagnostico,
-    }))
-  );
-
-  // Unique diagnoses from consultations
-  const diagnosticos = Array.from(new Set(consultas.map((c) => c.diagnostico).filter(Boolean)));
+  const { consultas, consultasConProcedimiento, estudiosFromConsultas, diagnosticos } = derivados;
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6">
+    <div className="relative mx-auto max-w-[1440px] space-y-6" aria-busy={isValidating}>
+      <BarraRevalidando activo={isValidating} className="-top-2" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <Link
@@ -260,7 +255,7 @@ export default function HistorialMedicoPage() {
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main content */}
-        <div className="flex-1 min-w-0">
+        <div key={activeTab} className="flex-1 min-w-0 animate-fadeIn">
           {/* ========== RESUMEN ========== */}
           {activeTab === 'Resumen' && (
             <>
@@ -276,9 +271,9 @@ export default function HistorialMedicoPage() {
                   </Link>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 anim-lista">
                   {consultas.map((c) => (
-                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-line dark:bg-surface">
+                    <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-line dark:bg-surface">
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/70 px-4 py-3 sm:px-6">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <span className="text-sm font-extrabold text-primary-700 dark:text-primary-400"><ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></span>
@@ -331,7 +326,7 @@ export default function HistorialMedicoPage() {
                   <p className="text-sm font-bold text-muted">No hay consultas registradas</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 anim-lista">
                   {consultas.map((c) => (
                     <div key={c.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/70 px-4 py-3 sm:px-6">
@@ -450,9 +445,9 @@ export default function HistorialMedicoPage() {
                   <p className="text-sm font-bold text-muted">No hay estudios registrados</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 anim-lista">
                   {estudiosFromConsultas.map((e) => (
-                    <div key={e.id} className="flex items-center gap-3 sm:gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-all hover:shadow-md dark:border-line dark:bg-surface">
+                    <div key={e.id} className="flex items-center gap-3 sm:gap-5 rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-line dark:bg-surface">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 ring-1 ring-sky-100 dark:bg-sky-500/10 dark:ring-sky-500/30">
                         <Eye className="h-5 w-5 text-sky-600 dark:text-sky-400" />
                       </div>
@@ -483,8 +478,8 @@ export default function HistorialMedicoPage() {
               {diagnosticos.length === 0 ? (
                 <p className="text-sm text-muted">Sin diagnósticos registrados</p>
               ) : (
-                diagnosticos.map((d, idx) => (
-                  <div key={idx} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30">
+                diagnosticos.map((d) => (
+                  <div key={d} className="rounded-lg p-3 ring-1 ring-inset bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30">
                     <p className="text-sm font-bold leading-snug">{d}</p>
                   </div>
                 ))

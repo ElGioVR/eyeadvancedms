@@ -1,5 +1,5 @@
 export { useDebounce } from './useDebounce';
 export { useFilteredData } from './useFilteredData';
-export { useFetch } from './useFetch';
+export { useFetch, useInvalidar, construirUrl } from './useFetch';
 export { useUser } from './useUser';
 export { useAutosave } from './useAutosave';

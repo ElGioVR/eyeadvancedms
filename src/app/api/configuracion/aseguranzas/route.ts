@@ -1,34 +1,41 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { fechaISO, leerJSON } from '@/lib/api/validar';
+import { idDeQuery, respuestaErrorDb, textoCorto, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
 
 const tipoAseguranzaEnum = z.enum(['PRIVADA', 'CONVENIO', 'PARTICULAR']);
 
+const COLUMNAS = 'id, nombre, contacto, telefono, direccion, activo, porcentaje_cobertura, tipo, vigente_desde, vigente_hasta';
+
 const aseguranzaCreateSchema = z.object({
-  nombre: z.string().min(1).max(255),
-  telefono: z.string().max(20).optional(),
-  direccion: z.string().optional(),
-  contacto: z.string().max(255).optional(),
-  porcentaje_cobertura: z.number().min(0).max(100).optional(),
+  nombre: z.string().trim().min(1).max(255),
+  telefono: textoCorto(20).optional(),
+  direccion: textoLargo.optional(),
+  contacto: textoCorto(255).optional(),
+  porcentaje_cobertura: z.number().finite().min(0).max(100).optional(),
   tipo: tipoAseguranzaEnum.optional(),
-  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_desde: fechaISO.optional().nullable(),
+  vigente_hasta: fechaISO.optional().nullable(),
 }).strict();
 
 const aseguranzaUpdateSchema = z.object({
   id: z.string().uuid(),
-  nombre: z.string().min(1).max(255).optional(),
-  telefono: z.string().max(20).optional().nullable(),
-  direccion: z.string().optional().nullable(),
-  contacto: z.string().max(255).optional().nullable(),
+  nombre: z.string().trim().min(1).max(255).optional(),
+  telefono: textoCorto(20).optional().nullable(),
+  direccion: textoLargo.optional().nullable(),
+  contacto: textoCorto(255).optional().nullable(),
   activo: z.boolean().optional(),
-  porcentaje_cobertura: z.number().min(0).max(100).optional().nullable(),
+  porcentaje_cobertura: z.number().finite().min(0).max(100).optional().nullable(),
   tipo: tipoAseguranzaEnum.optional(),
-  vigente_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  vigente_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  vigente_desde: fechaISO.optional().nullable(),
+  vigente_hasta: fechaISO.optional().nullable(),
 }).strict();
+
+function vigenciaInvalida(desde?: string | null, hasta?: string | null): boolean {
+  return !!desde && !!hasta && desde > hasta;
+}
 
 export async function GET() {
   const auth = await requireAuth();
@@ -39,13 +46,12 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('aseguranzas')
-    .select('id, nombre, contacto, telefono, direccion, activo, porcentaje_cobertura, tipo, vigente_desde, vigente_hasta')
+    .select(COLUMNAS)
     .eq('activo', true)
-    .order('nombre');
+    .order('nombre')
+    .limit(1000);
 
-  if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.listar');
 
   return NextResponse.json(data);
 }
@@ -56,23 +62,14 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const data = await leerJSON(request, aseguranzaCreateSchema);
+  if (data instanceof NextResponse) return data;
+
+  if (vigenciaInvalida(data.vigente_desde, data.vigente_hasta)) {
+    return NextResponse.json({ error: 'La vigencia inicial no puede ser posterior a la final' }, { status: 400 });
+  }
+
   const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = aseguranzaCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
-
   const { data: aseguranza, error } = await supabase
     .from('aseguranzas')
     .insert({
@@ -88,9 +85,7 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.crear');
 
   return NextResponse.json(aseguranza, { status: 201 });
 }
@@ -101,25 +96,15 @@ export async function PATCH(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  const supabase = getSupabaseAdmin();
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = aseguranzaUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
+  const data = await leerJSON(request, aseguranzaUpdateSchema);
+  if (data instanceof NextResponse) return data;
   const { id, ...updates } = data;
 
-  const profileUpdates: Record<string, any> = {};
+  if (vigenciaInvalida(updates.vigente_desde, updates.vigente_hasta)) {
+    return NextResponse.json({ error: 'La vigencia inicial no puede ser posterior a la final' }, { status: 400 });
+  }
+
+  const profileUpdates: Record<string, unknown> = {};
   if (updates.nombre) profileUpdates.nombre = updates.nombre.trim();
   if (updates.telefono !== undefined) profileUpdates.telefono = updates.telefono?.trim() || null;
   if (updates.direccion !== undefined) profileUpdates.direccion = updates.direccion?.trim() || null;
@@ -134,14 +119,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No hay datos para actualizar' }, { status: 400 });
   }
 
-  const { error: profileError } = await supabase
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
     .from('aseguranzas')
     .update(profileUpdates)
     .eq('id', id);
 
-  if (profileError) {
-    return NextResponse.json({ error: errorTranslations[profileError.message] || 'Error interno del servidor' }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.actualizar');
 
   return NextResponse.json({ success: true });
 }
@@ -152,22 +136,16 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
+  const id = idDeQuery(request, 'Falta el ID de la aseguranza');
+  if (id instanceof NextResponse) return id;
+
   const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-
-  if (!id) {
-    return NextResponse.json({ error: 'Falta el ID de la aseguranza' }, { status: 400 });
-  }
-
   const { error } = await supabase
     .from('aseguranzas')
     .update({ activo: false })
     .eq('id', id);
 
-  if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.eliminar');
 
   return NextResponse.json({ success: true });
 }

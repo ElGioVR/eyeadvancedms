@@ -2,18 +2,28 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { translateError } from '@/lib/supabase/errors';
+import { registrarMovimiento } from '@/lib/inventario';
+import { esquemaPaginacion, leerJSON, leerQuery } from '@/lib/api/validar';
 import { z } from 'zod';
 
 const movimientoCreateSchema = z.object({
   inventario_item_id: z.string().uuid(),
-  tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE', 'DEVOLUCION', 'SALIDA_CIRUGIA']),
-  cantidad: z.number().int().min(1),
-  motivo: z.string().max(500).optional().nullable(),
+  // SALIDA_CIRUGIA / devoluciones de cirugía solo las registra el flujo de cirugías
+  tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE', 'DEVOLUCION']),
+  cantidad: z.number().int().min(1).max(100000),
+  // AJUSTE: dirección explícita (antes siempre sumaba)
+  direccion: z.enum(['ENTRA', 'SALE']).optional(),
+  motivo: z.string().trim().max(500).optional().nullable(),
   costo_unitario: z.number().min(0).max(99999999.99).optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
-  referencia_tipo: z.enum(['CONSULTA', 'CIRUGIA', 'COMPRA', 'AJUSTE_MANUAL']).optional().nullable(),
+  referencia_tipo: z.enum(['CONSULTA', 'COMPRA', 'AJUSTE_MANUAL']).optional().nullable(),
   referencia_id: z.string().uuid().optional().nullable(),
 }).strict();
+
+const listaQuerySchema = z.object({
+  ...esquemaPaginacion(25, 100),
+  item_id: z.string().uuid('ID no válido').optional(),
+});
 
 export async function GET(request: Request) {
   const auth = await requireAuth();
@@ -21,51 +31,56 @@ export async function GET(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
+  const q = leerQuery(request, listaQuerySchema);
+  if (q instanceof NextResponse) return q;
   const supabase = getSupabaseAdmin();
-  const { searchParams } = new URL(request.url);
-  const itemId = searchParams.get('item_id');
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '25', 10)));
+  const { page, pageSize } = q;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   let query = supabase
     .from('inventario_movimientos')
     .select(`
-      *,
-      inventario_items:inventario_item_id (marca, modelo, folio),
-      usuarios:usuario_id (nombre_completo)
+      id, inventario_item_id, tipo, cantidad, stock_resultante, referencia_tipo,
+      referencia_id, motivo, costo_unitario, proveedor_id, created_at,
+      inventario_items:inventario_item_id (manufacturer, model, folio),
+      usuarios:usuario_id (nombre)
     `, { count: 'exact' })
     .order('created_at', { ascending: false });
 
-  if (itemId) {
-    query = query.eq('inventario_item_id', itemId);
+  if (q.item_id) {
+    query = query.eq('inventario_item_id', q.item_id);
   }
 
-  query = query.range(from, to);
-
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.range(from, to);
 
   if (error) {
     return NextResponse.json({ error: translateError(error.message) || 'Error interno del servidor' }, { status: 500 });
   }
 
-  const result = (data || []).map((m) => ({
-    id: m.id,
-    inventario_item_id: m.inventario_item_id,
-    item_nombre: `${(m as any).inventario_items?.marca || ''} ${(m as any).inventario_items?.modelo || ''}`.trim(),
-    item_folio: (m as any).inventario_items?.folio || '',
-    tipo: m.tipo,
-    cantidad: m.cantidad,
-    stock_resultante: m.stock_resultante,
-    usuario: (m as any).usuarios?.nombre_completo || '',
-    referencia_tipo: m.referencia_tipo,
-    referencia_id: m.referencia_id,
-    motivo: m.motivo,
-    costo_unitario: m.costo_unitario,
-    proveedor_id: m.proveedor_id,
-    created_at: m.created_at,
-  }));
+  type Emb<T> = T | T[] | null;
+  const uno = <T,>(v: Emb<T>): T | null => (Array.isArray(v) ? v[0] ?? null : v);
+
+  const result = (data || []).map((m) => {
+    const item = uno(m.inventario_items as Emb<{ manufacturer: string | null; model: string | null; folio: string | null }>);
+    const usuario = uno(m.usuarios as Emb<{ nombre: string | null }>);
+    return {
+      id: m.id,
+      inventario_item_id: m.inventario_item_id,
+      item_nombre: `${item?.manufacturer || ''} ${item?.model || ''}`.trim(),
+      item_folio: item?.folio || '',
+      tipo: m.tipo,
+      cantidad: m.cantidad,
+      stock_resultante: m.stock_resultante,
+      usuario: usuario?.nombre || '',
+      referencia_tipo: m.referencia_tipo,
+      referencia_id: m.referencia_id,
+      motivo: m.motivo,
+      costo_unitario: m.costo_unitario,
+      proveedor_id: m.proveedor_id,
+      created_at: m.created_at,
+    };
+  });
 
   return NextResponse.json({ data: result, total: count || 0, page, pageSize });
 }
@@ -76,74 +91,36 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  const supabase = getSupabaseAdmin();
+  const data = await leerJSON(request, movimientoCreateSchema);
+  if (data instanceof NextResponse) return data;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  const entra =
+    data.tipo === 'ENTRADA' ||
+    data.tipo === 'DEVOLUCION' ||
+    (data.tipo === 'AJUSTE' && data.direccion !== 'SALE');
+  const delta = entra ? data.cantidad : -data.cantidad;
+
+  // Stock + Kardex atómicos (sin perder movimientos simultáneos)
+  const r = await registrarMovimiento({
+    itemId: data.inventario_item_id,
+    delta,
+    tipo: data.tipo,
+    cantidad: data.cantidad,
+    usuarioId: auth.user.id,
+    referenciaTipo: data.referencia_tipo ?? null,
+    referenciaId: data.referencia_id ?? null,
+    motivo: data.motivo ?? null,
+    costoUnitario: data.costo_unitario ?? null,
+    proveedorId: data.proveedor_id ?? null,
+  });
+
+  if (!r.ok) {
+    return NextResponse.json({ error: r.error }, { status: r.status });
   }
 
-  const validation = movimientoCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
+  const { data: movimiento } = r.movimientoId
+    ? await getSupabaseAdmin().from('inventario_movimientos').select('*').eq('id', r.movimientoId).maybeSingle()
+    : { data: null };
 
-  const data = validation.data;
-
-  const { data: item, error: itemError } = await supabase
-    .from('inventario_items')
-    .select('id, stock')
-    .eq('id', data.inventario_item_id)
-    .single();
-
-  if (itemError || !item) {
-    return NextResponse.json({ error: 'Ítem de inventario no encontrado' }, { status: 404 });
-  }
-
-  let newStock = item.stock;
-  if (data.tipo === 'ENTRADA' || data.tipo === 'DEVOLUCION') {
-    newStock = item.stock + data.cantidad;
-  } else if (data.tipo === 'SALIDA' || data.tipo === 'SALIDA_CIRUGIA') {
-    if (item.stock < data.cantidad) {
-      return NextResponse.json({ error: `Stock insuficiente. Disponible: ${item.stock}` }, { status: 400 });
-    }
-    newStock = item.stock - data.cantidad;
-  } else if (data.tipo === 'AJUSTE') {
-    newStock = item.stock + data.cantidad;
-  }
-
-  const { data: movimiento, error: movError } = await supabase
-    .from('inventario_movimientos')
-    .insert({
-      inventario_item_id: data.inventario_item_id,
-      tipo: data.tipo,
-      cantidad: data.cantidad,
-      stock_resultante: newStock,
-      usuario_id: auth.user.id,
-      referencia_tipo: data.referencia_tipo ?? null,
-      referencia_id: data.referencia_id ?? null,
-      motivo: data.motivo ?? null,
-      costo_unitario: data.costo_unitario ?? null,
-      proveedor_id: data.proveedor_id ?? null,
-    })
-    .select()
-    .single();
-
-  if (movError) {
-    return NextResponse.json({ error: translateError(movError.message) || 'Error al registrar movimiento' }, { status: 500 });
-  }
-
-  const { error: updateError } = await supabase
-    .from('inventario_items')
-    .update({ stock: newStock })
-    .eq('id', data.inventario_item_id);
-
-  if (updateError) {
-    console.error('Error actualizando stock:', updateError.message);
-  }
-
-  return NextResponse.json(movimiento, { status: 201 });
+  return NextResponse.json(movimiento ?? { stock_resultante: r.stock }, { status: 201 });
 }

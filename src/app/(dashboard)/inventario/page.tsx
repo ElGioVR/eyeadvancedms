@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
@@ -24,7 +24,8 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFetch, useDebounce } from '@/hooks';
+import { useFetch, useDebounce, useInvalidar } from '@/hooks';
+import { enviarJSON } from '@/lib/fetcher';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
@@ -36,6 +37,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ClientDate from '@/components/ui/ClientDate';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import { SkeletonTarjetas } from '@/components/ui/Skeleton';
 
 const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
@@ -91,16 +94,46 @@ const estadoConfig: Record<string, { bg: string; text: string; dot?: string }> =
   VENCIDO: { bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-600 dark:text-red-300', dot: 'bg-red-500' },
 };
 
+interface RespuestaPaginada<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+function mensajeError(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 function getEstadoLente(stock: number, minimo: number): string {
   if (stock === 0) return 'SIN STOCK';
   if (stock < minimo) return 'BAJO';
   return 'DISPONIBLE';
 }
 
+/** Reemplaza campos de una fila en la respuesta paginada cacheada. */
+function conFila(actual: unknown, id: string, cambios: Partial<LenteAPI>): unknown {
+  const r = actual as RespuestaPaginada<LenteAPI> | undefined;
+  if (!r || !Array.isArray(r.data)) return actual;
+  return { ...r, data: r.data.map((l) => (l.id === id ? { ...l, ...cambios } : l)) };
+}
+
+/** Quita una fila de la respuesta paginada cacheada. */
+function sinFila(actual: unknown, id: string): unknown {
+  const r = actual as RespuestaPaginada<LenteAPI> | undefined;
+  if (!r || !Array.isArray(r.data)) return actual;
+  return { ...r, data: r.data.filter((l) => l.id !== id), total: Math.max(0, (r.total ?? 0) - 1) };
+}
+
 export default function InventarioPage() {
   const [page, setPage] = useState(1);
   const { user } = useUser();
-  const { data: lentes, loading, error, refetch, total, page: currentPage } = useFetch<LenteAPI>('/api/inventario', { page: String(page), pageSize: '15' });
+  // Misma URL que la precarga de /bienvenida (page=1&pageSize=15).
+  const { data: lentes, loading, validating, error, mutate, total } = useFetch<LenteAPI>('/api/inventario', { page: String(page), pageSize: '15' });
+  // SWR mantiene `isLoading` al paginar aunque muestre la página anterior (keepPreviousData):
+  // el skeleton solo aparece si de verdad no hay nada que mostrar.
+  const cargandoInicial = loading && lentes.length === 0;
+  const invalidar = useInvalidar();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('Todos');
@@ -123,9 +156,12 @@ export default function InventarioPage() {
   const [scanError, setScanError] = useState('');
 
   const [kardexItemId, setKardexItemId] = useState<string | null>(null);
-  const [kardexData, setKardexData] = useState<KardexMovimiento[]>([]);
-  const [kardexLoading, setKardexLoading] = useState(false);
   const [kardexItemName, setKardexItemName] = useState('');
+  const { data: kardexData, loading: kardexLoading } = useFetch<KardexMovimiento>(
+    '/api/inventario/movimientos',
+    kardexItemId ? { item_id: kardexItemId, pageSize: '50' } : undefined,
+    { enabled: !!kardexItemId }
+  );
 
   const debouncedSearch = useDebounce(search);
 
@@ -174,18 +210,28 @@ export default function InventarioPage() {
     const newStock = lente.stock + adjustQty;
     if (newStock < 0) return;
 
+    const id = showAdjust;
+    const stockAnterior = lente.stock;
     setAdjusting(true);
     try {
-      const res = await fetch('/api/inventario', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: showAdjust, stock: newStock }),
-      });
-      if (!res.ok) throw new Error('Error');
-      toast(`Stock actualizado: ${lente.stock} → ${newStock}`);
+      // Actualización optimista del stock de la fila; se revierte si el servidor falla.
+      await mutate(
+        async (actual: unknown) => {
+          const actualizado = await enviarJSON<LenteAPI>('/api/inventario', 'PATCH', { id, ajuste_stock: adjustQty });
+          return conFila(actual, id, actualizado);
+        },
+        {
+          optimisticData: (actual: unknown) => conFila(actual, id, { stock: newStock }),
+          rollbackOnError: true,
+          populateCache: true,
+          revalidate: false,
+        }
+      );
+      toast(`Stock actualizado: ${stockAnterior} → ${newStock}`);
       setShowAdjust(null);
-      refetch();
-    } catch {
-      toast('Error al ajustar stock', 'error');
+      invalidar('/api/inventario', '/api/dashboard');
+    } catch (err) {
+      toast(mensajeError(err, 'Error al ajustar stock'), 'error');
     } finally {
       setAdjusting(false);
     }
@@ -193,15 +239,21 @@ export default function InventarioPage() {
 
   async function handleDelete() {
     if (!deleteId) return;
+    const id = deleteId;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/inventario?id=${deleteId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error');
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/inventario?id=${encodeURIComponent(id)}`, 'DELETE');
+          return sinFila(actual, id);
+        },
+        { optimisticData: (actual: unknown) => sinFila(actual, id), rollbackOnError: true, populateCache: true, revalidate: false }
+      );
       toast('Lente eliminado correctamente');
       setDeleteId(null);
-      refetch();
-    } catch {
-      toast('Error al eliminar lente', 'error');
+      invalidar('/api/inventario', '/api/dashboard');
+    } catch (err) {
+      toast(mensajeError(err, 'Error al eliminar lente'), 'error');
     } finally {
       setDeleting(false);
     }
@@ -246,21 +298,12 @@ export default function InventarioPage() {
     }
   }
 
-  async function openKardex(lente: LenteAPI) {
+  function openKardex(lente: LenteAPI) {
     setKardexItemId(lente.id);
     setKardexItemName(`${lente.manufacturer} ${lente.model}`);
-    setKardexLoading(true);
-    setKardexData([]);
-    try {
-      const res = await fetch(`/api/inventario/movimientos?item_id=${lente.id}&pageSize=50`);
-      if (res.ok) {
-        const data = await res.json();
-        setKardexData(data.data || []);
-      }
-    } catch { /* silent */ } finally {
-      setKardexLoading(false);
-    }
   }
+
+  const cerrarKardex = useCallback(() => setKardexItemId(null), []);
 
   // Coincide con el RBAC de /api/inventario: crear puede admin/recepcionista/doctor;
   // ajustar stock, editar y eliminar siguen siendo solo admin/recepcionista.
@@ -297,7 +340,7 @@ export default function InventarioPage() {
               <span className={cn('hidden h-1.5 w-1.5 shrink-0 rounded-full sm:inline-block', s.dot)} />
               {s.label}
             </span>
-            <p className={cn('mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl', s.color)}>{s.value}</p>
+            <p className={cn('valor-suave mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl', s.color)} data-validando={validating}>{s.value}</p>
           </div>
         ))}
       </div>
@@ -311,8 +354,8 @@ export default function InventarioPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-4">
+      {cargandoInicial ? (
+        <div className="space-y-4" aria-busy="true">
           {[1, 2, 3].map((i) => (
             <div key={i} className="animate-pulse rounded-2xl border border-line bg-surface p-6">
               <div className="flex gap-4">
@@ -328,17 +371,18 @@ export default function InventarioPage() {
             </div>
           ))}
         </div>
-      ) : error ? (
+      ) : error && lentes.length === 0 ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       ) : (
-        <div className="space-y-4">
+        <div className="relative space-y-4 anim-lista" aria-busy={validating}>
+          <BarraRevalidando activo={validating && !cargandoInicial} className="-top-2" />
           {filtered.map((lente) => {
             const stockBajo = lente.stock > 0 && lente.stock < lente.stock_minimo;
             const sinStock = lente.stock === 0;
             const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo);
             return (
               <div key={lente.id} className={cn(
-                'rounded-2xl border bg-surface shadow-soft overflow-hidden transition-all hover:shadow-card dark:shadow-none',
+                'rounded-2xl border bg-surface shadow-soft overflow-hidden transition-[box-shadow,border-color] duration-200 hover:shadow-card dark:shadow-none',
                 sinStock ? 'border-red-200 dark:border-red-500/30' : stockBajo ? 'border-amber-200 dark:border-amber-500/30' : 'border-line'
               )}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
@@ -424,7 +468,7 @@ export default function InventarioPage() {
       )}
 
       <Pagination
-        page={currentPage}
+        page={page}
         total={total}
         pageSize={15}
         totalItems={filtered.length}
@@ -543,7 +587,7 @@ export default function InventarioPage() {
                 <p className="text-2xl font-extrabold text-fg mt-1">Stock actual: <span className={stockClass}>{lente.stock}</span> pzas</p>
               </div>
               <div className="flex items-center justify-center gap-4">
-                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
+                <button onClick={() => setAdjustQty((prev) => Math.max(prev - 1, -lente.stock))} aria-label="Restar una pieza" className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
                   <Minus className="h-4 w-4" />
                 </button>
                 <div className="text-center">
@@ -557,14 +601,14 @@ export default function InventarioPage() {
                     </p>
                   )}
                 </div>
-                <button onClick={() => setAdjustQty((prev) => prev + 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
+                <button onClick={() => setAdjustQty((prev) => prev + 1)} aria-label="Sumar una pieza" className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface text-fg-2 hover:bg-surface-2 transition-colors">
                   <PlusIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button onClick={() => setShowAdjust(null)} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
                 <button onClick={handleAdjustStock} disabled={adjusting || adjustQty === 0} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2">
-                  {adjusting ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : 'CONFIRMAR'}
+                  {adjusting ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : 'CONFIRMAR'}
                 </button>
               </div>
             </div>
@@ -587,29 +631,27 @@ export default function InventarioPage() {
       {/* Kardex Drawer */}
       {kardexItemId && (
         <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setKardexItemId(null)} />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-surface border-l border-line z-50 shadow-2xl flex flex-col">
+          <div className="fixed inset-0 bg-black/30 z-40 animate-fadeIn" onClick={cerrarKardex} />
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-surface border-l border-line z-50 shadow-2xl flex flex-col animate-fadeIn" role="dialog" aria-modal="true" aria-label="Kardex">
             <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div>
                 <h3 className="text-base font-extrabold text-fg">Kardex</h3>
                 <p className="text-xs text-muted">{kardexItemName}</p>
               </div>
-              <button onClick={() => setKardexItemId(null)} className="p-2 rounded-lg hover:bg-surface-2 transition-colors">
+              <button onClick={cerrarKardex} aria-label="Cerrar kardex" className="p-2 rounded-lg hover:bg-surface-2 transition-colors">
                 <X className="h-5 w-5 text-muted" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" aria-busy={kardexLoading}>
               {kardexLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-                </div>
+                <SkeletonTarjetas cantidad={4} className="sm:grid-cols-1 lg:grid-cols-1" />
               ) : kardexData.length === 0 ? (
                 <div className="text-center py-12">
                   <History className="h-8 w-8 text-gray-300 dark:text-line-strong mx-auto mb-3" />
                   <p className="text-sm text-muted">Sin movimientos registrados</p>
                 </div>
               ) : (
-                <div className="relative space-y-3">
+                <div className="relative space-y-3 anim-lista">
                   <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-surface-3" />
                   {kardexData.map((mov) => {
                     const config = kardexTipoConfig[mov.tipo] || kardexTipoConfig.AJUSTE;

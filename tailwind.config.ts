@@ -89,12 +89,22 @@ const config: Config = {
           '0%': { opacity: '0', transform: 'translateY(8px) scale(0.98)' },
           '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
+        fadeUp: {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        barraCarga: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(250%)' },
+        },
       },
       animation: {
         slideUp: 'slideUp 0.4s ease-out',
         sheetUp: 'sheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
         fadeIn: 'fadeIn 0.2s ease-out',
         popIn: 'popIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        fadeUp: 'fadeUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) backwards',
+        barraCarga: 'barraCarga 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite',
       },
     },
   },

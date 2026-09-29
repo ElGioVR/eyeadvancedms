@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Plus,
   Search,
@@ -15,7 +16,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch } from '@/hooks/useFetch';
+import { useDebounce } from '@/hooks/useDebounce';
+import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface AseguranzaAPI {
@@ -40,13 +44,17 @@ const cardColors = [
   'bg-violet-500',
 ];
 
+const comoLista = (actual: unknown): AseguranzaAPI[] => (Array.isArray(actual) ? (actual as AseguranzaAPI[]) : []);
+const msg = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
 function getCardColor(id: string): string {
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return cardColors[hash % cardColors.length];
 }
 
 export default function AseguranzasPage() {
-  const { data: aseguranzas, loading, error, refetch } = useFetch<AseguranzaAPI>('/api/configuracion/aseguranzas');
+  // Misma URL que la precarga de /bienvenida.
+  const { data: aseguranzas, loading, validating, error, mutate } = useFetch<AseguranzaAPI>('/api/configuracion/aseguranzas');
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [editingItem, setEditingItem] = useState<AseguranzaAPI | null>(null);
@@ -62,14 +70,14 @@ export default function AseguranzasPage() {
   const [formContacto, setFormContacto] = useState('');
   const [formCobertura, setFormCobertura] = useState('');
 
-  const filtered = useMemo(
-    () =>
-      aseguranzas.filter((a) =>
-        a.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        (a.contacto && a.contacto.toLowerCase().includes(search.toLowerCase()))
-      ),
-    [aseguranzas, search]
-  );
+  const debouncedSearch = useDebounce(search);
+  const filtered = useMemo(() => {
+    const term = debouncedSearch.toLowerCase();
+    return aseguranzas.filter((a) =>
+      (a.nombre || '').toLowerCase().includes(term) ||
+      (a.contacto && a.contacto.toLowerCase().includes(term))
+    );
+  }, [aseguranzas, debouncedSearch]);
 
   const resetForm = useCallback(() => {
     setFormNombre('');
@@ -101,78 +109,97 @@ export default function AseguranzasPage() {
     resetForm();
   }, [resetForm]);
 
+  /** Validación local (el servidor sigue siendo la autoridad). */
+  const validar = useCallback((): string | null => {
+    if (!formNombre.trim()) return 'El nombre es obligatorio';
+    if (formNombre.trim().length > 255) return 'El nombre no puede exceder 255 caracteres';
+    if (formCobertura) {
+      const n = Number(formCobertura);
+      if (!Number.isFinite(n) || n < 0 || n > 100) return 'La cobertura debe estar entre 0 y 100';
+    }
+    return null;
+  }, [formNombre, formCobertura]);
+
+  const payloadForm = useCallback(() => ({
+    nombre: formNombre.trim(),
+    telefono: formTelefono.trim(),
+    direccion: formDireccion.trim(),
+    contacto: formContacto.trim(),
+    porcentaje_cobertura: formCobertura ? parseFloat(formCobertura) : 0,
+  }), [formNombre, formTelefono, formDireccion, formContacto, formCobertura]);
+
   const handleCreate = useCallback(async () => {
-    if (!formNombre.trim()) return;
+    if (saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
     try {
-      const res = await fetch('/api/configuracion/aseguranzas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: formNombre,
-          telefono: formTelefono,
-          direccion: formDireccion,
-          contacto: formContacto,
-          porcentaje_cobertura: formCobertura ? parseFloat(formCobertura) : 0,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al crear aseguranza');
-        return;
-      }
+      const body = payloadForm();
+      await mutate(
+        async (actual: unknown) => {
+          const nueva = await enviarJSON<AseguranzaAPI>('/api/configuracion/aseguranzas', 'POST', body);
+          return nueva?.id ? [...comoLista(actual), nueva] : comoLista(actual);
+        },
+        { populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Aseguranza creada exitosamente');
-      await refetch();
+    } catch (err) {
+      setFormError(msg(err, 'Error al crear aseguranza'));
     } finally {
       setSaving(false);
     }
-  }, [formNombre, formTelefono, formDireccion, formContacto, formCobertura, refetch, handleCloseSidebar, toast]);
+  }, [saving, validar, payloadForm, mutate, handleCloseSidebar, toast]);
 
   const handleUpdate = useCallback(async () => {
-    if (!editingItem) return;
+    if (!editingItem || saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
+    const id = editingItem.id;
+    const body = payloadForm();
+    const aplicar = (actual: unknown) => comoLista(actual).map((a) => (a.id === id ? { ...a, ...body } : a));
     try {
-      const res = await fetch('/api/configuracion/aseguranzas', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingItem.id,
-          nombre: formNombre,
-          telefono: formTelefono,
-          direccion: formDireccion,
-          contacto: formContacto,
-          porcentaje_cobertura: formCobertura ? parseFloat(formCobertura) : 0,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al actualizar aseguranza');
-        return;
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON('/api/configuracion/aseguranzas', 'PATCH', { id, ...body });
+          return aplicar(actual);
+        },
+        { optimisticData: aplicar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Aseguranza actualizada exitosamente');
-      await refetch();
+    } catch (err) {
+      setFormError(msg(err, 'Error al actualizar aseguranza'));
     } finally {
       setSaving(false);
     }
-  }, [editingItem, formNombre, formTelefono, formDireccion, formContacto, formCobertura, refetch, handleCloseSidebar, toast]);
+  }, [editingItem, saving, validar, payloadForm, mutate, handleCloseSidebar, toast]);
 
   const handleDelete = useCallback(async (itemId: string) => {
+    const quitar = (actual: unknown) => comoLista(actual).filter((a) => a.id !== itemId);
     setDeleting(itemId);
     try {
-      const res = await fetch(`/api/configuracion/aseguranzas?id=${itemId}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast('Aseguranza eliminada');
-        await refetch();
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/configuracion/aseguranzas?id=${encodeURIComponent(itemId)}`, 'DELETE');
+          return quitar(actual);
+        },
+        { optimisticData: quitar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
+      toast('Aseguranza eliminada');
+      if (editingItem?.id === itemId) handleCloseSidebar();
+    } catch (err) {
+      toast(msg(err, 'No se pudo eliminar la aseguranza'), 'error');
     } finally {
       setDeleting(null);
       setDeleteTarget(null);
     }
-  }, [refetch, toast]);
+  }, [mutate, toast, editingItem, handleCloseSidebar]);
+
+  const cargandoInicial = loading && aseguranzas.length === 0;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
@@ -199,28 +226,30 @@ export default function AseguranzasPage() {
         </div>
 
         {/* Error */}
-        {error && (
+        {error && aseguranzas.length === 0 && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         )}
 
         {/* Cards */}
-        {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cargandoInicial ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-48 rounded-2xl border border-line bg-surface animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-line bg-surface p-12 text-center">
+          <div className="rounded-2xl border border-line bg-surface p-12 text-center animate-fadeIn">
             <ShieldCheck className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
             <p className="text-sm font-medium text-muted">No se encontraron aseguranzas</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="relative" aria-busy={validating}>
+          <BarraRevalidando activo={validating} className="-top-2" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 anim-lista">
             {filtered.map((item) => {
               const cardColor = getCardColor(item.id);
               return (
-                <div key={item.id} className="group overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div key={item.id} className="group overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-0.5">
                   <div className={cn('h-1.5 w-full', cardColor)} />
                   <div className="p-5">
                     <div className="flex items-start justify-between mb-4">
@@ -238,6 +267,7 @@ export default function AseguranzasPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleEditItem(item)}
+                          aria-label={`Editar ${item.nombre}`}
                           className="text-muted dark:text-muted hover:text-primary-600 transition-colors p-1"
                         >
                           <Pencil className="h-4 w-4" />
@@ -245,6 +275,7 @@ export default function AseguranzasPage() {
                         <button
                           onClick={() => setDeleteTarget(item.id)}
                           disabled={deleting === item.id}
+                          aria-label={`Eliminar ${item.nombre}`}
                           className="text-muted dark:text-muted hover:text-red-600 transition-colors p-1 disabled:opacity-50"
                         >
                           {deleting === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -284,17 +315,18 @@ export default function AseguranzasPage() {
                     </div>
                     {/* Services link */}
                     <div className="mt-3 pt-3 border-t border-line/70">
-                      <a
+                      <Link
                         href={`/configuracion/aseguranzas/${item.id}/servicios`}
                         className="text-xs font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 transition-colors"
                       >
                         Ver catálogo de servicios →
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </div>
               );
             })}
+          </div>
           </div>
         )}
       </div>
@@ -302,14 +334,14 @@ export default function AseguranzasPage() {
       {/* Sidebar — New or Edit */}
       {(editingItem || showNewItem) && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={handleCloseSidebar} />
-          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
+          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden animate-fadeIn" onClick={handleCloseSidebar} />
+          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl animate-fadeIn lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
             <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none lg:sticky lg:top-6">
               <div className="flex items-center justify-between border-b border-line/70 px-6 py-4">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">
                   {editingItem ? 'Editar Aseguranza' : 'Nueva Aseguranza'}
                 </h3>
-                <button onClick={handleCloseSidebar} className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg transition-colors">
+                <button onClick={handleCloseSidebar} aria-label="Cerrar" className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -387,7 +419,7 @@ export default function AseguranzasPage() {
                     className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
                     {saving ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
                     ) : editingItem ? 'GUARDAR CAMBIOS' : 'CREAR ASEGURANZA'}
                   </button>
                 </div>

@@ -12,8 +12,11 @@ import {
 } from 'lucide-react';
 import ClientDate from '@/components/ui/ClientDate';
 import { cn } from '@/lib/utils';
-import { useFetch } from '@/hooks/useFetch';
+import { useFetch, useInvalidar } from '@/hooks/useFetch';
+import { useDebounce } from '@/hooks/useDebounce';
+import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface CategoriaAPI {
@@ -34,13 +37,17 @@ const iconColors = [
   'bg-violet-500',
 ];
 
+const comoLista = (actual: unknown): CategoriaAPI[] => (Array.isArray(actual) ? (actual as CategoriaAPI[]) : []);
+const msg = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
 function getIconColor(id: string): string {
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return iconColors[hash % iconColors.length];
 }
 
 export default function CategoriasLentesPage() {
-  const { data: categorias, loading, error, refetch } = useFetch<CategoriaAPI>('/api/configuracion/categorias-lentes');
+  const { data: categorias, loading, validating, error, mutate } = useFetch<CategoriaAPI>('/api/configuracion/categorias-lentes');
+  const invalidar = useInvalidar();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [editingItem, setEditingItem] = useState<CategoriaAPI | null>(null);
@@ -53,14 +60,14 @@ export default function CategoriasLentesPage() {
   const [formNombre, setFormNombre] = useState('');
   const [formDescripcion, setFormDescripcion] = useState('');
 
-  const filtered = useMemo(
-    () =>
-      categorias.filter((c) =>
-        c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        (c.descripcion && c.descripcion.toLowerCase().includes(search.toLowerCase()))
-      ),
-    [categorias, search]
-  );
+  const debouncedSearch = useDebounce(search);
+  const filtered = useMemo(() => {
+    const term = debouncedSearch.toLowerCase();
+    return categorias.filter((c) =>
+      (c.nombre || '').toLowerCase().includes(term) ||
+      (c.descripcion && c.descripcion.toLowerCase().includes(term))
+    );
+  }, [categorias, debouncedSearch]);
 
   const resetForm = useCallback(() => {
     setFormNombre('');
@@ -86,65 +93,89 @@ export default function CategoriasLentesPage() {
     resetForm();
   }, [resetForm]);
 
+  /** Validación local (el servidor sigue siendo la autoridad). */
+  const validar = useCallback((): string | null => {
+    if (!formNombre.trim()) return 'El nombre es obligatorio';
+    if (formNombre.trim().length > 255) return 'El nombre no puede exceder 255 caracteres';
+    if (formDescripcion.length > 2000) return 'La descripción es demasiado larga';
+    return null;
+  }, [formNombre, formDescripcion]);
+
   const handleCreate = useCallback(async () => {
-    if (!formNombre.trim()) return;
+    if (saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
     try {
-      const res = await fetch('/api/configuracion/categorias-lentes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: formNombre, descripcion: formDescripcion }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al crear categoría');
-        return;
-      }
+      const body = { nombre: formNombre.trim(), descripcion: formDescripcion.trim() };
+      await mutate(
+        async (actual: unknown) => {
+          const nueva = await enviarJSON<CategoriaAPI>('/api/configuracion/categorias-lentes', 'POST', body);
+          return nueva?.id ? [...comoLista(actual), nueva] : comoLista(actual);
+        },
+        { populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Categoría creada exitosamente');
-      await refetch();
+    } catch (err) {
+      setFormError(msg(err, 'Error al crear categoría'));
     } finally {
       setSaving(false);
     }
-  }, [formNombre, formDescripcion, refetch, handleCloseSidebar, toast]);
+  }, [saving, validar, formNombre, formDescripcion, mutate, handleCloseSidebar, toast]);
 
   const handleUpdate = useCallback(async () => {
-    if (!editingItem) return;
+    if (!editingItem || saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
+    const id = editingItem.id;
+    const body = { nombre: formNombre.trim(), descripcion: formDescripcion.trim() };
+    const aplicar = (actual: unknown) =>
+      comoLista(actual).map((c) => (c.id === id ? { ...c, ...body, descripcion: body.descripcion || null } : c));
     try {
-      const res = await fetch('/api/configuracion/categorias-lentes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingItem.id, nombre: formNombre, descripcion: formDescripcion }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al actualizar categoría');
-        return;
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON('/api/configuracion/categorias-lentes', 'PATCH', { id, ...body });
+          return aplicar(actual);
+        },
+        { optimisticData: aplicar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Categoría actualizada exitosamente');
-      await refetch();
+      // El nombre de la categoría se muestra en las fichas de inventario.
+      invalidar('/api/inventario');
+    } catch (err) {
+      setFormError(msg(err, 'Error al actualizar categoría'));
     } finally {
       setSaving(false);
     }
-  }, [editingItem, formNombre, formDescripcion, refetch, handleCloseSidebar, toast]);
+  }, [editingItem, saving, validar, formNombre, formDescripcion, mutate, invalidar, handleCloseSidebar, toast]);
 
   const handleDelete = useCallback(async (itemId: string) => {
+    const quitar = (actual: unknown) => comoLista(actual).filter((c) => c.id !== itemId);
     setDeleting(itemId);
     try {
-      const res = await fetch(`/api/configuracion/categorias-lentes?id=${itemId}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast('Categoría eliminada');
-        await refetch();
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/configuracion/categorias-lentes?id=${encodeURIComponent(itemId)}`, 'DELETE');
+          return quitar(actual);
+        },
+        { optimisticData: quitar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
+      toast('Categoría eliminada');
+      if (editingItem?.id === itemId) handleCloseSidebar();
+    } catch (err) {
+      toast(msg(err, 'No se pudo eliminar la categoría'), 'error');
     } finally {
       setDeleting(null);
       setDeleteTarget(null);
     }
-  }, [refetch, toast]);
+  }, [mutate, toast, editingItem, handleCloseSidebar]);
+
+  const cargandoInicial = loading && categorias.length === 0;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
@@ -171,13 +202,13 @@ export default function CategoriasLentesPage() {
         </div>
 
         {/* Error */}
-        {error && (
+        {error && categorias.length === 0 && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         )}
 
         {/* Table */}
-        {loading ? (
-          <div className="rounded-2xl border border-line bg-surface p-6 space-y-3">
+        {cargandoInicial ? (
+          <div className="rounded-2xl border border-line bg-surface p-6 space-y-3" aria-busy="true">
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse flex items-center gap-4">
                 <div className="h-9 w-9 rounded-lg bg-gray-200 dark:bg-surface-2" />
@@ -189,7 +220,8 @@ export default function CategoriasLentesPage() {
             ))}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
+          <div className="relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none animate-fadeIn" aria-busy={validating}>
+            <BarraRevalidando activo={validating} />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[480px]">
                 <thead>
@@ -200,7 +232,7 @@ export default function CategoriasLentesPage() {
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted dark:text-muted">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line/60">
+                <tbody className="divide-y divide-line/60 anim-lista">
                   {filtered.map((cat) => {
                     const iconColor = getIconColor(cat.id);
                     return (
@@ -223,6 +255,7 @@ export default function CategoriasLentesPage() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleEditItem(cat)}
+                              aria-label={`Editar ${cat.nombre}`}
                               className="text-muted dark:text-muted hover:text-primary-600 transition-colors"
                             >
                               <Pencil className="h-4 w-4" />
@@ -230,6 +263,7 @@ export default function CategoriasLentesPage() {
                             <button
                               onClick={() => setDeleteTarget(cat.id)}
                               disabled={deleting === cat.id}
+                              aria-label={`Eliminar ${cat.nombre}`}
                               className="text-muted dark:text-muted hover:text-red-600 transition-colors disabled:opacity-50"
                             >
                               {deleting === cat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -260,14 +294,14 @@ export default function CategoriasLentesPage() {
       {/* Sidebar — New or Edit */}
       {(editingItem || showNewItem) && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={handleCloseSidebar} />
-          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
+          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden animate-fadeIn" onClick={handleCloseSidebar} />
+          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl animate-fadeIn lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
             <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none lg:sticky lg:top-6">
               <div className="flex items-center justify-between border-b border-line/70 px-6 py-4">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">
                   {editingItem ? 'Editar Categoría' : 'Nueva Categoría'}
                 </h3>
-                <button onClick={handleCloseSidebar} className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg transition-colors">
+                <button onClick={handleCloseSidebar} aria-label="Cerrar" className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -312,7 +346,7 @@ export default function CategoriasLentesPage() {
                     className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
                     {saving ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
                     ) : editingItem ? 'GUARDAR CAMBIOS' : 'CREAR CATEGORÍA'}
                   </button>
                 </div>

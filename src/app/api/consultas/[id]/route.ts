@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { resolveDoctorId, isModoFocus } from '@/lib/auth-helpers';
+import { doctorRequerido, inicialesDe, verificarDueno } from '@/lib/consultas-acceso';
+import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
@@ -11,43 +12,28 @@ import { z } from 'zod';
 const consultaUpdateSchema = z.object({
   estatus: z.enum(['BORRADOR', 'AGENDADA', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
   estatus_pago: z.enum(['PENDIENTE_PAGO', 'PAGADO']).optional(),
-  costo_total: z.number().min(0).optional(),
-  monto_pagado: z.number().min(0).optional(),
-  fecha_pago: z.string().optional().nullable(),
+  costo_total: z.number().min(0).max(10_000_000).optional(),
+  monto_pagado: z.number().min(0).max(10_000_000).optional(),
+  fecha_pago: z.string().max(40).refine((v) => !Number.isNaN(Date.parse(v)), 'Fecha de pago no válida').optional().nullable(),
   diagnostico: z.string().max(500).optional().nullable(),
-  notas: z.string().optional().nullable(),
-  metodo_pago: z.string().optional().nullable(),
+  notas: z.string().max(5000).optional().nullable(),
+  metodo_pago: z.string().max(50).optional().nullable(),
   // Full edit fields
   doctor_id: z.string().uuid().optional(),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  hora_inicio: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
-  hora_fin: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
-  tipo_consulta: z.string().optional().nullable(),
-  tipo_visita: z.string().optional().nullable(),
-  procedimiento: z.string().optional().nullable(),
+  fecha: fechaISO.optional(),
+  hora_inicio: horaHHMM.optional(),
+  hora_fin: horaHHMM.optional().nullable(),
+  tipo_consulta: z.string().max(60).optional().nullable(),
+  tipo_visita: z.string().max(60).optional().nullable(),
+  procedimiento: z.string().max(2000).optional().nullable(),
   procedimiento_doctor_id: z.string().uuid().optional().nullable(),
-  estudio_1: z.string().optional().nullable(),
-  estudio_2: z.string().optional().nullable(),
-  estudio_3: z.string().optional().nullable(),
+  estudio_1: z.string().max(255).optional().nullable(),
+  estudio_2: z.string().max(255).optional().nullable(),
+  estudio_3: z.string().max(255).optional().nullable(),
   estudio_1_doctor_id: z.string().uuid().optional().nullable(),
   estudio_2_doctor_id: z.string().uuid().optional().nullable(),
   estudio_3_doctor_id: z.string().uuid().optional().nullable(),
 }).strict();
-
-async function registrarHistorial(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  consultaId: string,
-  tipoEvento: string,
-  userId: string,
-  payload?: Record<string, unknown>,
-) {
-  await supabase.from('consulta_historial').insert({
-    consulta_id: consultaId,
-    tipo_evento: tipoEvento,
-    usuario_id: userId,
-    payload: payload ?? {},
-  });
-}
 
 export async function GET(
   request: Request,
@@ -59,63 +45,68 @@ export async function GET(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  const { data: consulta, error: consultaError } = await supabase
-    .from('consultas')
-    .select(`
-      id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
-      pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo, email, numero_poliza, numero_afiliacion),
-      doctores:doctor_id (alias),
-      est1_doc:estudio_1_doctor_id (alias),
-      est2_doc:estudio_2_doctor_id (alias),
-      est3_doc:estudio_3_doctor_id (alias),
-      proc_doc:procedimiento_doctor_id (alias)
-    `)
-    .eq('id', id)
-    .maybeSingle();
+  // Ronda 1 (paralelo): consulta + historial + conceptos + doctor del usuario (solo rol doctor).
+  // Lecturas sin efectos: si el RBAC rechaza, se descartan sin devolverse.
+  const [consultaResult, historialResult, conceptosResult, requerido] = await Promise.all([
+    supabase
+      .from('consultas')
+      .select(`
+        id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
+        pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo, email, numero_poliza, numero_afiliacion),
+        doctores:doctor_id (alias),
+        est1_doc:estudio_1_doctor_id (alias),
+        est2_doc:estudio_2_doctor_id (alias),
+        est3_doc:estudio_3_doctor_id (alias),
+        proc_doc:procedimiento_doctor_id (alias)
+      `)
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
+      .from('consulta_historial')
+      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
+      .eq('consulta_id', id)
+      .order('created_at', { ascending: true })
+      .limit(500),
+    supabase
+      .from('consulta_conceptos')
+      .select('id, consulta_id, tipo_concepto, concepto_id, texto_original, precio_aplicado, doctor_id, created_at')
+      .eq('consulta_id', id),
+    doctorRequerido(auth.user.id, auth.perfil),
+  ]);
 
+  const { data: consulta, error: consultaError } = consultaResult;
   if (consultaError || !consulta) {
     return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
   }
 
   // RBAC: doctor solo ve sus propias consultas
-  const userRole = (await supabase.from('usuarios').select('rol').eq('id', auth.user.id).maybeSingle()).data?.rol;
-  if (userRole === 'doctor') {
-    const doctorId = await resolveDoctorId(auth.user.id);
-    const focus = await isModoFocus(auth.user.id);
-    if (consulta.doctor_id !== doctorId && !(focus && doctorId)) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-    }
-  }
+  const denegado = verificarDueno(requerido, consulta.doctor_id);
+  if (denegado) return denegado;
 
-  const [historialResult, conceptosResult, aseguranzaResult, coberturaResult] = await Promise.all([
-    supabase
-      .from('consulta_historial')
-      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
-      .eq('consulta_id', id)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('consulta_conceptos')
-      .select('id, consulta_id, tipo_concepto, concepto_id, texto_original, precio_aplicado, doctor_id, created_at')
-      .eq('consulta_id', id),
+  // Ronda 2 (paralelo): aseguranza, cobertura y nombres de usuarios del historial
+  const historialBase = historialResult.data ?? [];
+  const historialUserIds = [...new Set(historialBase.map((h) => h.usuario_id).filter((u): u is string => !!u))];
+  const [aseguranzaResult, coberturaResult, usuariosResult] = await Promise.all([
     consulta.aseguranza_id
-      ? supabase.from('aseguranzas').select('id, nombre, telefono, direccion, notas, activo, created_at').eq('id', consulta.aseguranza_id).maybeSingle()
+      // `aseguranzas` no tiene columna `notas` (el select anterior fallaba y devolvía siempre null)
+      ? supabase.from('aseguranzas').select('id, nombre, telefono, direccion, contacto, activo, created_at').eq('id', consulta.aseguranza_id).maybeSingle()
       : Promise.resolve({ data: null }),
     consulta.aseguranza_id
-      ? supabase.from('coberturas_aseguranza').select('id, porcentaje_cobertura, monto_maximo, aplica_estudios, aplica_procedimientos').eq('aseguranza_id', consulta.aseguranza_id).eq('activo', true).maybeSingle()
+      ? supabase.from('coberturas_aseguranza').select('id, porcentaje_cobertura, copago_fijo, monto_maximo, aplica_estudios, aplica_procedimientos').eq('aseguranza_id', consulta.aseguranza_id).eq('activo', true).maybeSingle()
+      : Promise.resolve({ data: null }),
+    historialUserIds.length > 0
+      ? supabase.from('usuarios').select('id, nombre').in('id', historialUserIds)
       : Promise.resolve({ data: null }),
   ]);
 
-  let historial = historialResult.data ?? [];
-  const historialUserIds = [...new Set(historial.map((h: any) => h.usuario_id).filter(Boolean))];
+  let historial: Array<Record<string, unknown>> = historialBase;
   if (historialUserIds.length > 0) {
-    const { data: historialUsuarios } = await supabase
-      .from('usuarios')
-      .select('id, nombre')
-      .in('id', historialUserIds);
-    const hUserMap = new Map((historialUsuarios || []).map((u: any) => [u.id, u.nombre]));
-    historial = historial.map((h: any) => ({
+    const hUserMap = new Map(((usuariosResult.data || []) as Array<{ id: string; nombre: string | null }>).map((u) => [u.id, u.nombre]));
+    historial = historialBase.map((h) => ({
       ...h,
       usuario_nombre: h.usuario_id ? hUserMap.get(h.usuario_id) || null : null,
     }));
@@ -135,7 +126,7 @@ export async function GET(
     consulta: {
       ...consulta,
       paciente: pacienteData?.nombre_completo || null,
-      iniciales: (pacienteData?.nombre_completo || '?').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
+      iniciales: inicialesDe(pacienteData?.nombre_completo || '?'),
       doctor: doctorData?.alias || null,
       est1_doctor: est1Doc?.alias || null,
       est2_doctor: est2Doc?.alias || null,
@@ -165,32 +156,30 @@ export async function PATCH(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const data = await leerJSON(request, consultaUpdateSchema, { maxBytes: 50_000 });
+  if (data instanceof NextResponse) return data;
 
-  const validation = consultaUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
-
-  const { data: existing, error: checkError } = await supabase
-    .from('consultas')
-    .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id')
-    .eq('id', id)
-    .maybeSingle();
+  const [existingResult, requerido] = await Promise.all([
+    supabase
+      .from('consultas')
+      .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id, pacientes:paciente_id (nombre_completo)')
+      .eq('id', id)
+      .maybeSingle(),
+    doctorRequerido(auth.user.id, auth.perfil),
+  ]);
+  const { data: existing, error: checkError } = existingResult;
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
+
+  // RBAC: el doctor solo modifica sus propias consultas (igual que en GET)
+  const denegado = verificarDueno(requerido, existing.doctor_id);
+  if (denegado) return denegado;
 
   // AGE-001: detectar conflictos de agenda si cambian fecha/hora/doctor
   const cambiaFecha = data.fecha !== undefined && data.fecha !== existing.fecha;
@@ -253,22 +242,21 @@ export async function PATCH(
   if (data.estudio_2_doctor_id !== undefined) updateData.estudio_2_doctor_id = data.estudio_2_doctor_id;
   if (data.estudio_3_doctor_id !== undefined) updateData.estudio_3_doctor_id = data.estudio_3_doctor_id;
 
+  // Eventos de historial: se insertan en lote DESPUÉS de aplicar el update
+  // (antes se registraban aunque el update fallara).
+  const eventos: Array<{ tipo_evento: string; payload: Record<string, unknown> }> = [];
+
   // Status transitions
   if (data.estatus !== undefined) {
     updateData.estatus = data.estatus;
-    await registrarHistorial(supabase, id, 'CAMBIO_ESTATUS', auth.user.id, {
-      de: existing.estatus,
-      a: data.estatus,
-    });
+    eventos.push({ tipo_evento: 'CAMBIO_ESTATUS', payload: { de: existing.estatus, a: data.estatus } });
   }
 
   if (data.estatus_pago !== undefined) {
     updateData.estatus_pago = data.estatus_pago;
     if (data.estatus_pago === 'PAGADO') {
       updateData.fecha_pago = new Date().toISOString();
-      await registrarHistorial(supabase, id, 'PAGADO', auth.user.id, {
-        monto: data.monto_pagado,
-      });
+      eventos.push({ tipo_evento: 'PAGADO', payload: { monto: data.monto_pagado } });
     }
   }
 
@@ -285,8 +273,11 @@ export async function PATCH(
   ].some(v => v !== undefined);
 
   if (hasFieldChanges && !data.estatus) {
-    await registrarHistorial(supabase, id, 'EDICION', auth.user.id, {
-      campos_modificados: Object.keys(updateData).filter(k => !['estatus', 'estatus_pago', 'costo_total', 'monto_pagado', 'fecha_pago'].includes(k)),
+    eventos.push({
+      tipo_evento: 'EDICION',
+      payload: {
+        campos_modificados: Object.keys(updateData).filter(k => !['estatus', 'estatus_pago', 'costo_total', 'monto_pagado', 'fecha_pago'].includes(k)),
+      },
     });
   }
 
@@ -311,15 +302,16 @@ export async function PATCH(
   const cambioFecha =
     (data.fecha !== undefined && data.fecha !== existing.fecha) ||
     (data.hora_inicio !== undefined && data.hora_inicio !== existing.hora_inicio);
-  if (updated && (cancelada || reprogramada || cambioFecha)) {
-    const { data: pac } = await supabase
-      .from('pacientes')
-      .select('nombre_completo')
-      .eq('id', updated.paciente_id)
-      .maybeSingle();
+
+  const pacienteJoin = (existing as { pacientes?: { nombre_completo?: string | null } | { nombre_completo?: string | null }[] | null }).pacientes;
+  const pacienteNombre =
+    (Array.isArray(pacienteJoin) ? pacienteJoin[0]?.nombre_completo : pacienteJoin?.nombre_completo) || 'Paciente';
+
+  const notificar = async () => {
+    if (!updated || !(cancelada || reprogramada || cambioFecha)) return;
     const base = {
       doctorId: updated.doctor_id as string | null,
-      paciente: pac?.nombre_completo || 'Paciente',
+      paciente: pacienteNombre,
       entidadTipo: 'consulta' as const,
       entidadId: id,
       actorUserId: auth.user.id,
@@ -329,7 +321,20 @@ export async function PATCH(
     } else {
       await notificarReagendado({ ...base, fecha: updated.fecha, hora: updated.hora_inicio, aplazada: data.estatus === 'APLAZADA' });
     }
-  }
+  };
+
+  await Promise.all([
+    eventos.length > 0
+      ? Promise.resolve(
+          supabase.from('consulta_historial').insert(
+            eventos.map((e) => ({ consulta_id: id, usuario_id: auth.user.id, ...e })),
+          ),
+        ).then(({ error }) => {
+          if (error) handleSupabaseError(error, 'consultas.actualizar.historial');
+        })
+      : null,
+    notificar().catch(() => undefined),
+  ]);
 
   return NextResponse.json(updated);
 }
@@ -344,35 +349,49 @@ export async function DELETE(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  const { data: existing, error: checkError } = await supabase
-    .from('consultas')
-    .select('id, estatus')
-    .eq('id', id)
-    .maybeSingle();
+  const [existingResult, requerido] = await Promise.all([
+    supabase.from('consultas').select('id, estatus, doctor_id').eq('id', id).maybeSingle(),
+    doctorRequerido(auth.user.id, auth.perfil),
+  ]);
+  const { data: existing, error: checkError } = existingResult;
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
 
-  await supabase
+  // RBAC: el doctor solo cancela sus propias consultas
+  const denegado = verificarDueno(requerido, existing.doctor_id);
+  if (denegado) return denegado;
+
+  const { error: updError } = await supabase
     .from('consultas')
     .update({ estatus: 'CANCELADA' })
     .eq('id', id);
-
-  await supabase.from('consulta_historial').insert({
-    consulta_id: id,
-    tipo_evento: 'CANCELACION',
-    usuario_id: auth.user.id,
-    payload: { estatus_anterior: existing.estatus },
-  });
-
-  try {
-    await new MotorDevengoService().cancelarPorConsulta(id);
-  } catch {
-    // best-effort: no bloquea la cancelación de la consulta
+  if (updError) {
+    return NextResponse.json(
+      { error: handleSupabaseError(updError, 'consultas.cancelar').mensaje },
+      { status: 500 },
+    );
   }
+
+  await Promise.all([
+    Promise.resolve(
+      supabase.from('consulta_historial').insert({
+        consulta_id: id,
+        tipo_evento: 'CANCELACION',
+        usuario_id: auth.user.id,
+        payload: { estatus_anterior: existing.estatus },
+      }),
+    ).then(({ error }) => {
+      if (error) handleSupabaseError(error, 'consultas.cancelar.historial');
+    }),
+    // best-effort: no bloquea la cancelación de la consulta
+    new MotorDevengoService().cancelarPorConsulta(id).catch(() => undefined),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

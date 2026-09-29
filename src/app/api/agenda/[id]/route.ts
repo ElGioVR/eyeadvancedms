@@ -2,23 +2,31 @@ import { NextResponse } from 'next/server';
 import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
 import { z } from 'zod';
 
+/** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
+const ojoSchema = z
+  .string()
+  .max(10)
+  .transform((v) => v.trim().toUpperCase())
+  .refine((v) => v === '' || v === 'OD' || v === 'OI' || v === 'OU', 'Ojo no válido (OD, OI u OU)');
+
 const cirugiaUpdateSchema = z.object({
   paciente_id: z.string().uuid().optional().nullable(),
   nombre_paciente: z.string().min(1).max(255).optional(),
   expediente: z.string().max(50).optional().nullable(),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
+  fecha: fechaISO.optional().nullable(),
+  hora: horaHHMM.optional().nullable(),
   jornada: z.string().max(100).optional().nullable(),
   diagnostico: z.string().max(500).optional().nullable(),
   procedimiento: z.string().max(255).optional().nullable(),
-  ojo: z.string().max(10).optional().nullable(),
+  ojo: ojoSchema.optional().nullable(),
   lio: z.string().max(100).optional().nullable(),
   marca_lio: z.string().max(100).optional().nullable(),
   tiempo_estimado: z.string().max(50).optional().nullable(),
@@ -28,7 +36,7 @@ const cirugiaUpdateSchema = z.object({
   procedencia: z.string().max(255).optional().nullable(),
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
   motivo: z.string().min(1).max(500).optional().nullable(),
-  notas: z.string().optional().nullable(),
+  notas: z.string().max(5000).optional().nullable(),
   notificado: z.boolean().optional(),
   inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
@@ -37,12 +45,15 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // El rol se verifica en paralelo con la lectura (ver leerConRol).
   const rolP = requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
 
-  const { id } = await params;
   const supabase = getSupabaseAdmin();
 
   const r = await leerConRol(rolP, async () =>
@@ -53,7 +64,7 @@ export async function GET(
         doctores:doctor_id (alias)
       `)
       .eq('id', id)
-      .single()
+      .maybeSingle()
   );
   if ('denegado' in r) return r.denegado;
   const { data, error } = r.datos;
@@ -73,10 +84,13 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const rolP = requireRole(auth.user, ['admin', 'recepcionista']);
-  const { id } = await params;
   const supabase = getSupabaseAdmin();
 
   // Lectura del estado actual (solo lectura) en paralelo con la verificación de
@@ -86,7 +100,7 @@ export async function PATCH(
       .from('agenda_cirugias')
       .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente')
       .eq('id', id)
-      .single()
+      .maybeSingle()
   );
   const roleError = await rolP;
   if (roleError) {
@@ -94,20 +108,11 @@ export async function PATCH(
     return roleError;
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  const data = await leerJSON(request, cirugiaUpdateSchema);
+  if (data instanceof NextResponse) {
+    void prevP.catch(() => undefined);
+    return data;
   }
-
-  const validation = cirugiaUpdateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
   const updates: Record<string, unknown> = {};
 
   // Estado actual antes de actualizar (efectos secundarios y máquina de estados)
@@ -208,7 +213,7 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json(
-      { error: errorTranslations[error.message] || 'Error interno del servidor' },
+      { error: handleSupabaseError(error, 'agenda.actualizar').mensaje },
       { status: 500 }
     );
   }
@@ -301,12 +306,15 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  const { id } = await params;
   const supabase = getSupabaseAdmin();
 
   const { error } = await supabase
@@ -316,7 +324,7 @@ export async function DELETE(
 
   if (error) {
     return NextResponse.json(
-      { error: errorTranslations[error.message] || 'Error interno del servidor' },
+      { error: handleSupabaseError(error, 'agenda.eliminar').mensaje },
       { status: 500 }
     );
   }

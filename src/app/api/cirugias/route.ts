@@ -6,21 +6,38 @@ import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { calcularProductividadCirugia } from '@/lib/productividad';
 import { consumirLIO } from '@/lib/inventario';
+import { leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
+
+/** Tope del listado (se usa filtrado por paciente o consulta). */
+const MAX_LISTADO = 500;
+
+const listarQuerySchema = z.object({
+  consulta_id: uuid.optional(),
+  paciente_id: uuid.optional(),
+});
 
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Perfil ya memorizado por requireAuth: sin viaje extra.
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const { searchParams } = new URL(request.url);
-  const consultaId = searchParams.get('consulta_id');
-  const pacienteId = searchParams.get('paciente_id');
+  const consultaId = searchParams.get('consulta_id') || undefined;
+  const pacienteId = searchParams.get('paciente_id') || undefined;
+  const filtros = listarQuerySchema.safeParse({ consulta_id: consultaId, paciente_id: pacienteId });
+  if (!filtros.success) {
+    return NextResponse.json({ error: 'Filtro no válido (se esperaba un ID)' }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
   let query = supabase
     .from('agenda_cirugias')
     .select('id, codigo, paciente_id, nombre_paciente, fecha, hora, estado, ojo, servicio:servicio_id(nombre), origen:origen_id(nombre), consulta_id')
-    .order('fecha', { ascending: false });
+    .order('fecha', { ascending: false })
+    .limit(MAX_LISTADO);
 
   if (consultaId) {
     query = query.eq('consulta_id', consultaId);
@@ -40,22 +57,22 @@ export async function GET(request: Request) {
 const participanteSchema = z.object({
   medico_id: z.string().uuid(),
   rol_id: z.string().uuid(),
-});
+}).strict();
 
 const cirugiaCreateSchema = z.object({
   paciente_id: z.string().uuid(),
   origen_id: z.string().uuid(),
   servicio_id: z.string().uuid(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD'),
-  hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'La hora debe tener formato HH:MM o HH:MM:SS'),
-  duracion_min: z.number().int().positive('La duración estimada debe ser mayor a 0'),
+  hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'La hora debe tener formato HH:MM o HH:MM:SS'),
+  duracion_min: z.number().int().positive('La duración estimada debe ser mayor a 0').max(24 * 60, 'La duración estimada no puede exceder 24 horas'),
   recurso_id: z.string().uuid().optional().nullable(),
   ojo: z.enum(['OD', 'OI', 'OU']),
   inventario_item_id: z.string().uuid().optional().nullable(),
   lio: z.string().min(1).max(255).optional().nullable(),
   marca_lio: z.string().min(1).max(255).optional().nullable(),
   consulta_id: z.string().uuid().optional().nullable(),
-  participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante'),
+  participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante').max(20, 'Demasiados participantes'),
   notas: z.string().max(2000).optional().nullable(),
 })
   .strict()
@@ -71,20 +88,9 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const data = await leerJSON(request, cirugiaCreateSchema);
+  if (data instanceof NextResponse) return data;
 
-  const validation = cirugiaCreateSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
   const supabase = getSupabaseAdmin();
 
   // AGE-001 / AGE-002 / VAL-005: detectar conflictos de agenda antes de crear
@@ -132,14 +138,19 @@ export async function POST(request: Request) {
 
   const cirugiaId = (result as any)?.cirugia_id;
   if (cirugiaId) {
-    if (data.inventario_item_id) {
-      await consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id);
-    }
-    try {
-      await calcularProductividadCirugia(cirugiaId);
-    } catch {
-      // No se interrumpe la creación; la productividad queda PENDIENTE sin monto.
-    }
+    // Independientes entre sí: en paralelo (antes en serie). consumirLIO es
+    // idempotente por cirugía (el RPC ya registra la salida en el Kardex).
+    const productividadP = (async () => {
+      try {
+        await calcularProductividadCirugia(cirugiaId);
+      } catch {
+        // No se interrumpe la creación; la productividad queda PENDIENTE sin monto.
+      }
+    })();
+    await Promise.allSettled([
+      data.inventario_item_id ? consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id) : Promise.resolve(null),
+      productividadP,
+    ]);
   }
 
   return NextResponse.json(result, { status: 201 });

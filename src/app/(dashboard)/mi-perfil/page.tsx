@@ -1,19 +1,26 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import useSWR from 'swr';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import {
   Stethoscope, Bell, LogOut, Mail, Calendar, Shield, Loader2,
   Camera, X, Sun, Moon, Palette,
 } from 'lucide-react';
-import { useUser } from '@/hooks/useUser';
+import { useUser, clearUserCache } from '@/hooks/useUser';
+import { enviarJSON } from '@/lib/fetcher';
+import Skeleton from '@/components/ui/Skeleton';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import Avatar from '@/components/ui/Avatar';
 import ClientDate from '@/components/ui/ClientDate';
 import { logout } from '@/app/actions/auth';
+
+interface PrefsResp {
+  data?: { tipo_evento: string; canal?: string; activo: boolean }[];
+}
 
 interface DoctorInfo {
   especialidad: string | null;
@@ -77,55 +84,70 @@ export default function MiPerfilPage() {
   const { toast } = useToast();
   const avatar = useAvatarUpload(user?.id, toast);
   const [doctorInfo, setDoctorInfo] = useState<DoctorInfo | null>(null);
-  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
-    if (user.doctor_id) {
-      fetch(`/api/consultas?pageSize=1`)
-        .then(() => {
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-          if (supabaseUrl) {
-            fetch(`${supabaseUrl}/rest/v1/doctores?id=eq.${user.doctor_id}&select=especialidad,activo`, {
-              headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-            }).then(r => r.json()).then(data => { if (data?.[0]) setDoctorInfo(data[0]); }).catch(() => {});
-          }
-        })
-        .catch(() => {});
+    if (!user.doctor_id) return;
+    const ctrl = new AbortController();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl) {
+      fetch(`${supabaseUrl}/rest/v1/doctores?id=eq.${encodeURIComponent(user.doctor_id)}&select=especialidad,activo`, {
+        headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
+        signal: ctrl.signal,
+      }).then(r => r.json()).then(data => { if (data?.[0]) setDoctorInfo(data[0]); }).catch(() => {});
     }
+    return () => ctrl.abort();
+  }, [user?.doctor_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    fetch('/api/notificaciones/preferencias')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.data) {
-          const prefs: Record<string, boolean> = {};
-          for (const p of data.data) prefs[p.tipo_evento] = p.activo;
-          setNotifPrefs(prefs);
-        }
-      })
-      .catch(() => {});
-  }, [user]);
+  // Preferencias de notificación (SWR, misma clave que /configuracion): toggle optimista con reversión.
+  const { data: prefsResp, mutate: mutatePrefs } = useSWR<PrefsResp>(user ? '/api/notificaciones/preferencias' : null);
+  const notifPrefs = useMemo(() => {
+    const prefs: Record<string, boolean> = {};
+    for (const p of prefsResp?.data ?? []) prefs[p.tipo_evento] = p.activo;
+    return prefs;
+  }, [prefsResp]);
 
   const togglePref = useCallback(async (tipo: string) => {
     const next = !notifPrefs[tipo];
-    setNotifPrefs((p) => ({ ...p, [tipo]: next }));
+    const conCambio = (actual: PrefsResp | undefined): PrefsResp => {
+      const lista = actual?.data ?? [];
+      const existe = lista.some((p) => p.tipo_evento === tipo);
+      return {
+        ...(actual ?? {}),
+        data: existe
+          ? lista.map((p) => (p.tipo_evento === tipo ? { ...p, activo: next } : p))
+          : [...lista, { tipo_evento: tipo, canal: 'IN_APP', activo: next }],
+      };
+    };
     try {
-      await fetch('/api/notificaciones/preferencias', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferencias: [{ tipo_evento: tipo, canal: 'IN_APP', activo: next }] }),
-      });
-    } catch {
-      setNotifPrefs((p) => ({ ...p, [tipo]: !next }));
+      await mutatePrefs(
+        async (actual) => {
+          await enviarJSON('/api/notificaciones/preferencias', 'PATCH', {
+            preferencias: [{ tipo_evento: tipo, canal: 'IN_APP', activo: next }],
+          });
+          return conCambio(actual);
+        },
+        { optimisticData: conCambio, rollbackOnError: true, populateCache: true, revalidate: false }
+      );
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : 'No se pudo guardar la preferencia', 'error');
     }
-  }, [notifPrefs]);
+  }, [notifPrefs, mutatePrefs, toast]);
 
   if (userLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+      <div className="mx-auto max-w-[600px] space-y-5" aria-busy="true" aria-label="Cargando perfil">
+        <div className="rounded-2xl border border-line bg-surface p-6 flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-56" />
+          </div>
+        </div>
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
@@ -135,7 +157,7 @@ export default function MiPerfilPage() {
   const fotoActual = avatar.avatarPreview !== undefined ? avatar.avatarPreview : user.avatar_url;
 
   return (
-    <div className="mx-auto max-w-[600px] space-y-5">
+    <div className="mx-auto max-w-[600px] space-y-5 animate-fadeIn">
       {/* Profile Header */}
       <div className="rounded-2xl border border-line bg-surface p-6 flex items-center gap-4">
         <input
@@ -280,14 +302,14 @@ export default function MiPerfilPage() {
 
       {/* Logout Confirm */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 animate-fadeIn" onClick={() => setShowLogoutConfirm(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Cerrar sesión" className="bg-surface rounded-t-2xl sm:rounded-2xl p-6 w-full max-w-sm shadow-xl animate-popIn" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-fg">Cerrar sesión</h3>
             <p className="text-sm text-muted mt-2">¿Estás seguro que deseas cerrar sesión?</p>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-fg-2">Cancelar</button>
-              <form action={logout} className="flex-1">
-                <button type="submit" className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700">Cerrar</button>
+              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">Cancelar</button>
+              <form action={logout} onSubmit={() => clearUserCache()} className="flex-1">
+                <button type="submit" className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-colors">Cerrar</button>
               </form>
             </div>
           </div>

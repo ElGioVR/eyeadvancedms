@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { takePrefetched } from '@/lib/prefetch';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors } from 'lucide-react';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useFetch } from '@/hooks/useFetch';
+import { useFetch, useInvalidar } from '@/hooks/useFetch';
+import { enviarJSON } from '@/lib/fetcher';
+import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import EmptyState from '@/components/ui/EmptyState';
@@ -39,14 +41,14 @@ const sexoFilterOptions = ['Todos', 'Masculino', 'Femenino'] as const;
 const edadOptions = ['Todos', '0-18', '19-35', '36-50', '51+'] as const;
 
 const nuevoPacienteSchema = z.object({
-  nombre_completo: z.string().min(1, 'El nombre es requerido'),
+  nombre_completo: z.string().min(1, 'El nombre es requerido').max(255, 'Máximo 255 caracteres'),
   sexo: z.enum(['H', 'M'], { errorMap: () => ({ message: 'Selecciona un sexo' }) }),
   fecha_nacimiento: z.string().min(1, 'La fecha de nacimiento es requerida'),
-  telefono: z.string().min(1, 'El teléfono es requerido'),
+  telefono: z.string().trim().min(1, 'El teléfono es requerido').max(20, 'Máximo 20 caracteres'),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   aseguranza_id: z.string().optional().or(z.literal('')),
-  contacto_emergencia: z.string().optional().or(z.literal('')),
-  tel_emergencia: z.string().optional().or(z.literal('')),
+  contacto_emergencia: z.string().max(255, 'Máximo 255 caracteres').optional().or(z.literal('')),
+  tel_emergencia: z.string().max(20, 'Máximo 20 caracteres').optional().or(z.literal('')),
 });
 
 function filterByEdad(edad: number, filter: string): boolean {
@@ -61,25 +63,20 @@ function filterByEdad(edad: number, filter: string): boolean {
 export default function PacientesPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const { data: pacientes, loading, error, total, page: currentPage, refetch } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
+  // Misma URL que la precarga de /bienvenida (page=1&pageSize=15).
+  const { data: pacientes, loading, validating, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
+  const { data: aseguranzas } = useFetch<AseguranzaOption>('/api/configuracion/aseguranzas');
+  const invalidar = useInvalidar();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [filterSexo, setFilterSexo] = useState('Todos');
   const [filterEdad, setFilterEdad] = useState('Todos');
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [agendarMenuId, setAgendarMenuId] = useState<string | null>(null);
   const [filterAseguradora, setFilterAseguradora] = useState('Todas');
-  const [aseguranzas, setAseguranzas] = useState<AseguranzaOption[]>([]);
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    const precargado = takePrefetched<unknown>('/api/configuracion/aseguranzas');
-    (precargado ?? fetch('/api/configuracion/aseguranzas', { signal: ctrl.signal }).then((r) => r.json()))
-      .then((data) => { if (!ctrl.signal.aborted && Array.isArray(data)) setAseguranzas(data); })
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, []);
 
   const debouncedSearch = useDebounce(search);
 
@@ -166,6 +163,8 @@ export default function PacientesPage() {
           </div>
 
           {/* Patient list */}
+          <div className="relative" aria-busy={loading || validating}>
+          <BarraRevalidando activo={validating && !loading} className="-top-2" />
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -190,13 +189,13 @@ export default function PacientesPage() {
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 animate-fadeIn">{error}</div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 anim-lista">
               {filtered.map((paciente) => (
                 <div
                   key={paciente.id}
-                  className="group flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-2xl border border-line bg-surface px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-all hover:shadow-md hover:border-primary-200"
+                  className="group flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-2xl border border-line bg-surface px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm transition-[box-shadow,border-color] duration-200 hover:shadow-md hover:border-primary-200"
                 >
                   <Avatar
                     initials={paciente.iniciales}
@@ -245,7 +244,7 @@ export default function PacientesPage() {
                       {agendarMenuId === paciente.id && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setAgendarMenuId(null)} />
-                          <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden">
+                          <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-line rounded-xl shadow-lg z-50 overflow-hidden animate-fadeIn">
                             <div className="p-1">
                               <button
                                 onClick={() => { setAgendarMenuId(null); router.push(`/consultas/nueva?paciente_id=${paciente.id}`); }}
@@ -279,6 +278,7 @@ export default function PacientesPage() {
               )}
             </div>
           )}
+          </div>
 
           <Pagination
             page={currentPage}
@@ -410,23 +410,27 @@ export default function PacientesPage() {
                   if (result.data.contacto_emergencia) payload.contacto_emergencia = result.data.contacto_emergencia;
                   if (result.data.tel_emergencia) payload.tel_emergencia = result.data.tel_emergencia;
 
+                  if (saving) return;
+                  setSaving(true);
                   try {
-                    const res = await fetch('/api/pacientes', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(payload),
-                    });
-                    if (res.ok) {
-                      setShowNewPatient(false);
-                      setNewPatientAseguranzaId('');
-                      setFormErrors({});
-                      await refetch();
-                    }
-                  } catch {}
+                    await enviarJSON('/api/pacientes', 'POST', payload);
+                    setShowNewPatient(false);
+                    setNewPatientAseguranzaId('');
+                    setFormErrors({});
+                    toast('Paciente registrado');
+                    // Solo se refrescan los datos (lista, búsquedas y resúmenes); la pantalla no se desmonta.
+                    void invalidar('/api/pacientes', '/api/search', '/api/dashboard');
+                  } catch (err) {
+                    toast(err instanceof Error ? err.message : 'No se pudo registrar el paciente', 'error');
+                  } finally {
+                    setSaving(false);
+                  }
                 }}
-                className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
+                disabled={saving}
+                aria-busy={saving}
+                className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                GUARDAR PACIENTE
+                {saving ? 'GUARDANDO…' : 'GUARDAR PACIENTE'}
               </button>
             </div>
           </div>

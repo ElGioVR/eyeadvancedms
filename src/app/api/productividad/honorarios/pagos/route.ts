@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { esquemaPaginacion, leerQuery } from '@/lib/api/validar';
+import { inEnLotes, leerTodo } from '@/lib/productividad/lotes';
+import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
+import { z } from 'zod';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
 import type { PagoHonorarioFila } from '@/types/productividad';
 
-const MAX_CSV = 1000;
+/** Tope del CSV (antes 1000: un historial mayor se truncaba en silencio). */
+const MAX_CSV = 20000;
+
+const querySchema = z.object({
+  ...esquemaPaginacion(50, 100),
+  desde: fechaReal.optional(),
+  hasta: fechaReal.optional(),
+  doctor_id: uuidOpcional,
+  formato: z.string().max(10).optional(),
+});
 
 function csvCell(value: string | number | null | undefined): string {
   const raw = value == null ? '' : String(value);
@@ -28,90 +41,88 @@ type EventoPagoRow = {
   pagado_por: string | null;
 };
 
-async function leerEventos(
+const COLUMNAS_PAGO =
+  'id, doctor_id, origen_tipo, fecha_servicio, monto_devengado, estado, fecha_pago, pagado_por';
+
+function consultaPagos(desde: string, hasta: string, doctorId: string | null, conteo: boolean) {
+  let q = getSupabaseAdmin()
+    .from('eventos_honorario')
+    .select(COLUMNAS_PAGO, conteo ? { count: 'exact' } : undefined)
+    .eq('estado', 'PAGADO')
+    .not('fecha_pago', 'is', null)
+    .gte('fecha_pago', desde)
+    .lte('fecha_pago', hasta);
+  if (doctorId) q = q.eq('doctor_id', doctorId);
+  return q.order('fecha_pago', { ascending: false }).order('id', { ascending: true });
+}
+
+/** Página del listado (con total para el paginador). */
+async function leerPagina(
   desde: string,
   hasta: string,
   doctorId: string | null,
   desdeFila: number,
   hastaFila: number
 ) {
-  const supabase = getSupabaseAdmin();
-  let q = supabase
-    .from('eventos_honorario')
-    .select(
-      'id, doctor_id, origen_tipo, fecha_servicio, monto_devengado, estado, fecha_pago, pagado_por',
-      { count: 'exact' }
-    )
-    .eq('estado', 'PAGADO')
-    .not('fecha_pago', 'is', null)
-    .gte('fecha_pago', desde)
-    .lte('fecha_pago', hasta)
-    .order('fecha_pago', { ascending: false })
-    .range(desdeFila, hastaFila);
-  if (doctorId) q = q.eq('doctor_id', doctorId);
-  const { data, error, count } = await q;
+  const { data, error, count } = await consultaPagos(desde, hasta, doctorId, true).range(desdeFila, hastaFila);
   if (error) {
     throw Object.assign(new Error('Error al leer historial de pagos'), { status: 500 });
   }
   return { rows: (data || []) as EventoPagoRow[], count: count || 0 };
 }
 
+/** CSV: todas las filas del rango, paginando en bloques de 1000 (sin `count`). */
+async function leerTodoCsv(desde: string, hasta: string, doctorId: string | null) {
+  try {
+    const rows = await leerTodo<EventoPagoRow>(
+      (a, b) => consultaPagos(desde, hasta, doctorId, false).range(a, b),
+      MAX_CSV
+    );
+    return { rows, count: rows.length };
+  } catch {
+    throw Object.assign(new Error('Error al leer historial de pagos'), { status: 500 });
+  }
+}
+
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  // El rol se verifica en paralelo con la lectura (ver leerConRol).
-  const rolP = requireRole(auth.user, ['admin']);
+  // requireRole ya no cuesta un viaje extra: se espera antes de leer.
+  const roleError = await requireRole(auth.user, ['admin']);
+  if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const { desde, hasta } = rangoPersonalizado(
-    searchParams.get('desde'),
-    searchParams.get('hasta')
-  );
-  const doctorId = searchParams.get('doctor_id');
-  const formato = (searchParams.get('formato') || 'json').toLowerCase();
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10) || 50));
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
+  const { desde, hasta } = rangoPersonalizado(q.desde, q.hasta);
+  const doctorId = q.doctor_id ?? null;
+  const formato = (q.formato || 'json').toLowerCase();
+  const { page, pageSize } = q;
 
-  if (desde > hasta) {
-    const roleError = await rolP;
-    if (roleError) return roleError;
-    return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
-  }
+  const rangoError = validarRango(desde, hasta);
+  if (rangoError) return rangoError;
 
   try {
     const esCsv = formato === 'csv';
-    const desdeFila = esCsv ? 0 : (page - 1) * pageSize;
-    const hastaFila = esCsv ? MAX_CSV - 1 : desdeFila + pageSize - 1;
+    const desdeFila = (page - 1) * pageSize;
     const supabase = getSupabaseAdmin();
-    // eventos ‖ doctores (independientes) y, en cuanto llegan los eventos, usuarios.
-    const r = await leerConRol(rolP, async () => {
-      const eventosP = leerEventos(desde, hasta, doctorId, desdeFila, hastaFila);
-      const doctoresP = Promise.resolve(
-        doctorId
-          ? supabase.from('doctores').select('id, alias').eq('id', doctorId)
-          : supabase.from('doctores').select('id, alias').limit(500)
-      );
-      const ev = await eventosP;
-      const userIds = [
-        ...new Set(ev.rows.map((x) => x.pagado_por).filter((v): v is string => Boolean(v))),
-      ];
-      const [doctoresRes, usuariosRes] = await Promise.all([
-        doctoresP,
-        userIds.length
-          ? supabase.from('usuarios').select('id, nombre').in('id', userIds)
-          : Promise.resolve({ data: [] as Array<{ id: string; nombre: string | null }> }),
-      ]);
-      return { ...ev, doctoresRes, usuariosRes };
-    });
-    if ('denegado' in r) return r.denegado;
-    const { rows, count, doctoresRes, usuariosRes } = r.datos;
-    const doctores = new Map(
-      (doctoresRes.data || []).map((d) => [d.id as string, d.alias as string])
-    );
-    const usuarios = new Map(
-      (usuariosRes.data || []).map((u) => [u.id as string, u.nombre || u.id])
-    );
+    // Eventos y, en cuanto llegan, solo los doctores/usuarios que aparecen
+    // (antes se leían hasta 500 doctores en cada request).
+    const { rows, count } = esCsv
+      ? await leerTodoCsv(desde, hasta, doctorId)
+      : await leerPagina(desde, hasta, doctorId, desdeFila, desdeFila + pageSize - 1);
+    const [doctoresRows, usuariosRows] = await Promise.all([
+      inEnLotes<{ id: string; alias: string }>(
+        rows.map((x) => x.doctor_id),
+        (l) => supabase.from('doctores').select('id, alias').in('id', l)
+      ).catch(() => []),
+      inEnLotes<{ id: string; nombre: string | null }>(
+        rows.map((x) => x.pagado_por),
+        (l) => supabase.from('usuarios').select('id, nombre').in('id', l)
+      ).catch(() => []),
+    ]);
+    const doctores = new Map(doctoresRows.map((d) => [d.id, d.alias]));
+    const usuarios = new Map(usuariosRows.map((u) => [u.id, u.nombre || u.id]));
 
     const items: PagoHonorarioFila[] = rows.map((r) => ({
       id: r.id,

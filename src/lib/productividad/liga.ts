@@ -15,7 +15,7 @@ import type {
   TipoAgrupacionLiga,
   TipoPeriodoPago,
 } from '@/types/productividad';
-import { leerTodo } from './lotes';
+import { inEnLotes, leerTodo } from './lotes';
 
 const ESTADOS_EXCLUIDOS = ['REVERSADO'];
 
@@ -395,13 +395,31 @@ export async function editarMontoHonorario(
     );
   }
 
-  const { error: upd } = await supabase
+  const periodoP = leerTipoPeriodo();
+
+  // UPDATE condicionado al estado (evita editar un honorario que se pagó o
+  // canceló entre la lectura y la escritura) y que devuelve la fila: se ahorra
+  // la relectura posterior.
+  const { data: actualizado, error: upd } = await supabase
     .from('eventos_honorario')
     .update({ monto_devengado: monto })
-    .eq('id', id);
+    .eq('id', id)
+    .not('estado', 'in', '(PAGADO,CANCELADO)')
+    .select(
+      'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
+    )
+    .maybeSingle();
 
   if (upd) {
+    void periodoP.catch(() => undefined);
     throw Object.assign(new Error('Error al actualizar monto'), { status: 500 });
+  }
+  if (!actualizado) {
+    void periodoP.catch(() => undefined);
+    throw Object.assign(
+      new Error('No se puede editar un honorario pagado o cancelado'),
+      { status: 409 }
+    );
   }
 
   const bitacoraP = supabase.from('bitacora_honorarios').insert({
@@ -411,29 +429,12 @@ export async function editarMontoHonorario(
     valor_anterior: { monto_devengado: Number(evento.monto_devengado) || 0 },
     valor_nuevo: { monto_devengado: monto },
   });
-  const periodoP = leerTipoPeriodo();
-
-  const [{ data: actualizado, error: errLeer }] = await Promise.all([
-    supabase
-      .from('eventos_honorario')
-      .select(
-        'id, origen_tipo, origen_id, doctor_id, paciente_id, fecha_servicio, monto_devengado, estado, tarifa_snapshot, metricas_ligados'
-      )
-      .eq('id', id)
-      .maybeSingle(),
-    bitacoraP,
-  ]);
-
-  if (errLeer || !actualizado) {
-    throw Object.assign(new Error('Honorario no encontrado tras actualizar'), {
-      status: 404,
-    });
-  }
 
   const [{ data: doctor }, periodoTipoActual, origenBatch] = await Promise.all([
     supabase.from('doctores').select('alias').eq('id', actualizado.doctor_id).maybeSingle(),
     periodoP,
     resolverOrigenBatch([actualizado as EventoRow]),
+    bitacoraP,
   ]);
   const rangoFila = getPeriodRange(actualizado.fecha_servicio, periodoTipoActual);
   const montoNuevo = Number(actualizado.monto_devengado) || 0;
@@ -459,29 +460,42 @@ export async function editarMontoHonorario(
   };
 }
 
+export interface PagoRealizado {
+  id: string;
+  doctor_id: string;
+  monto_devengado: number | string | null;
+}
+
 export async function pagarHonorarios(
-  ids: string[],
+  idsEntrada: string[],
   pagadoPor: string
-): Promise<{ pagados: number; omitidos: Array<{ id: string; motivo: string }> }> {
+): Promise<{
+  pagados: number;
+  omitidos: Array<{ id: string; motivo: string }>;
+  /** Filas efectivamente marcadas como pagadas (para notificar sin releer). */
+  detalle: PagoRealizado[];
+}> {
+  const ids = [...new Set(idsEntrada)];
   if (!ids.length) {
     throw Object.assign(new Error('Ids vacíos'), { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
-  const { data: eventos, error } = await supabase
-    .from('eventos_honorario')
-    .select('id, estado, monto_devengado')
-    .in('id', ids);
-
-  if (error) {
+  // Por lotes: cientos de uuids en un solo `.in()` exceden el largo de URL.
+  let eventos: Array<{ id: string; estado: string; monto_devengado: number | string | null }>;
+  try {
+    eventos = await inEnLotes<{ id: string; estado: string; monto_devengado: number | string | null }>(ids, (l) =>
+      supabase.from('eventos_honorario').select('id, estado, monto_devengado').in('id', l)
+    );
+  } catch {
     throw Object.assign(new Error('Error al leer honorarios'), { status: 500 });
   }
 
   const omitidos: Array<{ id: string; motivo: string }> = [];
-  const aPagar: string[] = [];
+  let aPagar: string[] = [];
   const fechaPago = hoyTijuana();
 
-  for (const e of eventos || []) {
+  for (const e of eventos) {
     const monto = Number(e.monto_devengado) || 0;
     if (e.estado === 'PAGADO') {
       omitidos.push({ id: e.id, motivo: 'ya_pagado' });
@@ -498,29 +512,56 @@ export async function pagarHonorarios(
     aPagar.push(e.id);
   }
 
-  const idsNoEncontrados = ids.filter(
-    (id) => !(eventos || []).some((e) => e.id === id)
-  );
+  const encontrados = new Set(eventos.map((e) => e.id));
+  const idsNoEncontrados = ids.filter((id) => !encontrados.has(id));
   for (const id of idsNoEncontrados) {
     omitidos.push({ id, motivo: 'no_encontrado' });
   }
 
   let pagados = 0;
+  let detalle: PagoRealizado[] = [];
   if (aPagar.length > 0) {
-    const { error: upd } = await supabase
-      .from('eventos_honorario')
-      .update({
-        estado: 'PAGADO',
-        fecha_pago: fechaPago,
-        pagado_por: pagadoPor,
-      })
-      .in('id', aPagar);
-
-    if (upd) {
+    // Condicionado al estado y al monto: si otro admin pagó/canceló/editó a 0
+    // entre la lectura y este UPDATE, esa fila no se toca (antes se volvía a
+    // pagar y se duplicaba la bitácora).
+    // Lotes en serie: si uno falla, los ya aplicados se conservan y se registran
+    // en la bitácora; los del lote fallido se reportan como omitidos 'error'.
+    const actualizados: PagoRealizado[] = [];
+    const fallidos = new Set<string>();
+    for (let i = 0; i < aPagar.length; i += 150) {
+      const lote = aPagar.slice(i, i + 150);
+      const { data: filas, error } = await supabase
+        .from('eventos_honorario')
+        .update({
+          estado: 'PAGADO',
+          fecha_pago: fechaPago,
+          pagado_por: pagadoPor,
+        })
+        .in('id', lote)
+        .not('estado', 'in', '(PAGADO,CANCELADO,REVERSADO)')
+        .gt('monto_devengado', 0)
+        .select('id, doctor_id, monto_devengado');
+      if (error) {
+        console.error('[honorarios.pagar] lote fallido', { message: error.message, code: error.code });
+        for (const id of lote) fallidos.add(id);
+        continue;
+      }
+      actualizados.push(...((filas ?? []) as PagoRealizado[]));
+    }
+    if (actualizados.length === 0 && fallidos.size > 0) {
       throw Object.assign(new Error('Error al pagar honorarios'), { status: 500 });
     }
+    for (const id of fallidos) omitidos.push({ id, motivo: 'error' });
+    aPagar = aPagar.filter((id) => !fallidos.has(id));
 
+    detalle = actualizados;
+    const pagadosIds = new Set(detalle.map((e) => e.id));
+    for (const id of aPagar) {
+      if (!pagadosIds.has(id)) omitidos.push({ id, motivo: 'ya_pagado' });
+    }
+    aPagar = aPagar.filter((id) => pagadosIds.has(id));
     pagados = aPagar.length;
+    if (pagados === 0) return { pagados, omitidos, detalle };
 
     // Bitácora en un solo INSERT (antes 1 viaje por honorario pagado).
     await supabase.from('bitacora_honorarios').insert(
@@ -535,7 +576,7 @@ export async function pagarHonorarios(
     );
   }
 
-  return { pagados, omitidos };
+  return { pagados, omitidos, detalle };
 }
 
 export async function panelDoctorHonorarios(

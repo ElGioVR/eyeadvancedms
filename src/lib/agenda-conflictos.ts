@@ -46,12 +46,18 @@ function overlap(
  * Detecta traslapes de agenda para un médico o recurso en el horario propuesto.
  * Fuentes: consultas, conceptos de consulta (estudios/procedimientos) y cirugías.
  * Las cirugías canceladas se excluyen.
+ *
+ * Nota: es una verificación previa (check-then-insert). Dos solicitudes
+ * simultáneas pueden pasar ambas la verificación antes de que cualquiera
+ * inserte; cerrar esa carrera requiere una restricción/lock en BD.
  */
 export async function detectarConflictosAgenda(
   input: DetectarConflictosInput
 ): Promise<ConflictoAgenda[]> {
   const supabase = getSupabaseAdmin();
-  const { fecha, hora, duracion_min, medicos, recurso_id } = input;
+  const { fecha, hora, duracion_min, recurso_id } = input;
+  // Sin duplicados: el mismo médico en dos roles no debe duplicar consultas ni conflictos.
+  const medicos = Array.from(new Set(input.medicos.filter(Boolean)));
 
   if (medicos.length === 0 && !recurso_id) return [];
 

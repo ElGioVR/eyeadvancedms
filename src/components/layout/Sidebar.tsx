@@ -161,6 +161,8 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                         !showLabels && 'mx-auto h-11 w-11 justify-center px-0'
                       )}
                       title={!showLabels ? item.label : undefined}
+                      aria-label={!showLabels ? item.label : undefined}
+                      aria-current={isActive ? 'page' : undefined}
                       onClick={() => { if (window.innerWidth < 1024) onClose(); }}
                     >
                       {isActive && showLabels && (

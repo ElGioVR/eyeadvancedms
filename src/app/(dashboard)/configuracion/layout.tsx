@@ -43,6 +43,7 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
               <Link
                 key={tab.href}
                 href={tab.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'whitespace-nowrap px-4 py-3 text-sm font-semibold border-b-2 transition-colors',
                   isActive
@@ -57,7 +58,10 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
         </nav>
       </div>
 
-      {children}
+      {/* Fundido suave al cambiar de pestaña (solo opacidad: sin transform persistente). */}
+      <div key={pathname} className="animate-fadeIn">
+        {children}
+      </div>
     </div>
   );
 }

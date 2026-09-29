@@ -1,8 +1,25 @@
 import { NextResponse } from 'next/server';
-import { mensajeSeguro } from '@/lib/supabase/handle-error';
+import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { errorTranslations } from '@/lib/supabase/errors';
+import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerJSON, validarId } from '@/lib/api/validar';
+import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
+
+/** Tipos admitidos por el CHECK de consulta_historial.tipo_evento (migración 090). */
+const TIPOS_EVENTO = ['CREACION', 'CAMBIO_ESTATUS', 'EDICION', 'CANCELACION', 'REAGENDADO', 'PAGADO', 'FINALIZADO'] as const;
+
+const eventoSchema = z
+  .object({
+    tipo_evento: z
+      .string()
+      .trim()
+      .min(1, 'tipo_evento es requerido')
+      .max(60, 'tipo_evento demasiado largo')
+      .pipe(z.enum(TIPOS_EVENTO, { errorMap: () => ({ message: 'tipo_evento no válido' }) })),
+    payload: z.record(z.unknown()).optional(),
+  })
+  .strict();
 
 export async function GET(
   request: Request,
@@ -14,27 +31,45 @@ export async function GET(
   if (roleError) return roleError;
 
   const { id } = await params;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
   const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabase
-    .from('consulta_historial')
-    .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
-    .eq('consulta_id', id)
-    .order('created_at', { ascending: false });
+  // Historial + (solo rol doctor) consulta y doctor del usuario, en paralelo
+  const requeridoP = doctorRequerido(auth.user.id, auth.perfil);
+  const [historialResult, requerido, consultaResult] = await Promise.all([
+    supabase
+      .from('consulta_historial')
+      .select('id, consulta_id, tipo_evento, usuario_id, payload, created_at')
+      .eq('consulta_id', id)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    requeridoP,
+    auth.perfil?.rol === 'doctor'
+      ? supabase.from('consultas').select('doctor_id').eq('id', id).maybeSingle()
+      : Promise.resolve(null),
+  ]);
 
+  // RBAC: el doctor solo ve el historial de sus propias consultas (como en GET /consultas/[id])
+  if (requerido !== undefined) {
+    const denegado = verificarDueno(requerido, consultaResult?.data?.doctor_id);
+    if (denegado) return denegado;
+  }
+
+  const { data, error } = historialResult;
   if (error) {
     return NextResponse.json({ error: mensajeSeguro(error, 'consultas.[id].historial') }, { status: 500 });
   }
 
-  let enriched = data || [];
-  const userIds = [...new Set(enriched.map((h) => h.usuario_id).filter(Boolean))];
+  let enriched: Array<Record<string, unknown>> = data || [];
+  const userIds = [...new Set((data || []).map((h) => h.usuario_id).filter((u): u is string => !!u))];
   if (userIds.length > 0) {
     const { data: usuarios } = await supabase
       .from('usuarios')
       .select('id, nombre')
       .in('id', userIds);
-    const userMap = new Map((usuarios || []).map((u: any) => [u.id, u.nombre]));
-    enriched = enriched.map((h) => ({
+    const userMap = new Map(((usuarios || []) as Array<{ id: string; nombre: string | null }>).map((u) => [u.id, u.nombre]));
+    enriched = (data || []).map((h) => ({
       ...h,
       usuario_nombre: h.usuario_id ? userMap.get(h.usuario_id) || null : null,
     }));
@@ -53,47 +88,37 @@ export async function POST(
   if (roleError) return roleError;
 
   const { id } = await params;
-  let body: { tipo_evento?: unknown; payload?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-  const tipo_evento = typeof body.tipo_evento === 'string' ? body.tipo_evento.trim() : '';
-  const payload = body.payload;
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
 
-  if (!tipo_evento) {
-    return NextResponse.json({ error: 'tipo_evento es requerido' }, { status: 400 });
-  }
-  if (tipo_evento.length > 60) {
-    return NextResponse.json({ error: 'tipo_evento demasiado largo' }, { status: 400 });
-  }
-  if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) {
-    return NextResponse.json({ error: 'payload debe ser un objeto' }, { status: 400 });
-  }
+  const body = await leerJSON(request, eventoSchema, { maxBytes: 20_000 });
+  if (body instanceof NextResponse) return body;
 
   const supabase = getSupabaseAdmin();
 
-  // Verificar que la consulta exista antes de registrar el evento
-  const { data: consulta, error: consultaError } = await supabase
-    .from('consultas')
-    .select('id')
-    .eq('id', id)
-    .maybeSingle();
+  // Verificar que la consulta exista (y RBAC de doctor) antes de registrar el evento
+  const [consultaResult, requerido] = await Promise.all([
+    supabase.from('consultas').select('id, doctor_id').eq('id', id).maybeSingle(),
+    doctorRequerido(auth.user.id, auth.perfil),
+  ]);
+  const { data: consulta, error: consultaError } = consultaResult;
   if (consultaError || !consulta) {
     return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
   }
+  const denegado = verificarDueno(requerido, consulta.doctor_id);
+  if (denegado) return denegado;
 
   const { error } = await supabase.from('consulta_historial').insert({
     consulta_id: id,
-    tipo_evento,
+    tipo_evento: body.tipo_evento,
     usuario_id: auth.user.id,
-    payload: (payload as Record<string, unknown>) ?? {},
+    payload: body.payload ?? {},
   });
 
   if (error) {
+    const { mensaje, traducido } = handleSupabaseError(error, 'consultas.[id].historial.crear');
     return NextResponse.json(
-      { error: errorTranslations[error.message] || 'Error al registrar el evento' },
+      { error: traducido ? mensaje : 'Error al registrar el evento' },
       { status: 500 },
     );
   }

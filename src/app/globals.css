@@ -143,6 +143,44 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ─────────────────────────────────────────────
+   Movimiento de la app (entradas suaves, listas escalonadas)
+   ───────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Lista escalonada: cada hijo aparece 30 ms después del anterior (máx. 12). */
+.anim-lista > * { animation: fadeUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.anim-lista > *:nth-child(1) { animation-delay: 0ms; }
+.anim-lista > *:nth-child(2) { animation-delay: 30ms; }
+.anim-lista > *:nth-child(3) { animation-delay: 60ms; }
+.anim-lista > *:nth-child(4) { animation-delay: 90ms; }
+.anim-lista > *:nth-child(5) { animation-delay: 120ms; }
+.anim-lista > *:nth-child(6) { animation-delay: 150ms; }
+.anim-lista > *:nth-child(7) { animation-delay: 180ms; }
+.anim-lista > *:nth-child(8) { animation-delay: 210ms; }
+.anim-lista > *:nth-child(9) { animation-delay: 240ms; }
+.anim-lista > *:nth-child(10) { animation-delay: 270ms; }
+.anim-lista > *:nth-child(11) { animation-delay: 300ms; }
+.anim-lista > *:nth-child(n + 12) { animation-delay: 330ms; }
+
+/* Números/valores que cambian: transición de opacidad sin saltos de layout */
+.valor-suave { transition: opacity 0.2s ease; }
+.valor-suave[data-validando='true'] { opacity: 0.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-lista > *,
+  .animate-fadeUp,
+  .animate-popIn,
+  .animate-slideUp,
+  .animate-fadeIn,
+  .animate-sheetUp { animation: none !important; }
+  .animate-barraCarga { animation-duration: 2.4s; }
+  .valor-suave { transition: none; }
+}
+
 @media print {
   .no-print, nav, header, footer, .sidebar { display: none !important; }
   .print-page { padding: 0 !important; margin: 0 !important; }

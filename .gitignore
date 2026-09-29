@@ -41,3 +41,4 @@ next-env.d.ts
 .test-b*.txt
 .tsc-output.txt
 .lint-output.txt
+_to_delete/

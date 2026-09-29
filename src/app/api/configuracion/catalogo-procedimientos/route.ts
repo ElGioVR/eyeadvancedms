@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerJSON } from '@/lib/api/validar';
+import { idDeQuery, monto, respuestaErrorDb, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
 
+const TABLA = 'catalogo_procedimientos';
+const CONTEXTO = 'configuracion/catalogo-procedimientos';
+
 const baseSchema = z.object({
-  nombre: z.string().min(1).max(255),
-  descripcion: z.string().optional().nullable(),
-  costo: z.number().min(0).max(99999999.99),
+  nombre: z.string().trim().min(1).max(255),
+  descripcion: textoLargo.optional().nullable(),
+  costo: monto,
   por_ojo: z.boolean().optional(),
   activo: z.boolean().optional(),
 }).strict();
@@ -24,13 +28,12 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from('catalogo_procedimientos')
+    .from(TABLA)
     .select('id, nombre, descripcion, costo, por_ojo, activo')
-    .order('nombre', { ascending: true });
+    .order('nombre', { ascending: true })
+    .limit(2000);
 
-  if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/catalogo-procedimientos').mensaje }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, CONTEXTO);
 
   return NextResponse.json(data);
 }
@@ -41,28 +44,17 @@ export async function POST(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const validation = createSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0]?.message || 'Datos inválidos' }, { status: 400 });
-  }
+  const body = await leerJSON(request, createSchema);
+  if (body instanceof NextResponse) return body;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from('catalogo_procedimientos')
-    .insert(validation.data)
+    .from(TABLA)
+    .insert(body)
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/catalogo-procedimientos').mensaje }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, CONTEXTO);
 
   return NextResponse.json(data, { status: 201 });
 }
@@ -73,31 +65,20 @@ export async function PUT(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const body = await leerJSON(request, updateSchema);
+  if (body instanceof NextResponse) return body;
 
-  const validation = updateSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0]?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const { id, ...updates } = validation.data;
+  const { id, ...updates } = body;
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
-    .from('catalogo_procedimientos')
+    .from(TABLA)
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/catalogo-procedimientos').mensaje }, { status: 500 });
-  }
+  if (error) return respuestaErrorDb(error, CONTEXTO, { noEncontrado: 'Procedimiento no encontrado' });
 
   return NextResponse.json(data);
 }
@@ -108,20 +89,17 @@ export async function DELETE(request: Request) {
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  if (!id) {
-    return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
-  }
+  const id = idDeQuery(request, 'ID requerido');
+  if (id instanceof NextResponse) return id;
 
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
-    .from('catalogo_procedimientos')
+    .from(TABLA)
     .delete()
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: handleSupabaseError(error, 'configuracion/catalogo-procedimientos').mensaje }, { status: 500 });
+    return respuestaErrorDb(error, CONTEXTO, { referencia: 'No se puede eliminar: el procedimiento está en uso' });
   }
 
   return NextResponse.json({ success: true });

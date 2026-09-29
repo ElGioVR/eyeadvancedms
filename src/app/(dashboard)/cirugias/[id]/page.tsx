@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Printer, Calendar, Clock, User, Stethoscope, Eye, FileText,
@@ -14,6 +15,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 
 interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; }
 interface Origen { nombre?: string; }
@@ -208,33 +210,23 @@ export default function CirugiaDetailPage() {
   const router = useRouter();
   const { user } = useUser();
   const { toast } = useToast();
-  const [data, setData] = useState<CirugiaDetalleResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Detalle vía SWR: al volver a la pantalla se muestra al instante y tras subir o
+  // eliminar archivos solo se revalidan los datos (sin volver al skeleton).
+  const {
+    data,
+    error: errorSWR,
+    isLoading: loading,
+    isValidating: validating,
+    mutate,
+  } = useSWR<CirugiaDetalleResponse>(id ? `/api/cirugias/${id}` : null);
+  const error = errorSWR ? (errorSWR instanceof Error ? errorSWR.message : 'Error desconocido') : null;
+  const [eliminando, setEliminando] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [tipoDocumento, setTipoDocumento] = useState('');
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ archivo: Archivo; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-
-  const fetchCirugia = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/cirugias/${id}`);
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(payload?.error || `Error al cargar la cirugía (${res.status})`);
-      }
-      const payload = await res.json();
-      setData(payload);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => { fetchCirugia(); }, [fetchCirugia]);
 
   // Vista previa de archivos: bloquea scroll de fondo y cierra con Escape
   useEffect(() => {
@@ -319,6 +311,11 @@ export default function CirugiaDetailPage() {
       toast('Selecciona al menos un archivo', 'error');
       return;
     }
+    if (tipoDocumento.trim().length > 120) {
+      toast('El tipo de documento es demasiado largo (máx. 120 caracteres)', 'error');
+      return;
+    }
+    if (uploading) return;
     setUploading(true);
     try {
       for (const file of files) {
@@ -327,18 +324,19 @@ export default function CirugiaDetailPage() {
         formData.append('tipo_documento', tipoDocumento.trim());
         const res = await fetch(`/api/cirugias/${id}/archivos`, { method: 'POST', body: formData });
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || `Error al subir ${file.name}`);
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || `Error al subir ${file.name}`);
         }
       }
       toast('Archivos subidos exitosamente');
       setFiles([]);
       setTipoDocumento('');
       setShowUpload(false);
-      await fetchCirugia();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Error al subir archivos', 'error');
     } finally {
+      // Revalida aunque falle a medias (algunos archivos pudieron subirse)
+      void mutate();
       setUploading(false);
     }
   }
@@ -359,24 +357,40 @@ export default function CirugiaDetailPage() {
 
   async function deleteFile(archivoId: string) {
     if (!confirm('¿Eliminar este archivo? Se conservará el registro en historial.')) return;
+    if (eliminando) return;
+    setEliminando(archivoId);
     try {
-      const res = await fetch(`/api/cirugias/${id}/archivos/${archivoId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error al eliminar');
-      }
+      // Optimista: el archivo desaparece al instante; se revierte si el servidor falla.
+      await mutate(
+        async (actual) => {
+          const res = await fetch(`/api/cirugias/${id}/archivos/${archivoId}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const err = await res.json().catch(() => null);
+            throw new Error(err?.error || 'Error al eliminar');
+          }
+          return actual;
+        },
+        {
+          optimisticData: (actual) =>
+            actual ? { ...actual, archivos: actual.archivos.filter((a) => a.id !== archivoId) } : (actual as unknown as CirugiaDetalleResponse),
+          rollbackOnError: true,
+          populateCache: false,
+          revalidate: true, // trae el historial actualizado
+        }
+      );
       toast('Archivo eliminado');
-      await fetchCirugia();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Error al eliminar', 'error');
+    } finally {
+      setEliminando(null);
     }
   }
 
-  if (loading) {
+  if (loading && !data) {
     return <CirugiaDetalleSkeleton />;
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 dark:text-gray-400">{error || 'Cirugía no encontrada'}</p>
@@ -391,7 +405,8 @@ export default function CirugiaDetailPage() {
   const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${cirugia.ojo}` : procedimiento;
 
   return (
-    <div className="print-page">
+    <div className="print-page relative animate-fadeIn" aria-busy={validating}>
+      <BarraRevalidando activo={validating} className="no-print" />
       <PageHeader
         title={cirugia.codigo || 'Cirugía'}
         subtitle={`${nombrePaciente} — ${cirugia.fecha || 'Sin fecha'} ${cirugia.hora || ''}`}
@@ -497,7 +512,7 @@ export default function CirugiaDetailPage() {
             </div>
 
             {showUpload && (
-              <div className="mb-4 rounded-lg border border-dashed border-gray-300 dark:border-line bg-surface-2 p-4 no-print">
+              <div className="mb-4 rounded-lg border border-dashed border-gray-300 dark:border-line bg-surface-2 p-4 no-print animate-fadeIn">
                 <input type="file" multiple accept={EXTENSIONES_PERMITIDAS.join(',')} className="hidden" id="archivo-detalle" onChange={handleFileInput} />
                 <div
                   onDragOver={(e) => e.preventDefault()}
@@ -522,15 +537,15 @@ export default function CirugiaDetailPage() {
                     {files.map((f) => (
                       <div key={`${f.name}-${f.size}`} className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-sm">
                         <span className="truncate text-fg">{f.name} ({formatBytes(f.size)})</span>
-                        <button onClick={() => removeFile(f)} className="text-red-600 hover:text-red-700"><X className="h-4 w-4" /></button>
+                        <button onClick={() => removeFile(f)} aria-label={`Quitar ${f.name}`} className="text-red-600 transition-colors hover:text-red-700"><X className="h-4 w-4" /></button>
                       </div>
                     ))}
                   </div>
                 )}
                 <div className="mt-3 flex justify-end gap-2">
                   <button onClick={() => { setShowUpload(false); setFiles([]); setTipoDocumento(''); }} className="rounded-lg border border-line px-3 py-2 text-xs font-bold text-fg-2">Cancelar</button>
-                  <button onClick={uploadFiles} disabled={uploading} className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
-                    {uploading ? 'Subiendo...' : 'Subir'}
+                  <button onClick={uploadFiles} disabled={uploading} aria-busy={uploading} className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+                    {uploading ? 'Subiendo…' : 'Subir'}
                   </button>
                 </div>
               </div>
@@ -539,9 +554,9 @@ export default function CirugiaDetailPage() {
             {archivos.length === 0 ? (
               <p className="text-sm text-muted">Sin archivos adjuntos</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 anim-lista">
                 {archivos.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5">
+                  <div key={a.id} className={cn('flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5 transition-opacity duration-200', eliminando === a.id && 'opacity-50')}>
                     <div
                       className="flex items-center gap-3 min-w-0 cursor-pointer hover:opacity-75 transition-opacity"
                       onClick={() => openPreview(a)}
@@ -554,9 +569,9 @@ export default function CirugiaDetailPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 no-print">
-                      <button onClick={() => openPreview(a)} className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400" title="Vista previa"><Eye className="h-4 w-4" /></button>
-                      <button onClick={() => downloadFile(a.id)} className="text-primary-600 hover:text-primary-700" title="Descargar"><Download className="h-4 w-4" /></button>
-                      <button onClick={() => deleteFile(a.id)} className="text-red-600 hover:text-red-700" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => openPreview(a)} className="text-gray-400 transition-colors hover:text-primary-600 dark:hover:text-primary-400" title="Vista previa" aria-label={`Vista previa de ${a.nombre_original}`}><Eye className="h-4 w-4" /></button>
+                      <button onClick={() => downloadFile(a.id)} className="text-primary-600 transition-colors hover:text-primary-700" title="Descargar" aria-label={`Descargar ${a.nombre_original}`}><Download className="h-4 w-4" /></button>
+                      <button onClick={() => deleteFile(a.id)} disabled={eliminando === a.id} className="text-red-600 transition-colors hover:text-red-700 disabled:opacity-50" title="Eliminar" aria-label={`Eliminar ${a.nombre_original}`}><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                 ))}

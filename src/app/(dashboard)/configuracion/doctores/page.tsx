@@ -15,7 +15,10 @@ import {
 import { cn } from '@/lib/utils';
 import { getInitials } from '@/lib/text';
 import { useFetch } from '@/hooks/useFetch';
+import { useDebounce } from '@/hooks/useDebounce';
+import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface DoctorAPI {
@@ -51,13 +54,17 @@ const avatarColors = [
 ];
 
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const comoLista = (actual: unknown): DoctorAPI[] => (Array.isArray(actual) ? (actual as DoctorAPI[]) : []);
+const msg = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
 function getAvatarColor(id: string): string {
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return avatarColors[hash % avatarColors.length];
 }
 
 export default function DoctoresPage() {
-  const { data: doctores, loading, error, refetch } = useFetch<DoctorAPI>('/api/configuracion/doctores');
+  const { data: doctores, loading, validating, error, mutate } = useFetch<DoctorAPI>('/api/configuracion/doctores');
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [editingDoctor, setEditingDoctor] = useState<DoctorAPI | null>(null);
@@ -75,18 +82,25 @@ export default function DoctoresPage() {
   const [formTelefono, setFormTelefono] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formUsuarioId, setFormUsuarioId] = useState('');
-  const [usuariosDoctor, setUsuariosDoctor] = useState<UsuarioOption[]>([]);
 
-  const filtered = useMemo(
-    () =>
-      doctores.filter(
-        (d) =>
-          d.alias.toLowerCase().includes(search.toLowerCase()) ||
-          d.especialidad.toLowerCase().includes(search.toLowerCase()) ||
-          (d.cedula && d.cedula.toLowerCase().includes(search.toLowerCase()))
-      ),
-    [doctores, search]
+  // Usuarios vinculables: misma caché que /configuracion/usuarios; solo se pide con el panel abierto.
+  const panelAbierto = !!editingDoctor || showNewDoctor;
+  const { data: todosUsuarios } = useFetch<UsuarioOption>('/api/configuracion/usuarios', undefined, { enabled: panelAbierto });
+  const usuariosDoctor = useMemo(
+    () => todosUsuarios.filter((u) => ['doctor', 'admin'].includes(u.rol ?? '')),
+    [todosUsuarios]
   );
+
+  const debouncedSearch = useDebounce(search);
+  const filtered = useMemo(() => {
+    const term = debouncedSearch.toLowerCase();
+    return doctores.filter(
+      (d) =>
+        (d.alias || '').toLowerCase().includes(term) ||
+        (d.especialidad || '').toLowerCase().includes(term) ||
+        (d.cedula && d.cedula.toLowerCase().includes(term))
+    );
+  }, [doctores, debouncedSearch]);
 
   const resetForm = useCallback(() => {
     setFormAlias('');
@@ -99,23 +113,11 @@ export default function DoctoresPage() {
     setFormUsuarioId('');
   }, []);
 
-  const fetchUsuariosDoctor = useCallback(async () => {
-    try {
-      const res = await fetch('/api/configuracion/usuarios');
-      if (res.ok) {
-        const data = await res.json();
-        const all: UsuarioOption[] = Array.isArray(data) ? data : data.data || [];
-        setUsuariosDoctor(all.filter((u) => ['doctor', 'admin'].includes((u as any).rol)));
-      }
-    } catch { /* silent */ }
-  }, []);
-
   const handleNewDoctor = useCallback(() => {
     resetForm();
     setFormError(null);
     setShowNewDoctor(true);
-    fetchUsuariosDoctor();
-  }, [resetForm, fetchUsuariosDoctor]);
+  }, [resetForm]);
 
   const handleEditDoctor = useCallback((doc: DoctorAPI) => {
     setFormAlias(doc.alias);
@@ -128,8 +130,7 @@ export default function DoctoresPage() {
     setFormUsuarioId(doc.usuario_id || '');
     setFormError(null);
     setEditingDoctor(doc);
-    fetchUsuariosDoctor();
-  }, [fetchUsuariosDoctor]);
+  }, []);
 
   const handleCloseSidebar = useCallback(() => {
     setEditingDoctor(null);
@@ -137,84 +138,101 @@ export default function DoctoresPage() {
     resetForm();
   }, [resetForm]);
 
+  const payloadForm = useCallback(() => ({
+    alias: formAlias.trim(),
+    nombre: formNombre.trim() || null,
+    apellido: formApellido.trim() || null,
+    especialidad: formEspecialidad,
+    cedula: formCedula.trim(),
+    telefono: formTelefono.trim(),
+    // Vacío → sin correo (el esquema del servidor rechaza '' como email).
+    email: formEmail.trim() || null,
+    usuario_id: formUsuarioId || null,
+  }), [formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, formUsuarioId]);
+
+  /** Validación local (el servidor sigue siendo la autoridad). */
+  const validar = useCallback((): string | null => {
+    if (!formAlias.trim()) return 'El alias es obligatorio';
+    if (formAlias.trim().length > 100) return 'El alias no puede exceder 100 caracteres';
+    if (formEmail.trim() && !EMAIL_RE.test(formEmail.trim())) return 'Correo electrónico no válido';
+    if (formTelefono.trim() && !/^[0-9+()\-\s.]{7,20}$/.test(formTelefono.trim())) return 'Teléfono no válido';
+    return null;
+  }, [formAlias, formEmail, formTelefono]);
+
   const handleCreate = useCallback(async () => {
-    if (!formAlias.trim()) return;
+    if (saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
     try {
-      const res = await fetch('/api/configuracion/doctores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          alias: formAlias,
-          nombre: formNombre || null,
-          apellido: formApellido || null,
-          especialidad: formEspecialidad,
-          cedula: formCedula,
-          telefono: formTelefono,
-          email: formEmail,
-          usuario_id: formUsuarioId || null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al crear doctor');
-        return;
-      }
+      const { email, ...resto } = payloadForm();
+      // En alta el esquema acepta email opcional pero no null.
+      const body = email ? { ...resto, email } : resto;
+      await mutate(
+        async (actual: unknown) => {
+          const nuevo = await enviarJSON<DoctorAPI>('/api/configuracion/doctores', 'POST', body);
+          return nuevo?.id ? [...comoLista(actual), nuevo] : comoLista(actual);
+        },
+        { populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Doctor creado exitosamente');
-      await refetch();
+    } catch (err) {
+      setFormError(msg(err, 'Error al crear doctor'));
     } finally {
       setSaving(false);
     }
-  }, [formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
+  }, [saving, validar, payloadForm, mutate, handleCloseSidebar, toast]);
 
   const handleUpdate = useCallback(async () => {
-    if (!editingDoctor) return;
+    if (!editingDoctor || saving) return;
+    const invalido = validar();
+    if (invalido) { setFormError(invalido); return; }
     setSaving(true);
     setFormError(null);
+    const id = editingDoctor.id;
+    const body = payloadForm();
+    const aplicar = (actual: unknown) => comoLista(actual).map((d) => (d.id === id ? { ...d, ...body } : d));
     try {
-      const res = await fetch('/api/configuracion/doctores', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingDoctor.id,
-          alias: formAlias,
-          nombre: formNombre || null,
-          apellido: formApellido || null,
-          especialidad: formEspecialidad,
-          cedula: formCedula,
-          telefono: formTelefono,
-          email: formEmail,
-          usuario_id: formUsuarioId || null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.error || 'Error al actualizar doctor');
-        return;
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON('/api/configuracion/doctores', 'PATCH', { id, ...body });
+          return aplicar(actual);
+        },
+        { optimisticData: aplicar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
       handleCloseSidebar();
       toast('Doctor actualizado exitosamente');
-      await refetch();
+    } catch (err) {
+      setFormError(msg(err, 'Error al actualizar doctor'));
     } finally {
       setSaving(false);
     }
-  }, [editingDoctor, formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, refetch, handleCloseSidebar, toast]);
+  }, [editingDoctor, saving, validar, payloadForm, mutate, handleCloseSidebar, toast]);
 
   const handleDelete = useCallback(async (doctorId: string) => {
+    const quitar = (actual: unknown) => comoLista(actual).filter((d) => d.id !== doctorId);
     setDeleting(doctorId);
     try {
-      const res = await fetch(`/api/configuracion/doctores?id=${doctorId}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast('Doctor eliminado');
-        await refetch();
-      }
+      await mutate(
+        async (actual: unknown) => {
+          await enviarJSON(`/api/configuracion/doctores?id=${encodeURIComponent(doctorId)}`, 'DELETE');
+          return quitar(actual);
+        },
+        { optimisticData: quitar, rollbackOnError: true, populateCache: true, revalidate: true }
+      );
+      toast('Doctor eliminado');
+      if (editingDoctor?.id === doctorId) handleCloseSidebar();
+    } catch (err) {
+      toast(msg(err, 'No se pudo eliminar el doctor'), 'error');
     } finally {
       setDeleting(null);
       setDeleteTarget(null);
     }
-  }, [refetch, toast]);
+  }, [mutate, toast, editingDoctor, handleCloseSidebar]);
+
+  const cargandoInicial = loading && doctores.length === 0;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
@@ -241,29 +259,31 @@ export default function DoctoresPage() {
         </div>
 
         {/* Error */}
-        {error && (
+        {error && doctores.length === 0 && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         )}
 
         {/* Cards */}
-        {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cargandoInicial ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-64 rounded-2xl border border-line bg-surface animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-line bg-surface p-12 text-center">
+          <div className="rounded-2xl border border-line bg-surface p-12 text-center animate-fadeIn">
             <Stethoscope className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
             <p className="text-sm font-medium text-muted">No se encontraron doctores</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="relative" aria-busy={validating}>
+          <BarraRevalidando activo={validating} className="-top-2" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 anim-lista">
             {filtered.map((doc) => {
               const initials = getInitials(doc.alias);
               const avatarColor = getAvatarColor(doc.id);
               return (
-                <div key={doc.id} className="group overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none transition-all hover:shadow-md hover:-translate-y-0.5">
+                <div key={doc.id} className="group overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-0.5">
                   <div className="p-5">
                     <div className="flex items-start gap-4 mb-4">
                       <div className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white', avatarColor)}>
@@ -317,6 +337,7 @@ export default function DoctoresPage() {
                       <button
                         onClick={() => setDeleteTarget(doc.id)}
                         disabled={deleting === doc.id}
+                        aria-label={`Eliminar a ${doc.alias}`}
                         className="inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-bold text-muted dark:text-muted hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
                       >
                         {deleting === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -327,20 +348,21 @@ export default function DoctoresPage() {
               );
             })}
           </div>
+          </div>
         )}
       </div>
 
       {/* Sidebar — New or Edit */}
       {(editingDoctor || showNewDoctor) && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={handleCloseSidebar} />
-          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
+          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden animate-fadeIn" onClick={handleCloseSidebar} />
+          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl animate-fadeIn lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:rounded-xl lg:w-[380px] lg:shrink-0 w-full">
             <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none lg:sticky lg:top-6">
               <div className="flex items-center justify-between border-b border-line/70 px-6 py-4">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">
                   {editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}
                 </h3>
-                <button onClick={handleCloseSidebar} className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg dark:text-fg dark:text-muted transition-colors">
+                <button onClick={handleCloseSidebar} aria-label="Cerrar" className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg dark:text-fg dark:text-muted transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -439,7 +461,7 @@ export default function DoctoresPage() {
                     <option value="">Sin vincular</option>
                     {usuariosDoctor.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.nombre || u.email} {(u as any).rol === 'admin' ? '(Admin)' : '(Doctor)'}
+                        {u.nombre || u.email} {u.rol === 'admin' ? '(Admin)' : '(Doctor)'}
                       </option>
                     ))}
                   </select>
@@ -463,7 +485,7 @@ export default function DoctoresPage() {
                     className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
                     {saving ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
                     ) : editingDoctor ? 'GUARDAR CAMBIOS' : 'CREAR DOCTOR'}
                   </button>
                 </div>

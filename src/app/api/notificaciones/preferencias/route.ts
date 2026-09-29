@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth } from '@/lib/supabase/server';
+import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
 
 const TIPOS_EVENTO = [
@@ -21,7 +22,7 @@ const updateSchema = z.object({
     tipo_evento: z.enum(TIPOS_EVENTO),
     canal: z.enum(['IN_APP', 'EMAIL', 'PUSH']),
     activo: z.boolean(),
-  })).min(1).max(TIPOS_EVENTO.length * 3),
+  }).strict()).min(1).max(TIPOS_EVENTO.length * 3),
 }).strict();
 
 export async function GET() {
@@ -33,10 +34,11 @@ export async function GET() {
     .from('notificacion_preferencias')
     .select('id, tipo_evento, canal, activo')
     .eq('user_id', auth.user.id)
-    .order('tipo_evento');
+    .order('tipo_evento')
+    .limit(100);
 
   if (error) {
-    return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
+    return NextResponse.json({ error: errorTranslations[error.message] || handleSupabaseError(error, 'notificaciones.preferencias.get').mensaje }, { status: 500 });
   }
 
   return NextResponse.json({ data });
@@ -46,15 +48,12 @@ export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const body = await leerJSON(request, updateSchema, { maxBytes: 16_000 });
+  if (body instanceof NextResponse) return body;
 
-  const validation = updateSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
-  }
+  // Una misma (tipo_evento, canal) repetida haría fallar el upsert
+  // ("cannot affect row a second time"): se conserva la última.
+  const unicas = new Map(body.preferencias.map((p) => [`${p.tipo_evento}|${p.canal}`, p]));
 
   const supabase = getSupabaseAdmin();
 
@@ -63,7 +62,7 @@ export async function PATCH(request: Request) {
   const { error } = await supabase
     .from('notificacion_preferencias')
     .upsert(
-      validation.data.preferencias.map((pref) => ({
+      Array.from(unicas.values()).map((pref) => ({
         user_id: auth.user.id,
         tipo_evento: pref.tipo_evento,
         canal: pref.canal,

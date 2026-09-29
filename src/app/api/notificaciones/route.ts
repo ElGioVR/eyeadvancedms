@@ -2,12 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
+import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
 
 const markReadSchema = z.object({
-  ids: z.array(z.string().uuid()).optional(),
+  ids: z.array(z.string().uuid()).max(200).optional(),
   all: z.boolean().optional(),
-}).refine((data) => data.ids || data.all, {
+}).strict().refine((data) => data.ids || data.all === true, {
   message: 'Debe proporcionar "ids" o "all: true"',
 });
 
@@ -34,17 +35,10 @@ export async function PATCH(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  const parsed = markReadSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-  }
+  const body = await leerJSON(request, markReadSchema, { maxBytes: 16_000 });
+  if (body instanceof NextResponse) return body;
+  // Nada que marcar: no se consulta la BD
+  if (!body.all && body.ids?.length === 0) return NextResponse.json({ success: true });
 
   const supabase = getSupabaseAdmin();
 
@@ -53,10 +47,11 @@ export async function PATCH(request: NextRequest) {
     .update({ leido: true })
     .eq('user_id', auth.user.id);
 
-  if (parsed.data.all) {
+  if (body.all) {
     query = query.eq('leido', false);
-  } else if (parsed.data.ids) {
-    query = query.in('id', parsed.data.ids);
+  } else if (body.ids) {
+    // Sólo las no leídas: evita reescribir filas que no cambian
+    query = query.in('id', body.ids).eq('leido', false);
   }
 
   const { error } = await query;

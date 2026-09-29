@@ -19,5 +19,6 @@ export async function GET() {
     return NextResponse.json({ error: handleSupabaseError(error, 'cirugias.recursos').mensaje }, { status: 500 });
   }
 
-  return NextResponse.json(data || []);
+  // Catálogo casi estático: caché privada corta en el navegador.
+  return NextResponse.json(data || [], { headers: { 'Cache-Control': 'private, max-age=60' } });
 }

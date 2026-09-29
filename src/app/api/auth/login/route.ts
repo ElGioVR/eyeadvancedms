@@ -6,8 +6,8 @@ import { SESION_TEMPORAL_COOKIE, opcionesCookieAuth } from "@/lib/supabase/const
 
 const loginSchema = z
   .object({
-    email: z.string().email(),
-    password: z.string().min(1),
+    email: z.string().trim().email().max(255),
+    password: z.string().min(1).max(128),
     recordarme: z.boolean().optional(),
   })
   .strict();
@@ -42,10 +42,14 @@ export async function POST(request: NextRequest) {
 
   // Segundo límite solo por email: evita evadir el bloqueo rotando X-Forwarded-For
   const emailKey = `email:${email.trim().toLowerCase()}`;
+  // Tercer límite solo por IP (holgado: la clínica comparte IP): frena el
+  // «credential stuffing» contra muchos correos desde un mismo origen.
+  const ipKey = `ip:${clientIP}`;
   const rateCheck = checkRateLimit(rateKey);
   const emailCheck = checkRateLimit(emailKey);
-  if (!rateCheck.allowed || !emailCheck.allowed) {
-    const retry = Math.max(rateCheck.retryAfter ?? 0, emailCheck.retryAfter ?? 0);
+  const ipCheck = checkRateLimit(ipKey);
+  if (!rateCheck.allowed || !emailCheck.allowed || !ipCheck.allowed) {
+    const retry = Math.max(rateCheck.retryAfter ?? 0, emailCheck.retryAfter ?? 0, ipCheck.retryAfter ?? 0);
     return NextResponse.json(
       { error: `Demasiados intentos. Intenta de nuevo en ${retry} segundos.` },
       { status: 429 },
@@ -104,6 +108,7 @@ export async function POST(request: NextRequest) {
     });
 
     recordFailedAttempt(emailKey, 15);
+    recordFailedAttempt(ipKey, 60);
     const result = recordFailedAttempt(rateKey);
     if (result.blocked) {
       return NextResponse.json(

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { invalidarDoctorDeUsuario } from '@/lib/auth-helpers';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { errorTranslations } from '@/lib/supabase/errors';
-import { requireAuth } from '@/lib/supabase/server';
+import { mensajeSeguro } from '@/lib/supabase/handle-error';
+import { invalidarPerfil, requireAuth } from '@/lib/supabase/server';
+import { leerJSON } from '@/lib/api/validar';
+import { z } from 'zod';
 
 export async function GET() {
   const auth = await requireAuth();
@@ -9,7 +13,7 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
   // Perfil y vínculo doctor por usuario_id en paralelo (antes: 2-3 viajes en serie)
-  const [perfilRes, doctorRes] = await Promise.all([
+  const [perfilRes, doctorRes, authRes] = await Promise.all([
     supabase
       .from('usuarios')
       .select('id, email, nombre, rol, avatar_url, preferencias, activo')
@@ -20,6 +24,8 @@ export async function GET() {
       .select('id')
       .eq('usuario_id', auth.user.id)
       .maybeSingle(),
+    // Fechas de alta / último acceso (no vienen en el JWT); en paralelo
+    supabase.auth.admin.getUserById(auth.user.id),
   ]);
   const { data, error } = perfilRes;
 
@@ -52,6 +58,7 @@ export async function GET() {
           .update({ usuario_id: auth.user.id })
           .eq('id', doctorByEmail.id)
           .is('usuario_id', null);
+        invalidarDoctorDeUsuario(auth.user.id);
       }
     }
   }
@@ -61,8 +68,8 @@ export async function GET() {
   return NextResponse.json({
     ...perfil,
     doctor_id,
-    created_at: auth.user.created_at,
-    last_sign_in_at: auth.user.last_sign_in_at ?? null,
+    created_at: authRes.data?.user?.created_at ?? null,
+    last_sign_in_at: authRes.data?.user?.last_sign_in_at ?? null,
     modo_focus: ((data.preferencias as Record<string, unknown> | null)?.modo_focus === true),
     iniciales: data.nombre
       ? data.nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
@@ -70,33 +77,41 @@ export async function GET() {
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
+// Preferencias permitidas (las claves desconocidas se ignoran en vez de corromper la config)
+const preferenciasSchema = z.object({
+  modo_focus: z.boolean().optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+  festividad: z.enum(['TOTAL', 'MEDIO', 'POCO', 'NADA']).optional(),
+});
+
+const patchSchema = z.object({
+  preferencias: preferenciasSchema.optional(),
+}).strict();
+
 export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  let body: { preferencias?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const body = await leerJSON(request, patchSchema, { maxBytes: 8_000 });
+  if (body instanceof NextResponse) return body;
 
   const update: Record<string, unknown> = {};
 
-  if (body.preferencias && typeof body.preferencias === 'object') {
-    // Whitelist: solo claves conocidas; ignora el resto en vez de corromper la config
-    const entradas = Object.entries(body.preferencias as Record<string, unknown>).filter(([clave]) =>
-      ['modo_focus', 'theme', 'festividad'].includes(clave),
-    );
+  if (body.preferencias) {
+    const entradas = Object.entries(body.preferencias).filter(([, v]) => v !== undefined);
     if (entradas.length === 0) {
       return NextResponse.json({ error: 'Ninguna preferencia válida para actualizar' }, { status: 400 });
     }
+    // Se relee de BD (no de la caché de sesión) para no pisar cambios recientes
     const supabase = getSupabaseAdmin();
-    const { data: current } = await supabase
+    const { data: current, error: readError } = await supabase
       .from('usuarios')
       .select('preferencias')
       .eq('id', auth.user.id)
       .maybeSingle();
+    if (readError) {
+      return NextResponse.json({ error: mensajeSeguro(readError, 'usuarios.me.preferencias') }, { status: 500 });
+    }
 
     const merged = {
       ...((current?.preferencias as Record<string, unknown>) ?? {}),
@@ -119,5 +134,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: errorTranslations[error.message] || 'Error interno del servidor' }, { status: 500 });
   }
 
+  invalidarPerfil(auth.user.id);
   return NextResponse.json({ ok: true });
 }

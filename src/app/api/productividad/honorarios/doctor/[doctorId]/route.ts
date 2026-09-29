@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
-import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { leerQuery, validarId } from '@/lib/api/validar';
 import { panelDoctorHonorarios } from '@/lib/productividad';
+import { fechaReal, validarRango } from '@/lib/productividad/validacion';
+
+const querySchema = z.object({
+  referencia: fechaReal.optional(),
+  desde: fechaReal.optional(),
+  hasta: fechaReal.optional(),
+  page: z.string().max(10).optional(),
+  pageSize: z.string().max(10).optional(),
+});
 
 export async function GET(
   request: Request,
@@ -11,42 +22,40 @@ export async function GET(
   const authStart = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  // El rol se verifica en paralelo con la lectura (ver leerConRol).
-  const rolP = requireRole(auth.user, ['admin']);
+  const roleError = await requireRole(auth.user, ['admin']);
+  if (roleError) return roleError;
   const authDur = performance.now() - authStart;
 
   const { doctorId } = await params;
-  const { searchParams } = new URL(request.url);
-  const referencia = searchParams.get('referencia');
-  const desde = searchParams.get('desde');
-  const hasta = searchParams.get('hasta');
-  const fechaValida = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
-  const conRango = fechaValida(desde) && fechaValida(hasta);
-  const page = Math.max(1, Math.floor(Number(searchParams.get('page')) || 1));
+  const idError = validarId(doctorId, 'Doctor');
+  if (idError) return idError;
+
+  const q = leerQuery(request, querySchema);
+  if (q instanceof NextResponse) return q;
+  const referencia = q.referencia ?? null;
+  const desde = q.desde ?? null;
+  const hasta = q.hasta ?? null;
+  const conRango = !!desde && !!hasta;
+  const page = Math.min(100_000, Math.max(1, Math.floor(Number(q.page) || 1)));
   const pageSize = Math.min(
     200,
-    Math.max(1, Math.floor(Number(searchParams.get('pageSize')) || 10))
+    Math.max(1, Math.floor(Number(q.pageSize) || 10))
   );
 
-  if (conRango && desde > hasta) {
-    const roleError = await rolP;
-    if (roleError) return roleError;
-    return NextResponse.json({ error: 'Rango de fechas inválido' }, { status: 400 });
+  if (conRango) {
+    const rangoError = validarRango(desde, hasta);
+    if (rangoError) return rangoError;
   }
 
   const dbStart = performance.now();
   try {
-    const r = await leerConRol(rolP, () =>
-      panelDoctorHonorarios(
-        doctorId,
-        referencia,
-        page,
-        pageSize,
-        conRango ? { desde, hasta } : undefined
-      )
+    const data = await panelDoctorHonorarios(
+      doctorId,
+      referencia,
+      page,
+      pageSize,
+      conRango ? { desde, hasta } : undefined
     );
-    if ('denegado' in r) return r.denegado;
-    const data = r.datos;
     const response = NextResponse.json(data);
     response.headers.set(
       'Server-Timing',

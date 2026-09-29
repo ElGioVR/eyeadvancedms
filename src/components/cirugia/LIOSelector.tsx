@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
+import useSWR from 'swr';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,17 @@ interface LIOSelectorProps {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+}
+
+/** Clave de caché del catálogo de LIOs disponibles (misma URL en todas las pantallas). */
+export const URL_LIOS_DISPONIBLES = '/api/inventario/disponible?tipo=LENTE_INTRAOCULAR';
+
+async function obtenerLIOs(): Promise<LIODisponible[]> {
+  const r = await fetch('/api/inventario/disponible?tipo=LENTE_INTRAOCULAR', { credentials: 'same-origin', cache: 'no-store' });
+  // Error → lanzar (no cachear una lista vacía falsa); SWR reintenta
+  if (!r.ok) throw new Error('No se pudieron cargar los LIO disponibles');
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
 }
 
 function formatearOpcion(item: LIODisponible): string {
@@ -52,31 +64,11 @@ export default function LIOSelector({
   placeholder = 'Seleccionar LIO desde inventario',
   className,
 }: LIOSelectorProps) {
-  const [items, setItems] = useState<LIODisponible[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch('/api/inventario/disponible?tipo=LENTE_INTRAOCULAR')
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        const list = Array.isArray(data) ? data : [];
-        setItems(list);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setItems([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Catálogo compartido (SWR): se pide una vez y lo reutilizan agenda y cirugías.
+  const { data, isLoading: loading } = useSWR<LIODisponible[]>(URL_LIOS_DISPONIBLES, obtenerLIOs, {
+    revalidateOnFocus: false,
+  });
+  const items = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const selected = items.find((i) => i.id === value) || null;
 
@@ -109,7 +101,7 @@ export default function LIOSelector({
         )}
       </div>
       {selected && (
-        <div className="rounded-lg border border-line/70 bg-gray-50 dark:bg-surface-2/60 px-3 py-2 text-xs text-gray-600 dark:text-muted">
+        <div className="rounded-lg border border-line/70 bg-gray-50 dark:bg-surface-2/60 px-3 py-2 text-xs text-gray-600 dark:text-muted animate-fadeIn">
           {formatearResumen(selected)}
         </div>
       )}

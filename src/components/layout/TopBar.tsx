@@ -1,6 +1,8 @@
 "use client";
 
+import { useInvalidar } from '@/hooks/useFetch';
 import { useState, useEffect, useRef, useCallback } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -20,7 +22,8 @@ import {
 import { useUser, clearUserCache } from "@/hooks/useUser";
 import Avatar from "@/components/ui/Avatar";
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import { takePrefetched } from "@/lib/prefetch";
+import { enviarJSON } from "@/lib/fetcher";
+import BarraRevalidando from "@/components/ui/BarraRevalidando";
 import { cn } from "@/lib/utils";
 
 interface SearchResult {
@@ -101,6 +104,14 @@ function formatNotifTime(dateStr: string, now: Date): string {
   return d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
 }
 
+/** Mismas URLs que precarga /bienvenida (el fetcher global consume la precarga). */
+const URL_NO_LEIDAS = "/api/notificaciones/unread-count";
+const URL_NOTIFICACIONES = "/api/notificaciones";
+
+interface ListaNotificaciones {
+  data?: Notificacion[];
+}
+
 interface TopBarProps {
   onMenuToggle?: () => void;
 }
@@ -116,70 +127,43 @@ export default function TopBar(_props: TopBarProps) {
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState<Notificacion[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifLoading, setNotifLoading] = useState(false);
+  // La lista solo se pide al abrir el panel la primera vez; luego queda en caché.
+  const [listaSolicitada, setListaSolicitada] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [modoFocus, setModoFocus] = useState(false);
+  const invalidarDatos = useInvalidar();
   const [now, setNow] = useState<Date | null>(null);
   const [todayLabel, setTodayLabel] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const fetchUnreadCount = useCallback(async () => {
-    try {
-      // Primera carga: usa la precarga de /bienvenida si está fresca
-      const precargado = takePrefetched<{ count: number }>("/api/notificaciones/unread-count");
-      if (precargado) {
-        const data = await precargado;
-        if (data) {
-          setUnreadCount(data.count);
-          return;
-        }
-      }
-      const res = await fetch("/api/notificaciones/unread-count");
-      if (res.ok) {
-        const data = await res.json();
-        setUnreadCount(data.count);
-      }
-    } catch {
-      /* silent */
-    }
-  }, []);
+  // Contador de no leídas: sondeo cada 30 s SOLO con la pestaña visible
+  // (refreshWhenHidden: false); al volver a la pestaña SWR revalida al enfocar.
+  const { data: conteo, mutate: mutateConteo } = useSWR<{ count: number }>(
+    user ? URL_NO_LEIDAS : null,
+    { refreshInterval: 30000, refreshWhenHidden: false }
+  );
+  const unreadCount = conteo?.count ?? 0;
 
-  useEffect(() => {
-    if (user) fetchUnreadCount();
-  }, [user, fetchUnreadCount]);
+  const {
+    data: listaResp,
+    isLoading: notifLoading,
+    isValidating: notifValidando,
+    mutate: mutateLista,
+  } = useSWR<ListaNotificaciones>(listaSolicitada ? URL_NOTIFICACIONES : null);
+  const notifications = listaResp?.data ?? [];
 
-  // Sondeo cada 30 s solo con la pestaña visible; al volver, refresca de inmediato
+  // Sincroniza el contador con lo que realmente hay (la lista trae las 50 más recientes)
   useEffect(() => {
-    if (!user) return;
-    let interval: ReturnType<typeof setInterval> | null = null;
-    const start = () => {
-      if (interval) return;
-      interval = setInterval(fetchUnreadCount, 30000);
-    };
-    const stop = () => {
-      if (interval) clearInterval(interval);
-      interval = null;
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        fetchUnreadCount();
-        start();
-      } else {
-        stop();
-      }
-    };
-    if (document.visibilityState === "visible") start();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [user, fetchUnreadCount]);
+    const lista = listaResp?.data;
+    if (!lista) return;
+    const noLeidas = lista.filter((n) => !n.leido).length;
+    void mutateConteo(
+      (prev) => ({ count: lista.length < 50 ? noLeidas : Math.max(prev?.count ?? 0, noLeidas) }),
+      { revalidate: false }
+    );
+  }, [listaResp, mutateConteo]);
 
   // El perfil ya trae modo_focus (evita un GET /api/usuarios/me duplicado)
   useEffect(() => {
@@ -205,13 +189,11 @@ export default function TopBar(_props: TopBarProps) {
     const next = !modoFocus;
     setModoFocus(next);
     try {
-      await fetch("/api/usuarios/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preferencias: { modo_focus: next } }),
-      });
+      await enviarJSON("/api/usuarios/me", "PATCH", { preferencias: { modo_focus: next } });
       // Notifica al resto de la UI (nav móvil, vistas) que el modo focus cambió
       window.dispatchEvent(new CustomEvent("modo-focus-changed", { detail: next }));
+      // El servidor filtra por modo focus: refrescar (en segundo plano) lo que depende de él
+      void invalidarDatos("/api/consultas", "/api/agenda", "/api/dashboard", "/api/productividad");
     } catch {
       setModoFocus(!next);
     }
@@ -223,60 +205,36 @@ export default function TopBar(_props: TopBarProps) {
       return;
     }
     setNotifOpen(true);
-    setNotifLoading(notifications.length === 0);
+    // Primera apertura: la clave se activa y SWR la pide. Siguientes: se muestra
+    // la lista en caché al instante y se revalida en segundo plano.
+    if (!listaSolicitada) setListaSolicitada(true);
+    else void mutateLista();
+  }
+
+  /** Marca como leídas con actualización optimista de la lista y del contador; revierte si falla. */
+  async function marcarLeidas(ids: string[] | "all") {
+    const esTodas = ids === "all";
+    const marcar = (n: Notificacion) => (esTodas || ids.includes(n.id) ? { ...n, leido: true } : n);
+    const nuevasLeidas = esTodas ? unreadCount : ids.length;
+    const listaPrevia = listaResp;
+    const conteoPrevio = conteo;
+    void mutateLista((prev) => (prev ? { ...prev, data: (prev.data ?? []).map(marcar) } : prev), { revalidate: false });
+    void mutateConteo({ count: esTodas ? 0 : Math.max(0, unreadCount - nuevasLeidas) }, { revalidate: false });
     try {
-      const res = await fetch("/api/notificaciones", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        const lista: Notificacion[] = data.data ?? [];
-        setNotifications(lista);
-        // Sincroniza el contador con lo que realmente hay (la lista trae las 50 más recientes)
-        const noLeidas = lista.filter((n) => !n.leido).length;
-        setUnreadCount((prev) => (lista.length < 50 ? noLeidas : Math.max(prev, noLeidas)));
-      }
+      await enviarJSON(URL_NOTIFICACIONES, "PATCH", esTodas ? { all: true } : { ids });
     } catch {
-      /* silent */
-    } finally {
-      setNotifLoading(false);
+      void mutateLista(listaPrevia, { revalidate: false });
+      void mutateConteo(conteoPrevio, { revalidate: true });
     }
   }
 
-  async function markAsRead(ids: string[]) {
+  function markAsRead(ids: string[]) {
     if (ids.length === 0) return;
-    // Optimista: la UI responde al instante y se revierte si falla
-    const previas = notifications;
-    const conteoPrevio = unreadCount;
-    setNotifications((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, leido: true } : n)));
-    setUnreadCount((prev) => Math.max(0, prev - ids.length));
-    try {
-      const res = await fetch("/api/notificaciones", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setNotifications(previas);
-      setUnreadCount(conteoPrevio);
-    }
+    void marcarLeidas(ids);
   }
 
-  async function markAllAsRead() {
-    const previas = notifications;
-    const conteoPrevio = unreadCount;
-    setNotifications((prev) => prev.map((n) => ({ ...n, leido: true })));
-    setUnreadCount(0);
-    try {
-      const res = await fetch("/api/notificaciones", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all: true }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setNotifications(previas);
-      setUnreadCount(conteoPrevio);
-    }
+  function markAllAsRead() {
+    void marcarLeidas("all");
   }
 
   function handleNotifClick(n: Notificacion) {
@@ -286,24 +244,30 @@ export default function TopBar(_props: TopBarProps) {
     setNotifOpen(false);
   }
 
+  // Solo se aplica la respuesta de la búsqueda más reciente (ignora las fuera de orden).
+  const busquedaRef = useRef(0);
   const performSearch = useCallback(async (q: string) => {
+    const idBusqueda = ++busquedaRef.current;
     if (q.length < 2) {
       setSearchResults([]);
       setSearchOpen(false);
+      setSearchLoading(false);
       return;
     }
     setSearchLoading(true);
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (idBusqueda !== busquedaRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (idBusqueda !== busquedaRef.current) return;
         setSearchResults(data.results);
         setSearchOpen(data.results.length > 0);
       }
     } catch {
-      setSearchResults([]);
+      if (idBusqueda === busquedaRef.current) setSearchResults([]);
     } finally {
-      setSearchLoading(false);
+      if (idBusqueda === busquedaRef.current) setSearchLoading(false);
     }
   }, []);
 
@@ -508,7 +472,8 @@ export default function TopBar(_props: TopBarProps) {
             </button>
 
             {notifOpen && (
-              <div className="fixed inset-x-3 top-[calc(4.25rem+env(safe-area-inset-top))] z-50 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-popIn sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96">
+              <div className="fixed inset-x-3 top-[calc(4.25rem+env(safe-area-inset-top))] z-50 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-popIn sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96" aria-busy={notifLoading || notifValidando}>
+                <BarraRevalidando activo={notifValidando && !notifLoading} />
                 <div className="flex items-center justify-between border-b border-line px-4 py-3">
                   <span className="text-sm font-semibold text-fg">Notificaciones</span>
                   {unreadCount > 0 && (
@@ -522,7 +487,17 @@ export default function TopBar(_props: TopBarProps) {
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto p-1.5">
                   {notifLoading && (
-                    <div className="px-4 py-8 text-center text-sm text-muted">Cargando...</div>
+                    <div className="space-y-1" aria-label="Cargando notificaciones">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="flex items-start gap-3 px-3 py-2.5">
+                          <span className="mt-0.5 h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-3.5 w-2/3 animate-pulse rounded bg-surface-2" />
+                            <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                   {!notifLoading && notifications.length === 0 && (
                     <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">

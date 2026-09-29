@@ -1,4 +1,9 @@
-const attempts = new Map<string, { count: number; blockedUntil: number }>();
+/**
+ * Límite de intentos en memoria (por instancia). Ventana deslizante simple:
+ * los fallos cuentan solo dentro de WINDOW_MS desde el primero; pasado ese
+ * tiempo el contador se reinicia (antes se acumulaban indefinidamente).
+ */
+const attempts = new Map<string, { count: number; blockedUntil: number; firstAt: number }>();
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -11,7 +16,7 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfter?: nu
     return { allowed: false, retryAfter: Math.ceil((entry.blockedUntil - now) / 1000) };
   }
 
-  if (entry && entry.blockedUntil <= now) {
+  if (entry && entry.blockedUntil > 0 && entry.blockedUntil <= now) {
     attempts.delete(key);
   }
 
@@ -22,7 +27,7 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfter?: nu
 function prune(now: number) {
   if (attempts.size < 5000) return;
   attempts.forEach((v, k) => {
-    if (v.blockedUntil <= now) attempts.delete(k);
+    if (v.blockedUntil <= now && now - v.firstAt > WINDOW_MS) attempts.delete(k);
   });
 }
 
@@ -34,13 +39,14 @@ export function recordFailedAttempt(
   prune(now);
   let entry = attempts.get(key);
 
-  if (entry && entry.blockedUntil <= now) {
+  // Bloqueo cumplido o ventana vencida → empezar de cero
+  if (entry && ((entry.blockedUntil > 0 && entry.blockedUntil <= now) || now - entry.firstAt > WINDOW_MS)) {
     attempts.delete(key);
     entry = undefined;
   }
 
   if (!entry) {
-    entry = { count: 0, blockedUntil: 0 };
+    entry = { count: 0, blockedUntil: 0, firstAt: now };
   }
 
   entry.count += 1;

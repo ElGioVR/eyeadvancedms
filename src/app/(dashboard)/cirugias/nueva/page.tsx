@@ -3,6 +3,8 @@
 import { Suspense } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
+import { useInvalidar } from '@/hooks/useFetch';
 import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
@@ -208,6 +210,13 @@ const OJOS = [
 
 const EXTENSIONES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
 
+/** Catálogos: casi estáticos → sin revalidar en cada foco de ventana. */
+const OPCIONES_CATALOGO = { revalidateOnFocus: false, dedupingInterval: 60_000 } as const;
+
+function comoLista<T>(v: T[] | undefined | null): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -229,12 +238,29 @@ function NuevaCirugiaContent() {
   const cirujanoIdPrecarga = searchParams.get('cirujano_id');
   const cirujanoNombrePrecarga = searchParams.get('cirujano_nombre');
 
-  // Carga de catálogos
-  const [aseguranzas, setAseguranzas] = useState<Aseguranza[]>([]);
-  const [doctores, setDoctores] = useState<Doctor[]>([]);
-  const [roles, setRoles] = useState<Rol[]>([]);
-  const [recursos, setRecursos] = useState<Recurso[]>([]);
-  // const [loadingCatalogos, setLoadingCatalogos] = useState(true);
+  // Carga de catálogos vía SWR: caché compartida con otras pantallas (configuración,
+  // consultas, productividad) y con la precarga de /bienvenida. Al volver a esta
+  // pantalla se muestran al instante y se revalidan en segundo plano.
+  const aseguranzasSWR = useSWR<Aseguranza[]>('/api/configuracion/aseguranzas', OPCIONES_CATALOGO);
+  const doctoresSWR = useSWR<Array<Doctor & { alias?: string | null }>>('/api/configuracion/doctores', OPCIONES_CATALOGO);
+  const rolesSWR = useSWR<Rol[]>('/api/cirugias/roles', OPCIONES_CATALOGO);
+  const recursosSWR = useSWR<Recurso[]>('/api/cirugias/recursos', OPCIONES_CATALOGO);
+  const aseguranzas = useMemo(() => comoLista(aseguranzasSWR.data), [aseguranzasSWR.data]);
+  // El API devuelve `alias` (nombre de presentación) y `nombre` (nombre real, puede ser null).
+  const doctores = useMemo<Doctor[]>(
+    () => comoLista(doctoresSWR.data).map((x) => ({ ...x, nombre: x.alias || x.nombre || x.id })),
+    [doctoresSWR.data],
+  );
+  const roles = useMemo(() => comoLista(rolesSWR.data), [rolesSWR.data]);
+  const recursos = useMemo(() => comoLista(recursosSWR.data), [recursosSWR.data]);
+  const catalogos = [
+    { nombre: 'aseguranzas', swr: aseguranzasSWR },
+    { nombre: 'doctores', swr: doctoresSWR },
+    { nombre: 'roles', swr: rolesSWR },
+    { nombre: 'recursos', swr: recursosSWR },
+  ];
+  const catalogosListos = catalogos.every((c) => c.swr.data !== undefined || c.swr.error !== undefined);
+  const catalogosConError = catalogos.filter((c) => c.swr.error !== undefined && c.swr.data === undefined).map((c) => c.nombre).join(', ');
 
   // Paciente
   const [queryPaciente, setQueryPaciente] = useState('');
@@ -270,7 +296,9 @@ function NuevaCirugiaContent() {
   const [notas, setNotas] = useState('');
 
   const [guardando, setGuardando] = useState(false);
-const [error, setError] = useState<string | null>(null);
+  const [pasoGuardado, setPasoGuardado] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const invalidar = useInvalidar();
 
   // Para auto-fill de procedimiento desde consulta
   const [procedimientoPendiente, setProcedimientoPendiente] = useState<string | null>(null);
@@ -279,86 +307,38 @@ const [error, setError] = useState<string | null>(null);
 // Fast loading: only catalogs block the form; consulta/patient loads in background
   const [loadingInitial, setLoadingInitial] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const initialLoadDone = useRef(false);
 
+  // HARD SAFETY: Force form to render after 10s max, no matter what
   useEffect(() => {
+    const safetyTimeout = setTimeout(() => setLoadingInitial(false), 10000);
+    return () => clearTimeout(safetyTimeout);
+  }, []);
+
+  // Catálogos listos (o con error) → el formulario se muestra; errores en un toast.
+  useEffect(() => {
+    if (!catalogosListos) return;
+    setLoadingInitial(false);
+    if (catalogosConError) toast(`Error al cargar catálogos: ${catalogosConError}`, 'error');
+  }, [catalogosListos, catalogosConError, toast]);
+
+  // 2. BACKGROUND: precarga desde consulta/params (una sola vez, tras los catálogos)
+  useEffect(() => {
+    if (loadingInitial || initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
     const abort = new AbortController();
     abortRef.current = abort;
     const signal = abort.signal;
-
     let cancelled = false;
+    let terminado = false;
 
-    // HARD SAFETY: Force form to render after 10s max, no matter what
-    const safetyTimeout = setTimeout(() => {
-      if (!cancelled) {
-        setLoadingInitial(false);
-      }
-    }, 10000);
-
-    const loadInitialData = async () => {
-      try {
-        // 1. FAST: Load catalogs only (4 parallel) - this is quick
-        const fetchWithTimeout = (url: string, signal: AbortSignal, timeoutMs = 8000) => {
-          const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), timeoutMs)
-          );
-          return Promise.race([fetch(url, { signal }), timeout]);
-        };
-
-        const responses = await Promise.all([
-          fetchWithTimeout('/api/configuracion/aseguranzas', signal),
-          fetchWithTimeout('/api/configuracion/doctores', signal),
-          fetchWithTimeout('/api/cirugias/roles', signal),
-          fetchWithTimeout('/api/cirugias/recursos', signal),
-        ]);
-
-        if (signal.aborted) return;
-
-        const errors: string[] = [];
-        const jsons = await Promise.all(
-          responses.map((r, i) => {
-            const names = ['aseguranzas', 'doctores', 'roles', 'recursos'];
-            if (!r.ok) {
-              errors.push(names[i]);
-              return Promise.resolve([]);
-            }
-            return r.json();
-          }),
-        );
-        const [a, d, ro, re] = jsons;
-
-        if (signal.aborted) return;
-
-        if (errors.length > 0) {
-          toast(`Error al cargar catálogos: ${errors.join(', ')}`, 'error');
-        }
-        setAseguranzas(Array.isArray(a) ? a : []);
-        // El API devuelve `alias` (nombre de presentación) y `nombre` (nombre real, puede ser null).
-        setDoctores(
-          Array.isArray(d)
-            ? d.map((x: Doctor & { alias?: string | null }) => ({ ...x, nombre: x.alias || x.nombre || x.id }))
-            : [],
-        );
-        setRoles(Array.isArray(ro) ? ro : []);
-        setRecursos(Array.isArray(re) ? re : []);
-
-        // CATALOGS LOADED - Form can now render
-        if (!cancelled) setLoadingInitial(false);
-
-        // 2. BACKGROUND: Load consulta preload data (non-blocking)
-        if (!signal.aborted) {
-          loadConsultaData(signal);
-        }
-
-      } catch (err) {
-        if (signal.aborted || err instanceof DOMException && err.name === 'AbortError') return;
-        if (!cancelled) {
-          toast(err instanceof Error ? err.message : 'Error al cargar catálogos', 'error');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingInitial(false);
-        }
-      }
+    const fetchWithTimeout = (url: string, signal: AbortSignal, timeoutMs = 8000) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timeout')), timeoutMs);
+      });
+      return Promise.race([fetch(url, { signal }), timeout]).finally(() => clearTimeout(timer));
     };
 
     // Background loading - completely non-blocking
@@ -370,10 +350,11 @@ const [error, setError] = useState<string | null>(null);
         let consultaData = null;
 
         if (consultaPrecargaId) {
-          const res = await fetch(`/api/consultas/${consultaPrecargaId}`, { signal });
+          const res = await fetchWithTimeout(`/api/consultas/${consultaPrecargaId}`, signal);
           if (!res.ok || signal.aborted) return;
           consultaData = await res.json();
         }
+        if (cancelled) return;
 
         // Paciente - priority: direct param > consulta data
         const pacienteIdDirecto = pacientePrecargaId || consultaData?.consulta?.paciente_id;
@@ -418,17 +399,17 @@ const [error, setError] = useState<string | null>(null);
       }
     };
 
-    // Start fast path: catalogs only - store promise to track completion
-    const promise = loadInitialData();
+    void loadConsultaData(signal).finally(() => { terminado = true; });
 
     // Cleanup
     return () => {
       cancelled = true;
-      clearTimeout(safetyTimeout);
       abortRef.current?.abort();
+      // Si se interrumpió (p. ej. doble montaje en desarrollo) se permite reintentar.
+      if (!terminado) initialLoadDone.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast, consultaPrecargaId, pacientePrecargaId, pacienteNombrePrecarga, procedimientoPrecarga, cirujanoIdPrecarga, cirujanoNombrePrecarga]);
+  }, [loadingInitial]);
 
   // Selected function ref - set via layoutEffect to avoid initialization order issues
   const seleccionarPacienteRef = useRef<((paciente: Paciente) => Promise<unknown>) | null>(null);
@@ -497,19 +478,23 @@ useEffect(() => {
     if (queryPaciente.trim().length < 2) {
       setPacientesResult([]);
       setMostrarPacientes(false);
+      setBuscandoPacientes(false);
       return;
     }
     // Si el query corresponde al paciente ya seleccionado (precarga), no buscar ni mostrar dropdown
     if (pacienteSeleccionado && queryPaciente === pacienteSeleccionado.nombre_completo) {
       setPacientesResult([]);
       setMostrarPacientes(false);
+      setBuscandoPacientes(false);
       return;
     }
+    let vigente = true;
     const t = setTimeout(() => {
       setBuscandoPacientes(true);
       fetch(`/api/search?q=${encodeURIComponent(queryPaciente)}&cirugia=${filtroOjo}`)
         .then((r) => r.json())
         .then((data) => {
+          if (!vigente) return; // respuesta de una búsqueda anterior
           const pacientes = (data?.results || [])
             .filter((item: any) => item.tipo === 'paciente')
             .filter((item: any) => item.id !== pacienteSeleccionado?.id)
@@ -525,9 +510,9 @@ useEffect(() => {
           setMostrarPacientes(true);
         })
         .catch(() => {})
-        .finally(() => setBuscandoPacientes(false));
+        .finally(() => { if (vigente) setBuscandoPacientes(false); });
     }, 300);
-    return () => clearTimeout(t);
+    return () => { vigente = false; clearTimeout(t); };
   }, [queryPaciente, filtroOjo, pacienteSeleccionado]);
 
   // Ojo: primer / segundo ojo según el historial del paciente seleccionado
@@ -571,13 +556,16 @@ useEffect(() => {
       ? `aseguranza_id=${encodeURIComponent(origenConfigurado)}&tipo=PROCEDIMIENTO`
       : `paciente_id=${encodeURIComponent(pacienteSeleccionado.id)}&tipo=PROCEDIMIENTO`;
     setServicioId('');
+    // Ignora respuestas de un paciente/origen anterior (fuera de orden)
+    let vigente = true;
     fetch(`/api/catalogo-servicios?${params}`)
       .then((r) => r.json())
       .then((data) => {
-        setServicios(Array.isArray(data?.servicios) ? data.servicios : []);
+        if (vigente) setServicios(Array.isArray(data?.servicios) ? data.servicios : []);
       })
-      .catch(() => setServicios([]))
-      .finally(() => setLoadingServicios(false));
+      .catch(() => { if (vigente) setServicios([]); })
+      .finally(() => { if (vigente) setLoadingServicios(false); });
+    return () => { vigente = false; };
   }, [pacienteSeleccionado, origenId]);
 
   // Auto-fill procedimiento desde consulta cuando los servicios están disponibles
@@ -649,9 +637,11 @@ useEffect(() => {
   };
 
   const handleSubmit = async () => {
+    if (guardando) return; // evita doble envío
     const validationError = validarFormulario();
     if (validationError) {
       setError(validationError);
+      toast(validationError, 'warning'); // el aviso superior puede quedar fuera de vista
       return;
     }
     setGuardando(true);
@@ -709,19 +699,33 @@ useEffect(() => {
 
       const cirugiaId = data?.cirugia_id;
       if (cirugiaId) {
-        for (const archivo of archivos) {
+        let fallidos = 0;
+        for (const [i, archivo] of archivos.entries()) {
+          setPasoGuardado(`Subiendo archivos (${i + 1}/${archivos.length})…`);
           const fd = new FormData();
           fd.append('archivo', archivo.file);
           fd.append('tipo_documento', archivo.tipo_documento.trim());
-          await fetch(`/api/cirugias/${cirugiaId}/archivos`, { method: 'POST', body: fd });
+          try {
+            const r = await fetch(`/api/cirugias/${cirugiaId}/archivos`, { method: 'POST', body: fd });
+            if (!r.ok) fallidos++;
+          } catch {
+            fallidos++;
+          }
         }
+        if (fallidos > 0) toast(`${fallidos} archivo(s) no se pudieron subir; puedes agregarlos desde el detalle.`, 'warning');
       }
 
+      // La agenda, listas de cirugías y el dashboard se revalidan en segundo plano.
+      void invalidar('/api/agenda', '/api/cirugias', '/api/dashboard', '/api/inventario');
+      toast('Cirugía creada', 'success');
       router.push(`/cirugias/${cirugiaId}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      const mensaje = err instanceof Error ? err.message : 'Error desconocido';
+      setError(mensaje);
+      toast(mensaje, 'error');
     } finally {
       setGuardando(false);
+      setPasoGuardado(null);
     }
   };
 
@@ -739,13 +743,13 @@ useEffect(() => {
 
       <div className="mx-auto w-full max-w-6xl px-0 py-6 space-y-6">
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>
+          <div role="alert" className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 animate-fadeIn dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">{error}</div>
         )}
 
         {loadingInitial ? (
           <CirugiaFormSkeleton />
         ) : (
-          <>
+          <div className="space-y-6 animate-fadeIn">
             {/* 1. Paciente */}
             <section className="rounded-2xl border border-line bg-surface p-5">
               <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
@@ -1238,12 +1242,13 @@ useEffect(() => {
               <button
                 onClick={handleSubmit}
                 disabled={guardando}
+                aria-busy={guardando}
                 className="flex-[2] rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
-                {guardando ? 'Guardando...' : 'Validar y crear cirugía'}
+                {guardando ? (pasoGuardado ?? 'Guardando…') : 'Validar y crear cirugía'}
               </button>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -21,7 +22,7 @@ import dynamic from "next/dynamic";
 import StatCard from "@/components/ui/StatCard";
 import Avatar from "@/components/ui/Avatar";
 import { useUser } from "@/hooks/useUser";
-import { takePrefetched } from "@/lib/prefetch";
+import { enviarJSON } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/dashboard-data";
 import {
   obtenerFestivo,
@@ -36,15 +37,20 @@ const DashboardCharts = dynamic(
   () => import("@/components/dashboard/DashboardCharts"),
   {
     ssr: false,
+    // Misma forma final que DashboardCharts (encabezado + área de 160px)
     loading: () => (
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3" aria-busy="true" aria-label="Cargando gráficas">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-2xl border border-line bg-surface p-5"
+            className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none"
           >
-            <div className="h-4 w-40 bg-surface-2 rounded animate-pulse mb-4" />
-            <div className="h-[160px] w-full bg-surface-2 rounded-lg animate-pulse" />
+            <div className="border-b border-line/70 px-5 py-3.5">
+              <div className="h-4 w-40 bg-surface-2 rounded animate-pulse" />
+            </div>
+            <div className="p-4">
+              <div className="h-[160px] w-full bg-surface-2 rounded-lg animate-pulse" />
+            </div>
           </div>
         ))}
       </div>
@@ -147,7 +153,15 @@ export default function DashboardContent({
     right: number;
     maxHeight: number;
   } | null>(null);
-  const [chartData, setChartData] = useState<ChartData | null>(null);
+  // Gráficas vía SWR: misma URL que precarga /bienvenida (el fetcher global la consume).
+  const {
+    data: chartData,
+    isLoading: chartsCargando,
+    isValidating: chartsValidando,
+  } = useSWR<ChartData>("/api/dashboard/charts");
+  // «Ver como»: la navegación va en transición → se conserva el dashboard
+  // visible (sin volver al skeleton) mientras llega el nuevo render del servidor.
+  const [cambiandoVista, iniciarTransicion] = useTransition();
 
   // Los menús en portal usan position: fixed; al hacer scroll o cambiar el
   // tamaño se cierran para no quedar flotando lejos de su botón.
@@ -201,11 +215,7 @@ export default function DashboardContent({
     setNivelFestividad(nivel);
     setNivelDropdownOpen(false);
     try {
-      await fetch("/api/usuarios/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preferencias: { festividad: nivel } }),
-      });
+      await enviarJSON("/api/usuarios/me", "PATCH", { preferencias: { festividad: nivel } });
     } catch {
       // Silencioso: el nivel queda aplicado en sesión aunque falle el guardado
     }
@@ -223,22 +233,6 @@ export default function DashboardContent({
   const mostrarChipFestivo = !!festivoMostrado && nivelFestividad !== "NADA";
   const mostrarDecoraciones = nivelFestividad === "TOTAL";
   const mostrarFestividad = nivelFestividad !== "NADA";
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    // Reutiliza la precarga hecha en /bienvenida si existe (sin request extra)
-    const precargado = takePrefetched<ChartData>("/api/dashboard/charts");
-    const peticion =
-      precargado ??
-      fetch("/api/dashboard/charts", { signal: ctrl.signal })
-        .then((r) => (r.ok ? (r.json() as Promise<ChartData>) : null));
-    peticion
-      .then((d) => {
-        if (d && !ctrl.signal.aborted) setChartData(d);
-      })
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, []);
 
   const stats = [
     {
@@ -576,7 +570,7 @@ export default function DashboardContent({
                       <div className="min-h-0 overflow-y-auto overscroll-contain p-1">
                         <button
                           onClick={() => {
-                            router.push("/dashboard");
+                            iniciarTransicion(() => router.push("/dashboard"));
                             setDoctorDropdownOpen(false);
                           }}
                           className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-2 rounded-lg text-sm font-medium text-fg-2 transition-colors"
@@ -587,7 +581,7 @@ export default function DashboardContent({
                           <button
                             key={doctor.id}
                             onClick={() => {
-                              router.push(`/dashboard?doctor=${doctor.id}`);
+                              iniciarTransicion(() => router.push(`/dashboard?doctor=${doctor.id}`));
                               setDoctorDropdownOpen(false);
                             }}
                             className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-2 rounded-lg text-sm font-medium text-fg-2 transition-colors"
@@ -623,7 +617,11 @@ export default function DashboardContent({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div
+        className="valor-suave grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4"
+        data-validando={cambiandoVista}
+        aria-busy={cambiandoVista}
+      >
         {stats.map((stat) => (
           <StatCard
             key={stat.label}
@@ -751,6 +749,8 @@ export default function DashboardContent({
         estatusChartData={estatusChartData}
         procChartData={procChartData}
         agendaChartData={agendaChartData}
+        cargando={chartsCargando && !chartData}
+        validando={chartsValidando && !!chartData}
       />
     </div>
   );

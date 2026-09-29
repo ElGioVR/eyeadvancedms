@@ -4,15 +4,17 @@ import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
+import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
 import { MotorDevengoService } from '@/services/productividad';
 
 const accionesSchema = z.object({
   accion: z.enum(['aplazar', 'reagendar', 'cancelar']),
   motivo: z.string().trim().min(1, 'El motivo es requerido').max(500),
-  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  hora_inicio: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
-  hora_fin: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
-});
+  fecha: fechaISO.optional(),
+  hora_inicio: horaHHMM.optional(),
+  hora_fin: horaHHMM.optional().nullable(),
+}).strict();
 
 function toMin(t: string | null | undefined): number {
   if (!t) return 0;
@@ -30,31 +32,30 @@ export async function POST(
   if (roleError) return roleError;
 
   const { id } = await params;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+  const idError = validarId(id, 'ID de consulta');
+  if (idError) return idError;
 
-  const validation = accionesSchema.safeParse(body);
-  if (!validation.success) {
-    const firstError = validation.error.errors[0];
-    return NextResponse.json({ error: firstError?.message || 'Datos inválidos' }, { status: 400 });
-  }
-
-  const data = validation.data;
+  const data = await leerJSON(request, accionesSchema, { maxBytes: 10_000 });
+  if (data instanceof NextResponse) return data;
   const supabase = getSupabaseAdmin();
 
-  const { data: existing, error: checkError } = await supabase
-    .from('consultas')
-    .select('id, estatus, fecha, hora_inicio, hora_fin, doctor_id, pacientes:paciente_id (nombre_completo)')
-    .eq('id', id)
-    .maybeSingle();
+  const [existingResult, requerido] = await Promise.all([
+    supabase
+      .from('consultas')
+      .select('id, estatus, fecha, hora_inicio, hora_fin, doctor_id, pacientes:paciente_id (nombre_completo)')
+      .eq('id', id)
+      .maybeSingle(),
+    doctorRequerido(auth.user.id, auth.perfil),
+  ]);
+  const { data: existing, error: checkError } = existingResult;
 
   if (checkError || !existing) {
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
+
+  // RBAC: el doctor solo gestiona sus propias consultas
+  const denegado = verificarDueno(requerido, existing.doctor_id);
+  if (denegado) return denegado;
 
   const pacienteJoin = (existing as { pacientes?: { nombre_completo?: string } | { nombre_completo?: string }[] | null }).pacientes;
   const pacienteNombre =
@@ -166,13 +167,11 @@ export async function POST(
       return NextResponse.json({ error: 'Error al registrar la cancelación' }, { status: 500 });
     }
 
-    try {
-      await new MotorDevengoService().cancelarPorConsulta(id);
-    } catch {
+    await Promise.all([
       // el cancelamiento de honorarios es best-effort y no bloquea la cancelación de consulta
-    }
-
-    await notificarCancelacion({ ...notifBase, fecha: existing.fecha, hora: existing.hora_inicio, motivo: data.motivo });
+      new MotorDevengoService().cancelarPorConsulta(id).catch(() => undefined),
+      notificarCancelacion({ ...notifBase, fecha: existing.fecha, hora: existing.hora_inicio, motivo: data.motivo }).catch(() => 0),
+    ]);
     return NextResponse.json({ ok: true, accion: 'cancelar' });
   }
 
