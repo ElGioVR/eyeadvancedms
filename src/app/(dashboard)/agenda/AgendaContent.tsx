@@ -7,7 +7,7 @@ import {
   Clock, User, Search, X, AlertTriangle, CheckCircle2,
   FileSpreadsheet, Eye, Stethoscope, MapPin, StickyNote,
   Timer, Building2, Columns3, Square, GripVertical,
-  Maximize2, Minimize2, SlidersHorizontal, Download,
+  Maximize2, Minimize2, SlidersHorizontal, Download, CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import useSWR, { preload, useSWRConfig } from 'swr';
@@ -63,6 +63,19 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 
 /** Doctor y enfermero(a) ven solo su propia ocupación y no administran la agenda. */
 function esRolPropio(rol: string) { return rol === 'doctor' || rol === 'enfermero'; }
+
+/**
+ * URL de «Agendar consulta» desde un evento de la agenda: precarga paciente,
+ * médico y especialidad; el tipo queda en Subsecuente (el paciente ya tiene historial).
+ */
+function urlAgendarConsulta(ev: Pick<AgendaCirugia, 'paciente_id' | 'doctor_id' | 'especialidad'>): string {
+  const q = new URLSearchParams();
+  if (ev.paciente_id) q.set('paciente_id', ev.paciente_id);
+  if (ev.doctor_id) q.set('doctor_id', ev.doctor_id);
+  if (ev.especialidad) q.set('especialidad', ev.especialidad);
+  q.set('tipo_agenda', 'SUBSECUENTE');
+  return `/consultas/nueva?${q.toString()}`;
+}
 function fmtDate(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 function fmtDateShort(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); }
 function fmtTime(t: string | null) { return t ? t.slice(0, 5) : ''; }
@@ -291,7 +304,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [dayCreate, setDayCreate] = useState<{ x: number; y: number; date: string; hour?: string } | null>(null);
   // Acciones rápidas (aplazar / reagendar / cancelar) y alta rápida sin salir de la agenda.
   const [accionRapida, setAccionRapida] = useState<{ evento: AgendaCirugia; accion: AccionRapida } | null>(null);
-  const [agendarRapido, setAgendarRapido] = useState<{ fecha: string; hora: string; tipo: 'PRIMERA' | 'ESTUDIOS' } | null>(null);
+  // Alta rápida desde un hueco de la agenda: solo consultas (los estudios van en el formulario completo).
+  const [agendarRapido, setAgendarRapido] = useState<{ fecha: string; hora: string; tipo: 'PRIMERA' } | null>(null);
   const [mobileOpenDay, setMobileOpenDay] = useState<{ date: string; key: number } | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const stripSelectedRef = useRef<HTMLButtonElement>(null);
@@ -1006,6 +1020,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               getAcciones={(c) => accionesDisponibles(c, userRol)}
               onAccion={(c, accion) => setAccionRapida({ evento: c, accion })}
+              onAgendarConsulta={userRol !== 'enfermero' ? (c) => router.push(urlAgendarConsulta(c)) : undefined}
               todayStr={todayStr}
               openDay={mobileOpenDay}
             />
@@ -1389,17 +1404,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
             >
               <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-            </button>
-            <button
-              onClick={() => {
-                const fecha = dayCreate.date;
-                const hora = dayCreate.hour || '';
-                setDayCreate(null);
-                setAgendarRapido({ fecha, hora, tipo: 'ESTUDIOS' });
-              }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
-            >
-              <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
             </button>
             <button
               onClick={() => {
@@ -1857,6 +1861,14 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
             ))}
           </div>
         )}
+        {cirugia.paciente_id && userRol !== 'enfermero' && (
+          <button
+            onClick={() => { onClose(); router.push(urlAgendarConsulta(cirugia)); }}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 dark:border-primary-500/30 dark:text-primary-300 dark:hover:bg-primary-500/10 transition-colors">
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Agendar consulta
+          </button>
+        )}
         <button
           onClick={() => { onClose(); router.push(esCirugia ? `/cirugias/${cirugia.id}` : `/consultas/${cirugia.id}`); }}
           className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors">
@@ -1998,7 +2010,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         <div><label className={labelCls}>Doctor / Cirujano</label>
           <select value={form.doctor_id} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
             <option value="">Sin asignar</option>
-            {doctores.filter(d => d.tipo_personal !== 'ENFERMERO').map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
+            {doctores.filter(d => d.tipo_personal !== 'ENFERMERO' && d.tipo_personal !== 'ANESTESIOLOGO').map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
           </select>
         </div>
       )}

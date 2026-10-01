@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle, ExternalLink, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
@@ -79,11 +79,13 @@ interface Props {
   /** Acciones rápidas disponibles para el evento (aplazar / reagendar / cancelar). */
   getAcciones?: (cirugia: AgendaCirugia) => AccionRapida[];
   onAccion?: (cirugia: AgendaCirugia, accion: AccionRapida) => void;
+  /** «Agendar consulta» con los datos del evento precargados. */
+  onAgendarConsulta?: (cirugia: AgendaCirugia) => void;
 }
 
 type ViewMode = 'month' | 'day';
 
-export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr, openDay, onMonthChange, loading, getAcciones, onAccion }: Props) {
+export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr, openDay, onMonthChange, loading, getAcciones, onAccion, onAgendarConsulta }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date('2000-01-01T12:00:00'));
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
@@ -585,6 +587,17 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                 </div>
               );
             })()}
+            {onAgendarConsulta && selectedCirugia.paciente_id && (
+              <div className="px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <button
+                  onClick={() => { const c = selectedCirugia; closeDetail(); onAgendarConsulta(c); }}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-primary-200 py-2.5 text-sm font-bold text-primary-700 active:bg-primary-50 dark:border-primary-500/30 dark:text-primary-300"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Agendar consulta
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

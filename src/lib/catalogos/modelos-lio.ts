@@ -1,7 +1,7 @@
 /**
  * Catálogo de modelos de LIO (cat_modelos_lio, mig. 1800000000360).
  *
- * Fuente: lo administra la clínica (Configuración → Modelos de LIO), sembrado
+ * Fuente: lo administra la clínica (Configuración → Marcas), sembrado
  * con los LIO de su propio inventario. La ESCRS no publica un catálogo
  * descargable y las condiciones de IOLCon prohíben copiar sus datos a otro
  * software; se pueden CONSULTAR ahí para verificar cada alta.
@@ -155,4 +155,21 @@ export function coincideConModelo(
   const fab = fi.includes(fm) || fm.includes(fi);
   const mod = mm.includes(mi) || mi.includes(mm);
   return fab && mod;
+}
+
+/** Alias de fabricante → nombre unificado (mismo mapa que patch-modelos-lio-oficiales). */
+const ALIAS_FABRICANTE: Record<string, string> = {
+  'johnson & johnson vision': 'Johnson & Johnson', 'j&j': 'Johnson & Johnson', 'j&j vision': 'Johnson & Johnson',
+  'johnson&johnson': 'Johnson & Johnson', 'johnson and johnson': 'Johnson & Johnson', jnj: 'Johnson & Johnson',
+  abbott: 'Johnson & Johnson', amo: 'Johnson & Johnson',
+  'carl zeiss meditec': 'Zeiss', 'carl zeiss': 'Zeiss', 'zeiss meditec': 'Zeiss',
+  'bausch & lomb': 'Bausch + Lomb', 'bausch+lomb': 'Bausch + Lomb', 'bausch and lomb': 'Bausch + Lomb', 'b+l': 'Bausch + Lomb',
+  'hoya surgical optics': 'Hoya', 'hoya surgical': 'Hoya', 'hoya vision': 'Hoya', 'hoya vision care': 'Hoya',
+  'bvi physiol': 'BVI', physiol: 'BVI', 'bvi medical': 'BVI',
+  'teleon surgical': 'Teleon', 'hanita lenses': 'Hanita', 'rayner surgical': 'Rayner', 'alcon laboratories': 'Alcon', 'alcon mexico': 'Alcon',
+};
+
+export function fabricanteCanonico(nombre: string): string {
+  const t = nombre.trim().replace(/\s+/g, ' ');
+  return ALIAS_FABRICANTE[t.toLowerCase()] ?? t;
 }

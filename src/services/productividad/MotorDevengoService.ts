@@ -457,7 +457,7 @@ export class MotorDevengoService {
           .eq('cirugia_id', cirugiaId),
         this.supabase
           .from('cirugia_participantes')
-          .select('medico_id, rol_id')
+          .select('medico_id, rol_id, rol:rol_id (clave)')
           .eq('cirugia_id', cirugiaId),
       ]);
 
@@ -495,8 +495,14 @@ export class MotorDevengoService {
       }
     }
 
+    // Anestesiólogo: su propio rol (el monto se liquida en Productividad, como los demás).
     for (const p of participantesCirugia || []) {
-      if (p.medico_id && !doctoresMap.has(p.medico_id)) {
+      if (!p.medico_id) continue;
+      const rolRel = (p as { rol?: { clave?: string } | { clave?: string }[] | null }).rol;
+      const clave = Array.isArray(rolRel) ? rolRel[0]?.clave : rolRel?.clave;
+      if (clave === 'anestesiologo') {
+        doctoresMap.set(p.medico_id, 'ANESTESIOLOGO');
+      } else if (!doctoresMap.has(p.medico_id)) {
         doctoresMap.set(p.medico_id, 'CIRUJANO_PRINCIPAL');
       }
     }
@@ -532,6 +538,8 @@ export class MotorDevengoService {
             origen_nombre: origenNombre,
             origen_id: origenAsegId,
             procedimiento: cirugia.procedimiento ?? null,
+            servicio_id: cirugia.servicio_id ?? null,
+            ...(rol === 'ANESTESIOLOGO' ? { concepto: 'Anestesia' } : {}),
           },
           metricas_ligados: metricasVacias(),
         })

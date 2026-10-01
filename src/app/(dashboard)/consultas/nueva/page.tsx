@@ -31,6 +31,7 @@ import { DURACION_CITA_MIN, deMinutos } from '@/lib/agenda-slots';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
 import { TIPOS_CONSULTA_AGENDA, opcionTipoConsulta } from '@/lib/catalogos/tipos-consulta';
+import { esAnestesiologo, esMedicoTratante } from '@/lib/catalogos/personal';
 import Skeleton from '@/components/ui/Skeleton';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 
@@ -249,9 +250,10 @@ function NuevaConsultaContent() {
   );
   // Personal unificado: médicos para consultas y procedimientos; enfermería con
   // honorarios activos también puede realizar estudios (y consultas tipo Estudios).
-  const medicos = useMemo(() => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO'), [doctores]);
+  // Anestesiólogos fuera: solo ejercen la anestesia en cirugías.
+  const medicos = useMemo(() => doctores.filter(esMedicoTratante), [doctores]);
   const personalEstudios = useMemo(
-    () => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO' || d.cobra_honorarios !== false),
+    () => doctores.filter((d) => !esAnestesiologo(d) && (d.tipo_personal !== 'ENFERMERO' || d.cobra_honorarios !== false)),
     [doctores],
   );
   const { data: matrizCostos } = useFetch<MatrizCosto>('/api/configuracion/matriz-costos');
@@ -446,6 +448,36 @@ function NuevaConsultaContent() {
       .catch(() => {});
   }, [draftHydrated, pacienteParamId, cargarServiciosOrigen]);
 
+  // Precarga desde la agenda: doctor_id, especialidad (nombre o clave) y tipo_agenda.
+  const precargaAplicada = useRef(false);
+  useEffect(() => {
+    if (!draftHydrated || precargaAplicada.current) return;
+    const doctorParam = searchParams.get('doctor_id');
+    const especialidadParam = searchParams.get('especialidad');
+    const tipoAgendaParam = (searchParams.get('tipo_agenda') || '').toUpperCase();
+    if (!doctorParam && !especialidadParam && !tipoAgendaParam) {
+      precargaAplicada.current = true;
+      return;
+    }
+    // Espera a que carguen los médicos para validar el doctor.
+    if (doctorParam && doctores.length === 0) return;
+    precargaAplicada.current = true;
+
+    const tipoValido = TIPOS_CONSULTA_AGENDA.some((t) => t.value === tipoAgendaParam);
+    const op = tipoValido ? opcionTipoConsulta(tipoAgendaParam) : null;
+    const doctor = doctorParam ? doctores.find((d) => d.id === doctorParam) : undefined;
+    // Enfermería solo atiende Estudios: si no aplica, se deja el doctor vacío.
+    const doctorOk = doctor && !esAnestesiologo(doctor) && (doctor.tipo_personal !== 'ENFERMERO' || op?.value === 'ESTUDIOS') ? doctor : undefined;
+    const esp = buscarEspecialidad(especialidades, especialidadParam) ?? buscarEspecialidad(especialidades, doctorOk?.especialidad);
+
+    setConsultationData((f) => ({
+      ...f,
+      ...(op ? { tipoAgenda: op.value, tipo: op.tipo, tipoVisita: op.tipoVisita } : {}),
+      ...(doctorOk ? { doctorId: doctorOk.id } : {}),
+      ...(esp ? { especialidad: esp.clave } : {}),
+    }));
+  }, [draftHydrated, searchParams, doctores, especialidades]);
+
   const esUSD = consultationData.moneda === 'USD - Dólar';
   const convertir = useCallback((montoMXN: number) => {
     if (!esUSD || !tipoCambio) return montoMXN;
@@ -514,7 +546,11 @@ function NuevaConsultaContent() {
 
   useEffect(() => {
     try {
-      const rawDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      // Si se llega con datos precargados (p. ej. «Agendar consulta» desde la agenda),
+      // el borrador anterior no debe pisarlos.
+      const conPrecarga = new URLSearchParams(window.location.search).has('paciente_id');
+      if (conPrecarga) localStorage.removeItem(DRAFT_STORAGE_KEY);
+      const rawDraft = conPrecarga ? null : localStorage.getItem(DRAFT_STORAGE_KEY);
       if (rawDraft) {
         const draft = JSON.parse(rawDraft) as {
           consultationData?: ConsultationForm;
@@ -608,8 +644,9 @@ function NuevaConsultaContent() {
       return;
     }
     setConsultationData((prev) => {
-      if (prev.consultaServicioId && catalogoConsultas.some((c) => c.id === prev.consultaServicioId)) return prev;
-      return { ...prev, consultaServicioId: catalogoConsultas[0].id };
+      if (!prev.consultaServicioId || catalogoConsultas.some((c) => c.id === prev.consultaServicioId)) return prev;
+      // La consulta es opcional: si la elegida no existe en el nuevo origen, se deja vacía.
+      return { ...prev, consultaServicioId: '' };
     });
   }, [catalogoConsultas]);
 
@@ -1283,31 +1320,14 @@ function NuevaConsultaContent() {
                   value={consultationData.doctorId}
                   onChange={(v) => {
                     updateConsultation('doctorId', v);
-                    // Especialidad sugerida: la del médico (editable).
+                    // Especialidad: se toma del médico (ya no hay selector propio).
                     const esp = buscarEspecialidad(especialidades, doctores.find((d) => d.id === v)?.especialidad);
-                    if (esp) updateConsultation('especialidad', esp.clave);
+                    updateConsultation('especialidad', esp?.clave || '');
                   }}
                   options={['', ...(consultationData.tipoAgenda === 'ESTUDIOS' ? personalEstudios : medicos).map((d) => d.id)]}
                   displayOptions={['', ...(consultationData.tipoAgenda === 'ESTUDIOS' ? personalEstudios : medicos).map((d) => `${d.nombre}${d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}`)]}
                 />
                 <FormInput label="Fecha de Consulta" value={consultationData.fecha} onChange={(v) => updateConsultation('fecha', v)} type="date" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormSelect
-                  label="Especialidad"
-                  value={consultationData.especialidad || ''}
-                  onChange={(v) => updateConsultation('especialidad', v)}
-                  options={['', ...especialidades.map((e) => e.clave)]}
-                  displayOptions={['Seleccionar especialidad...', ...especialidades.map((e) => e.nombre)]}
-                />
-                <FormSelect
-                  label="Tipo de consulta"
-                  required
-                  value={consultationData.tipoAgenda || 'PRIMERA'}
-                  onChange={(v) => updateConsultation('tipoAgenda', v)}
-                  options={TIPOS_CONSULTA_AGENDA.map((t) => t.value)}
-                  displayOptions={TIPOS_CONSULTA_AGENDA.map((t) => t.label)}
-                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <SelectorHoraSlot
@@ -1325,20 +1345,34 @@ function NuevaConsultaContent() {
                   {dateTimeError}
                 </div>
               )}
+              <FormSelect
+                label="Origen"
+                value={consultationData.origenId}
+                onChange={(v) => updateConsultation('origenId', v)}
+                options={['', ...insuranceOptions]}
+                displayOptions={['Seleccionar origen...', ...insuranceDisplayOptions]}
+              />
+              {/* Consulta unificada (servicio del origen); la especialidad se toma del médico. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormSelect
-                  label="Origen"
-                  value={consultationData.origenId}
-                  onChange={(v) => updateConsultation('origenId', v)}
-                  options={['', ...insuranceOptions]}
-                  displayOptions={['Seleccionar origen...', ...insuranceDisplayOptions]}
-                />
-                <FormSelect
-                  label="Consulta"
+                  label="Consulta (opcional)"
                   value={consultationData.consultaServicioId}
                   onChange={(v) => updateConsultation('consultaServicioId', v)}
                   options={['', ...catalogoConsultas.map((c) => c.id)]}
-                  displayOptions={['Seleccionar consulta...', ...catalogoConsultas.map((c) => c.nombre)]}
+                  displayOptions={[
+                    catalogoConsultas.length > 0
+                      ? 'Sin consulta específica'
+                      : consultationData.origenId ? 'El origen no tiene consultas' : 'Selecciona primero el origen',
+                    ...catalogoConsultas.map((c) => c.nombre),
+                  ]}
+                />
+                <FormSelect
+                  label="Tipo de consulta"
+                  required
+                  value={consultationData.tipoAgenda || 'PRIMERA'}
+                  onChange={(v) => updateConsultation('tipoAgenda', v)}
+                  options={TIPOS_CONSULTA_AGENDA.map((t) => t.value)}
+                  displayOptions={TIPOS_CONSULTA_AGENDA.map((t) => t.label)}
                 />
               </div>
               <FormInput label="Diagnóstico" value={consultationData.diagnostico} onChange={(v) => updateConsultation('diagnostico', v)} placeholder="Escriba el diagnóstico del paciente..." />
@@ -1970,10 +2004,9 @@ function NuevaConsultaContent() {
               <PreviewField label="Fecha" value={consultationData.fecha || '—'} />
               <PreviewField label="Hora Inicio" value={consultationData.horaInicio || '—'} />
               <PreviewField label="Hora Fin" value={consultationData.horaFin || '—'} />
-              <PreviewField label="Especialidad" value={especialidades.find((e) => e.clave === consultationData.especialidad)?.nombre || '—'} />
-              <PreviewField label="Tipo de consulta" value={opcionTipoConsulta(consultationData.tipoAgenda).label} />
               <PreviewField label="Origen" value={selectedInsurance?.nombre || '—'} />
               <PreviewField label="Consulta" value={selectedConsultaServicio?.nombre || '—'} />
+              <PreviewField label="Tipo de consulta" value={opcionTipoConsulta(consultationData.tipoAgenda).label} />
             </div>
             <div className="mt-3 space-y-3">
               <PreviewField label="Diagnóstico" value={consultationData.diagnostico || 'No especificado'} full />

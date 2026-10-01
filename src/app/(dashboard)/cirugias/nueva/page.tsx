@@ -17,11 +17,13 @@ import {
   type MiembroEquipo,
 } from '@/lib/catalogos/equipo-quirurgico';
 import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
-import { URL_ESCRS_IOL, URL_IOLCON, coincideConModelo, etiquetaModeloLio, filtrarModelosPorTipo, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+import { URL_ESCRS_IOL, URL_IOLCON, coincideConModelo, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+import SelectorModeloLio from '@/components/cirugia/SelectorModeloLio';
+import { ROL_ANESTESIOLOGO, esAnestesiologo, esEnfermeria, esMedicoTratante, puedeOcuparRol } from '@/lib/catalogos/personal';
 import {
   ANESTESIAS,
   OJOS_CIRUGIA,
-  TIPOS_LIO,
+  tipoLioDe,
   esProcedimientoConLio,
   TIPOS_DOCUMENTO_APOYO,
   TIPO_DOCUMENTO_OTRO,
@@ -324,7 +326,6 @@ function NuevaCirugiaContent() {
   const [lioManualMarca, setLioManualMarca] = useState('');
   const [lioManualModelo, setLioManualModelo] = useState('');
   const [lioManualPotencia, setLioManualPotencia] = useState('');
-  const [lioManualLote, setLioManualLote] = useState('');
   const [archivos, setArchivos] = useState<ArchivoLocal[]>([]);
   const [notas, setNotas] = useState('');
   // Punto I: diagnóstico propio (antes se copiaba a Notas) y anestesia obligatoria.
@@ -333,24 +334,20 @@ function NuevaCirugiaContent() {
   const [anestesia, setAnestesia] = useState('');
   // Punto I.1: datos generales de la cirugía
   const [procedencia, setProcedencia] = useState('');
-  const [motivoConsulta, setMotivoConsulta] = useState('');
   const [especialidad, setEspecialidad] = useState('');
   const [especialidadEditada, setEspecialidadEditada] = useState(false);
   const { especialidades } = useEspecialidades();
   // Punto I.2: procedimientos adicionales, tipo de LIO y personal de apoyo no médico
   const [procedimientosAdicionales, setProcedimientosAdicionales] = useState<string[]>([]);
-  const [tipoLio, setTipoLio] = useState('');
+  // LIO (solo Faco + LIO): bandera tórico → fabricante → modelo → pieza del inventario (o manual).
+  const [lioTorico, setLioTorico] = useState(false);
+  const [fabricanteLio, setFabricanteLio] = useState('');
   const [modeloLioId, setModeloLioId] = useState('');
   const modelosLioSWR = useSWR<ModeloLio[]>('/api/catalogos/modelos-lio', OPCIONES_CATALOGO);
-  const tipoLioSel = TIPOS_LIO.find((t) => t.value === tipoLio);
-  // Flujo del LIO: 1) tipo → 2) modelo → 3) pieza del inventario de ese modelo (o manual).
   const [verTodoInventario, setVerTodoInventario] = useState(false);
   const liosSWR = useSWR<LIODisponible[]>(URL_LIOS_DISPONIBLES, obtenerLIOs, { revalidateOnFocus: false });
-  const modelosCompatibles = useMemo(
-    () => (tipoLioSel ? filtrarModelosPorTipo(Array.isArray(modelosLioSWR.data) ? modelosLioSWR.data : [], tipoLioSel.diseno, tipoLioSel.torico) : []),
-    [modelosLioSWR.data, tipoLioSel],
-  );
-  const modeloLioSel = modelosCompatibles.find((m) => m.id === modeloLioId) || null;
+  const modelosLio = useMemo(() => (Array.isArray(modelosLioSWR.data) ? modelosLioSWR.data : []), [modelosLioSWR.data]);
+  const modeloLioSel = modelosLio.find((m) => m.id === modeloLioId) || null;
   const piezasDelModelo = useMemo(
     () => (modeloLioSel && Array.isArray(liosSWR.data) ? liosSWR.data.filter((i) => coincideConModelo(i, modeloLioSel)) : []),
     [liosSWR.data, modeloLioSel],
@@ -670,6 +667,16 @@ useEffect(() => {
     [servicioId, procedimientosAdicionales, servicios],
   );
 
+  // El LIO solo aplica a Faco + LIO: si se quita ese procedimiento, se limpia la selección.
+  useEffect(() => {
+    if (esCirugiaConLio) return;
+    setModeloLioId('');
+    setFabricanteLio('');
+    setInventarioItemId(null);
+    setVerTodoInventario(false);
+    setLioManual(false);
+  }, [esCirugiaConLio]);
+
   // Especialidad sugerida: la del cirujano principal (editable).
   useEffect(() => {
     if (especialidadEditada) return;
@@ -691,8 +698,10 @@ useEffect(() => {
     return [...delCatalogo, ...faltantes];
   }, [roles]);
   // Personal unificado: enfermería primero para roles de apoyo; médicos para el resto.
-  const enfermeria = useMemo(() => doctores.filter((d) => d.tipo_personal === 'ENFERMERO'), [doctores]);
-  const medicosLista = useMemo(() => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO'), [doctores]);
+  // Anestesiólogos: solo en el rol «Anestesiólogo» (y ese rol solo los muestra a ellos).
+  const enfermeria = useMemo(() => doctores.filter(esEnfermeria), [doctores]);
+  const medicosLista = useMemo(() => doctores.filter(esMedicoTratante), [doctores]);
+  const anestesiologos = useMemo(() => doctores.filter(esAnestesiologo), [doctores]);
 
   const agregarParticipante = () => {
     const ref = participantes.find((m) => m.rol === 'cirujano');
@@ -814,7 +823,6 @@ useEffect(() => {
       const lioManualTexto = [
         lioManualModelo.trim() || null,
         lioManualPotencia ? `${lioManualPotencia}D` : null,
-        lioManualLote.trim() ? `Lote ${lioManualLote.trim()}` : null,
       ]
         .filter(Boolean)
         .join(' · ') || null;
@@ -828,9 +836,9 @@ useEffect(() => {
         duracion_min: Number(duracionMin),
         recurso_id: recursoId || null,
         ojo,
-        inventario_item_id: lioManual ? null : inventarioItemId,
-        lio: lioManual ? lioManualTexto : null,
-        marca_lio: lioManual ? lioManualMarca.trim() || null : null,
+        inventario_item_id: esCirugiaConLio && !lioManual ? inventarioItemId : null,
+        lio: esCirugiaConLio && lioManual ? lioManualTexto : null,
+        marca_lio: esCirugiaConLio && lioManual ? lioManualMarca.trim() || null : null,
         consulta_id: consultaPrecargaId,
         // Todo el equipo (médicos y enfermería) va como participantes: mismo motor de
         // agenda, conflictos y honorarios.
@@ -846,10 +854,11 @@ useEffect(() => {
         diagnostico: diagnostico.trim() || null,
         anestesia,
         procedencia: procedencia.trim() || null,
-        motivo_consulta: motivoConsulta.trim() || null,
         especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
-        tipo_lio: tipoLio || null,
-        modelo_lio_id: modeloLioId || null,
+        // Tipo de LIO derivado del modelo (diseño × tórico); sin modelo, solo la bandera tórico.
+        tipo_lio: esCirugiaConLio && modeloLioSel ? tipoLioDe(modeloLioSel.diseno, modeloLioSel.torico)?.value ?? null : null,
+        lio_torico: esCirugiaConLio ? lioTorico : null,
+        modelo_lio_id: esCirugiaConLio ? modeloLioId || null : null,
         procedimientos_adicionales: procedimientosAdicionales.filter((id) => id !== servicioId),
       };
 
@@ -867,19 +876,27 @@ useEffect(() => {
       const cirugiaId = data?.cirugia_id;
       if (data?.advertencia) toast(data.advertencia, 'warning');
       if (cirugiaId) {
+        // Subida en paralelo (máx. 3 a la vez) en lugar de uno por uno.
         let fallidos = 0;
-        for (const [i, archivo] of archivos.entries()) {
-          setPasoGuardado(`Subiendo archivos (${i + 1}/${archivos.length})…`);
-          const fd = new FormData();
-          fd.append('archivo', archivo.file);
-          fd.append('tipo_documento', archivo.tipo_documento.trim());
-          try {
-            const r = await fetch(`/api/cirugias/${cirugiaId}/archivos`, { method: 'POST', body: fd });
-            if (!r.ok) fallidos++;
-          } catch {
-            fallidos++;
+        let terminados = 0;
+        const pendientes = [...archivos];
+        if (pendientes.length) setPasoGuardado(`Subiendo archivos (0/${archivos.length})…`);
+        const subir = async () => {
+          for (let archivo = pendientes.shift(); archivo; archivo = pendientes.shift()) {
+            const fd = new FormData();
+            fd.append('archivo', archivo.file);
+            fd.append('tipo_documento', archivo.tipo_documento.trim());
+            try {
+              const r = await fetch(`/api/cirugias/${cirugiaId}/archivos`, { method: 'POST', body: fd });
+              if (!r.ok) fallidos++;
+            } catch {
+              fallidos++;
+            }
+            terminados++;
+            setPasoGuardado(`Subiendo archivos (${terminados}/${archivos.length})…`);
           }
-        }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, pendientes.length) }, subir));
         if (fallidos > 0) toast(`${fallidos} archivo(s) no se pudieron subir; puedes agregarlos desde el detalle.`, 'warning');
       }
 
@@ -901,13 +918,10 @@ useEffect(() => {
   const inputCls =
     'w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500';
 
-  const origenNombre = useMemo(() => {
-    return aseguranzas.find((a) => a.id === origenId)?.nombre || resumenPaciente?.aseguranza?.nombre || '—';
-  }, [aseguranzas, origenId, resumenPaciente]);
 
   return (
     <div className="w-full bg-transparent pb-20">
-      <PageHeader title="Nueva cirugía" subtitle="Cree una cirugía homologada en 6 pasos" />
+      <PageHeader title="Nueva cirugía" subtitle="Cree una cirugía homologada en 5 pasos" />
 
       <div className="mx-auto w-full max-w-6xl px-0 py-6 space-y-6">
         {error && (
@@ -1065,7 +1079,21 @@ useEffect(() => {
                 </div>
               )}
               {pacienteSeleccionado && (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className={labelCls}>Origen / Aseguradora</label>
+                    <select
+                      value={origenId}
+                      onChange={(e) => { setOrigenId(e.target.value); setServicioId(''); }}
+                      className={cn(inputCls, 'appearance-none')}
+                      aria-label="Origen / Aseguradora"
+                    >
+                      <option value="">{resumenPaciente?.aseguranza?.nombre ? `Del paciente: ${resumenPaciente.aseguranza.nombre}` : 'Del paciente'}</option>
+                      {aseguranzas.map((a) => (
+                        <option key={a.id} value={a.id}>{a.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className={labelCls}>Procedencia</label>
                     <input
@@ -1090,17 +1118,6 @@ useEffect(() => {
                       ))}
                     </select>
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelCls}>Motivo de consulta</label>
-                    <input
-                      type="text"
-                      value={motivoConsulta}
-                      onChange={(e) => setMotivoConsulta(e.target.value)}
-                      maxLength={500}
-                      placeholder="Ej. Disminución de agudeza visual en OD"
-                      className={inputCls}
-                    />
-                  </div>
                 </div>
               )}
             </section>
@@ -1111,28 +1128,7 @@ useEffect(() => {
                 <Stethoscope className="w-4 h-4 text-primary-500" /> 3. Datos de la cirugía
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Origen / Aseguradora</label>
-                  <div className={cn(inputCls, 'flex items-center justify-between')}>
-                    <span>{origenNombre}</span>
-                    <select
-                      value={origenId}
-                      onChange={(e) => {
-                        setOrigenId(e.target.value);
-                        setServicioId('');
-                      }}
-                      className="bg-transparent text-sm focus:outline-none"
-                    >
-                      <option value="">Cambiar origen</option>
-                      {aseguranzas.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label className={labelCls}>Procedimiento</label>
                   <div className="relative">
                     <select
@@ -1192,6 +1188,153 @@ useEffect(() => {
                     </div>
                   )}
                 </div>
+                {/* LIO: solo cuando el procedimiento es Faco + LIO (estilo calculadora ESCRS) */}
+                {esCirugiaConLio && (
+                  <div className="sm:col-span-2 rounded-xl border border-primary-200/70 bg-primary-50/40 p-4 dark:border-primary-500/20 dark:bg-primary-500/5">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-bold text-fg">
+                      <Eye className="h-4 w-4 text-primary-500" /> Lente intraocular (LIO)
+                    </p>
+                    <SelectorModeloLio
+                      modelos={modelosLio}
+                      cargando={modelosLioSWR.isLoading}
+                      torico={lioTorico}
+                      onTorico={(v) => { setLioTorico(v); reiniciarPieza(); }}
+                      fabricante={fabricanteLio}
+                      onFabricante={setFabricanteLio}
+                      modeloId={modeloLioId}
+                      onModelo={(id) => { setModeloLioId(id); reiniciarPieza(); }}
+                    />
+                    <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted">
+                      <span>Marcas y modelos en Configuración → Marcas.</span>
+                      <a href={URL_ESCRS_IOL} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                        Buscar en ESCRS ↗
+                      </a>
+                      <a href={URL_IOLCON} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                        Ficha técnica en IOLCon ↗
+                      </a>
+                    </p>
+                  {/* Paso 3: pieza física */}
+                  <div className="mt-4">
+                    <p className={labelCls}>Lente (pieza física)</p>
+                    {!lioManual ? (
+                      !modeloLioSel ? (
+                        <div className="mt-1 space-y-2">
+                          <p className="text-xs text-muted">Elige el modelo para ver las piezas disponibles de ese lente.</p>
+                          {!verTodoInventario ? (
+                            <button type="button" onClick={() => setVerTodoInventario(true)} className="text-xs font-bold text-primary-600 hover:underline">
+                              Elegir del inventario sin modelo
+                            </button>
+                          ) : (
+                            <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
+                          )}
+                        </div>
+                      ) : piezasDelModelo.length > 0 && !verTodoInventario ? (
+                        <div className="mt-1 space-y-2">
+                          <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} soloModelo />
+                          <p className="text-xs text-muted">
+                            {piezasDelModelo.length} pieza(s) disponible(s) de este modelo, no caducadas.{' '}
+                            <button type="button" onClick={() => setVerTodoInventario(true)} className="font-bold text-primary-600 hover:underline">
+                              Ver todo el inventario
+                            </button>
+                          </p>
+                        </div>
+                      ) : piezasDelModelo.length > 0 ? (
+                        <div className="mt-1 space-y-2">
+                          <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
+                          <button type="button" onClick={() => setVerTodoInventario(false)} className="text-xs font-bold text-primary-600 hover:underline">
+                            Mostrar solo este modelo
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                          {liosSWR.isLoading ? 'Buscando piezas en inventario…' : 'No hay piezas disponibles de este modelo en inventario.'}
+                          {!liosSWR.isLoading && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={abrirLioManual}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Agregar LIO manual con este modelo
+                              </button>
+                              <button type="button" onClick={() => setVerTodoInventario(true)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-bold dark:border-amber-500/40">
+                                Elegir otra pieza del inventario
+                              </button>
+                            </div>
+                          )}
+                          {verTodoInventario && (
+                            <div className="mt-2">
+                              <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className={labelCls}>Marca</label>
+                          <input
+                            type="text"
+                            value={lioManualMarca}
+                            onChange={(e) => setLioManualMarca(e.target.value)}
+                            placeholder="Ej. Alcon"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Modelo / Descripción</label>
+                          <input
+                            type="text"
+                            value={lioManualModelo}
+                            onChange={(e) => setLioManualModelo(e.target.value)}
+                            placeholder="Ej. Clareon PanOptix Toric"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Potencia (dioptrías)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min={-40}
+                            max={60}
+                            value={lioManualPotencia}
+                            onChange={(e) => setLioManualPotencia(e.target.value)}
+                            placeholder="Ej. 22.5"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        LIO fuera de inventario: se registra en la cirugía sin descontar stock.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLioManual(false);
+                          setLioManualMarca('');
+                          setLioManualModelo('');
+                          setLioManualPotencia('');
+                        }}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2"
+                      >
+                        ← Volver a seleccionar desde inventario
+                      </button>
+                    </>
+                    )}
+                    {!lioManual && (
+                      <button
+                        type="button"
+                        onClick={abrirLioManual}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-line px-4 py-2 text-sm font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
+                      >
+                        <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
+                      </button>
+                    )}
+                  </div>
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>Ojo</label>
                   <select value={ojo} onChange={(e) => setOjo(e.target.value)} className={cn(inputCls, 'appearance-none')}>
@@ -1312,13 +1455,19 @@ useEffect(() => {
               <div className="space-y-3">
                 {participantes.map((m) => {
                   const apoyo = esRolApoyo(m.rol);
-                  const lista = apoyo ? [...enfermeria, ...medicosLista] : medicosLista;
+                  const esRolAnestesia = m.rol === ROL_ANESTESIOLOGO;
+                  const lista = esRolAnestesia ? anestesiologos : apoyo ? [...enfermeria, ...medicosLista] : medicosLista;
                   return (
                     <div key={m.id} className="grid grid-cols-12 gap-3 items-start rounded-lg sm:rounded-none border border-line/70 sm:border-0 p-3 sm:p-0">
                       <div className="col-span-12 sm:col-span-3">
                         <select
                           value={m.rol}
-                          onChange={(e) => actualizarParticipante(m.id, { rol: e.target.value })}
+                          onChange={(e) => {
+                            const rol = e.target.value;
+                            const persona = doctores.find((d) => d.id === m.personaId);
+                            // Si la persona elegida no puede ocupar el nuevo rol, se libera el campo.
+                            actualizarParticipante(m.id, persona && !puedeOcuparRol(persona, rol, ROLES_APOYO) ? { rol, personaId: '' } : { rol });
+                          }}
                           className={cn(inputCls, 'appearance-none')}
                           aria-label="Rol"
                         >
@@ -1360,7 +1509,13 @@ useEffect(() => {
                             className={cn(inputCls, 'appearance-none disabled:opacity-60')}
                             aria-label="Persona"
                           >
-                            <option value="">{!m.rol ? 'Elige primero el rol' : apoyo ? 'Seleccionar persona' : 'Seleccionar médico'}</option>
+                            <option value="">
+                              {!m.rol
+                                ? 'Elige primero el rol'
+                                : esRolAnestesia
+                                  ? anestesiologos.length ? 'Seleccionar anestesiólogo' : 'No hay anestesiólogos registrados'
+                                  : apoyo ? 'Seleccionar persona' : 'Seleccionar médico'}
+                            </option>
                             {lista.map((d) => (
                               <option key={d.id} value={d.id}>
                                 {d.nombre}{apoyo && d.tipo_personal !== 'ENFERMERO' ? ' · médico' : ''}
@@ -1414,216 +1569,10 @@ useEffect(() => {
               </div>
             </section>
 
-            {/* 5. LIO / Inventario — orden: tipo → modelo → pieza del inventario (o manual) */}
+            {/* 5. Archivos de apoyo */}
             <section className="rounded-2xl border border-line bg-surface p-5">
               <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
-                <Eye className="w-4 h-4 text-primary-500" /> 5. Lente intraocular (LIO)
-              </h2>
-              {esCirugiaConLio && !tipoLio && (
-                <p className="mb-3 rounded-lg bg-primary-50/70 px-3 py-2 text-xs text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
-                  Facoemulsificación + LIO: elige el tipo de lente, luego el modelo y después la pieza del inventario.
-                </p>
-              )}
-
-              {/* Paso 1: tipo */}
-              <div>
-                <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">1</span>Tipo de LIO</p>
-                <div className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label="Tipo de LIO">
-                  {TIPOS_LIO.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={tipoLio === t.value}
-                      onClick={() => { setTipoLio(tipoLio === t.value ? '' : t.value); setModeloLioId(''); reiniciarPieza(); }}
-                      className={cn(
-                        'rounded-lg border px-3 py-2 text-xs font-bold transition-colors',
-                        tipoLio === t.value
-                          ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
-                          : 'border-line text-fg-2 hover:bg-surface-2'
-                      )}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Paso 2: modelo */}
-              {tipoLioSel && (
-                <div className="mt-4">
-                  <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">2</span>Modelo</p>
-                  <select
-                    value={modeloLioId}
-                    onChange={(e) => { setModeloLioId(e.target.value); reiniciarPieza(); }}
-                    className={cn(inputCls, 'mt-1 appearance-none')}
-                    aria-label="Modelo de LIO"
-                  >
-                    <option value="">{modelosCompatibles.length ? 'Seleccionar modelo' : 'Sin modelos de este tipo en el catálogo'}</option>
-                    {modelosCompatibles.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {etiquetaModeloLio(m)}{m.verificado ? '' : ' · por verificar'}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted">
-                    <span>Catálogo en Configuración → Modelos de LIO.</span>
-                    <a href={URL_ESCRS_IOL} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
-                      Buscar en ESCRS ↗
-                    </a>
-                    <a href={URL_IOLCON} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
-                      Ficha técnica en IOLCon ↗
-                    </a>
-                  </p>
-                </div>
-              )}
-
-              {/* Paso 3: pieza física */}
-              <div className="mt-4">
-                <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">3</span>Lente (pieza física)</p>
-                {!lioManual ? (
-                  !tipoLioSel ? (
-                    <div className="mt-1 space-y-2">
-                      <p className="text-xs text-muted">Elige el tipo y el modelo para ver las piezas disponibles de ese lente.</p>
-                      {!verTodoInventario ? (
-                        <button type="button" onClick={() => setVerTodoInventario(true)} className="text-xs font-bold text-primary-600 hover:underline">
-                          Elegir del inventario sin tipo ni modelo
-                        </button>
-                      ) : (
-                        <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
-                      )}
-                    </div>
-                  ) : !modeloLioSel ? (
-                    <div className="mt-1 space-y-2">
-                      <p className="text-xs text-muted">
-                        {modelosCompatibles.length
-                          ? 'Elige el modelo para ver sus piezas en inventario.'
-                          : 'No hay modelos de este tipo en el catálogo: puedes elegir la pieza directo del inventario o capturarla a mano.'}
-                      </p>
-                      {modelosCompatibles.length === 0 && <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />}
-                    </div>
-                  ) : piezasDelModelo.length > 0 && !verTodoInventario ? (
-                    <div className="mt-1 space-y-2">
-                      <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} soloModelo />
-                      <p className="text-xs text-muted">
-                        {piezasDelModelo.length} pieza(s) disponible(s) de este modelo, no caducadas.{' '}
-                        <button type="button" onClick={() => setVerTodoInventario(true)} className="font-bold text-primary-600 hover:underline">
-                          Ver todo el inventario
-                        </button>
-                      </p>
-                    </div>
-                  ) : piezasDelModelo.length > 0 ? (
-                    <div className="mt-1 space-y-2">
-                      <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
-                      <button type="button" onClick={() => setVerTodoInventario(false)} className="text-xs font-bold text-primary-600 hover:underline">
-                        Mostrar solo este modelo
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                      {liosSWR.isLoading ? 'Buscando piezas en inventario…' : 'No hay piezas disponibles de este modelo en inventario.'}
-                      {!liosSWR.isLoading && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={abrirLioManual}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"
-                          >
-                            <Plus className="h-3.5 w-3.5" /> Agregar LIO manual con este modelo
-                          </button>
-                          <button type="button" onClick={() => setVerTodoInventario(true)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-bold dark:border-amber-500/40">
-                            Elegir otra pieza del inventario
-                          </button>
-                        </div>
-                      )}
-                      {verTodoInventario && (
-                        <div className="mt-2">
-                          <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
-                        </div>
-                      )}
-                    </div>
-                  )
-                ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelCls}>Marca</label>
-                      <input
-                        type="text"
-                        value={lioManualMarca}
-                        onChange={(e) => setLioManualMarca(e.target.value)}
-                        placeholder="Ej. Alcon"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Modelo / Descripción</label>
-                      <input
-                        type="text"
-                        value={lioManualModelo}
-                        onChange={(e) => setLioManualModelo(e.target.value)}
-                        placeholder="Ej. Clareon PanOptix Toric"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Potencia (dioptrías)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={-40}
-                        max={60}
-                        value={lioManualPotencia}
-                        onChange={(e) => setLioManualPotencia(e.target.value)}
-                        placeholder="Ej. 22.5"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Lote / Serie</label>
-                      <input
-                        type="text"
-                        value={lioManualLote}
-                        onChange={(e) => setLioManualLote(e.target.value)}
-                        placeholder="Ej. L-2024-001"
-                        className={inputCls}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                    LIO fuera de inventario: se registra en la cirugía sin descontar stock.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLioManual(false);
-                      setLioManualMarca('');
-                      setLioManualModelo('');
-                      setLioManualPotencia('');
-                      setLioManualLote('');
-                    }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2"
-                  >
-                    ← Volver a seleccionar desde inventario
-                  </button>
-                </>
-                )}
-                {!lioManual && (
-                  <button
-                    type="button"
-                    onClick={abrirLioManual}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-line px-4 py-2 text-sm font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
-                  >
-                    <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
-                  </button>
-                )}
-              </div>
-            </section>
-
-            {/* 6. Archivos de apoyo */}
-            <section className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
-                <FileText className="w-4 h-4 text-primary-500" /> 6. Archivos de apoyo
+                <FileText className="w-4 h-4 text-primary-500" /> 5. Archivos de apoyo
               </h2>
               <div
                 onDragOver={(e) => e.preventDefault()}

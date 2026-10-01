@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { claveTexto, faltantesDoctor, limpiarEspacios } from '@/lib/import-agenda';
 
 // Personal unificado (mig. 390): médicos y enfermería en la misma tabla.
-const tipoPersonal = z.enum(['MEDICO', 'ENFERMERO']);
+const tipoPersonal = z.enum(['MEDICO', 'ENFERMERO', 'ANESTESIOLOGO']);
 // El alias (ej. "DR BAYARDO") es el nombre de presentación usado en toda la app.
 // `nombre`/`apellido` guardan la identidad real del doctor.
 const doctorCreateSchema = z.object({

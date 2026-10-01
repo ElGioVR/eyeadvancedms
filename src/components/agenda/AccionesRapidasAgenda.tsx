@@ -195,6 +195,9 @@ interface DoctorOpcion { id: string; alias: string; tipo_personal?: string | nul
 interface ResultadoBusqueda { tipo: string; id: string; titulo: string; subtitulo: string }
 
 
+/** La alta rápida de la agenda solo agenda consultas (Primera consulta / Subsecuente). */
+const TIPOS_ALTA_RAPIDA = TIPOS_CONSULTA_AGENDA.filter((t) => t.value === 'PRIMERA' || t.value === 'SUBSECUENTE');
+
 export function AgendarRapidoModal({
   fecha: fechaInicial,
   hora: horaInicial,
@@ -219,7 +222,9 @@ export function AgendarRapidoModal({
   const [doctorId, setDoctorId] = useState(doctorInicial || '');
   const [fecha, setFecha] = useState(fechaInicial);
   const [hora, setHora] = useState(horaInicial || '');
-  const [tipo, setTipo] = useState<TipoConsultaAgenda>(tipoInicial);
+  const [tipo, setTipo] = useState<TipoConsultaAgenda>(
+    TIPOS_ALTA_RAPIDA.some((t) => t.value === tipoInicial) ? tipoInicial : 'PRIMERA'
+  );
   const [especialidad, setEspecialidad] = useState('');
   const { especialidades } = useEspecialidades();
   const [guardando, setGuardando] = useState(false);
@@ -262,7 +267,7 @@ export function AgendarRapidoModal({
     <Modal isOpen onClose={onClose} maxWidth="max-w-md">
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-bold text-fg">Agendar cita</h3>
+          <h3 className="text-lg font-bold text-fg">Agendar consulta</h3>
           <p className="text-sm text-muted">Alta rápida sin salir de la agenda. Costos y estudios se completan después en el detalle.</p>
         </div>
 
@@ -310,7 +315,7 @@ export function AgendarRapidoModal({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Tipo de consulta" required>
             <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoConsultaAgenda)} className="input-field">
-              {TIPOS_CONSULTA_AGENDA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {TIPOS_ALTA_RAPIDA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </FormField>
           <FormField label="Especialidad">
@@ -324,7 +329,7 @@ export function AgendarRapidoModal({
               <option value="">Seleccionar</option>
               {doctores
                 // Enfermería: solo en consultas tipo Estudios y con honorarios activos.
-                .filter((d) => d.tipo_personal !== 'ENFERMERO' || (tipo === 'ESTUDIOS' && d.cobra_honorarios !== false))
+                .filter((d) => d.tipo_personal !== 'ANESTESIOLOGO' && (d.tipo_personal !== 'ENFERMERO' || (tipo === 'ESTUDIOS' && d.cobra_honorarios !== false)))
                 .map((d) => <option key={d.id} value={d.id}>{d.alias}{d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}</option>)}
             </select>
           </FormField>

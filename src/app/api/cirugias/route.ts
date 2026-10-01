@@ -7,7 +7,9 @@ import { detectarConflictosAgenda, detectarConflictosPersonal } from '@/lib/agen
 import { horarioCirugia, seTraslapan } from '@/lib/catalogos/equipo-quirurgico';
 import { aMinutos } from '@/lib/agenda-slots';
 import { calcularProductividadCirugia } from '@/lib/productividad';
+import { ROL_ANESTESIOLOGO, esAnestesiologo } from '@/lib/catalogos/personal';
 import { consumirLIO } from '@/lib/inventario';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
@@ -101,6 +103,8 @@ const cirugiaCreateSchema = z.object({
   tipo_lio: z.enum(TIPOS_LIO.map((t) => t.value) as [string, ...string[]]).optional().nullable(),
   // Modelo del catálogo cat_modelos_lio (mig. 1800000000360)
   modelo_lio_id: z.string().uuid().optional().nullable(),
+  // Bandera «Tórico» del selector de LIO (se usa si no hay modelo ni tipo)
+  lio_torico: z.boolean().optional().nullable(),
   // I.2 Procedimientos adicionales (ids de aseguranza_servicios; el principal es servicio_id)
   procedimientos_adicionales: z.array(z.string().uuid()).max(10, 'Demasiados procedimientos').optional().nullable(),
   // I.2 Personal de apoyo (personal_clinico) con horario; varias personas por rol
@@ -142,7 +146,9 @@ export async function POST(request: Request) {
   const personal = data.personal || [];
   const personalIds = Array.from(new Set(personal.map((p) => p.personal_id)));
   const adicionalesIds = Array.from(new Set((data.procedimientos_adicionales || []).filter((id) => id !== data.servicio_id)));
-  const [conflictos, conflictosPropios, conflictosPersonal, personalRes, adicionalesRes] = await Promise.all([
+  const rolIds = Array.from(new Set(data.participantes.map((p) => p.rol_id)));
+  const medicoIds = Array.from(new Set(data.participantes.map((p) => p.medico_id)));
+  const [conflictos, conflictosPropios, conflictosPersonal, personalRes, adicionalesRes, rolesRes, tiposRes] = await Promise.all([
     detectarConflictosAgenda({
       fecha: data.fecha,
       hora: data.hora,
@@ -167,7 +173,31 @@ export async function POST(request: Request) {
     adicionalesIds.length
       ? supabase.from('aseguranza_servicios').select('id, nombre').in('id', adicionalesIds)
       : Promise.resolve({ data: [] as { id: string; nombre: string }[], error: null }),
+    supabase.from('cat_roles_participante').select('id, clave').in('id', rolIds),
+    supabase.from('doctores').select('id, tipo_personal').in('id', medicoIds),
   ]);
+  // Anestesiólogos: solo en el rol «Anestesiólogo», y ese rol solo para ellos.
+  // (Si la BD aún no tiene tipo_personal, la lectura falla y no se valida, como antes.)
+  if (!rolesRes.error && !tiposRes.error) {
+    const claveRol = new Map((rolesRes.data || []).map((r: { id: string; clave: string }) => [r.id, r.clave]));
+    const tipoDe = new Map((tiposRes.data || []).map((d: { id: string; tipo_personal: string | null }) => [d.id, d.tipo_personal]));
+    for (const p of data.participantes) {
+      const clave = claveRol.get(p.rol_id) || '';
+      const persona = { tipo_personal: tipoDe.get(p.medico_id) ?? null };
+      if (clave === ROL_ANESTESIOLOGO && !esAnestesiologo(persona)) {
+        return NextResponse.json(
+          { error: 'En el rol Anestesiólogo solo se puede asignar personal registrado como anestesiólogo' },
+          { status: 400 }
+        );
+      }
+      if (clave && clave !== ROL_ANESTESIOLOGO && esAnestesiologo(persona)) {
+        return NextResponse.json(
+          { error: 'Los anestesiólogos solo pueden asignarse en el rol Anestesiólogo' },
+          { status: 400 }
+        );
+      }
+    }
+  }
   const personalCat = (personalRes.data || []) as { id: string; nombre: string; activo: boolean }[];
   if (personalRes.error || personalCat.filter((p) => p.activo).length !== personalIds.length) {
     return NextResponse.json({ error: 'Alguna persona del personal de apoyo no existe o está inactiva' }, { status: 400 });
@@ -224,6 +254,21 @@ export async function POST(request: Request) {
     // Diagnóstico y anestesia van fuera del RPC crear_cirugia (no se altera su firma):
     // UPDATE inmediato de la fila recién creada, en paralelo con LIO y productividad.
     const tipoLio = TIPOS_LIO.find((t) => t.value === data.tipo_lio);
+    // Con modelo del catálogo, diseño y tórico salen del modelo (fuente de verdad).
+    let lioDiseno: string | null = tipoLio?.diseno ?? null;
+    let lioTorico: boolean | null = tipoLio ? tipoLio.torico : (data.lio_torico ?? null);
+    if (data.modelo_lio_id) {
+      const { data: modelo } = await supabase
+        .from('cat_modelos_lio')
+        .select('diseno, torico')
+        .eq('id', data.modelo_lio_id)
+        .maybeSingle();
+      if (modelo) {
+        // El CHECK de agenda_cirugias.lio_diseno solo admite MONOFOCAL / TRIFOCAL.
+        lioDiseno = modelo.diseno === 'MONOFOCAL' || modelo.diseno === 'TRIFOCAL' ? modelo.diseno : null;
+        lioTorico = !!modelo.torico;
+      }
+    }
     const avisar = (err: unknown, contexto: string) => {
       mensajeSeguro(err, contexto);
       advertencia = 'La cirugía se creó, pero algunos datos clínicos no se guardaron; revísalos en el detalle.';
@@ -237,8 +282,8 @@ export async function POST(request: Request) {
           procedencia: data.procedencia || null,
           motivo_consulta: data.motivo_consulta || null,
           especialidad_id: data.especialidad_id || null,
-          lio_diseno: tipoLio?.diseno ?? null,
-          lio_torico: tipoLio ? tipoLio.torico : null,
+          lio_diseno: lioDiseno,
+          lio_torico: lioTorico,
           modelo_lio_id: data.modelo_lio_id || null,
         })
         .eq('id', cirugiaId)
@@ -282,17 +327,21 @@ export async function POST(request: Request) {
     ]);
     // Independientes entre sí: en paralelo (antes en serie). consumirLIO es
     // idempotente por cirugía (el RPC ya registra la salida en el Kardex).
-    const productividadP = (async () => {
-      try {
-        await calcularProductividadCirugia(cirugiaId);
-      } catch {
-        // No se interrumpe la creación; la productividad queda PENDIENTE sin monto.
-      }
-    })();
+    // Productividad: best-effort y fuera del camino de la respuesta (antes se esperaba).
+    // Si falla, la productividad queda PENDIENTE sin monto, igual que antes.
+    enSegundoPlano(
+      (async () => {
+        try {
+          await calcularProductividadCirugia(cirugiaId);
+        } catch {
+          // No se interrumpe la creación; la productividad queda PENDIENTE sin monto.
+        }
+      })(),
+      'cirugias.productividad'
+    );
     await Promise.allSettled([
       camposClinicosP,
       data.inventario_item_id ? consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id) : Promise.resolve(null),
-      productividadP,
     ]);
   }
 

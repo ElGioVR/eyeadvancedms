@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { respuestaErrorDb } from '@/lib/api/configuracion';
-import { VALORES_DISENO_LIO } from '@/lib/catalogos/modelos-lio';
+import { VALORES_DISENO_LIO, fabricanteCanonico } from '@/lib/catalogos/modelos-lio';
 
 /** Administración del catálogo de modelos de LIO (solo admin). */
 
@@ -23,6 +23,18 @@ const crearSchema = z.union([
   z.object({ filas: z.array(fila).min(1).max(500) }).strict(),
   // Traer del inventario: ejecuta sembrar_cat_modelos_lio() (idempotente)
   z.object({ accion: z.literal('sembrar_inventario') }).strict(),
+  // Marcas: renombra la marca en todos sus modelos (agrupa alias: «Carl Zeiss Meditec» = «Zeiss»)
+  z.object({
+    accion: z.literal('renombrar_fabricante'),
+    de: z.string().trim().min(1).max(120),
+    a: z.string().trim().min(1, 'El nombre de la marca es obligatorio').max(120),
+  }).strict(),
+  // Marcas: activa o desactiva todos los modelos de una marca
+  z.object({
+    accion: z.literal('activar_fabricante'),
+    fabricante: z.string().trim().min(1).max(120),
+    activo: z.boolean(),
+  }).strict(),
 ]);
 
 const actualizarSchema = z.object({
@@ -65,6 +77,29 @@ export async function POST(request: Request) {
   const data = await leerJSON(request, crearSchema, { maxBytes: 200_000 });
   if (data instanceof NextResponse) return data;
   const supabase = getSupabaseAdmin();
+
+  if ('accion' in data && data.accion !== 'sembrar_inventario') {
+    const nombre = data.accion === 'renombrar_fabricante' ? data.de : data.fabricante;
+    const { data: todos, error: errLeer } = await supabase.from('cat_modelos_lio').select('id, fabricante').limit(5000);
+    if (errLeer) return respuestaErrorDb(errLeer, 'configuracion.modelos-lio.marca');
+    const ids = (todos || [])
+      .filter((m) => fabricanteCanonico(m.fabricante as string) === fabricanteCanonico(nombre))
+      .map((m) => m.id as string);
+    if (ids.length === 0) return NextResponse.json({ actualizados: 0 });
+    const cambios = data.accion === 'renombrar_fabricante'
+      ? { fabricante: data.a.replace(/\s+/g, ' ') }
+      : { activo: data.activo };
+    const { error } = await supabase
+      .from('cat_modelos_lio')
+      .update({ ...cambios, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) {
+      return respuestaErrorDb(error, 'configuracion.modelos-lio.marca', {
+        duplicado: 'La marca destino ya tiene un modelo con el mismo nombre; renómbralo o desactívalo antes',
+      });
+    }
+    return NextResponse.json({ actualizados: ids.length });
+  }
 
   if ('accion' in data) {
     const { data: agregados, error } = await supabase.rpc('sembrar_cat_modelos_lio');

@@ -36,7 +36,7 @@ interface DoctorAPI {
   usuario_id: string | null;
   activo: boolean;
   /** Personal unificado (mig. 390) */
-  tipo_personal?: 'MEDICO' | 'ENFERMERO';
+  tipo_personal?: 'MEDICO' | 'ENFERMERO' | 'ANESTESIOLOGO';
   cobra_honorarios?: boolean;
   /** Alta automática por importación con datos por completar (mig. 400) */
   pendiente_completar?: boolean;
@@ -44,8 +44,9 @@ interface DoctorAPI {
   created_at: string;
 }
 
-type TipoPersonal = 'MEDICO' | 'ENFERMERO';
+type TipoPersonal = 'MEDICO' | 'ENFERMERO' | 'ANESTESIOLOGO';
 const ESPECIALIDAD_ENFERMERIA = 'Enfermería';
+const ESPECIALIDAD_ANESTESIA = 'Anestesiología';
 
 interface UsuarioOption {
   id: string;
@@ -101,7 +102,7 @@ export default function DoctoresPage() {
   // ?tipo=ENFERMERO (p. ej. desde la antigua pestaña Personal clínico) preselecciona el filtro.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tipo');
-    if (t === 'ENFERMERO' || t === 'MEDICO') setFiltroTipo(t);
+    if (t === 'ENFERMERO' || t === 'MEDICO' || t === 'ANESTESIOLOGO') setFiltroTipo(t);
   }, []);
 
   // Usuarios vinculables: misma caché que /configuracion/usuarios; solo se pide con el panel abierto.
@@ -285,7 +286,7 @@ export default function DoctoresPage() {
             NUEVO PERSONAL
           </button>
           <div className="flex rounded-lg border border-line p-0.5" role="group" aria-label="Tipo de personal">
-            {([['', 'Todos'], ['MEDICO', 'Médicos'], ['ENFERMERO', 'Enfermería']] as const).map(([v, l]) => (
+            {([['', 'Todos'], ['MEDICO', 'Médicos'], ['ANESTESIOLOGO', 'Anestesiólogos'], ['ENFERMERO', 'Enfermería']] as const).map(([v, l]) => (
               <button
                 key={l}
                 onClick={() => setFiltroTipo(v)}
@@ -331,8 +332,8 @@ export default function DoctoresPage() {
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-fg truncate">{doc.alias}</h3>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', doc.tipo_personal === 'ENFERMERO' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300')}>
-                            {doc.tipo_personal === 'ENFERMERO' ? 'Enfermería' : 'Médico'}
+                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', doc.tipo_personal === 'ENFERMERO' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : doc.tipo_personal === 'ANESTESIOLOGO' ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300')}>
+                            {doc.tipo_personal === 'ENFERMERO' ? 'Enfermería' : doc.tipo_personal === 'ANESTESIOLOGO' ? 'Anestesiólogo' : 'Médico'}
                           </span>
                           {doc.cobra_honorarios === false && (
                             <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">Sin honorarios</span>
@@ -417,8 +418,8 @@ export default function DoctoresPage() {
               <div className="p-6 space-y-5">
                 <div>
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Tipo de personal</label>
-                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de personal">
-                    {([['MEDICO', 'Médico'], ['ENFERMERO', 'Enfermero(a)']] as const).map(([v, l]) => (
+                  <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tipo de personal">
+                    {([['MEDICO', 'Médico'], ['ANESTESIOLOGO', 'Anestesiólogo'], ['ENFERMERO', 'Enfermero(a)']] as const).map(([v, l]) => (
                       <button
                         key={v}
                         type="button"
@@ -429,12 +430,17 @@ export default function DoctoresPage() {
                           if (v === 'ENFERMERO') {
                             setFormEspecialidad(ESPECIALIDAD_ENFERMERIA);
                             if (!editingDoctor) setFormCobra(false);
-                          } else if (formEspecialidad === ESPECIALIDAD_ENFERMERIA) {
+                          } else if (v === 'ANESTESIOLOGO') {
+                            setFormEspecialidad(ESPECIALIDAD_ANESTESIA);
+                            if (!editingDoctor) setFormCobra(true);
+                          } else if (formEspecialidad === ESPECIALIDAD_ENFERMERIA || formEspecialidad === ESPECIALIDAD_ANESTESIA) {
                             setFormEspecialidad('Oftalmología');
                           }
                         }}
+                        title={l}
                         className={cn(
-                          'rounded-lg border px-3 py-2 text-sm font-bold',
+                          // 3 opciones en un panel angosto: el texto se ajusta sin desbordar el borde.
+                          'min-w-0 truncate rounded-lg border px-1.5 py-2 text-xs font-bold sm:text-[13px]',
                           formTipo === v ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300' : 'border-line text-fg-2'
                         )}
                       >
@@ -443,7 +449,9 @@ export default function DoctoresPage() {
                     ))}
                   </div>
                   <p className="mt-1 text-[11px] text-muted">
-                    Enfermería se asigna en cirugías como instrumentista, enfermero(a) o circulante y aparece en la agenda.
+                    {formTipo === 'ANESTESIOLOGO'
+                      ? 'El anestesiólogo solo ejerce la anestesia: aparece únicamente en el rol «Anestesiólogo» de las cirugías y sus honorarios se manejan en Productividad.'
+                      : 'Enfermería se asigna en cirugías como instrumentista, enfermero(a) o circulante y aparece en la agenda.'}
                   </p>
                 </div>
                 <label className="flex items-start gap-3 rounded-lg border border-line px-3 py-2.5">
@@ -451,7 +459,9 @@ export default function DoctoresPage() {
                   <span>
                     <span className="block text-sm font-bold text-fg">Cobra honorarios</span>
                     <span className="block text-[11px] text-muted">
-                      {formTipo === 'ENFERMERO'
+                      {formTipo === 'ANESTESIOLOGO'
+                        ? 'Genera un honorario (rol Anestesiólogo) por cada cirugía en la que anestesia; el monto se liquida en Productividad.'
+                        : formTipo === 'ENFERMERO'
                         ? 'Activo: puede realizar estudios (y consultas de tipo Estudios), genera honorarios y ve «Mis honorarios». Inactivo: solo apoyo en cirugía, sin honorarios.'
                         : 'Genera honorarios por consultas, estudios, procedimientos y cirugías.'}
                     </span>

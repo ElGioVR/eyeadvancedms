@@ -25,8 +25,7 @@
  *           2) Expediente
  *           3) Datos de la cirugía / Procedimiento
  *           4) Asignación médica / Participantes
- *           5) LIO / Lente intraocular
- *           6) Archivos de apoyo
+ *           5) Archivos de apoyo (el LIO va dentro de 3, solo con Faco + LIO)
  *       * usa `SearchInput` o `fetch('/api/search?q=...')` para búsqueda
  *       * muestra expediente (`Ver expediente`) y datos de última
  *         consulta / historial
@@ -237,13 +236,10 @@ function checkNuevaPage() {
       label: '4. Asignación médica',
       re: /4\.\s*Asignaci(ó|o)n\s+m(é|e)dica|>\s*4\.\s*Asignaci(ó|o)n\s+m(é|e)dica/,
     },
+    // El LIO ahora va dentro de «3. Datos de la cirugía» (solo con Faco + LIO): 5 secciones.
     {
-      label: '5. LIO / Lente intraocular',
-      re: /5\.\s*Lente\s+intraocular|5\.\s*LIO|>5\.\s*LIO|>5\.\s*Lente/,
-    },
-    {
-      label: '6. Archivos de apoyo',
-      re: /6\.\s*Archivos\s+de\s+apoyo|>\s*6\.\s*Archivos\s+de\s+apoyo/,
+      label: '5. Archivos de apoyo',
+      re: /5\.\s*Archivos\s+de\s+apoyo|>\s*5\.\s*Archivos\s+de\s+apoyo/,
     },
   ];
 

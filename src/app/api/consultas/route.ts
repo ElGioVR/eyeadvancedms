@@ -14,6 +14,7 @@ import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/li
 import { DURACION_CITA_MIN, duracionEntre, sumarMinutos } from '@/lib/agenda-slots';
 import { notificarAsignacion } from '@/services/notificaciones';
 import { z } from 'zod';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 const tipoConsultaMap: Record<string, string> = {
   'Primera Consulta': 'CONSULTA',
@@ -238,6 +239,80 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
+  const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';
+  const tipoVisita = tipoVisitaMap[data.tipo_visita || ''] || data.tipo_visita || 'PRIMERA_VEZ';
+
+  // Parse estudios - support both string and {id, nombre, doctor_id} formats
+  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null; cantidad?: number | null; ojo?: 'OD' | 'OI' | 'OU' | null }) => {
+    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null, cantidad: 1, ojo: null };
+    return {
+      id: 'id' in e ? e.id || null : null,
+      nombre: e.nombre,
+      doctor_id: e.doctor_id || null,
+      cantidad: Math.max(1, Number(e.cantidad) || 1),
+      ojo: e.ojo || null,
+    };
+  };
+  const est0 = data.estudios?.[0] ? parseEstudio(data.estudios[0]) : null;
+  const est1 = data.estudios?.[1] ? parseEstudio(data.estudios[1]) : null;
+  const est2 = data.estudios?.[2] ? parseEstudio(data.estudios[2]) : null;
+  const estudios = [est0, est1, est2].filter((e): e is NonNullable<typeof e> => !!e);
+  const procedimientos = data.procedimientos?.length
+    ? data.procedimientos
+    : data.procedimiento
+      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null, cantidad: 1, ojo: null }]
+      : [];
+
+  // Cache de resolución de servicios (evita N+1 cuando la consulta repite estudios)
+  type ServicioResuelto = { id: string | null; nombre: string | null; costo: number; cobertura: number };
+  const servicioCache = new Map<string, Promise<ServicioResuelto>>();
+
+  function resolverServicio(
+    aseguranzaId: string | null,
+    tipo: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO',
+    servicioId?: string | null,
+    nombre?: string | null,
+  ): Promise<ServicioResuelto> {
+    if (!aseguranzaId) return Promise.resolve({ id: servicioId || null, nombre: nombre || null, costo: 0, cobertura: 0 });
+
+    const clave = `${aseguranzaId}|${tipo}|${servicioId || ''}|${nombre || ''}`;
+    const cacheado = servicioCache.get(clave);
+    if (cacheado) return cacheado;
+
+    let query = supabase
+      .from('aseguranza_servicios')
+      .select('id, nombre, costo, porcentaje_cobertura')
+      .eq('aseguranza_id', aseguranzaId)
+      .eq('activo', true)
+      .eq('tipo', tipo);
+
+    if (servicioId) query = query.eq('id', servicioId);
+    // Coincidencia exacta sin distinguir mayúsculas: se escapan comodines de ILIKE
+    else if (nombre) query = query.ilike('nombre', nombre.replace(/[\\%_]/g, (c) => `\\${c}`));
+    else return Promise.resolve({ id: null, nombre: null, costo: 0, cobertura: 0 });
+
+    const promesa = Promise.resolve(query.limit(1).maybeSingle()).then(({ data: svc }) => ({
+      id: svc?.id || servicioId || null,
+      nombre: svc?.nombre || nombre || null,
+      costo: Number(svc?.costo) || 0,
+      cobertura: Number(svc?.porcentaje_cobertura) || 0,
+    }));
+    servicioCache.set(clave, promesa);
+    return promesa;
+  }
+
+  // Precios del servidor para una aseguradora (consulta + estudios + procedimientos en paralelo)
+  const preciosPara = (aseguranzaId: string | null) =>
+    Promise.all([
+      resolverServicio(aseguranzaId, 'CONSULTA', data.consulta_servicio_id || null, data.tipo_consulta || 'Consulta'),
+      Promise.all(estudios.map((estudio) => resolverServicio(aseguranzaId, 'ESTUDIO', estudio.id || null, estudio.nombre || null))),
+      Promise.all(procedimientos.map((procedimiento) => resolverServicio(aseguranzaId, 'PROCEDIMIENTO', procedimiento.id || null, procedimiento.nombre || null))),
+    ]);
+  // Con el origen enviado por el formulario (caso normal) los precios se piden
+  // en paralelo con la ronda 1 en vez de esperar a las validaciones.
+  const preciosTempranosP = data.aseguranza_id ? preciosPara(data.aseguranza_id) : null;
+  preciosTempranosP?.catch(() => {});
+
   // ── Ronda 1 (paralelo): verificaciones y lecturas independientes ──────────
   // IDOR-10: el paciente, el doctor y la consulta de origen deben existir.
   // Empalmes: el mismo médico no puede tener dos citas que se traslapen (se consulta en paralelo).
@@ -277,6 +352,12 @@ export async function POST(request: Request) {
   if (doctorCheck.data && !doctorCheck.data.activo) {
     return NextResponse.json({ error: 'El doctor seleccionado no está activo' }, { status: 400 });
   }
+  if (doctorCheck.data?.tipo_personal === 'ANESTESIOLOGO') {
+    return NextResponse.json(
+      { error: 'Los anestesiólogos solo se asignan en cirugías (rol Anestesiólogo), no en consultas' },
+      { status: 400 }
+    );
+  }
   if (doctorCheck.data?.tipo_personal === 'ENFERMERO') {
     const esEstudio = /ESTUDIO/i.test(data.tipo_consulta || '');
     if (!esEstudio || doctorCheck.data.cobra_honorarios === false) {
@@ -296,30 +377,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';
-  const tipoVisita = tipoVisitaMap[data.tipo_visita || ''] || data.tipo_visita || 'PRIMERA_VEZ';
-
-  // Parse estudios - support both string and {id, nombre, doctor_id} formats
-  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null; cantidad?: number | null; ojo?: 'OD' | 'OI' | 'OU' | null }) => {
-    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null, cantidad: 1, ojo: null };
-    return {
-      id: 'id' in e ? e.id || null : null,
-      nombre: e.nombre,
-      doctor_id: e.doctor_id || null,
-      cantidad: Math.max(1, Number(e.cantidad) || 1),
-      ojo: e.ojo || null,
-    };
-  };
-  const est0 = data.estudios?.[0] ? parseEstudio(data.estudios[0]) : null;
-  const est1 = data.estudios?.[1] ? parseEstudio(data.estudios[1]) : null;
-  const est2 = data.estudios?.[2] ? parseEstudio(data.estudios[2]) : null;
-  const estudios = [est0, est1, est2].filter((e): e is NonNullable<typeof e> => !!e);
-  const procedimientos = data.procedimientos?.length
-    ? data.procedimientos
-    : data.procedimiento
-      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null, cantidad: 1, ojo: null }]
-      : [];
-
   // Origen (aseguranza): el enviado o el del paciente
   const aseguranzaId = data.aseguranza_id || pacienteCheck.data.aseguranza_id || null;
   if (aseguranzaId) {
@@ -334,49 +391,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // Cache de resolución de servicios (evita N+1 cuando la consulta repite estudios)
-  type ServicioResuelto = { id: string | null; nombre: string | null; costo: number; cobertura: number };
-  const servicioCache = new Map<string, Promise<ServicioResuelto>>();
-
-  function resolverServicio(
-    tipo: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO',
-    servicioId?: string | null,
-    nombre?: string | null,
-  ): Promise<ServicioResuelto> {
-    if (!aseguranzaId) return Promise.resolve({ id: servicioId || null, nombre: nombre || null, costo: 0, cobertura: 0 });
-
-    const clave = `${tipo}|${servicioId || ''}|${nombre || ''}`;
-    const cacheado = servicioCache.get(clave);
-    if (cacheado) return cacheado;
-
-    let query = supabase
-      .from('aseguranza_servicios')
-      .select('id, nombre, costo, porcentaje_cobertura')
-      .eq('aseguranza_id', aseguranzaId)
-      .eq('activo', true)
-      .eq('tipo', tipo);
-
-    if (servicioId) query = query.eq('id', servicioId);
-    // Coincidencia exacta sin distinguir mayúsculas: se escapan comodines de ILIKE
-    else if (nombre) query = query.ilike('nombre', nombre.replace(/[\\%_]/g, (c) => `\\${c}`));
-    else return Promise.resolve({ id: null, nombre: null, costo: 0, cobertura: 0 });
-
-    const promesa = Promise.resolve(query.limit(1).maybeSingle()).then(({ data: svc }) => ({
-      id: svc?.id || servicioId || null,
-      nombre: svc?.nombre || nombre || null,
-      costo: Number(svc?.costo) || 0,
-      cobertura: Number(svc?.porcentaje_cobertura) || 0,
-    }));
-    servicioCache.set(clave, promesa);
-    return promesa;
-  }
-
-  // ── Ronda 2: precios del servidor (consulta + estudios + procedimientos en paralelo)
-  const [servicioConsulta, serviciosEstudios, serviciosProcedimientos] = await Promise.all([
-    resolverServicio('CONSULTA', data.consulta_servicio_id || null, data.tipo_consulta || 'Consulta'),
-    Promise.all(estudios.map((estudio) => resolverServicio('ESTUDIO', estudio.id || null, estudio.nombre || null))),
-    Promise.all(procedimientos.map((procedimiento) => resolverServicio('PROCEDIMIENTO', procedimiento.id || null, procedimiento.nombre || null))),
-  ]);
+  // ── Ronda 2: precios del servidor (ya en curso si el origen vino en la petición)
+  const [servicioConsulta, serviciosEstudios, serviciosProcedimientos] = await (
+    preciosTempranosP && aseguranzaId === data.aseguranza_id ? preciosTempranosP : preciosPara(aseguranzaId)
+  );
 
   // Conceptos clínicos (consulta_id se asigna tras el insert)
   const conceptos: Array<{
@@ -496,7 +514,13 @@ export async function POST(request: Request) {
 
   if (consultaError || !consultaData) {
     return NextResponse.json(
-      { error: handleSupabaseError(consultaError, 'consultas.crear').mensaje },
+      {
+        error: handleSupabaseError(consultaError, 'consultas.crear').mensaje,
+        // Solo en desarrollo: el error real de Supabase para diagnosticar.
+        ...(process.env.NODE_ENV !== 'production' && consultaError
+          ? { detalle: { message: consultaError.message, code: consultaError.code, details: consultaError.details } }
+          : {}),
+      },
       { status: 500 }
     );
   }
@@ -529,7 +553,8 @@ export async function POST(request: Request) {
   const configValor = (honorariosConfig.data?.valor as Record<string, unknown>) || {};
   const devengoAutomatico = configValor.devengo_automatico !== false;
 
-  await Promise.all([
+  // Best-effort: no retrasa la respuesta (antes se esperaba antes de responder).
+  enSegundoPlano(Promise.all([
     data.doctor_costos && data.doctor_costos.length > 0
       ? Promise.resolve(
           supabase.from('consulta_doctor_costo').insert(
@@ -567,7 +592,7 @@ export async function POST(request: Request) {
           actorUserId: auth.user.id,
         }).catch(() => 0)
       : null,
-  ]);
+  ]), 'consultas.crear.posteriores');
 
   return NextResponse.json(consultaData, { status: 201 });
 }

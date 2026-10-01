@@ -136,7 +136,6 @@ export default function InventarioPage() {
   const invalidar = useInvalidar();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
-  const [filterCategoria, setFilterCategoria] = useState('Todos');
   const [filterProveedor, setFilterProveedor] = useState('Todos');
   const [filterStock, setFilterStock] = useState('Todos');
   const [filterTipo, setFilterTipo] = useState('Todos');
@@ -165,11 +164,6 @@ export default function InventarioPage() {
 
   const debouncedSearch = useDebounce(search);
 
-  const categorias = useMemo(() => {
-    const unique = [...new Set(lentes.map((l) => l.categoria).filter((c): c is string => Boolean(c)))];
-    return ['Todos', ...unique];
-  }, [lentes]);
-
   const proveedores = useMemo(() => {
     const unique = [...new Set(lentes.map((l) => l.proveedor).filter((p): p is string => Boolean(p)))];
     return ['Todos', ...unique];
@@ -185,16 +179,15 @@ export default function InventarioPage() {
         l.model.toLowerCase().includes(term) || 
         l.barcode?.toLowerCase().includes(term) ||
         l.serial_number?.toLowerCase().includes(term);
-      const matchesCategoria = filterCategoria === 'Todos' || l.categoria === filterCategoria;
       const matchesProveedor = filterProveedor === 'Todos' || l.proveedor === filterProveedor;
       // Note: tipo is no longer in the schema; all are intraocular now
       let matchesStock = true;
       if (filterStock === 'Suficiente') matchesStock = l.stock >= l.stock_minimo;
       else if (filterStock === 'Bajo') matchesStock = l.stock > 0 && l.stock < l.stock_minimo;
       else if (filterStock === 'Sin Stock') matchesStock = l.stock === 0;
-      return matchesSearch && matchesCategoria && matchesProveedor && matchesStock;
+      return matchesSearch && matchesProveedor && matchesStock;
     });
-  }, [lentes, debouncedSearch, filterCategoria, filterProveedor, filterStock]);
+  }, [lentes, debouncedSearch, filterProveedor, filterStock]);
 
   const stats = useMemo(() => {
     const conStock = lentes.filter((l) => l.stock > 0).length;
@@ -361,7 +354,6 @@ export default function InventarioPage() {
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-3 shadow-soft dark:shadow-none sm:p-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar folio, código, marca, modelo…" />
         <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
-          <FilterSelect label="Categoría" value={filterCategoria} onChange={setFilterCategoria} options={categorias} />
           <FilterSelect label="Proveedor" value={filterProveedor} onChange={setFilterProveedor} options={proveedores} />
           <FilterSelect label="Stock" value={filterStock} onChange={setFilterStock} options={['Todos', 'Suficiente', 'Bajo', 'Sin Stock']} />
         </div>
@@ -410,7 +402,7 @@ export default function InventarioPage() {
                         </span>
                       </div>
                       <h3 className="truncate text-base font-semibold text-fg">{lente.manufacturer} {lente.model}</h3>
-                      <p className="truncate text-xs text-muted">{lente.categoria || 'Sin categoría'} {lente.product_name ? `\u00b7 ${lente.product_name}` : ''}</p>
+                      <p className="truncate text-xs text-muted">{lente.product_name || lente.model}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">

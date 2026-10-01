@@ -11,9 +11,7 @@ const tabs = [
   { label: 'Usuarios', href: '/configuracion/usuarios' },
   { label: 'Personal médico', href: '/configuracion/doctores' },
   { label: 'Aseguranzas', href: '/configuracion/aseguranzas' },
-  { label: 'Categorías Lentes', href: '/configuracion/categorias-lentes' },
-  { label: 'Proveedores', href: '/configuracion/proveedores' },
-  { label: 'Modelos de LIO', href: '/configuracion/modelos-lio' },
+  { label: 'Marcas', href: '/configuracion/marcas' },
   { label: 'Sistema', href: '/configuracion/sistema' },
 ];
 

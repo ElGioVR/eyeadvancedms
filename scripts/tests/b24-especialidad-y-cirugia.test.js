@@ -40,7 +40,7 @@ check('POST /api/consultas acepta especialidad_id', /especialidad_id: z\.string\
 check('PATCH /api/consultas/[id] acepta especialidad_id', /updateData\.especialidad_id = data\.especialidad_id/.test(leer('src/app/api/consultas/[id]/route.ts')));
 
 const nueva = leer('src/app/(dashboard)/consultas/nueva/page.tsx');
-check('consultas/nueva: selector Especialidad', /label="Especialidad"/.test(nueva));
+check('consultas/nueva: Consulta unificada (opcional) antes de Tipo; especialidad del médico', /label="Consulta \(opcional\)"[\s\S]{0,900}label="Tipo de consulta"/.test(nueva) && !/label="Especialidad"/.test(nueva) && /updateConsultation\('especialidad', esp\?\.clave \|\| ''\)/.test(nueva));
 check('consultas/nueva: selector Tipo de consulta (4 opciones)', /label="Tipo de consulta"[\s\S]{0,300}TIPOS_CONSULTA_AGENDA/.test(nueva));
 check('consultas/nueva: envía especialidad_id', /especialidad_id: especialidades\.find/.test(nueva));
 check('consultas/nueva: respeta ?tipo=ESTUDIO de la agenda', /searchParams\.get\('tipo'\)/.test(nueva));
@@ -81,12 +81,12 @@ if (existe(m350)) {
 }
 check('SQL espejo sql/patch-cirugia-campos-clinicos.sql', existe('sql/patch-cirugia-campos-clinicos.sql'));
 check('API valida procedimientos adicionales contra el catálogo', /Alguno de los procedimientos adicionales no existe/.test(apiCir));
-check('API guarda tipo de LIO, procedencia, motivo y especialidad', /lio_diseno: tipoLio\?\.diseno/.test(apiCir) && /procedencia: data\.procedencia/.test(apiCir) && /motivo_consulta: data\.motivo_consulta/.test(apiCir) && /especialidad_id: data\.especialidad_id/.test(apiCir));
+check('API guarda tipo de LIO, procedencia, motivo y especialidad', /lio_diseno: lioDiseno/.test(apiCir) && /from\('cat_modelos_lio'\)/.test(apiCir) && /procedencia: data\.procedencia/.test(apiCir) && /motivo_consulta: data\.motivo_consulta/.test(apiCir) && /especialidad_id: data\.especialidad_id/.test(apiCir));
 check('API inserta cirugia_procedimientos y cirugia_personal', /from\('cirugia_procedimientos'\)[\s\S]{0,40}\.insert/.test(apiCir) && /from\('cirugia_personal'\)[\s\S]{0,40}\.insert/.test(apiCir));
 check('API: la misma persona de apoyo no puede empalmarse dentro del equipo', /La misma persona de apoyo aparece dos veces en horarios que se empalman/.test(apiCir));
-check('wizard: procedencia, especialidad y motivo de consulta', /value=\{procedencia\}/.test(wiz) && /value=\{especialidad\}/.test(wiz) && /value=\{motivoConsulta\}/.test(wiz));
+check('wizard: expediente con origen, procedencia y especialidad (sin motivo de consulta)', /value=\{procedencia\}/.test(wiz) && /value=\{especialidad\}/.test(wiz) && /aria-label="Origen \/ Aseguradora"/.test(wiz) && !/motivoConsulta/.test(wiz));
 check('wizard: agregar otro procedimiento', /Agregar otro procedimiento/.test(wiz));
-check('wizard: tipo de LIO al detectar Faco + LIO', /esCirugiaConLio/.test(wiz) && /TIPOS_LIO\.map/.test(wiz));
+check('wizard: LIO solo con Faco + LIO, debajo de procedimiento', /\{esCirugiaConLio && \(\s*<div className="sm:col-span-2/.test(wiz) && /<SelectorModeloLio/.test(wiz) && !/5\. Lente intraocular/.test(wiz));
 check('wizard: equipo homologado con roles por defecto y horario', /equipoPorDefecto\(/.test(wiz) && /aria-label="Hora de entrada"/.test(wiz) && /validarEquipo\(/.test(wiz));
 const det = leer('src/app/(dashboard)/cirugias/[id]/page.tsx');
 check('detalle: muestra procedencia, motivo, tipo de LIO y personal', /label="Procedencia"/.test(det) && /label="Motivo de consulta"/.test(det) && /Tipo de LIO/.test(det) && /personalApoyo\.map/.test(det));
@@ -109,10 +109,10 @@ check('SQL espejo sql/patch-cat-modelos-lio.sql', existe('sql/patch-cat-modelos-
 const admLio = 'src/app/api/configuracion/modelos-lio/route.ts';
 check('API admin de modelos de LIO solo para admin', existe(admLio) && /requireRole\(auth\.user, \['admin'\]\)/.test(leer(admLio)));
 check('API admin: importación CSV omite duplicados', existe(admLio) && /omitidas/.test(leer(admLio)));
-check('botón «Traer del inventario» llama a sembrar_cat_modelos_lio', existe(admLio) && /rpc\('sembrar_cat_modelos_lio'\)/.test(leer(admLio)) && /Traer del inventario/.test(leer('src/app/(dashboard)/configuracion/modelos-lio/page.tsx')));
+check('botón «Traer del inventario» llama a sembrar_cat_modelos_lio', existe(admLio) && /rpc\('sembrar_cat_modelos_lio'\)/.test(leer(admLio)) && /Traer del inventario/.test(leer('src/app/(dashboard)/configuracion/marcas/page.tsx')));
 check('GET /api/catalogos/modelos-lio (lectura para todos)', existe('src/app/api/catalogos/modelos-lio/route.ts'));
-check('pestaña Configuración → Modelos de LIO', /\/configuracion\/modelos-lio/.test(leer('src/app/(dashboard)/configuracion/layout.tsx')) && existe('src/app/(dashboard)/configuracion/modelos-lio/page.tsx'));
-check('wizard: modelo filtrado por tipo de LIO', /filtrarModelosPorTipo\(/.test(wiz) && /modelo_lio_id: modeloLioId/.test(wiz));
+check('pestaña Configuración → Marcas (proveedores + modelos; rutas viejas redirigen)', /\/configuracion\/marcas/.test(leer('src/app/(dashboard)/configuracion/layout.tsx')) && !/categorias-lentes|\/configuracion\/modelos-lio|\/configuracion\/proveedores/.test(leer('src/app/(dashboard)/configuracion/layout.tsx')) && /redirect\('\/configuracion\/marcas'\)/.test(leer('src/app/(dashboard)/configuracion/modelos-lio/page.tsx')));
+check('wizard: tórico como bandera → fabricante → modelo', /m\.torico === torico/.test(leer('src/components/cirugia/SelectorModeloLio.tsx')) && /Fabricante/.test(leer('src/components/cirugia/SelectorModeloLio.tsx')) && /modelo_lio_id: esCirugiaConLio \? modeloLioId/.test(wiz));
 check('API cirugías guarda modelo_lio_id', /modelo_lio_id: data\.modelo_lio_id/.test(apiCir));
 
 console.log('Huecos de la auditoría (1-oct)');
@@ -153,7 +153,7 @@ const sel = leer('src/components/cirugia/LIOSelector.tsx');
 check('selector de inventario agrupa por modelo elegido', /modeloPreferido/.test(sel) && /Del modelo elegido/.test(sel));
 check('selector avisa si la pieza no coincide con el modelo', /no coincide con el modelo elegido/.test(sel));
 check('wizard pasa el modelo elegido al selector', /modeloPreferido=\{modeloLioSel\}/.test(wiz));
-check('LIO en orden: tipo → modelo → pieza del modelo', /Paso 1: tipo/.test(wiz) && /Paso 2: modelo/.test(wiz) && /Paso 3: pieza física/.test(wiz) && /soloModelo/.test(wiz));
+check('LIO en orden: modelo → pieza del modelo', /<SelectorModeloLio[\s\S]{0,2000}Paso 3: pieza física/.test(wiz) && /soloModelo/.test(wiz));
 check('sin piezas del modelo: ofrece LIO manual precargado', /No hay piezas disponibles de este modelo en inventario/.test(wiz) && /setLioManualMarca\(\(v\) => v \|\| modeloLioSel\.fabricante\)/.test(wiz));
 check('cambiar tipo o modelo reinicia la pieza elegida', /reiniciarPieza\(\)/.test(wiz));
 check('wizard: «Buscar en ESCRS» junto al modelo', /URL_ESCRS_IOL/.test(wiz) && /Buscar en ESCRS/.test(wiz));

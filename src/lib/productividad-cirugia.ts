@@ -128,44 +128,49 @@ export async function calcularProductividadCirugia(
     throw new Error(`Error al consultar productividad: ${rowsError.message}`);
   }
 
-  let actualizados = 0;
-  let sinRegla = 0;
-
-  for (const row of rows || []) {
-    if (!row.rol_id) {
-      sinRegla += 1;
-      continue;
+  // Antes: 3 viajes en serie por participante. Ahora la regla y el monto se
+  // resuelven una vez por rol y las actualizaciones van en paralelo.
+  const origenId = cirugia.origen_id as string;
+  const servicioId = cirugia.servicio_id as string;
+  const porRol = new Map();
+  function reglaDeRol(rolId: string) {
+    if (!porRol.has(rolId)) {
+      porRol.set(
+        rolId,
+        obtenerReglaProductividad({
+          origen_id: origenId,
+          servicio_id: servicioId,
+          rol_id: rolId,
+        }).then(async (regla) =>
+          regla ? { regla, monto: await calcularMontoProductividad(regla, servicioId) } : null
+        )
+      );
     }
-
-    const regla = await obtenerReglaProductividad({
-      origen_id: cirugia.origen_id as string,
-      servicio_id: cirugia.servicio_id as string,
-      rol_id: row.rol_id,
-    });
-
-    if (!regla) {
-      sinRegla += 1;
-      continue;
-    }
-
-    const monto = await calcularMontoProductividad(regla, cirugia.servicio_id as string);
-
-    const { error: updateError } = await supabase
-      .from('cirugia_productividad')
-      .update({
-        monto,
-        regla_id: regla.id,
-        estado: 'PENDIENTE',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', row.id);
-
-    if (updateError) {
-      throw new Error(`Error al actualizar productividad: ${updateError.message}`);
-    }
-
-    actualizados += 1;
+    return porRol.get(rolId);
   }
+
+  const resultados = await Promise.all(
+    (rows || []).map(async (row) => {
+      if (!row.rol_id) return 'sin_regla';
+      const r = await reglaDeRol(row.rol_id as string);
+      if (!r) return 'sin_regla';
+      const { error: updateError } = await supabase
+        .from('cirugia_productividad')
+        .update({
+          monto: r.monto,
+          regla_id: r.regla.id,
+          estado: 'PENDIENTE',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id);
+      if (updateError) {
+        throw new Error(`Error al actualizar productividad: ${updateError.message}`);
+      }
+      return 'actualizado';
+    })
+  );
+  const actualizados = resultados.filter((x) => x === 'actualizado').length;
+  const sinRegla = resultados.length - actualizados;
 
   return { actualizados, sin_regla: sinRegla };
 }
