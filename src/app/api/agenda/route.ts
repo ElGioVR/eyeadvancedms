@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 import { notificarAsignacion } from '@/services/notificaciones';
 import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -118,16 +119,18 @@ export async function GET(request: Request) {
 
   // RBAC con el perfil que ya trae requireAuth (sin otra consulta a `usuarios`).
   const profile = auth.perfil;
-  const ROLES_AGENDA = ['admin', 'doctor', 'recepcionista'];
+  const ROLES_AGENDA = ['admin', 'doctor', 'recepcionista', 'enfermero'];
   if (!profile || profile.activo !== true || !ROLES_AGENDA.includes(profile.rol)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
   const userRole = profile.rol;
+  // Doctor y enfermero(a) ven solo su propia ocupación.
+  const propia = userRole === 'doctor' || userRole === 'enfermero';
   const focus = userRole === 'admin' && profile.preferencias?.modo_focus === true;
 
   // El vínculo usuario → doctores solo se consulta cuando filtra (doctor o admin en modo focus).
   let sessionDoctorId: string | null = null;
-  if (userRole === 'doctor' || focus) {
+  if (propia || focus) {
     const { data: doctorProfile } = await supabase
       .from('doctores')
       .select('id')
@@ -135,11 +138,11 @@ export async function GET(request: Request) {
       .maybeSingle();
     sessionDoctorId = doctorProfile?.id ?? null;
   }
-  const filtrarPorDoctor = userRole === 'doctor' || (userRole === 'admin' && focus && sessionDoctorId);
+  const filtrarPorDoctor = propia || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
 
   // Un doctor sin vínculo a `doctores` no debe ver la agenda de todos.
-  if (userRole === 'doctor' && !sessionDoctorId) {
+  if (propia && !sessionDoctorId) {
     return NextResponse.json({ data: [], total: 0, page, pageSize });
   }
 
@@ -156,7 +159,22 @@ export async function GET(request: Request) {
 
   if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
   if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
-  if (doctorFiltro) queryCirugias = queryCirugias.eq('doctor_id', doctorFiltro);
+  if (doctorFiltro) {
+    // Ocupación completa de la persona: cirugías como cirujano principal o como
+    // participante del equipo (anestesiólogo, instrumentista, enfermero, circulante…).
+    let qPart = supabase
+      .from('cirugia_participantes')
+      .select('cirugia_id, agenda_cirugias!inner(fecha)')
+      .eq('medico_id', doctorFiltro)
+      .limit(MAX_FILAS_FUENTE);
+    if (fechaDesde) qPart = qPart.gte('agenda_cirugias.fecha', fechaDesde);
+    if (fechaHasta) qPart = qPart.lte('agenda_cirugias.fecha', fechaHasta);
+    const { data: participaciones } = await qPart;
+    const ids = Array.from(new Set((participaciones || []).map((p: { cirugia_id: string }) => p.cirugia_id)));
+    queryCirugias = ids.length
+      ? queryCirugias.or(`doctor_id.eq.${doctorFiltro},id.in.(${ids.join(',')})`)
+      : queryCirugias.eq('doctor_id', doctorFiltro);
+  }
   if (estado) queryCirugias = queryCirugias.eq('estado', estado);
   if (searchSeguro) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${searchSeguro}%,expediente.ilike.%${searchSeguro}%`);
 
@@ -170,14 +188,21 @@ export async function GET(request: Request) {
       fecha,
       hora_inicio,
       tipo_consulta,
+      tipo_visita,
       estatus,
       doctores:doctor_id (alias),
+      especialidad:especialidad_id (nombre),
       pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo)
     `);
 
   if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
   if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
-  if (doctorFiltro) queryConsultas = queryConsultas.eq('doctor_id', doctorFiltro);
+  // Consultas propias y estudios asignados a la persona (p. ej. enfermería con honorarios).
+  if (doctorFiltro) {
+    queryConsultas = queryConsultas.or(
+      `doctor_id.eq.${doctorFiltro},estudio_1_doctor_id.eq.${doctorFiltro},estudio_2_doctor_id.eq.${doctorFiltro},estudio_3_doctor_id.eq.${doctorFiltro}`
+    );
+  }
   // Con `!inner` el filtro sobre pacientes sí reduce las consultas.
   if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
 
@@ -228,6 +253,9 @@ export async function GET(request: Request) {
     fecha: c.fecha,
     hora: c.hora_inicio,
     procedimiento: c.tipo_consulta || 'Consulta',
+    // Punto II: especialidad y tipo (Primera / Subsecuente / Estudios / Procedimientos).
+    especialidad: (c as any).especialidad?.nombre || null,
+    tipo_consulta_label: etiquetaTipoConsulta(c.tipo_consulta, (c as any).tipo_visita),
     doctor_id: c.doctor_id,
     doctor_nombre: (c as any).doctores?.alias || null,
     estado: (ESTADO_CONSULTA_A_AGENDA[c.estatus || ''] || 'agendada') as any,

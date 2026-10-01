@@ -3,7 +3,7 @@ import { notificarCancelacion, notificarReagendado } from '@/services/notificaci
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/lib/agenda-conflictos';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
 import { MotorDevengoService } from '@/services/productividad';
@@ -115,6 +115,9 @@ export async function POST(
       .from('consultas')
       .update({ hora_inicio: nuevaHora, hora_fin: nuevaHoraFin, estatus: 'APLAZADA' })
       .eq('id', id);
+    if (esEmpalmeAgenda(updError)) {
+      return NextResponse.json({ error: MENSAJE_EMPALME, conflictos: [] }, { status: 409 });
+    }
     if (updError) {
       return NextResponse.json({ error: 'Error al aplazar la consulta' }, { status: 500 });
     }
@@ -213,6 +216,9 @@ export async function POST(
       estatus: 'REAGENDADA',
     })
     .eq('id', id);
+  if (esEmpalmeAgenda(updError)) {
+    return NextResponse.json({ error: MENSAJE_EMPALME, conflictos: [] }, { status: 409 });
+  }
   if (updError) {
     return NextResponse.json({ error: 'Error al reagendar la consulta' }, { status: 500 });
   }

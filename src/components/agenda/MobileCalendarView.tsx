@@ -4,6 +4,8 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Calendar, X, Clock, Eye, Stethoscope, FileText, AlertCircle, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
+import { etiquetaOjo } from '@/lib/catalogos/cirugia';
+import { ETIQUETA_ACCION, type AccionRapida } from '@/lib/agenda-acciones';
 
 const DIAS_LARGOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -74,11 +76,14 @@ interface Props {
   /** Avisa al padre del mes visible para que cargue ese rango de datos. */
   onMonthChange?: (year: number, month: number) => void;
   loading?: boolean;
+  /** Acciones rápidas disponibles para el evento (aplazar / reagendar / cancelar). */
+  getAcciones?: (cirugia: AgendaCirugia) => AccionRapida[];
+  onAccion?: (cirugia: AgendaCirugia, accion: AccionRapida) => void;
 }
 
 type ViewMode = 'month' | 'day';
 
-export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr, openDay, onMonthChange, loading }: Props) {
+export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onAdd, onSelect, todayStr, openDay, onMonthChange, loading, getAcciones, onAccion }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date('2000-01-01T12:00:00'));
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
@@ -470,7 +475,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                   <Eye className="h-4 w-4 text-sky-500 shrink-0" />
                   <div>
                     <p className="text-[10px] font-bold uppercase text-muted">Ojo</p>
-                    <p className="text-sm font-bold text-fg">{selectedCirugia.ojo || '—'}</p>
+                    <p className="text-sm font-bold text-fg">{etiquetaOjo(selectedCirugia.ojo) || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-surface-2">
@@ -552,6 +557,34 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                 </div>
               )}
             </div>
+
+            {(() => {
+              const acciones = getAcciones?.(selectedCirugia) ?? [];
+              if (!onAccion || acciones.length === 0) return null;
+              return (
+                <div
+                  className="grid gap-2 border-t border-line/70 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  style={{ gridTemplateColumns: `repeat(${acciones.length}, minmax(0, 1fr))` }}
+                  role="group"
+                  aria-label="Acciones rápidas"
+                >
+                  {acciones.map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => { const c = selectedCirugia; closeDetail(); onAccion(c, a); }}
+                      className={cn(
+                        'rounded-xl border py-2.5 text-sm font-bold transition-colors',
+                        a === 'cancelar'
+                          ? 'border-red-200 text-red-700 active:bg-red-50 dark:border-red-500/30 dark:text-red-300'
+                          : 'border-line text-fg-2 active:bg-surface-2'
+                      )}
+                    >
+                      {ETIQUETA_ACCION[a]}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

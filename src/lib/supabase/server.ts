@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import { cookies, headers } from 'next/headers';
 import { SESION_TEMPORAL_COOKIE, VERIFIED_USER_HEADER, opcionesCookieAuth } from './constants';
 
-export type UserRole = 'admin' | 'doctor' | 'recepcionista';
+/**
+ * Roles de usuario. 'enfermero' es restringido: solo su propia agenda y, si
+ * su ficha de personal tiene honorarios activos, «Mis honorarios». Solo entra
+ * a los endpoints que lo listan explícitamente en requireRole.
+ */
+export type UserRole = 'admin' | 'doctor' | 'recepcionista' | 'enfermero';
 
 export function createClient() {
   const cookieStore = cookies();

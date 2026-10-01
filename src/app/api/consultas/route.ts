@@ -10,6 +10,8 @@ import {
   siguienteFolioConsulta,
 } from '@/lib/consultas-acceso';
 import { MotorDevengoService } from '@/services/productividad';
+import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/lib/agenda-conflictos';
+import { DURACION_CITA_MIN, duracionEntre, sumarMinutos } from '@/lib/agenda-slots';
 import { notificarAsignacion } from '@/services/notificaciones';
 import { z } from 'zod';
 
@@ -67,6 +69,7 @@ const consultaCreateSchema = z.object({
   hora_fin: horaHHMM.optional().nullable(),
   tipo_consulta: z.string().max(60).optional().nullable(),
   tipo_visita: z.string().max(60).optional().nullable(),
+  especialidad_id: z.string().uuid().optional().nullable(),
   aseguranza_id: z.string().uuid().optional().nullable(),
   consulta_servicio_id: z.string().uuid().optional().nullable(),
   consulta_origen_id: z.string().uuid().optional().nullable(),
@@ -112,13 +115,8 @@ const listadoQuerySchema = z.object({
 });
 
 function defaultHoraFin(horaInicio: string): string {
-  const [h, m, s] = horaInicio.split(':').map(Number);
-  const totalMin = h * 60 + m + 30;
-  const nh = Math.floor(totalMin / 60) % 24;
-  const nm = totalMin % 60;
-  return s !== undefined
-    ? `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}:00`
-    : `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+  // Intervalo estándar de agenda: 1 paciente cada DURACION_CITA_MIN (15 min).
+  return sumarMinutos(horaInicio, DURACION_CITA_MIN, horaInicio.split(':').length === 3);
 }
 
 export async function GET(request: Request) {
@@ -242,9 +240,18 @@ export async function POST(request: Request) {
 
   // ── Ronda 1 (paralelo): verificaciones y lecturas independientes ──────────
   // IDOR-10: el paciente, el doctor y la consulta de origen deben existir.
-  const [pacienteCheck, doctorCheck, origenCheck, aseguranzaPedida, folioInicial, honorariosConfig] = await Promise.all([
+  // Empalmes: el mismo médico no puede tener dos citas que se traslapen (se consulta en paralelo).
+  const horaFinPropuesta = data.hora_fin || defaultHoraFin(data.hora_inicio);
+  const [pacienteCheck, doctorCheck, origenCheck, aseguranzaPedida, folioInicial, honorariosConfig, conflictos] = await Promise.all([
     supabase.from('pacientes').select('id, aseguranza_id, nombre_completo').eq('id', data.paciente_id).maybeSingle(),
-    supabase.from('doctores').select('id, activo').eq('id', data.doctor_id).maybeSingle(),
+    // Personal unificado (mig. 390): tipo y honorarios; sin esas columnas, como antes.
+    (async () => {
+      const r = await supabase.from('doctores').select('id, activo, tipo_personal, cobra_honorarios').eq('id', data.doctor_id).maybeSingle();
+      if (!r.error) return r as { data: { id: string; activo: boolean; tipo_personal?: string; cobra_honorarios?: boolean } | null };
+      return (await supabase.from('doctores').select('id, activo').eq('id', data.doctor_id).maybeSingle()) as {
+        data: { id: string; activo: boolean; tipo_personal?: string; cobra_honorarios?: boolean } | null;
+      };
+    })(),
     data.consulta_origen_id
       ? supabase.from('consultas').select('id').eq('id', data.consulta_origen_id).maybeSingle()
       : Promise.resolve({ data: { id: null as string | null } }),
@@ -253,6 +260,12 @@ export async function POST(request: Request) {
       : Promise.resolve(null),
     siguienteFolioConsulta(),
     supabase.from('configuracion_sistema').select('valor').eq('clave', 'honorarios').maybeSingle(),
+    detectarConflictosAgenda({
+      fecha: data.fecha,
+      hora: data.hora_inicio,
+      duracion_min: duracionEntre(data.hora_inicio, horaFinPropuesta),
+      medicos: [data.doctor_id],
+    }),
   ]);
 
   if (!pacienteCheck.data) {
@@ -264,8 +277,23 @@ export async function POST(request: Request) {
   if (doctorCheck.data && !doctorCheck.data.activo) {
     return NextResponse.json({ error: 'El doctor seleccionado no está activo' }, { status: 400 });
   }
+  if (doctorCheck.data?.tipo_personal === 'ENFERMERO') {
+    const esEstudio = /ESTUDIO/i.test(data.tipo_consulta || '');
+    if (!esEstudio || doctorCheck.data.cobra_honorarios === false) {
+      return NextResponse.json(
+        { error: 'Enfermería solo puede atender consultas de tipo Estudios y debe tener honorarios activos' },
+        { status: 400 }
+      );
+    }
+  }
   if (!origenCheck.data) {
     return NextResponse.json({ error: 'La consulta de origen referenciada no existe' }, { status: 404 });
+  }
+  if (conflictos.length > 0) {
+    return NextResponse.json(
+      { error: MENSAJE_EMPALME, conflictos },
+      { status: 409 }
+    );
   }
 
   const tipoConsulta = tipoConsultaMap[data.tipo_consulta || ''] || data.tipo_consulta || 'CONSULTA';
@@ -424,7 +452,7 @@ export async function POST(request: Request) {
       }
     : { estatus_pago: 'PENDIENTE_PAGO' };
 
-  const horaFin = data.hora_fin || defaultHoraFin(data.hora_inicio);
+  const horaFin = horaFinPropuesta;
   const fila = {
     paciente_id: data.paciente_id,
     doctor_id: data.doctor_id,
@@ -433,6 +461,8 @@ export async function POST(request: Request) {
     hora_fin: horaFin,
     tipo_consulta: tipoConsulta,
     tipo_visita: tipoVisita,
+    // Punto II: especialidad elegida en la agenda (FK cat_especialidades; mig. 1800000000330).
+    ...(data.especialidad_id ? { especialidad_id: data.especialidad_id } : {}),
     diagnostico: data.diagnostico?.trim() || null,
     estudio_1: est0?.nombre || null,
     estudio_2: est1?.nombre || null,
@@ -458,6 +488,11 @@ export async function POST(request: Request) {
     insertado = await supabase.from('consultas').insert({ ...fila, folio }).select().single();
   }
   const { data: consultaData, error: consultaError } = insertado;
+
+  // Carrera cerrada en BD: otro request tomó el horario entre la verificación y el insert.
+  if (esEmpalmeAgenda(consultaError)) {
+    return NextResponse.json({ error: MENSAJE_EMPALME, conflictos: [] }, { status: 409 });
+  }
 
   if (consultaError || !consultaData) {
     return NextResponse.json(

@@ -36,6 +36,8 @@ async function fetchDashboardData(doctorId?: string) {
     .toUpperCase();
   const avatar_url = perfilResult.data?.avatar_url ?? null;
   const rol = perfilResult.data?.rol || 'doctor';
+  // Enfermería (rol restringido) no ve indicadores de la clínica: su inicio es la agenda.
+  if (rol === 'enfermero') redirect('/agenda');
 
   return { data, nombre, iniciales, avatar_url, rol };
 }

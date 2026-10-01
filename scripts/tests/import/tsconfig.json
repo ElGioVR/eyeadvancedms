@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", "module": "esnext", "moduleResolution": "bundler", "strict": false, "esModuleInterop": true, "jsx": "preserve", "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/lib/supabase/admin": ["./fake-admin.ts"],
+      "@/lib/supabase/server": ["./fake-server.ts"],
+      "@/*": ["../../../src/*"]
+    }
+  }
+}

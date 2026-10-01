@@ -68,19 +68,19 @@ assert(
 
 // 3. Lectura permitida al doctor (coherente con lo que ve en la página)
 assert(
-  api.includes("requireRole(auth.user, ['admin', 'doctor', 'recepcionista'])"),
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(api),
   'GET /api/inventario permite rol doctor'
 );
 assert(
-  mov.includes("requireRole(auth.user, ['admin', 'doctor', 'recepcionista'])"),
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(mov),
   'GET /api/inventario/movimientos (kardex) permite rol doctor'
 );
 assert(
-  cats.includes("requireRole(auth.user, ['admin', 'doctor', 'recepcionista'])"),
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(cats),
   'GET /api/configuracion/categorias-lentes permite rol doctor'
 );
 assert(
-  provs.includes("requireRole(auth.user, ['admin', 'doctor', 'recepcionista'])"),
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(provs),
   'GET /api/configuracion/proveedores permite rol doctor'
 );
 
@@ -122,16 +122,16 @@ const patchSection = api.slice(
 );
 const deleteSection = api.slice(api.indexOf('export async function DELETE'));
 assert(
-  postSection.includes("requireRole(auth.user, ['admin', 'doctor', 'recepcionista'])"),
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(postSection),
   'POST /api/inventario permite rol doctor (alta de ítem)'
 );
 assert(
-  patchSection.includes("requireRole(auth.user, ['admin', 'recepcionista'])") &&
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'recepcionista'\]\)/.test(patchSection) &&
     !patchSection.includes("'doctor'"),
   'PATCH /api/inventario NO permite rol doctor'
 );
 assert(
-  deleteSection.includes("requireRole(auth.user, ['admin', 'recepcionista'])") &&
+  /requireRole(?:Inventario)?\(auth\.user, \['admin', 'recepcionista'\]\)/.test(deleteSection) &&
     !deleteSection.includes("'doctor'"),
   'DELETE /api/inventario NO permite rol doctor'
 );

@@ -3,6 +3,7 @@ import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
 import { resolveDoctorId } from '@/lib/auth-helpers';
+import { enfermeroCobraHonorarios } from '@/lib/acceso-enfermeria';
 
 interface SearchResult {
   tipo: string;
@@ -146,28 +147,40 @@ export async function GET(request: NextRequest) {
     return q;
   };
 
+  // Enfermería (rol restringido): solo pacientes, y lentes si tiene honorarios
+  // activos. Sin consultas, personal ni cobros.
+  const esEnfermero = auth.perfil?.rol === 'enfermero';
+  const verLentes = !esEnfermero || (await enfermeroCobraHonorarios(auth.user.id));
+  const vacio = Promise.resolve({ data: null });
+
   const [pacientes, consultas, lentes, doctores, cobros] = await Promise.all([
     pacientesQuery,
-    consultasQuery(),
+    esEnfermero ? vacio : consultasQuery(),
 
-    supabase
-      .from('inventario_items')
-      .select('id,marca,modelo,codigo_barras,categoria:categorias_lentes(nombre)')
-      .or(`marca.ilike.${pattern},modelo.ilike.${pattern},codigo_barras.ilike.${pattern}`)
-      .limit(MAX_RESULTS_PER_TYPE),
+    verLentes
+      ? supabase
+          .from('inventario_items')
+          .select('id,marca,modelo,codigo_barras,categoria:categorias_lentes(nombre)')
+          .or(`marca.ilike.${pattern},modelo.ilike.${pattern},codigo_barras.ilike.${pattern}`)
+          .limit(MAX_RESULTS_PER_TYPE)
+      : vacio,
 
-    supabase
-      .from('doctores')
-      .select('id,alias,especialidad')
-      .or(`alias.ilike.${pattern},especialidad.ilike.${pattern}`)
-      .eq('activo', true)
-      .limit(MAX_RESULTS_PER_TYPE),
+    esEnfermero
+      ? vacio
+      : supabase
+          .from('doctores')
+          .select('id,alias,especialidad')
+          .or(`alias.ilike.${pattern},especialidad.ilike.${pattern}`)
+          .eq('activo', true)
+          .limit(MAX_RESULTS_PER_TYPE),
 
-    supabase
-      .from('cobros')
-      .select('id,folio,paciente:pacientes(nombre_completo),monto,pagado')
-      .ilike('folio', pattern)
-      .limit(MAX_RESULTS_PER_TYPE),
+    esEnfermero
+      ? vacio
+      : supabase
+          .from('cobros')
+          .select('id,folio,paciente:pacientes(nombre_completo),monto,pagado')
+          .ilike('folio', pattern)
+          .limit(MAX_RESULTS_PER_TYPE),
   ]);
 
   agregarPacientes(pacientes.data || []);

@@ -56,22 +56,35 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="theme">
           <SWRProvider>{children}</SWRProvider>
         </ThemeProvider>
-        <Script id="sw-register" strategy="afterInteractive">
-          {`
-            if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js').then(
-                  function(registration) {
-                    console.log('SW registered:', registration.scope);
-                  },
-                  function(err) {
-                    console.log('SW registration failed:', err);
-                  }
-                );
-              });
-            }
-          `}
-        </Script>
+        {process.env.NODE_ENV === 'production' ? (
+          <Script id="sw-register" strategy="afterInteractive">
+            {`
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(registration) {
+                      console.log('SW registered:', registration.scope);
+                    },
+                    function(err) {
+                      console.log('SW registration failed:', err);
+                    }
+                  );
+                });
+              }
+            `}
+          </Script>
+        ) : (
+          // Desarrollo: los chunks de /_next/static no llevan hash y el SW los servía
+          // desde caché (TypeError "reading 'call'" tras cambiar código). Se da de baja
+          // cualquier SW previo y se purga su caché. Script inline: corre aunque el
+          // runtime de Next esté roto por chunks viejos.
+          <script
+            id="sw-unregister-dev"
+            dangerouslySetInnerHTML={{
+              __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function (rs) { if (!rs.length) return; Promise.all(rs.map(function (r) { return r.unregister(); })).then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : null; }).then(function () { location.reload(); }); }); }`,
+            }}
+          />
+        )}
       </body>
     </html>
   );

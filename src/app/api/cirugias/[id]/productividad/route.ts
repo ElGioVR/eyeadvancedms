@@ -14,6 +14,10 @@ export async function GET(
 
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Rol restringido (solo agenda propia): sin acceso a métricas, montos ni catálogo de precios
+  if (auth.perfil?.rol === 'enfermero') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
 
   try {
     const rows = await listarProductividadCirugia(id);

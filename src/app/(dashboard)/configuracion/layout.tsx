@@ -1,18 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useUser } from '@/hooks/useUser';
 import { cn } from '@/lib/utils';
 
 const tabs = [
   { label: 'Perfil', href: '/configuracion' },
   { label: 'Usuarios', href: '/configuracion/usuarios' },
-  { label: 'Doctores', href: '/configuracion/doctores' },
+  { label: 'Personal médico', href: '/configuracion/doctores' },
   { label: 'Aseguranzas', href: '/configuracion/aseguranzas' },
   { label: 'Categorías Lentes', href: '/configuracion/categorias-lentes' },
   { label: 'Proveedores', href: '/configuracion/proveedores' },
+  { label: 'Modelos de LIO', href: '/configuracion/modelos-lio' },
   { label: 'Sistema', href: '/configuracion/sistema' },
 ];
+
+/** Enfermería: solo Perfil y Sistema. */
+const TABS_ENFERMERIA = new Set(['/configuracion', '/configuracion/sistema']);
 
 function getActiveTab(pathname: string) {
   if (pathname === '/configuracion') return 'Perfil';
@@ -22,7 +28,16 @@ function getActiveTab(pathname: string) {
 
 export default function ConfiguracionLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useUser();
+  const esEnfermero = user?.rol === 'enfermero';
   const activeTab = getActiveTab(pathname);
+  const tabsVisibles = esEnfermero ? tabs.filter((t) => TABS_ENFERMERIA.has(t.href)) : tabs;
+  const rutaPermitida = !esEnfermero || TABS_ENFERMERIA.has(pathname);
+
+  useEffect(() => {
+    if (!rutaPermitida) router.replace('/configuracion');
+  }, [rutaPermitida, router]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -37,7 +52,7 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
       {/* Tabs */}
       <div className="border-b border-line">
         <nav className="flex gap-1 -mb-px overflow-x-auto px-2 sm:px-0">
-          {tabs.map((tab) => {
+          {tabsVisibles.map((tab) => {
             const isActive = activeTab === tab.label;
             return (
               <Link
@@ -60,7 +75,7 @@ export default function ConfiguracionLayout({ children }: { children: React.Reac
 
       {/* Fundido suave al cambiar de pestaña (solo opacidad: sin transform persistente). */}
       <div key={pathname} className="animate-fadeIn">
-        {children}
+        {rutaPermitida ? children : null}
       </div>
     </div>
   );

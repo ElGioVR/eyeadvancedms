@@ -243,6 +243,9 @@ export interface AgendaCirugia {
   updated_at: string;
   // B11+: Agenda unificada
   tipo?: 'cirugia' | 'consulta' | 'estudio';
+  // Modificaciones agenda (punto II): solo consultas/estudios
+  especialidad?: string | null;
+  tipo_consulta_label?: string | null;
 }
 
 export interface AgendaCirugiaImportRow {

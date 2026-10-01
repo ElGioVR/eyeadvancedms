@@ -87,11 +87,18 @@ export async function GET(request: Request) {
   const dbStart = performance.now();
   try {
     const supabase = getSupabaseAdmin();
-    const { data: porUsuario } = await supabase
+    let { data: porUsuario, error: errFicha } = await supabase
       .from('doctores')
-      .select('id, alias')
+      .select('id, alias, cobra_honorarios')
       .eq('usuario_id', auth.user.id)
       .maybeSingle();
+    if (errFicha) {
+      // BD sin la columna cobra_honorarios (mig. 390): se lee como antes.
+      ({ data: porUsuario } = await supabase.from('doctores').select('id, alias').eq('usuario_id', auth.user.id).maybeSingle());
+    }
+    if ((porUsuario as { cobra_honorarios?: boolean } | null)?.cobra_honorarios === false) {
+      return NextResponse.json({ error: 'Tu perfil no tiene honorarios activos' }, { status: 403 });
+    }
 
     const doctor = await resolverDoctorPropio(
       auth.user.id,

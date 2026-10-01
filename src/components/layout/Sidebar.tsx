@@ -63,9 +63,15 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
   const sidebarWide = isDesktop ? !collapsed : isOpen;
   const showLabels = sidebarWide;
 
-  const visibleItems = menuItems.filter(
-    (item) => !('adminOnly' in item && item.adminOnly) || user?.rol === 'admin'
-  );
+  const visibleItems = menuItems.filter((item) => {
+    // Enfermería (rol restringido): agenda, pacientes (lectura), configuración
+    // (Perfil y Sistema) e inventario solo con honorarios activos.
+    if (user?.rol === 'enfermero') {
+      if (item.href === '/inventario') return user.cobra_honorarios === true;
+      return item.href === '/agenda' || item.href === '/pacientes' || item.href === '/configuracion';
+    }
+    return !('adminOnly' in item && item.adminOnly) || user?.rol === 'admin';
+  });
   const sections = visibleItems.reduce<Record<string, typeof visibleItems>>((acc, item) => {
     (acc[item.section] ??= []).push(item);
     return acc;

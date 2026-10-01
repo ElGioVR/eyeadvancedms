@@ -21,6 +21,10 @@ const MAX_SERVICIOS = 1000;
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Rol restringido (solo agenda propia): sin acceso a métricas, montos ni catálogo de precios
+  if (auth.perfil?.rol === 'enfermero') {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
 
   const filtros = leerQuery(request, querySchema);
   if (filtros instanceof NextResponse) return filtros;

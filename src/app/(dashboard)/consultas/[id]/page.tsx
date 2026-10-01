@@ -11,6 +11,8 @@ import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 import { useUser } from '@/hooks/useUser';
 import { useInvalidar } from '@/hooks/useFetch';
+import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { TIPOS_CONSULTA_AGENDA, etiquetaTipoConsulta, tipoAgendaDesdeBd, valoresBdTipoConsulta, type TipoConsultaAgenda } from '@/lib/catalogos/tipos-consulta';
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -44,6 +46,8 @@ interface ConsultaDetalle {
   hora_fin: string | null;
   tipo_consulta: string | null;
   tipo_visita: string | null;
+  especialidad_id?: string | null;
+  especialidad?: string | null;
   diagnostico: string | null;
   estudio_1: string | null;
   estudio_2: string | null;
@@ -150,11 +154,6 @@ const estatusLabels: Record<string, string> = {
 const estatusPagoLabels: Record<string, string> = {
   PENDIENTE_PAGO: 'Pendiente de Pago',
   PAGADO: 'Pagado',
-};
-
-const tipoVisitaLabels: Record<string, string> = {
-  PRIMERA_VEZ: 'Primera Vez',
-  SUBSECUENTE: 'Subsecuente',
 };
 
 function Field({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
@@ -264,6 +263,10 @@ export default function ConsultaDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editCosto, setEditCosto] = useState('');
   const [editNotas, setEditNotas] = useState('');
+  // Punto II: especialidad y tipo de consulta editables
+  const [editEspecialidadId, setEditEspecialidadId] = useState('');
+  const [editTipo, setEditTipo] = useState<TipoConsultaAgenda>('PRIMERA');
+  const { especialidades } = useEspecialidades();
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
@@ -321,6 +324,8 @@ export default function ConsultaDetailPage() {
   function startEditing() {
     setEditCosto(String(consulta?.costo_total ?? 0));
     setEditNotas(consulta?.notas || '');
+    setEditEspecialidadId(consulta?.especialidad_id || '');
+    setEditTipo(tipoAgendaDesdeBd(consulta?.tipo_consulta, consulta?.tipo_visita));
     setEditError(null);
     setEditing(true);
   }
@@ -342,6 +347,10 @@ export default function ConsultaDetailPage() {
     if (!consulta || savingEdit) return;
     const body: Record<string, unknown> = {};
     if ((consulta.notas || '') !== editNotas) body.notas = editNotas;
+    if ((consulta.especialidad_id || '') !== editEspecialidadId) body.especialidad_id = editEspecialidadId || null;
+    if (tipoAgendaDesdeBd(consulta.tipo_consulta, consulta.tipo_visita) !== editTipo) {
+      Object.assign(body, valoresBdTipoConsulta(editTipo));
+    }
     if (consulta.estatus_pago !== 'PAGADO') {
       const costo = Number(editCosto);
       if (!Number.isFinite(costo) || costo < 0) {
@@ -358,7 +367,11 @@ export default function ConsultaDetailPage() {
     setSavingEdit(true);
     setEditError(null);
     try {
-      await patchConsulta(body, body as Partial<ConsultaDetalle>);
+      const optimista: Partial<ConsultaDetalle> = { ...(body as Partial<ConsultaDetalle>) };
+      if ('especialidad_id' in body) {
+        optimista.especialidad = especialidades.find((e) => e.id === body.especialidad_id)?.nombre ?? null;
+      }
+      await patchConsulta(body, optimista);
       setEditing(false);
       toast('Cambios guardados');
     } catch (err) {
@@ -546,10 +559,41 @@ export default function ConsultaDetailPage() {
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Doctor" value={consulta.doctor || '—'} />
-              <Field label="Tipo" value={consulta.tipo_consulta || '—'} />
+              {editing ? (
+                <>
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Especialidad</span>
+                    <select
+                      value={editEspecialidadId}
+                      onChange={(e) => setEditEspecialidadId(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
+                    >
+                      <option value="">Sin especialidad</option>
+                      {especialidades.filter((e) => e.id).map((e) => (
+                        <option key={e.clave} value={e.id}>{e.nombre}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Tipo de consulta</span>
+                    <select
+                      value={editTipo}
+                      onChange={(e) => setEditTipo(e.target.value as TipoConsultaAgenda)}
+                      className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
+                    >
+                      {TIPOS_CONSULTA_AGENDA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <span className="mt-1 block text-[11px] text-muted">Cambiar el tipo no recalcula el costo; ajústalo en «Costo total».</span>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <Field label="Especialidad" value={consulta.especialidad || '—'} />
+                  <Field label="Tipo de consulta" value={etiquetaTipoConsulta(consulta.tipo_consulta, consulta.tipo_visita)} />
+                </>
+              )}
               <Field label="Fecha y Hora" value={consulta.fecha && consulta.hora_inicio ? `${consulta.fecha} ${consulta.hora_inicio.slice(0, 5)}` : '—'} />
               <Field label="Hora Fin" value={consulta.hora_fin ? consulta.hora_fin.slice(0, 5) : '—'} />
-              <Field label="Tipo de Visita" value={tipoVisitaLabels[consulta.tipo_visita || ''] || consulta.tipo_visita || '—'} />
               <Field label="Método de Pago" value={consulta.metodo_pago || '—'} />
               <Field label="Diagnóstico" value={consulta.diagnostico} full />
             </div>

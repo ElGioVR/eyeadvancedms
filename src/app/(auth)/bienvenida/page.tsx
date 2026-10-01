@@ -44,6 +44,7 @@ interface PerfilMin {
 function modulosPara(u: PerfilMin | null): string[] {
   const rutas = ['/pacientes', '/agenda', '/inventario', '/configuracion'];
   if (!u) return rutas;
+  if (u.rol === 'enfermero') return ['/agenda', '/pacientes', '/configuracion', '/mi-perfil'];
   if (u.rol === 'admin') rutas.push('/productividad');
   if (u.rol === 'doctor' || u.modo_focus) rutas.push('/mis-honorarios', '/mi-perfil');
   return rutas;
@@ -54,6 +55,8 @@ function modulosPara(u: PerfilMin | null): string[] {
  * (useFetch / fetch) para que la consuman con takePrefetched() sin repetir la request.
  */
 function datosPara(u: PerfilMin | null): string[] {
+  // Enfermería: solo lo que puede abrir (sin dashboard, inventario condicionado ni aseguranzas)
+  if (u?.rol === 'enfermero') return ['/api/notificaciones/unread-count', '/api/pacientes?page=1&pageSize=15'];
   const urls = [
     '/api/dashboard/charts',
     '/api/notificaciones/unread-count',

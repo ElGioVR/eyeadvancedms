@@ -813,8 +813,9 @@ function checkNuevaPagePrecarga() {
     { re: /seleccionarPaciente\s*\(/, label: 'selecciona el paciente' },
     { re: /setOrigenId\s*\(/, label: 'establece el origen/aseguradora' },
     {
-      re: /setNotas\s*\(\s*[`'"][^`]*diagn[óo]stico[^`]*[`'"]/,
-      label: 'precarga el diagnóstico de la consulta en notas',
+      // Modificaciones agenda (punto I.2): el diagnóstico tiene campo propio en la cirugía.
+      re: /setDiagnostico\s*\(\s*consultaData\.consulta\.diagnostico\s*\)/,
+      label: 'precarga el diagnóstico de la consulta en el campo Diagnóstico',
     },
   ];
   marcadoresPrecarga.forEach(function (m) {

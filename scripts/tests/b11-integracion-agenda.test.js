@@ -289,8 +289,9 @@ function checkAgendaRoute() {
     content,
     // requireRole(...) o la verificación equivalente en la misma lectura del perfil
     // (rol + activo) que usa el GET optimizado.
-    /requireRole\s*\(\s*auth\.user\s*,\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)|ROLES_AGENDA\s*=\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*\][\s\S]*profile\.activo !== true/,
-    'GET mantiene RBAC de los 3 roles (sin regresión)'
+    /requireRole\s*\(\s*auth\.user\s*,\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)|ROLES_AGENDA\s*=\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*(?:,\s*['"]enfermero['"]\s*)?\][\s\S]*profile\.activo !== true/,
+    // + 'enfermero' (rol restringido, solo su agenda) desde la mig. 390
+    'GET mantiene RBAC de los roles de agenda (sin regresión)'
   );
 }
 

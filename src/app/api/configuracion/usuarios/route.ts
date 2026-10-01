@@ -21,7 +21,7 @@ const usuarioCreateSchema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(72),
   nombre: z.string().trim().min(1).max(255),
-  rol: z.enum(['admin', 'doctor', 'recepcionista']),
+  rol: z.enum(['admin', 'doctor', 'recepcionista', 'enfermero']),
 }).strict();
 
 const usuarioUpdateSchema = z.object({
@@ -31,7 +31,7 @@ const usuarioUpdateSchema = z.object({
   // Obligatoria cuando el propio usuario cambia su contraseña (autoservicio)
   password_actual: z.string().min(1).max(128).optional(),
   nombre: z.string().trim().min(1).max(255).optional(),
-  rol: z.enum(['admin', 'doctor', 'recepcionista']).optional(),
+  rol: z.enum(['admin', 'doctor', 'recepcionista', 'enfermero']).optional(),
   activo: z.boolean().optional(),
   // Solo URLs https del Storage del propio proyecto (evita rastreo / contenido externo)
   avatar_url: z

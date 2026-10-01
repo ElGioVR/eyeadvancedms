@@ -19,11 +19,19 @@ export async function GET() {
       .select('id, email, nombre, rol, avatar_url, preferencias, activo')
       .eq('id', auth.user.id)
       .maybeSingle(),
-    supabase
-      .from('doctores')
-      .select('id')
-      .eq('usuario_id', auth.user.id)
-      .maybeSingle(),
+    // Ficha de personal (médico o enfermería) con su bandera de honorarios;
+    // si la BD aún no tiene esas columnas (mig. 390) se lee solo el id.
+    (async () => {
+      const r = await supabase
+        .from('doctores')
+        .select('id, tipo_personal, cobra_honorarios')
+        .eq('usuario_id', auth.user.id)
+        .maybeSingle();
+      if (!r.error) return r as { data: { id: string; tipo_personal?: string; cobra_honorarios?: boolean } | null };
+      return (await supabase.from('doctores').select('id').eq('usuario_id', auth.user.id).maybeSingle()) as {
+        data: { id: string; tipo_personal?: string; cobra_honorarios?: boolean } | null;
+      };
+    })(),
     // Fechas de alta / último acceso (no vienen en el JWT); en paralelo
     supabase.auth.admin.getUserById(auth.user.id),
   ]);
@@ -37,7 +45,7 @@ export async function GET() {
   }
 
   let doctor_id: string | null = null;
-  if (data.rol === 'doctor' || data.rol === 'admin') {
+  if (data.rol === 'doctor' || data.rol === 'admin' || data.rol === 'enfermero') {
     if (doctorRes.data) {
       doctor_id = doctorRes.data.id;
     } else if (data.email) {
@@ -68,6 +76,9 @@ export async function GET() {
   return NextResponse.json({
     ...perfil,
     doctor_id,
+    tipo_personal: doctorRes.data?.tipo_personal ?? (doctor_id ? 'MEDICO' : null),
+    // Sin ficha de personal no hay honorarios propios que mostrar.
+    cobra_honorarios: doctor_id ? doctorRes.data?.cobra_honorarios !== false : false,
     created_at: authRes.data?.user?.created_at ?? null,
     last_sign_in_at: authRes.data?.user?.last_sign_in_at ?? null,
     modo_focus: ((data.preferencias as Record<string, unknown> | null)?.modo_focus === true),

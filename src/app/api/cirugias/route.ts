@@ -3,11 +3,14 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorTranslations } from '@/lib/supabase/errors';
-import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { detectarConflictosAgenda, detectarConflictosPersonal } from '@/lib/agenda-conflictos';
+import { horarioCirugia, seTraslapan } from '@/lib/catalogos/equipo-quirurgico';
+import { aMinutos } from '@/lib/agenda-slots';
 import { calcularProductividadCirugia } from '@/lib/productividad';
 import { consumirLIO } from '@/lib/inventario';
-import { leerJSON, uuid } from '@/lib/api/validar';
+import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
+import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
 
 /** Tope del listado (se usa filtrado por paciente o consulta). */
 const MAX_LISTADO = 500;
@@ -54,10 +57,23 @@ export async function GET(request: Request) {
   return NextResponse.json({ data: data || [] });
 }
 
+const horarioValido = (d: { hora_inicio?: string | null; hora_fin?: string | null }) =>
+  !d.hora_inicio || !d.hora_fin || d.hora_fin.slice(0, 5) > d.hora_inicio.slice(0, 5);
+
 const participanteSchema = z.object({
   medico_id: z.string().uuid(),
   rol_id: z.string().uuid(),
-}).strict();
+  // Equipo homologado (mig. 370): horario propio dentro de la cirugía
+  hora_inicio: horaHHMM.optional().nullable(),
+  hora_fin: horaHHMM.optional().nullable(),
+}).strict().refine(horarioValido, { message: 'El horario de un participante debe terminar después de iniciar' });
+
+const personalSchema = z.object({
+  rol: z.enum(VALORES_ROL_PERSONAL),
+  personal_id: z.string().uuid(),
+  hora_inicio: horaHHMM,
+  hora_fin: horaHHMM,
+}).strict().refine(horarioValido, { message: 'El horario del personal de apoyo debe terminar después de iniciar' });
 
 const cirugiaCreateSchema = z.object({
   paciente_id: z.string().uuid(),
@@ -74,11 +90,33 @@ const cirugiaCreateSchema = z.object({
   consulta_id: z.string().uuid().optional().nullable(),
   participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante').max(20, 'Demasiados participantes'),
   notas: z.string().max(2000).optional().nullable(),
+  // Punto I (Modificaciones agenda): diagnóstico propio y anestesia obligatoria.
+  diagnostico: z.string().trim().max(500).optional().nullable(),
+  anestesia: z.enum(VALORES_ANESTESIA, { errorMap: () => ({ message: 'Selecciona el tipo de anestesia' }) }),
+  // I.1 Datos generales
+  procedencia: z.string().trim().max(255).optional().nullable(),
+  motivo_consulta: z.string().trim().max(500).optional().nullable(),
+  especialidad_id: z.string().uuid().optional().nullable(),
+  // I.2 Tipo de LIO (monofocal/trifocal × tórico/no tórico)
+  tipo_lio: z.enum(TIPOS_LIO.map((t) => t.value) as [string, ...string[]]).optional().nullable(),
+  // Modelo del catálogo cat_modelos_lio (mig. 1800000000360)
+  modelo_lio_id: z.string().uuid().optional().nullable(),
+  // I.2 Procedimientos adicionales (ids de aseguranza_servicios; el principal es servicio_id)
+  procedimientos_adicionales: z.array(z.string().uuid()).max(10, 'Demasiados procedimientos').optional().nullable(),
+  // I.2 Personal de apoyo (personal_clinico) con horario; varias personas por rol
+  personal: z.array(personalSchema).max(20, 'Demasiado personal de apoyo').optional().nullable(),
 })
   .strict()
   .refine(
     (d) => !(d.inventario_item_id && (d.lio || d.marca_lio)),
     { message: 'Asigne solo un LIO: de inventario o manual, no ambos' }
+  )
+  .refine(
+    (d) => {
+      const p = d.personal || [];
+      return !p.some((a, i) => p.some((b, j) => j > i && a.personal_id === b.personal_id && seTraslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)));
+    },
+    { message: 'La misma persona de apoyo aparece dos veces en horarios que se empalman' }
   );
 
 export async function POST(request: Request) {
@@ -93,15 +131,58 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  // AGE-001 / AGE-002 / VAL-005: detectar conflictos de agenda antes de crear
-  const medicos = data.participantes.map((p) => p.medico_id);
-  const conflictos = await detectarConflictosAgenda({
-    fecha: data.fecha,
-    hora: data.hora,
-    duracion_min: data.duracion_min,
-    medicos,
-    recurso_id: data.recurso_id,
-  });
+  // AGE-001 / AGE-002 / VAL-005: detectar conflictos de agenda antes de crear.
+  // Médicos con horario propio (equipo homologado) se revisan con su rango;
+  // el resto, y el quirófano, con el horario de la cirugía.
+  const hCirugia = horarioCirugia(data.hora, data.duracion_min);
+  const conHorarioPropio = data.participantes.filter(
+    (p) => p.hora_inicio && p.hora_fin && (p.hora_inicio.slice(0, 5) !== hCirugia.inicio || p.hora_fin.slice(0, 5) !== hCirugia.fin)
+  );
+  const medicos = data.participantes.filter((p) => !conHorarioPropio.includes(p)).map((p) => p.medico_id);
+  const personal = data.personal || [];
+  const personalIds = Array.from(new Set(personal.map((p) => p.personal_id)));
+  const adicionalesIds = Array.from(new Set((data.procedimientos_adicionales || []).filter((id) => id !== data.servicio_id)));
+  const [conflictos, conflictosPropios, conflictosPersonal, personalRes, adicionalesRes] = await Promise.all([
+    detectarConflictosAgenda({
+      fecha: data.fecha,
+      hora: data.hora,
+      duracion_min: data.duracion_min,
+      medicos,
+      recurso_id: data.recurso_id,
+    }),
+    Promise.all(
+      conHorarioPropio.map((p) =>
+        detectarConflictosAgenda({
+          fecha: data.fecha,
+          hora: p.hora_inicio!,
+          duracion_min: Math.max(1, aMinutos(p.hora_fin) - aMinutos(p.hora_inicio)),
+          medicos: [p.medico_id],
+        })
+      )
+    ).then((r) => r.flat()),
+    detectarConflictosPersonal({ fecha: data.fecha, miembros: personal }),
+    personalIds.length
+      ? supabase.from('personal_clinico').select('id, nombre, activo').in('id', personalIds)
+      : Promise.resolve({ data: [] as { id: string; nombre: string; activo: boolean }[], error: null }),
+    adicionalesIds.length
+      ? supabase.from('aseguranza_servicios').select('id, nombre').in('id', adicionalesIds)
+      : Promise.resolve({ data: [] as { id: string; nombre: string }[], error: null }),
+  ]);
+  const personalCat = (personalRes.data || []) as { id: string; nombre: string; activo: boolean }[];
+  if (personalRes.error || personalCat.filter((p) => p.activo).length !== personalIds.length) {
+    return NextResponse.json({ error: 'Alguna persona del personal de apoyo no existe o está inactiva' }, { status: 400 });
+  }
+  conflictos.push(...conflictosPropios);
+  if (conflictosPersonal.length > 0) {
+    return NextResponse.json(
+      { error: conflictosPersonal[0].descripcion, conflictos: conflictosPersonal },
+      { status: 409 }
+    );
+  }
+  const adicionales = (adicionalesRes.data || []) as { id: string; nombre: string }[];
+  if (adicionalesRes.error || adicionales.length !== adicionalesIds.length) {
+    return NextResponse.json({ error: 'Alguno de los procedimientos adicionales no existe' }, { status: 400 });
+  }
 
   if (conflictos.length > 0) {
     return NextResponse.json(
@@ -123,7 +204,8 @@ export async function POST(request: Request) {
     p_lio: data.lio ?? null,
     p_marca_lio: data.marca_lio ?? null,
     p_consulta_id: data.consulta_id,
-    p_participantes: data.participantes,
+    // El RPC solo usa medico_id y rol_id; el horario se guarda después.
+    p_participantes: data.participantes.map((p) => ({ medico_id: p.medico_id, rol_id: p.rol_id })),
     p_notas: data.notas,
     p_created_by: auth.user.id,
   });
@@ -137,7 +219,67 @@ export async function POST(request: Request) {
   }
 
   const cirugiaId = (result as any)?.cirugia_id;
+  let advertencia: string | null = null;
   if (cirugiaId) {
+    // Diagnóstico y anestesia van fuera del RPC crear_cirugia (no se altera su firma):
+    // UPDATE inmediato de la fila recién creada, en paralelo con LIO y productividad.
+    const tipoLio = TIPOS_LIO.find((t) => t.value === data.tipo_lio);
+    const avisar = (err: unknown, contexto: string) => {
+      mensajeSeguro(err, contexto);
+      advertencia = 'La cirugía se creó, pero algunos datos clínicos no se guardaron; revísalos en el detalle.';
+    };
+    const camposClinicosP = Promise.all([
+      supabase
+        .from('agenda_cirugias')
+        .update({
+          anestesia: data.anestesia,
+          diagnostico: data.diagnostico || null,
+          procedencia: data.procedencia || null,
+          motivo_consulta: data.motivo_consulta || null,
+          especialidad_id: data.especialidad_id || null,
+          lio_diseno: tipoLio?.diseno ?? null,
+          lio_torico: tipoLio ? tipoLio.torico : null,
+          modelo_lio_id: data.modelo_lio_id || null,
+        })
+        .eq('id', cirugiaId)
+        .then(({ error: e }) => { if (e) avisar(e, 'cirugias.campos-clinicos'); }),
+      adicionales.length
+        ? supabase
+            .from('cirugia_procedimientos')
+            .insert(adicionalesIds.map((id, i) => ({
+              cirugia_id: cirugiaId,
+              servicio_id: id,
+              nombre: adicionales.find((a) => a.id === id)!.nombre,
+              orden: i + 1,
+            })))
+            .then(({ error: e }) => { if (e) avisar(e, 'cirugias.procedimientos-adicionales'); })
+        : null,
+      personal.length
+        ? supabase
+            .from('cirugia_personal')
+            .insert(personal.map((p) => ({
+              cirugia_id: cirugiaId,
+              rol: p.rol,
+              personal_id: p.personal_id,
+              nombre: personalCat.find((c) => c.id === p.personal_id)!.nombre,
+              hora_inicio: p.hora_inicio,
+              hora_fin: p.hora_fin,
+            })))
+            .then(({ error: e }) => { if (e) avisar(e, 'cirugias.personal'); })
+        : null,
+      // Horario de cada médico del equipo (columnas de mig. 370)
+      ...data.participantes
+        .filter((p) => p.hora_inicio && p.hora_fin)
+        .map((p) =>
+          supabase
+            .from('cirugia_participantes')
+            .update({ hora_inicio: p.hora_inicio, hora_fin: p.hora_fin })
+            .eq('cirugia_id', cirugiaId)
+            .eq('medico_id', p.medico_id)
+            .eq('rol_id', p.rol_id)
+            .then(({ error: e }) => { if (e) avisar(e, 'cirugias.horario-participante'); })
+        ),
+    ]);
     // Independientes entre sí: en paralelo (antes en serie). consumirLIO es
     // idempotente por cirugía (el RPC ya registra la salida en el Kardex).
     const productividadP = (async () => {
@@ -148,10 +290,14 @@ export async function POST(request: Request) {
       }
     })();
     await Promise.allSettled([
+      camposClinicosP,
       data.inventario_item_id ? consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id) : Promise.resolve(null),
       productividadP,
     ]);
   }
 
+  if (advertencia && result && typeof result === 'object') {
+    return NextResponse.json({ ...(result as object), advertencia }, { status: 201 });
+  }
   return NextResponse.json(result, { status: 201 });
 }

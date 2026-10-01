@@ -314,6 +314,6 @@ export class CreateCrearCirugiaRPC1800000000180 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP FUNCTION IF EXISTS crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, UUID, JSONB, TEXT, UUID);`);
+    await queryRunner.query(`DROP FUNCTION IF EXISTS crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, TEXT, TEXT, UUID, JSONB, TEXT, UUID);`);
   }
 }

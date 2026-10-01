@@ -3,16 +3,46 @@ import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error'
 import { errorInterno } from '@/lib/api/validar';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
-import type { Worksheet } from 'exceljs';
+import { invalidarDoctorDeUsuario } from '@/lib/auth-helpers';
+import {
+  claveTexto,
+  crearResolverDoctores,
+  crearResolverPacientes,
+  faltantesPaciente,
+  generarCsvRechazos,
+  limpiarEspacios,
+  normalizarSexo,
+  parseFechaImport,
+  parseHoraImport,
+  validarNombrePaciente,
+  valorCelda,
+  type DoctorExistente,
+  type FilaRechazada,
+  type PacienteExistente,
+  type ResolucionDoctor,
+} from '@/lib/import-agenda';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
 export const maxDuration = 60;
 
-/* ─────────── Utilidades de parsing ─────────── */
+/*
+ * Importación masiva de consultas y cirugías.
+ *
+ * - Sin duplicados: una fila que ya existe (mismo paciente, fecha y hora; o la
+ *   misma cirugía aplazada) se omite, también si se repite dentro del archivo.
+ * - Doctores y pacientes que faltan se crean UNA vez y quedan marcados con
+ *   `pendiente_completar` (mig. 400) para terminar su ficha.
+ * - Alias de doctor sin distinguir mayúsculas/acentos («Luis» = «LUIS»); los
+ *   nuevos se guardan en MAYÚSCULAS. Nombres de paciente y alias se validan.
+ * - Las filas que no se pudieron agregar vuelven en un CSV con su motivo y las
+ *   columnas originales para corregirlas y volver a importar.
+ */
+
+/* ─────────── Lectura del archivo ─────────── */
 
 /** Parser CSV: campos entre comillas, separador , o ; */
 function parseCsv(text: string): string[][] {
-  const clean = text.replace(/^\uFEFF/, '');
+  const clean = text.replace(/^﻿/, '');
   const rows: string[][] = [];
   let cur: string[] = [];
   let field = '';
@@ -71,64 +101,17 @@ function dedupeHeaders(headers: string[]): string[] {
   });
 }
 
-function parseFecha(val: unknown): string | null {
-  if (val === null || val === undefined || val === '') return null;
-  if (typeof val === 'number') {
-    const date = new Date((val - 25569) * 86400 * 1000);
-    if (!isNaN(date.getTime())) return date.toISOString().slice(0, 10);
-  }
-  const str = String(val).trim();
-  // Formato ISO con hora: "2026-07-22 00:00:00" → prefijo
-  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  // Formato largo en inglés: "Tuesday, September 1, 2026"
-  const d = new Date(str);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  return null;
-}
-
-function parseFechaNacimiento(val: unknown): string | null {
-  const fecha = parseFecha(val);
-  if (fecha && fecha >= '1900-01-01' && fecha <= '2100-12-31') return fecha;
-  return null;
-}
-
-function parseHora(val: unknown): string | null {
-  if (val === null || val === undefined || val === '') return null;
-  if (typeof val === 'number') {
-    const totalMinutes = Math.round(val * 24 * 60);
-    const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
-    const m = (totalMinutes % 60).toString().padStart(2, '0');
-    return `${h}:${m}:00`;
-  }
-  const str = String(val).trim().toUpperCase();
-  // Formato AM/PM: "10:00AM", "9:30 AM", "2:00 AM"
-  const ampm = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-  if (ampm) {
-    let h = parseInt(ampm[1], 10);
-    const m = ampm[2];
-    const meridiem = ampm[3];
-    if (meridiem === 'PM' && h < 12) h += 12;
-    if (meridiem === 'AM' && h === 12) h = 0;
-    return `${String(h).padStart(2, '0')}:${m}:00`;
-  }
-  const simple = str.match(/(\d{1,2}):(\d{2})/);
-  if (simple) return `${simple[1].padStart(2, '0')}:${simple[2]}:00`;
-  return null;
-}
-
 function normalizeOjo(val: unknown): string | null {
   if (!val) return null;
   const v = String(val).trim().toUpperCase();
   if (v === 'OD' || v === 'DERECHO') return 'OD';
   if (v === 'OI' || v === 'OS' || v === 'IZQUIERDO') return 'OI';
   if (v === 'OU' || v === 'AO' || v === 'AMBOS' || v === 'BILATERAL') return 'OU';
-  // agenda_cirugias.ojo tiene CHECK (OD/OI/OU): otro valor tumbaba todo el lote.
   return null;
 }
 
 function normalizeText(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /** "$5,100.00 " → 5100 */
@@ -138,50 +121,34 @@ function parseCosto(val: unknown): number {
   return isNaN(num) ? 0 : num;
 }
 
-interface DoctorRef { id: string; alias: string }
+const texto = (v: unknown) => limpiarEspacios(String(v ?? ''));
 
-/**
- * Resuelve el doctor a partir del texto del archivo usando la lista de doctores
- * activos precargada UNA vez por request (antes: 1 consulta por fila).
- */
-function crearResolverDoctor(doctores: DoctorRef[]) {
-  const memo = new Map<string, DoctorRef | null>();
-  return (texto: unknown): DoctorRef | null => {
-    if (!texto) return null;
-    const buscar = String(texto).trim();
-    if (!buscar || doctores.length === 0) return null;
+/** Una hoja leída: encabezados originales + filas (valores crudos y por encabezado). */
+interface Hoja {
+  nombre: string;
+  encabezados: string[];
+  filas: Array<{ numero: number; valores: Array<string | number>; obj: Record<string, string | number> }>;
+}
 
-    const buscarLower = buscar.toLowerCase();
-    if (memo.has(buscarLower)) return memo.get(buscarLower) ?? null;
-
-    // Primer cirujano antes de "/" (BAYARDO/IRINA → BAYARDO)
-    const principal = buscarLower.split('/')[0]?.trim() || buscarLower;
-
-    const exacto = doctores.find((d) => {
-      const a = d.alias.toLowerCase();
-      return a === principal || a.includes(principal) || principal.includes(a);
-    });
-    const porApellido = exacto
-      ? null
-      : doctores.find((d: DoctorRef) => {
-          const apellidos = d.alias.toLowerCase().split(' ');
-          return apellidos.some((a: string) => a.length > 3 && principal.includes(a));
-        });
-    const r = exacto || porApellido || null;
-    memo.set(buscarLower, r);
-    return r;
-  };
+function hojaDesdeMatriz(nombre: string, matriz: Array<Array<string | number>>): Hoja {
+  const encabezados = (matriz[0] || []).map((h) => String(h ?? '').trim());
+  const claves = dedupeHeaders(encabezados);
+  const filas: Hoja['filas'] = [];
+  matriz.slice(1).forEach((valores, i) => {
+    if (valores.every((v) => String(v ?? '').trim() === '')) return; // fila vacía
+    const obj: Record<string, string | number> = {};
+    claves.forEach((h, j) => { if (h) obj[h] = valores[j] ?? ''; });
+    filas.push({ numero: i + 2, valores, obj });
+  });
+  return { nombre, encabezados, filas };
 }
 
 /* ─────────── Utilidades de lotes ─────────── */
 
 type Admin = ReturnType<typeof getSupabaseAdmin>;
 
-/** Tamaño de lote para inserts en arreglo. */
 const LOTE_INSERT = 200;
-/** Tamaño de página de PostgREST (max-rows por defecto de Supabase). */
 const PAGINA = 1000;
-/** Máx. de peticiones simultáneas cuando se cae a inserción fila por fila. */
 const CONCURRENCIA = 8;
 
 function trozos<T>(arr: T[], n: number): T[][] {
@@ -190,7 +157,6 @@ function trozos<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
-/** Ejecuta `fn` sobre cada elemento con un límite de concurrencia (orden de resultados preservado). */
 async function mapConLimite<T, R>(items: T[], limite: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const res = new Array<R>(items.length);
   let siguiente = 0;
@@ -204,10 +170,9 @@ async function mapConLimite<T, R>(items: T[], limite: number, fn: (item: T, i: n
   return res;
 }
 
-/** Lee todas las páginas de una consulta (PostgREST corta en `max-rows`). */
 async function leerPaginado<T>(
   construir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-  maxPaginas = 50,
+  maxPaginas = 100,
 ): Promise<T[]> {
   const out: T[] = [];
   for (let p = 0; p < maxPaginas; p++) {
@@ -220,27 +185,48 @@ async function leerPaginado<T>(
   return out;
 }
 
+type ResultadoInsert = { ok: true; row: Record<string, unknown> } | { ok: false; error: unknown };
+
+/** ¿El error es por una columna que aún no existe (migración sin aplicar)? */
+function esColumnaFaltante(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return !!e && (e.code === 'PGRST204' || e.code === '42703' || /column .* (does not exist|could not find)|Could not find the '.*' column/i.test(e.message || ''));
+}
+
 /**
- * Inserta filas en lotes. Si un lote falla (una fila inválida tumba el lote),
- * se reintenta fila por fila para aislar solo las filas con error.
- * Devuelve por fila: el registro insertado (según `columnas`) o el error.
+ * Inserta en lotes. Si un lote falla se reintenta fila por fila para aislar
+ * solo las filas con error. Si falla por una columna opcional inexistente
+ * (`opcionales`, p. ej. `pendiente_completar` sin la mig. 400) se reintenta sin ella.
  */
 async function insertarEnLotes(
   supabase: Admin,
   tabla: string,
   filas: Array<Record<string, unknown>>,
   columnas: string,
-): Promise<Array<{ ok: true; row: Record<string, unknown> } | { ok: false; error: unknown }>> {
-  const resultado: Array<{ ok: true; row: Record<string, unknown> } | { ok: false; error: unknown }> = [];
-  for (const lote of trozos(filas, LOTE_INSERT)) {
-    const { data, error } = await supabase.from(tabla).insert(lote as never).select(columnas);
+  opcionales: string[] = [],
+): Promise<ResultadoInsert[]> {
+  let quitar = false;
+  const preparar = (f: Record<string, unknown>) => {
+    if (!quitar) return f;
+    const copia = { ...f };
+    for (const c of opcionales) delete copia[c];
+    return copia;
+  };
+  const resultado: ResultadoInsert[] = [];
+  for (const loteOriginal of trozos(filas, LOTE_INSERT)) {
+    let lote = loteOriginal.map(preparar);
+    let { data, error } = await supabase.from(tabla).insert(lote as never).select(columnas);
+    if (error && !quitar && opcionales.length && esColumnaFaltante(error)) {
+      quitar = true;
+      lote = loteOriginal.map(preparar);
+      ({ data, error } = await supabase.from(tabla).insert(lote as never).select(columnas));
+    }
     const insertados = (data || []) as unknown as Record<string, unknown>[];
     if (!error && insertados.length === lote.length) {
       insertados.forEach((row) => resultado.push({ ok: true, row }));
       continue;
     }
     if (!error) {
-      // Respuesta incompleta (no debería pasar): no se puede mapear fila a fila.
       lote.forEach(() => resultado.push({ ok: false, error: new Error('Respuesta incompleta al insertar') }));
       continue;
     }
@@ -255,110 +241,117 @@ async function insertarEnLotes(
   return resultado;
 }
 
-/** Patrón ILIKE exacto (sin comodines) entre comillas para `ilike(any).{…}`. */
-function patronIlikeExacto(texto: string): string {
-  const sinComodines = texto.replace(/[\\%_]/g, (c) => `\\${c}`);
-  return `"${sinComodines.replace(/[\\"]/g, (c) => `\\${c}`)}"`;
+/* ─────────── Doctores y pacientes ─────────── */
+
+async function cargarDoctores(supabase: Admin): Promise<DoctorExistente[]> {
+  return leerPaginado<DoctorExistente>((d, h) =>
+    supabase.from('doctores').select('id, alias, activo').order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: DoctorExistente[] | null; error: unknown }>
+  );
 }
 
-/** Trozos cuyo tamaño en la URL no excede ~6 KB (límite práctico de PostgREST/proxies). */
-function trozosPorLongitud(valores: string[], maxChars = 6000, maxItems = 200): string[][] {
-  const out: string[][] = [];
-  let actual: string[] = [];
-  let largo = 0;
-  for (const v of valores) {
-    const l = encodeURIComponent(v).length + 1;
-    if (actual.length > 0 && (largo + l > maxChars || actual.length >= maxItems)) {
-      out.push(actual);
-      actual = [];
-      largo = 0;
-    }
-    actual.push(v);
-    largo += l;
-  }
-  if (actual.length) out.push(actual);
-  return out;
+async function cargarPacientes(supabase: Admin): Promise<PacienteExistente[]> {
+  return leerPaginado<PacienteExistente>((d, h) =>
+    supabase
+      .from('pacientes')
+      .select('id, nombre_completo, telefono, created_at')
+      .order('id', { ascending: true })
+      .range(d, h) as unknown as PromiseLike<{ data: PacienteExistente[] | null; error: unknown }>
+  );
 }
 
-function telefono10(tel: string | null): string | null {
-  if (!tel) return null;
-  const t = tel.replace(/\D/g, '').slice(-10);
-  return t.length === 10 ? t : null;
-}
-
-/* ─────────── Tipos de filas ─────────── */
-
-interface CirugiaFila {
-  nombre_paciente: string;
-  expediente: string | null;
-  fecha: string | null;
-  hora: string | null;
-  jornada: string | null;
-  diagnostico: string | null;
-  procedimiento: string | null;
-  ojo: string | null;
-  lio: string | null;
-  marca_lio: string | null;
-  tiempo_estimado: string | null;
-  tiempo_estancia: string | null;
-  doctor_id: string | null;
-  estado: string;
-  notas: string | null;
-  _cirujano_texto: string | null;
-  _doctor_alias: string | null;
-}
-
-interface ConsultaFila {
-  fecha: string | null;
-  hora_inicio: string | null;
-  hora_fin: string | null;
+interface PacienteNuevo {
+  nombre_completo: string;
   telefono: string | null;
-  doctor_alias: string;
-  nombre_paciente: string;
   sexo: string | null;
   fecha_nacimiento: string | null;
-  tipo_consulta: string;
-  diagnostico: string | null;
-  tipo_visita: string;
-  estudio_1: string | null;
-  estudio_2: string | null;
-  estudio_3: string | null;
-  procedimiento: string | null;
-  aseguradora: string | null;
-  metodo_pago: string | null;
-  costo: number;
+  edad: number | null;
 }
 
-const MESES_EN: Record<string, number> = {
-  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
-};
+/** Referencia a doctor/paciente: id existente o clave de uno por crear. */
+type Ref = { id: string } | { nuevo: string } | null;
 
-/** "Tuesday, September 1, 2026" → 2026-09-01 */
-function parseFechaLargaEn(str: string): string | null {
-  const m = str.match(/[A-Za-z]+,\s*([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/);
-  if (!m) return null;
-  const mes = MESES_EN[m[1].toLowerCase()];
-  if (mes === undefined) return null;
-  return `${m[3]}-${String(mes + 1).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+/**
+ * Crea los doctores nuevos (alias en MAYÚSCULAS). Si otro proceso ya lo creó
+ * (índice único de alias, mig. 400) se reutiliza el existente.
+ */
+async function crearDoctores(supabase: Admin, nuevos: Map<string, string>): Promise<{ ids: Map<string, string>; fallos: Map<string, string> }> {
+  const ids = new Map<string, string>();
+  const fallos = new Map<string, string>();
+  const claves = Array.from(nuevos.keys());
+  if (claves.length === 0) return { ids, fallos };
+  const filas = claves.map((k) => ({
+    alias: nuevos.get(k)!,
+    nombre: null,
+    especialidad: 'Oftalmología',
+    activo: true,
+    tipo_personal: 'MEDICO',
+    cobra_honorarios: true,
+    pendiente_completar: true,
+  }));
+  const res = await insertarEnLotes(supabase, 'doctores', filas, 'id', ['pendiente_completar', 'tipo_personal', 'cobra_honorarios']);
+  const pendientes: string[] = [];
+  res.forEach((r, i) => {
+    if (r.ok) ids.set(claves[i], r.row.id as string);
+    else pendientes.push(claves[i]);
+  });
+  if (pendientes.length) {
+    // Carrera con otro import: buscar por alias exacto en mayúsculas
+    const { data } = await supabase.from('doctores').select('id, alias').in('alias', pendientes.map((k) => nuevos.get(k)!));
+    for (const k of pendientes) {
+      const d = (data || []).find((x: { alias: string }) => x.alias === nuevos.get(k));
+      if (d) ids.set(k, d.id);
+      else fallos.set(k, `No se pudo crear el doctor «${nuevos.get(k)}»`);
+    }
+  }
+  if (ids.size) invalidarDoctorDeUsuario();
+  return { ids, fallos };
+}
+
+async function crearPacientes(supabase: Admin, nuevos: Map<string, PacienteNuevo>): Promise<{ ids: Map<string, string>; fallos: Map<string, string> }> {
+  const ids = new Map<string, string>();
+  const fallos = new Map<string, string>();
+  const claves = Array.from(nuevos.keys());
+  if (claves.length === 0) return { ids, fallos };
+  const filas = claves.map((k) => {
+    const p = nuevos.get(k)!;
+    return { ...p, pendiente_completar: faltantesPaciente(p).length > 0 };
+  });
+  const res = await insertarEnLotes(supabase, 'pacientes', filas, 'id', ['pendiente_completar']);
+  res.forEach((r, i) => {
+    if (r.ok) ids.set(claves[i], r.row.id as string);
+    else fallos.set(claves[i], `No se pudo crear el paciente: ${mensajeSeguro(r.error, 'agenda.import.paciente', 'error al guardar')}`);
+  });
+  return { ids, fallos };
+}
+
+/** Resolución de doctor → Ref, registrando los nuevos. Devuelve el motivo si se rechaza. */
+function refDoctor(r: ResolucionDoctor | null, nuevos: Map<string, string>): { ref: Ref; motivo?: string; nuevo?: boolean } {
+  if (!r) return { ref: null };
+  if (r.tipo === 'rechazo') return { ref: null, motivo: r.motivo };
+  if (r.tipo === 'existente') return { ref: { id: r.id } };
+  if (!nuevos.has(r.clave)) nuevos.set(r.clave, r.alias);
+  return { ref: { nuevo: r.clave }, nuevo: true };
+}
+
+function idDe(ref: Ref, creados: Map<string, string>): string | null | undefined {
+  if (!ref) return null;
+  if ('id' in ref) return ref.id;
+  return creados.get(ref.nuevo); // undefined = no se pudo crear
 }
 
 /* ─────────── Endpoint ─────────── */
 
-// Límites para evitar DoS por memoria en archivos enormes
 const MAX_SIZE_IMPORT = 5 * 1024 * 1024; // 5MB
 const MAX_FILAS_IMPORT = 2000;
-/** Margen del multipart (boundary, otros campos) sobre el tamaño del archivo. */
 const MARGEN_MULTIPART = 64 * 1024;
 const MAX_NOMBRE_ARCHIVO = 255;
+const MAX_FILAS_PREVIEW = 100;
 
-/** MIME aceptados por extensión ('' = el navegador no informó tipo). */
 const MIME_IMPORT: Record<'csv' | 'xlsx', string[]> = {
   csv: ['', 'text/csv', 'text/plain', 'application/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'application/octet-stream'],
   xlsx: ['', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream', 'application/zip'],
 };
 
-/** Verifica que el contenido coincida con la extensión (xlsx = ZIP «PK\x03\x04»; csv sin bytes nulos). */
 function contenidoCoincide(ext: 'csv' | 'xlsx', buf: ArrayBuffer): boolean {
   const bytes = new Uint8Array(buf, 0, Math.min(buf.byteLength, 4096));
   if (ext === 'xlsx') {
@@ -367,13 +360,24 @@ function contenidoCoincide(ext: 'csv' | 'xlsx', buf: ArrayBuffer): boolean {
   return !bytes.includes(0);
 }
 
+/** Fila del preview que ve el usuario antes de confirmar. */
+interface FilaPreview {
+  fila: number;
+  fecha: string | null;
+  hora: string | null;
+  paciente: string;
+  doctor: string | null;
+  estado?: string;
+  paciente_nuevo: boolean;
+  doctor_nuevo: boolean;
+}
+
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
-  // Rechazo temprano por tamaño declarado (antes de leer el multipart a memoria).
   const largo = Number(request.headers.get('content-length') || 0);
   if (largo > MAX_SIZE_IMPORT + MARGEN_MULTIPART) {
     return NextResponse.json({ error: 'Archivo demasiado grande (máximo 5MB)' }, { status: 400 });
@@ -404,7 +408,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No se proporcionó un archivo' }, { status: 400 });
   }
   const file = fileRaw;
-
   if (file.size === 0) {
     return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 });
   }
@@ -414,7 +417,6 @@ export async function POST(request: Request) {
   if (!file.name || file.name.length > MAX_NOMBRE_ARCHIVO) {
     return NextResponse.json({ error: 'Nombre de archivo no válido' }, { status: 400 });
   }
-
   const extRaw = file.name.split('.').pop()?.toLowerCase() || '';
   if (extRaw !== 'xlsx' && extRaw !== 'csv') {
     return NextResponse.json({ error: 'Formato no soportado. Usa .xlsx o .csv' }, { status: 400 });
@@ -424,58 +426,115 @@ export async function POST(request: Request) {
   if (!MIME_IMPORT[ext].includes(mime)) {
     return NextResponse.json({ error: 'Formato no soportado. Usa .xlsx o .csv' }, { status: 400 });
   }
-
   const buffer = await file.arrayBuffer();
   if (!contenidoCoincide(ext, buffer)) {
     return NextResponse.json({ error: 'El contenido del archivo no corresponde a su extensión' }, { status: 400 });
   }
   const archivoNombre = file.name.replace(/[^\w\-. ]/g, '_').slice(0, 120);
 
-  // Doctores activos: una sola lectura por request (antes: una por fila/doctor).
-  const doctoresP = Promise.resolve(supabase.from('doctores').select('id, alias').eq('activo', true));
+  // Lecturas de referencia en paralelo con el parseo del archivo.
+  const doctoresP = cargarDoctores(supabase);
+  const pacientesP = cargarPacientes(supabase);
+  doctoresP.catch(() => undefined);
+  pacientesP.catch(() => undefined);
 
-  async function cargarWorkbook() {
-    const ExcelJS = (await import('exceljs')).default;
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
-    return workbook;
+  // Hojas del archivo (CSV = una sola hoja).
+  let hojas: Hoja[];
+  try {
+    if (ext === 'csv') {
+      hojas = [hojaDesdeMatriz(tipo === 'cirugias' ? 'CIRUGIA' : 'CONSULTAS', parseCsv(decodeText(buffer)))];
+    } else {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      const leerHoja = (ws: (typeof workbook.worksheets)[number] | undefined, nombre: string): Hoja | null => {
+        if (!ws) return null;
+        const matriz: Array<Array<string | number>> = [];
+        ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+          const fila: Array<string | number> = [];
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => { fila[colNumber - 1] = valorCelda(cell.value); });
+          matriz[rowNumber - 1] = Array.from(fila, (v) => v ?? '');
+        });
+        return hojaDesdeMatriz(nombre, Array.from(matriz, (f) => f ?? []));
+      };
+      if (tipo === 'consultas') {
+        const h = leerHoja(workbook.worksheets[0], 'CONSULTAS');
+        hojas = h ? [h] : [];
+      } else {
+        const principal = leerHoja(workbook.getWorksheet('CIRUGIA') || workbook.worksheets[0], 'CIRUGIA');
+        const aplazados = leerHoja(workbook.getWorksheet('APLAZADOS'), 'APLAZADOS');
+        hojas = [principal, aplazados].filter((h): h is Hoja => !!h);
+      }
+    }
+  } catch (err) {
+    return NextResponse.json({ error: mensajeSeguro(err, 'agenda.import.leer', 'No se pudo leer el archivo') }, { status: 400 });
   }
 
-  /* ══════════ IMPORT DE CONSULTAS (ENTRADA Y SALIDA.csv) ══════════ */
+  const totalFilas = hojas.reduce((n, h) => n + h.filas.length, 0);
+  if (totalFilas === 0) {
+    return NextResponse.json({ error: 'El archivo no contiene filas de datos' }, { status: 400 });
+  }
+  if (totalFilas > MAX_FILAS_IMPORT) {
+    return NextResponse.json({ error: `El archivo tiene más de ${MAX_FILAS_IMPORT} filas. Divídelo en partes.` }, { status: 400 });
+  }
+
+  let doctores: DoctorExistente[];
+  let pacientes: PacienteExistente[];
+  try {
+    [doctores, pacientes] = await Promise.all([doctoresP, pacientesP]);
+  } catch (err) {
+    return errorInterno(err, 'agenda.import.precarga');
+  }
+  const resolverDoctor = crearResolverDoctores(doctores);
+  const resolverPaciente = crearResolverPacientes(pacientes);
+
+  // Estado común a ambos tipos
+  const rechazos: FilaRechazada[] = [];
+  const duplicados: FilaRechazada[] = [];
+  const doctoresNuevos = new Map<string, string>(); // clave → alias MAYÚSCULAS
+  const pacientesNuevos = new Map<string, PacienteNuevo>(); // clave → datos
+  const valoresTexto = (valores: Array<string | number>) => valores.map((v) => String(v ?? ''));
+  const rechazar = (hoja: Hoja, fila: Hoja['filas'][number], motivo: string) =>
+    rechazos.push({ fila: fila.numero, motivo, valores: valoresTexto(fila.valores), hoja: hoja.nombre });
+  const omitirDuplicado = (hoja: Hoja, fila: Hoja['filas'][number], motivo: string) =>
+    duplicados.push({ fila: fila.numero, motivo, valores: valoresTexto(fila.valores), hoja: hoja.nombre });
+
+  /** Paciente de la fila: existente o por crear (una sola vez por nombre). */
+  const refPaciente = (clave: string, datos: PacienteNuevo): { ref: Ref; nuevo: boolean } => {
+    const id = resolverPaciente(clave, datos.telefono);
+    if (id) return { ref: { id }, nuevo: false };
+    if (!pacientesNuevos.has(clave)) pacientesNuevos.set(clave, datos);
+    return { ref: { nuevo: clave }, nuevo: true };
+  };
+
+  /** CSV unificado (con HOJA si hay más de una). */
+  const encabezadosUnion = () => {
+    if (hojas.length === 1) return hojas[0].encabezados;
+    const union: string[] = [];
+    for (const h of hojas) for (const e of h.encabezados) if (e && !union.includes(e)) union.push(e);
+    return union;
+  };
+  const alinear = (lista: FilaRechazada[]) => {
+    if (hojas.length === 1) return lista;
+    const union = encabezadosUnion();
+    return lista.map((r) => {
+      const hoja = hojas.find((h) => h.nombre === r.hoja)!;
+      return { ...r, valores: union.map((e) => { const j = hoja.encabezados.indexOf(e); return j >= 0 ? r.valores[j] ?? '' : ''; }) };
+    });
+  };
+  const csvRechazos = () => generarCsvRechazos(encabezadosUnion(), alinear(rechazos), hojas.length > 1);
+  const csvDuplicados = () => generarCsvRechazos(encabezadosUnion(), alinear(duplicados), hojas.length > 1);
+  const listaRechazos = () =>
+    rechazos
+      .slice()
+      .sort((a, b) => (a.hoja || '').localeCompare(b.hoja || '') || a.fila - b.fila)
+      .map((r) => ({ fila: r.fila, hoja: r.hoja, motivo: r.motivo }));
+
+  /* ══════════ CONSULTAS ══════════ */
   if (tipo === 'consultas') {
-    const aseguranzasP = Promise.resolve(supabase.from('aseguranzas').select('id, nombre'));
-    let matriz: string[][];
-
-    try {
-      if (ext === 'csv') {
-        matriz = parseCsv(decodeText(buffer));
-      } else {
-        const workbook = await cargarWorkbook();
-        const ws = workbook.worksheets[0];
-        if (!ws) return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 });
-        matriz = [];
-        ws.eachRow((row) => {
-          const fila: string[] = [];
-          row.eachCell({ includeEmpty: true }, (cell) => fila.push(String(cell.value ?? '')));
-          matriz.push(fila);
-        });
-      }
-    } catch (err) {
-      void doctoresP.catch(() => undefined);
-      void aseguranzasP.catch(() => undefined);
-      return NextResponse.json({ error: mensajeSeguro(err, 'agenda.import.leer', 'No se pudo leer el archivo') }, { status: 400 });
-    }
-
-    if (matriz.length < 2) {
-      return NextResponse.json({ error: 'El archivo no contiene filas de datos' }, { status: 400 });
-    }
-    if (matriz.length - 1 > MAX_FILAS_IMPORT) {
-      return NextResponse.json({ error: `El archivo tiene más de ${MAX_FILAS_IMPORT} filas. Divídelo en partes.` }, { status: 400 });
-    }
-
-    const headers = matriz[0].map((h) => normalizeText(h));
-    const col = (...nombres: string[]) =>
-      headers.findIndex((h) => nombres.some((n) => h === n || h.startsWith(n)));
+    const hoja = hojas[0];
+    const headers = hoja.encabezados.map((h) => normalizeText(h));
+    const col = (...nombres: string[]) => headers.findIndex((h) => nombres.some((n) => h === n || h.startsWith(n)));
     const idx = {
       fecha: col('fecha'),
       ingreso: col('hora de ingreso'),
@@ -485,111 +544,82 @@ export async function POST(request: Request) {
       nombre: col('nombre de paciente'),
       sexo: col('sexo'),
       fnac: col('fecha de nacimiento'),
+      edad: col('edad'),
       consulta: col('consulta'),
       diagnostico: col('diagnostico'),
       tipoVisita: col('tipo de consulta'),
       est1: col('estudio 1', 'estudio1'),
-      est2: col('estudio2'),
-      est3: col('estudio3'),
+      est2: col('estudio2', 'estudio 2'),
+      est3: col('estudio3', 'estudio 3'),
       procedimiento: col('procedimiento'),
       aseguradora: col('aseguranza'),
       metodoPago: col('metodo de pago'),
       costo: col('costo consulta'),
     };
-
     if (idx.fecha < 0 || idx.nombre < 0) {
       return NextResponse.json({ error: 'No se encontraron las columnas FECHA y NOMBRE DE PACIENTE' }, { status: 400 });
     }
+    const get = (valores: Array<string | number>, i: number) => (i >= 0 ? texto(valores[i]) : '');
+    const crudo = (valores: Array<string | number>, i: number) => (i >= 0 ? valores[i] ?? '' : '');
 
-    const get = (fila: string[], i: number) => (i >= 0 ? String(fila[i] ?? '').trim() : '');
-
-    // Cache de doctores y aseguranzas (ya en vuelo, en paralelo con el parseo)
-    const [{ data: doctores }, { data: aseguranzas }] = await Promise.all([doctoresP, aseguranzasP]);
-    const findDoctor = crearResolverDoctor((doctores || []) as DoctorRef[]);
-
-    const filas: ConsultaFila[] = [];
-    let filasOmitidas = 0;
-
-    for (const fila of matriz.slice(1)) {
-      const nombre = get(fila, idx.nombre).slice(0, 255);
-      const fechaStr = get(fila, idx.fecha);
-      if (!nombre || !fechaStr) { filasOmitidas++; continue; }
-
-      const fecha = parseFechaLargaEn(fechaStr) || parseFecha(fechaStr);
-      if (!fecha) { filasOmitidas++; continue; }
-
-      filas.push({
-        fecha,
-        hora_inicio: parseHora(get(fila, idx.ingreso)),
-        hora_fin: parseHora(get(fila, idx.egreso)),
-        telefono: get(fila, idx.telefono).slice(0, 30) || null,
-        doctor_alias: get(fila, idx.doctor),
-        nombre_paciente: nombre,
-        sexo: get(fila, idx.sexo).toUpperCase() || null,
-        fecha_nacimiento: parseFechaNacimiento(get(fila, idx.fnac)),
-        tipo_consulta: (get(fila, idx.consulta) || 'CONSULTA').toUpperCase(),
-        diagnostico: get(fila, idx.diagnostico) || null,
-        tipo_visita: get(fila, idx.tipoVisita).toUpperCase().includes('PRIMERA') ? 'PRIMERA_VEZ' : 'SUBSECUENTE',
-        estudio_1: get(fila, idx.est1) || null,
-        estudio_2: get(fila, idx.est2) || null,
-        estudio_3: get(fila, idx.est3) || null,
-        procedimiento: get(fila, idx.procedimiento) || null,
-        aseguradora: get(fila, idx.aseguradora) || null,
-        metodo_pago: get(fila, idx.metodoPago) || null,
-        costo: parseCosto(get(fila, idx.costo)),
-      });
-    }
-
-    if (filas.length === 0) {
-      return NextResponse.json({ error: 'No se encontraron filas válidas (requieren FECHA y NOMBRE DE PACIENTE)' }, { status: 400 });
-    }
-
-    // Match doctor/aseguranza por fila (preview) — en memoria
+    const { data: aseguranzas } = await supabase.from('aseguranzas').select('id, nombre');
     const asegNorm = new Map<string, string>((aseguranzas || []).map((a: { id: string; nombre: string }) => [normalizeText(a.nombre), a.id]));
-    const conDoctores = filas.map((f) => ({
-      ...f,
-      _doctorRef: f.doctor_alias ? findDoctor(f.doctor_alias) : null,
-    }));
 
-    if (!confirmar) {
-      return NextResponse.json({
-        preview: true,
-        tipo: 'consultas',
-        total: conDoctores.length,
-        omitidas: filasOmitidas,
-        doctorNoEncontrado: conDoctores.filter((f) => f.doctor_alias && !f._doctorRef).length,
-        filas: conDoctores.map((f) => ({
-          fecha: f.fecha,
-          hora: f.hora_inicio,
-          paciente: f.nombre_paciente,
-          doctor: f.doctor_alias || '—',
-          doctor_id: f._doctorRef?.id ?? null,
-          tipo: f.tipo_consulta,
-          aseguranza_resuelta: f.aseguradora ? (asegNorm.get(normalizeText(f.aseguradora)) ? 'sí' : 'no') : '—',
-        })),
+    interface Pend {
+      fila: Hoja['filas'][number];
+      fecha: string;
+      hora_inicio: string | null;
+      hora_fin: string | null;
+      nombre: string;
+      clave: string;
+      paciente: Ref;
+      pacienteNuevo: boolean;
+      doctor: Ref;
+      doctorTexto: string | null;
+      doctorNuevo: boolean;
+      v: Array<string | number>;
+    }
+    const validas: Pend[] = [];
+
+    for (const fila of hoja.filas) {
+      const v = fila.valores;
+      const nombreV = validarNombrePaciente(get(v, idx.nombre));
+      if (!nombreV.ok) { rechazar(hoja, fila, nombreV.motivo); continue; }
+      const fechaTxt = crudo(v, idx.fecha);
+      if (String(fechaTxt).trim() === '') { rechazar(hoja, fila, 'Falta la fecha'); continue; }
+      const fecha = parseFechaImport(fechaTxt);
+      if (!fecha) { rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa AAAA-MM-DD o DD/MM/AAAA`); continue; }
+      const ingresoTxt = crudo(v, idx.ingreso);
+      const horaInicio = parseHoraImport(ingresoTxt);
+      if (String(ingresoTxt).trim() !== '' && !horaInicio) { rechazar(hoja, fila, `Hora de ingreso no válida («${texto(ingresoTxt)}»)`); continue; }
+      const egresoTxt = crudo(v, idx.egreso);
+      const horaFin = parseHoraImport(egresoTxt);
+      if (String(egresoTxt).trim() !== '' && !horaFin) { rechazar(hoja, fila, `Hora de egreso no válida («${texto(egresoTxt)}»)`); continue; }
+
+      const doctorTexto = get(v, idx.doctor) || null;
+      const doc = refDoctor(resolverDoctor(doctorTexto), doctoresNuevos);
+      if (doc.motivo) { rechazar(hoja, fila, doc.motivo); continue; }
+
+      const edadNum = parseInt(get(v, idx.edad), 10);
+      const pac = refPaciente(nombreV.clave, {
+        nombre_completo: nombreV.nombre,
+        telefono: get(v, idx.telefono).slice(0, 20) || null,
+        sexo: normalizarSexo(get(v, idx.sexo)),
+        fecha_nacimiento: parseFechaImport(crudo(v, idx.fnac)),
+        edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
+      });
+      validas.push({
+        fila, fecha, hora_inicio: horaInicio, hora_fin: horaFin, nombre: nombreV.nombre, clave: nombreV.clave,
+        paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, v,
       });
     }
 
-    /* Confirm: upsert pacientes + insert consultas (por lotes) */
-    const METODO_PAGO_MAP: Record<string, string> = {
-      'EFECTIVO': 'EFECTIVO', 'TARJETA': 'TARJETA', 'TARJETA DE CREDITO': 'TARJETA',
-      'TARJETA DE DEBITO': 'TARJETA', 'TRANSFERENCIA': 'TRANSFERENCIA',
-    };
-
-    const fechas = Array.from(new Set(conDoctores.map((f) => f.fecha as string)));
-    const telefonos = Array.from(new Set(conDoctores.map((f) => telefono10(f.telefono)).filter((t): t is string => !!t)));
-    const nombresUnicos = Array.from(new Map(conDoctores.map((f) => [f.nombre_paciente.toLowerCase(), f.nombre_paciente])).values());
-
-    // Precarga en paralelo: conteo para folios, duplicados existentes, pacientes por teléfono y por nombre.
-    // (Antes: 2–3 consultas por fila en serie.)
-    let consultasCount: number | null;
-    let consultasExistentes: Array<{ fecha: string; hora_inicio: string | null; pacientes: unknown }>;
-    let pacientesPorTel: Array<{ id: string; telefono: string | null }>;
-    let pacientesPorNombre: Array<{ id: string; nombre_completo: string | null }>;
+    // Duplicados contra la BD (mismas fechas) y dentro del archivo.
+    const fechas = Array.from(new Set(validas.map((f) => f.fecha)));
+    let existentes: Array<{ fecha: string; hora_inicio: string | null; pacientes: unknown }>;
     try {
-      const [conteo, existentes, porTel, porNombre] = await Promise.all([
-        supabase.from('consultas').select('id', { count: 'exact', head: true }),
-        Promise.all(
+      existentes = (
+        await Promise.all(
           trozos(fechas, 60).map((grupo) =>
             leerPaginado<{ fecha: string; hora_inicio: string | null; pacientes: unknown }>((d, h) =>
               supabase
@@ -600,361 +630,254 @@ export async function POST(request: Request) {
                 .range(d, h) as unknown as PromiseLike<{ data: { fecha: string; hora_inicio: string | null; pacientes: unknown }[] | null; error: unknown }>
             )
           )
-        ),
-        mapConLimite(trozos(telefonos, 200), CONCURRENCIA, async (grupo) => {
-          const { data, error } = await supabase.from('pacientes').select('id, telefono').in('telefono', grupo).limit(PAGINA);
-          if (error) throw error;
-          return (data || []) as Array<{ id: string; telefono: string | null }>;
-        }),
-        mapConLimite(trozosPorLongitud(nombresUnicos.map(patronIlikeExacto)), CONCURRENCIA, async (grupo) => {
-          const { data, error } = await supabase.from('pacientes').select('id, nombre_completo').ilikeAnyOf('nombre_completo', grupo).limit(PAGINA);
-          if (error) throw error;
-          return (data || []) as Array<{ id: string; nombre_completo: string | null }>;
-        }),
-      ]);
-      if (conteo.error) throw conteo.error;
-      consultasCount = conteo.count;
-      consultasExistentes = existentes.flat();
-      pacientesPorTel = porTel.flat();
-      pacientesPorNombre = porNombre.flat();
+        )
+      ).flat();
     } catch (err) {
-      return errorInterno(err, 'agenda.import.precarga');
+      return errorInterno(err, 'agenda.import.duplicados');
+    }
+    const nombreDe = (p: unknown) => {
+      const x = Array.isArray(p) ? p[0] : p;
+      return (x as { nombre_completo?: string | null } | null)?.nombre_completo || '';
+    };
+    const claveConsulta = (fecha: string, hora: string | null, clavePaciente: string) => `${fecha}|${(hora || '').slice(0, 5)}|${clavePaciente}`;
+    const enBd = new Set(existentes.map((c) => claveConsulta(c.fecha, c.hora_inicio, claveTexto(nombreDe(c.pacientes)))));
+    const enArchivo = new Map<string, number>();
+    const porInsertar: Pend[] = [];
+    for (const p of validas) {
+      const k = claveConsulta(p.fecha, p.hora_inicio, p.clave);
+      if (enBd.has(k)) { omitirDuplicado(hoja, p.fila, 'Ya existe en el sistema (mismo paciente, fecha y hora)'); continue; }
+      const previa = enArchivo.get(k);
+      if (previa) { omitirDuplicado(hoja, p.fila, `Duplicada dentro del archivo (igual a la fila ${previa})`); continue; }
+      enArchivo.set(k, p.fila.numero);
+      porInsertar.push(p);
+    }
+    // Solo se crean los pacientes/doctores de filas que sí se van a insertar
+    const usadosPac = new Set(porInsertar.flatMap((p) => (p.paciente && 'nuevo' in p.paciente ? [p.paciente.nuevo] : [])));
+    const usadosDoc = new Set(porInsertar.flatMap((p) => (p.doctor && 'nuevo' in p.doctor ? [p.doctor.nuevo] : [])));
+    pacientesNuevos.forEach((_, k) => { if (!usadosPac.has(k)) pacientesNuevos.delete(k); });
+    doctoresNuevos.forEach((_, k) => { if (!usadosDoc.has(k)) doctoresNuevos.delete(k); });
+
+    const resumen = {
+      total: totalFilas,
+      aImportar: porInsertar.length,
+      duplicadas: duplicados.length,
+      conError: rechazos.length,
+      doctoresNuevos: Array.from(doctoresNuevos.values()),
+      pacientesNuevos: pacientesNuevos.size,
+    };
+
+    if (!confirmar) {
+      return NextResponse.json({
+        preview: true,
+        tipo: 'consultas',
+        resumen,
+        filas: porInsertar.slice(0, MAX_FILAS_PREVIEW).map((p): FilaPreview => ({
+          fila: p.fila.numero,
+          fecha: p.fecha,
+          hora: p.hora_inicio,
+          paciente: p.nombre,
+          doctor: p.doctorTexto,
+          paciente_nuevo: p.pacienteNuevo,
+          doctor_nuevo: p.doctorNuevo,
+        })),
+        rechazos: listaRechazos(),
+        rechazosCsv: csvRechazos(),
+        duplicadosCsv: csvDuplicados(),
+      });
     }
 
-    let seq = consultasCount || 0;
+    // Confirmación: doctores → pacientes → consultas
+    const [docs, pacs, conteo] = await Promise.all([
+      crearDoctores(supabase, doctoresNuevos),
+      crearPacientes(supabase, pacientesNuevos),
+      supabase.from('consultas').select('id', { count: 'exact', head: true }),
+    ]);
+    if (conteo.error) return errorInterno(conteo.error, 'agenda.import.folios');
+    let seq = conteo.count || 0;
     const year = new Date().getFullYear().toString().slice(-2);
-
-    // Dedupe por (fecha, hora_inicio, nombre paciente normalizado)
-    const dupSet = new Set(
-      consultasExistentes.map((c) =>
-        `${c.fecha}|${(c.hora_inicio || '').slice(0, 5)}|${normalizeText((c as any).pacientes?.nombre_completo || '')}`
-      )
-    );
-
-    // Índices de pacientes. Coincidencia ambigua (2+ pacientes) no cuenta,
-    // igual que el `.maybeSingle()` anterior.
-    const agrupar = (pares: Array<[string, string]>) => {
-      const m = new Map<string, Set<string>>();
-      for (const [k, id] of pares) {
-        if (!m.has(k)) m.set(k, new Set());
-        m.get(k)!.add(id);
-      }
-      const unicos = new Map<string, string>();
-      m.forEach((ids, k) => { if (ids.size === 1) unicos.set(k, ids.values().next().value as string); });
-      return unicos;
+    const METODO_PAGO_MAP: Record<string, string> = {
+      efectivo: 'EFECTIVO', tarjeta: 'TARJETA', 'tarjeta de credito': 'TARJETA',
+      'tarjeta de debito': 'TARJETA', transferencia: 'TRANSFERENCIA',
     };
-    const idPorTel = agrupar(pacientesPorTel.filter((p) => p.telefono).map((p) => [p.telefono as string, p.id]));
-    const idPorNombre = agrupar(pacientesPorNombre.filter((p) => p.nombre_completo).map((p) => [(p.nombre_completo as string).toLowerCase(), p.id]));
 
-    let insertadas = 0;
-    let omitidasDuplicadas = 0;
-    let errores = 0;
-    const rechazadosIdx: Array<{ idx: number; nombre: string; fecha?: string | null; motivo: string }> = [];
-
-    // Paso 1 (memoria): duplicados y resolución de paciente: caché por nombre → teléfono → nombre → crear.
-    const pacienteCache = new Map<string, string>(); // nombre lower → id existente o clave `nuevo:<nombre lower>`
-    const nuevosPacientes = new Map<string, Record<string, unknown>>();
-    const pendientes: Array<{ idx: number; f: (typeof conDoctores)[number]; pacienteRef: string }> = [];
-
-    conDoctores.forEach((f, i) => {
-      const dupKey = `${f.fecha}|${(f.hora_inicio || '').slice(0, 5)}|${normalizeText(f.nombre_paciente)}`;
-      if (dupSet.has(dupKey)) { omitidasDuplicadas++; return; }
-      dupSet.add(dupKey);
-
-      const nombreKey = f.nombre_paciente.toLowerCase();
-      let ref = pacienteCache.get(nombreKey) || null;
-      if (!ref) {
-        const tel = telefono10(f.telefono);
-        ref = (tel && idPorTel.get(tel)) || idPorNombre.get(nombreKey) || null;
-      }
-      if (!ref) {
-        ref = `nuevo:${nombreKey}`;
-        const sexo = f.sexo?.startsWith('M') ? 'MASCULINO' : f.sexo?.startsWith('F') ? 'FEMENINO' : null;
-        nuevosPacientes.set(nombreKey, {
-          nombre_completo: f.nombre_paciente,
-          telefono: f.telefono,
-          sexo,
-          fecha_nacimiento: f.fecha_nacimiento,
-        });
-      }
-      pacienteCache.set(nombreKey, ref);
-      pendientes.push({ idx: i, f, pacienteRef: ref });
-    });
-
-    // Paso 2: crear pacientes nuevos en lote (un insert por cada 200).
-    const idNuevo = new Map<string, string>();
-    const clavesNuevas = Array.from(nuevosPacientes.keys());
-    const creados = await insertarEnLotes(supabase, 'pacientes', clavesNuevas.map((k) => nuevosPacientes.get(k)!), 'id');
-    creados.forEach((r, i) => { if (r.ok) idNuevo.set(`nuevo:${clavesNuevas[i]}`, r.row.id as string); });
-
-    // Paso 3: armar consultas (folios en orden de fila) e insertarlas en lote.
-    const porInsertar: Array<{ idx: number; f: (typeof conDoctores)[number]; row: Record<string, unknown> }> = [];
-    for (const p of pendientes) {
-      const pacienteId = p.pacienteRef.startsWith('nuevo:') ? idNuevo.get(p.pacienteRef) : p.pacienteRef;
-      const f = p.f;
+    const filasConsulta: Array<{ p: Pend; row: Record<string, unknown> }> = [];
+    for (const p of porInsertar) {
+      const pacienteId = idDe(p.paciente, pacs.ids);
       if (!pacienteId) {
-        errores++;
-        rechazadosIdx.push({ idx: p.idx, nombre: f.nombre_paciente, fecha: f.fecha, motivo: 'No se pudo crear el paciente' });
+        rechazar(hoja, p.fila, (p.paciente && 'nuevo' in p.paciente && pacs.fallos.get(p.paciente.nuevo)) || 'No se pudo crear el paciente');
         continue;
       }
-
+      const doctorId = idDe(p.doctor, docs.ids);
+      if (doctorId === undefined) {
+        rechazar(hoja, p.fila, (p.doctor && 'nuevo' in p.doctor && docs.fallos.get(p.doctor.nuevo)) || 'No se pudo crear el doctor');
+        continue;
+      }
+      const v = p.v;
+      const costo = parseCosto(get(v, idx.costo));
+      const metodoTxt = get(v, idx.metodoPago);
+      const asegTxt = get(v, idx.aseguradora);
       seq += 1;
-      const folio = `CON-${year}-${String(seq).padStart(5, '0')}`;
-      const metodo = f.metodo_pago ? METODO_PAGO_MAP[normalizeText(f.metodo_pago)] || null : null;
-      const horaFin = f.hora_fin && f.hora_inicio && f.hora_fin > f.hora_inicio ? f.hora_fin : null;
-      const asegId = f.aseguradora ? asegNorm.get(normalizeText(f.aseguradora)) || null : null;
-
-      porInsertar.push({
-        idx: p.idx,
-        f,
+      filasConsulta.push({
+        p,
         row: {
-          folio,
+          folio: `CON-${year}-${String(seq).padStart(5, '0')}`,
           paciente_id: pacienteId,
-          doctor_id: f._doctorRef?.id || null,
-          fecha: f.fecha,
-          hora_inicio: f.hora_inicio,
-          hora_fin: horaFin,
-          tipo_consulta: f.tipo_consulta,
-          tipo_visita: f.tipo_visita,
-          diagnostico: f.diagnostico,
-          estudio_1: f.estudio_1,
-          estudio_2: f.estudio_2,
-          estudio_3: f.estudio_3,
-          procedimiento: f.procedimiento,
-          metodo_pago: metodo,
-          aseguranza_id: asegId,
-          costo_total: f.costo || 0,
+          doctor_id: doctorId,
+          fecha: p.fecha,
+          hora_inicio: p.hora_inicio,
+          hora_fin: p.hora_fin && p.hora_inicio && p.hora_fin > p.hora_inicio ? p.hora_fin : null,
+          tipo_consulta: (get(v, idx.consulta) || 'CONSULTA').toUpperCase(),
+          tipo_visita: get(v, idx.tipoVisita).toUpperCase().includes('PRIMERA') ? 'PRIMERA_VEZ' : 'SUBSECUENTE',
+          diagnostico: get(v, idx.diagnostico) || null,
+          estudio_1: get(v, idx.est1) || null,
+          estudio_2: get(v, idx.est2) || null,
+          estudio_3: get(v, idx.est3) || null,
+          procedimiento: get(v, idx.procedimiento) || null,
+          metodo_pago: metodoTxt ? METODO_PAGO_MAP[normalizeText(metodoTxt)] || null : null,
+          aseguranza_id: asegTxt ? asegNorm.get(normalizeText(asegTxt)) || null : null,
+          costo_total: costo,
           estatus: 'AGENDADA',
-          estatus_pago: f.costo > 0 ? 'PENDIENTE_PAGO' : 'PAGADO',
+          estatus_pago: costo > 0 ? 'PENDIENTE_PAGO' : 'PAGADO',
+          // Registro histórico de entradas/salidas: puede traer horarios empalmados reales.
+          permite_empalme: true,
         },
       });
     }
 
-    const resultados = await insertarEnLotes(supabase, 'consultas', porInsertar.map((x) => x.row), 'id');
+    let importadas = 0;
+    const resultados = await insertarEnLotes(supabase, 'consultas', filasConsulta.map((x) => x.row), 'id');
     resultados.forEach((r, i) => {
-      const { idx: filaIdx, f } = porInsertar[i];
-      if (r.ok) {
-        insertadas++;
-      } else {
-        errores++;
-        rechazadosIdx.push({ idx: filaIdx, nombre: f.nombre_paciente, fecha: f.fecha, motivo: mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar') });
-      }
+      if (r.ok) importadas++;
+      else rechazar(hoja, filasConsulta[i].p.fila, mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'));
     });
-
-    // Mismo orden que el procesamiento fila por fila anterior.
-    const rechazados = rechazadosIdx
-      .sort((x, y) => x.idx - y.idx)
-      .map(({ nombre, fecha, motivo }) => ({ nombre, fecha, motivo }));
 
     await supabase.from('agenda_import_log').insert({
       usuario_id: auth.user.id,
       archivo_nombre: archivoNombre,
-      total_filas: conDoctores.length + filasOmitidas,
-      filas_ok: insertadas,
-      filas_rechazadas: omitidasDuplicadas + errores + filasOmitidas,
-      detalle_rechazados: rechazados,
+      total_filas: totalFilas,
+      filas_ok: importadas,
+      filas_rechazadas: rechazos.length + duplicados.length,
+      detalle_rechazados: listaRechazos(),
     });
 
     return NextResponse.json({
       preview: false,
       tipo: 'consultas',
-      importadas: insertadas,
-      omitidasDuplicadas,
-      omitidasSinDatos: filasOmitidas,
-      errores,
-      rechazados,
+      importadas,
+      omitidasDuplicadas: duplicados.length,
+      errores: rechazos.length,
+      doctoresCreados: docs.ids.size,
+      pacientesCreados: pacs.ids.size,
+      rechazos: listaRechazos(),
+      rechazosCsv: csvRechazos(),
+      duplicadosCsv: csvDuplicados(),
     });
   }
 
-  /* ══════════ IMPORT DE CIRUGÍAS (CIRUGIA.csv / Excel) ══════════ */
+  /* ══════════ CIRUGÍAS (hoja CIRUGIA + APLAZADOS) ══════════ */
 
-  interface CirugiaSheetRow {
-    'FECHA'?: unknown;
-    'NOMBRE PX'?: unknown;
-    'No. Expediente'?: unknown;
-    'HORA CX'?: unknown;
-    'JORNADA'?: unknown;
-    'FECHA NAC.'?: unknown;
-    'SEXO'?: unknown;
-    'EDAD'?: unknown;
-    'DIAGNOSTICO'?: unknown;
-    'PROCEDIMIENTO'?: unknown;
-    'OJO'?: unknown;
-    'OJO_2'?: unknown;
-    'LIO'?: unknown;
-    'LIO_2'?: unknown;
-    'MARCA'?: unknown;
-    'MARCA_2'?: unknown;
-    'TIEMPO ESTIMADO CX'?: unknown;
-    'TIEMPO DE ESTANCIA'?: unknown;
-    'CIRUJANO'?: unknown;
-    'NOTAS'?: unknown;
+  interface PendCx {
+    hoja: Hoja;
+    fila: Hoja['filas'][number];
+    clave: string;
+    nombre: string;
+    paciente: Ref;
+    pacienteNuevo: boolean;
+    doctor: Ref;
+    doctorTexto: string | null;
+    doctorNuevo: boolean;
+    dedupe: string;
+    data: Record<string, unknown>;
   }
+  const validasCx: PendCx[] = [];
+  const val = (o: Record<string, string | number>, k: string) => texto(o[k]);
 
-  let cirugiaRows: Record<string, unknown>[] = [];
-  let aplazadosRows: Record<string, unknown>[] = [];
+  for (const hoja of hojas) {
+    const esAplazados = hoja.nombre === 'APLAZADOS';
+    for (const fila of hoja.filas) {
+      const o = fila.obj;
+      const nombreV = validarNombrePaciente(val(o, 'NOMBRE PX'));
+      if (!nombreV.ok) { rechazar(hoja, fila, nombreV.motivo); continue; }
 
-  try {
-    if (ext === 'csv') {
-      const matriz = parseCsv(decodeText(buffer));
-      if (matriz.length < 2) {
-        void doctoresP.catch(() => undefined);
-        return NextResponse.json({ error: 'El archivo no contiene filas de datos' }, { status: 400 });
+      let fecha: string | null = null;
+      let hora: string | null = null;
+      if (!esAplazados) {
+        const fechaTxt = o['FECHA'] ?? '';
+        fecha = parseFechaImport(fechaTxt);
+        if (String(fechaTxt).trim() !== '' && !fecha) {
+          rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa AAAA-MM-DD o DD/MM/AAAA; déjala vacía para aplazada`);
+          continue;
+        }
+        const horaTxt = o['HORA CX'] ?? '';
+        hora = parseHoraImport(horaTxt);
+        if (String(horaTxt).trim() !== '' && !hora) { rechazar(hoja, fila, `Hora no válida («${texto(horaTxt)}»)`); continue; }
       }
-      const headers = dedupeHeaders(matriz[0]);
-      cirugiaRows = matriz.slice(1).map((fila) => {
-        const obj: Record<string, unknown> = {};
-        headers.forEach((h, i) => { obj[h] = fila[i] ?? ''; });
-        return obj;
+
+      const ojoTxt = val(o, 'OJO');
+      const ojo2Txt = val(o, 'OJO_2');
+      const ojo = normalizeOjo(ojoTxt) || normalizeOjo(ojo2Txt);
+      if ((ojoTxt && !normalizeOjo(ojoTxt)) || (ojo2Txt && !normalizeOjo(ojo2Txt))) {
+        rechazar(hoja, fila, `Ojo no válido («${ojoTxt || ojo2Txt}»). Usa OD, OI/OS u OU`);
+        continue;
+      }
+
+      const doctorTexto = esAplazados ? null : val(o, 'CIRUJANO') || null;
+      const doc = refDoctor(resolverDoctor(doctorTexto), doctoresNuevos);
+      if (doc.motivo) { rechazar(hoja, fila, doc.motivo); continue; }
+
+      const edadNum = parseInt(val(o, 'EDAD'), 10);
+      const pac = refPaciente(nombreV.clave, {
+        nombre_completo: nombreV.nombre,
+        telefono: (val(o, 'TELEFONO') || val(o, 'TELÉFONO')).slice(0, 20) || null,
+        sexo: normalizarSexo(val(o, 'SEXO')),
+        fecha_nacimiento: parseFechaImport(o['FECHA NAC.'] ?? ''),
+        edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
       });
-    } else {
-      const workbook = await cargarWorkbook();
 
-      const sheetToJson = (worksheet: Worksheet | undefined): Record<string, unknown>[] => {
-        if (!worksheet) return [];
-        const rows: Record<string, unknown>[] = [];
-        const rawHeaders: string[] = [];
-        let headers: string[] = [];
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber === 1) {
-            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-              rawHeaders[colNumber] = String(cell.value || '').trim();
-            });
-            // Una sola vez por hoja (antes se recalculaba por cada celda).
-            headers = dedupeHeaders(Array.from(rawHeaders, (h) => h ?? ''));
-            return;
-          }
-          const obj: Record<string, unknown> = {};
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            const h = headers[colNumber];
-            if (h) obj[h] = cell.value;
-          });
-          rows.push(obj);
-        });
-        return rows;
-      };
+      const procedimiento = val(o, 'PROCEDIMIENTO') || null;
+      const notasBase = val(o, 'NOTAS') || null;
+      const suspendida = !esAplazados && !!notasBase && notasBase.toUpperCase().includes('SUSPENDIDO');
+      const ojo2 = normalizeOjo(ojo2Txt);
+      let notas = notasBase;
+      if (suspendida) notas = null;
+      else if (ojo2 && ojo && ojo2 !== ojo) notas = notas ? `${notas} (2º ojo: ${ojo2})` : `(2º ojo: ${ojo2})`;
 
-      cirugiaRows = sheetToJson(workbook.getWorksheet('CIRUGIA') || workbook.worksheets[0]);
-      aplazadosRows = sheetToJson(workbook.getWorksheet('APLAZADOS'));
+      const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? 'agendada' : 'aplazada';
+      const dedupe = fecha
+        ? `F|${nombreV.clave}|${fecha}|${(hora || '').slice(0, 5)}`
+        : `A|${nombreV.clave}|${claveTexto(procedimiento || '')}`;
+
+      validasCx.push({
+        hoja, fila, clave: nombreV.clave, nombre: nombreV.nombre,
+        paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, dedupe,
+        data: {
+          nombre_paciente: nombreV.nombre,
+          expediente: val(o, 'No. Expediente') || null,
+          fecha,
+          hora,
+          jornada: esAplazados ? null : val(o, 'JORNADA') || null,
+          diagnostico: val(o, 'DIAGNOSTICO') || null,
+          procedimiento,
+          ojo,
+          lio: val(o, 'LIO') || val(o, 'LIO_2') || null,
+          marca_lio: esAplazados ? null : val(o, 'MARCA') || val(o, 'MARCA_2') || null,
+          tiempo_estimado: esAplazados ? null : val(o, 'TIEMPO ESTIMADO CX') || null,
+          tiempo_estancia: esAplazados ? null : val(o, 'TIEMPO DE ESTANCIA') || null,
+          estado,
+          notas: esAplazados ? null : notas,
+          ...(estado === 'aplazada'
+            ? { procedencia: val(o, 'PROCEDENCIA') || null, motivo_aplazamiento: val(o, 'MOTIVO') || null }
+            : {}),
+        },
+      });
     }
-  } catch (err) {
-    void doctoresP.catch(() => undefined);
-    return NextResponse.json({ error: mensajeSeguro(err, 'agenda.import.leer', 'No se pudo leer el archivo') }, { status: 400 });
   }
 
-  if (cirugiaRows.length === 0 && aplazadosRows.length === 0) {
-    void doctoresP.catch(() => undefined);
-    return NextResponse.json({ error: 'El archivo no contiene datos válidos' }, { status: 400 });
-  }
-  if (cirugiaRows.length + aplazadosRows.length > MAX_FILAS_IMPORT) {
-    void doctoresP.catch(() => undefined);
-    return NextResponse.json({ error: `El archivo tiene más de ${MAX_FILAS_IMPORT} filas. Divídelo en partes.` }, { status: 400 });
-  }
-
-  const { data: doctores } = await doctoresP;
-  const findDoctor = crearResolverDoctor((doctores || []) as DoctorRef[]);
-
-  const filasCirugia: CirugiaFila[] = [];
-  const filasAplazadas: Array<Record<string, unknown>> = [];
-  const erroresCount = { cirugia: 0, aplazada: 0 };
-  let doctorNoEncontradoCount = 0;
-
-  for (const row of cirugiaRows as CirugiaSheetRow[]) {
-    const nombre = row['NOMBRE PX']?.toString().trim();
-    if (!nombre) { erroresCount.cirugia++; continue; }
-
-    const fecha = parseFecha(row['FECHA']);
-    const hora = parseHora(row['HORA CX']);
-    // OJO principal: primer grupo; si vacío usar el segundo
-    const ojo = normalizeOjo(row['OJO']) || normalizeOjo(row['OJO_2']);
-    const lio = String(row['LIO'] ?? '').trim() || String(row['LIO_2'] ?? '').trim() || null;
-    const marca = String(row['MARCA'] ?? '').trim() || String(row['MARCA_2'] ?? '').trim() || null;
-    const ojo2 = normalizeOjo(row['OJO_2']);
-    const notasBase = row['NOTAS']?.toString().trim() || null;
-
-    // "SUSPENDIDO" en notas → cirugía cancelada
-    const suspendida = !!notasBase && notasBase.toUpperCase().includes('SUSPENDIDO');
-
-    const cirujano = row['CIRUJANO']?.toString().trim() || null;
-    let doctorId: string | null = null;
-    let doctorAlias: string | null = null;
-    if (cirujano) {
-      const match = findDoctor(cirujano);
-      doctorId = match?.id ?? null;
-      doctorAlias = match?.alias ?? null;
-      if (!doctorId) doctorNoEncontradoCount++;
-    }
-
-    let notas = notasBase;
-    if (suspendida) notas = null;
-    else if (ojo2 && ojo && ojo2 !== ojo) {
-      notas = notas ? `${notas} (2º ojo: ${ojo2})` : `(2º ojo: ${ojo2})`;
-    }
-
-    filasCirugia.push({
-      nombre_paciente: nombre,
-      expediente: row['No. Expediente']?.toString().trim() || null,
-      fecha,
-      hora,
-      jornada: row['JORNADA']?.toString().trim() || null,
-      diagnostico: row['DIAGNOSTICO']?.toString().trim() || null,
-      procedimiento: row['PROCEDIMIENTO']?.toString().trim() || null,
-      ojo,
-      lio,
-      marca_lio: marca,
-      tiempo_estimado: row['TIEMPO ESTIMADO CX']?.toString().trim() || null,
-      tiempo_estancia: row['TIEMPO DE ESTANCIA']?.toString().trim() || null,
-      doctor_id: doctorId,
-      estado: suspendida ? 'cancelada' : fecha ? 'agendada' : 'aplazada',
-      notas,
-      _cirujano_texto: cirujano,
-      _doctor_alias: doctorAlias,
-    });
-  }
-
-  for (const row of aplazadosRows) {
-    const nombre = row['NOMBRE PX']?.toString().trim();
-    if (!nombre) { erroresCount.aplazada++; continue; }
-
-    filasAplazadas.push({
-      nombre_paciente: nombre,
-      expediente: row['No. Expediente']?.toString().trim() || null,
-      diagnostico: row['DIAGNOSTICO']?.toString().trim() || null,
-      procedimiento: row['PROCEDIMIENTO']?.toString().trim() || null,
-      ojo: normalizeOjo(row['OJO']),
-      lio: String(row['LIO'] ?? '').trim() || null,
-      procedencia: row['PROCEDENCIA']?.toString().trim() || null,
-      motivo_aplazamiento: row['MOTIVO']?.toString().trim() || null,
-      estado: 'aplazada',
-    });
-  }
-
-  if (!confirmar) {
-    return NextResponse.json({
-      preview: true,
-      tipo: 'cirugias',
-      cirugias: filasCirugia,
-      aplazadas: filasAplazadas,
-      totalCirugias: filasCirugia.length,
-      totalAplazadas: filasAplazadas.length,
-      erroresCirugia: erroresCount.cirugia,
-      erroresAplazada: erroresCount.aplazada,
-      doctorNoEncontrado: doctorNoEncontradoCount,
-    });
-  }
-
-  let insertadas = 0;
-  let insertadasAplazadas = 0;
-  let erroresInsercion = 0;
-  const rechazados: Array<{ fila: number; motivo: string; nombre: string; fecha?: string; fila_original: string }> = [];
-  const yaExistentes: Array<{ fila: number; nombre: string; fecha?: string; fila_original: string }> = [];
-
-  // Duplicados: solo las cirugías de las fechas del archivo (antes se leía la
-  // tabla completa, truncada por PostgREST a 1000 filas → dedupe incompleto).
-  const fechasArchivo = Array.from(new Set(filasCirugia.map((f) => f.fecha).filter((f): f is string => !!f)));
-  const haySinFecha = filasCirugia.some((f) => !f.fecha);
-  type Existente = { nombre_paciente: string | null; fecha: string | null; hora: string | null };
-  let existentes: Existente[];
+  // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.
+  const fechasArchivo = Array.from(new Set(validasCx.map((f) => f.data.fecha as string | null).filter((f): f is string => !!f)));
+  const haySinFecha = validasCx.some((f) => !f.data.fecha);
+  type Existente = { nombre_paciente: string | null; fecha: string | null; hora: string | null; procedimiento: string | null };
+  let existentesCx: Existente[];
   try {
     const [porFecha, sinFecha] = await Promise.all([
       Promise.all(
@@ -962,7 +885,7 @@ export async function POST(request: Request) {
           leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('nombre_paciente, fecha, hora')
+              .select('nombre_paciente, fecha, hora, procedimiento')
               .in('fecha', grupo)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
@@ -973,108 +896,129 @@ export async function POST(request: Request) {
         ? leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('nombre_paciente, fecha, hora')
+              .select('nombre_paciente, fecha, hora, procedimiento')
               .is('fecha', null)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
           )
         : Promise.resolve([] as Existente[]),
     ]);
-    existentes = [...porFecha.flat(), ...sinFecha];
+    existentesCx = [...porFecha.flat(), ...sinFecha];
   } catch (err) {
     return errorInterno(err, 'agenda.import.duplicados');
   }
-
-  const existingSet = new Set(
-    existentes.map(
-      (e) => `${(e.nombre_paciente || '').toLowerCase().trim()}|${e.fecha}|${e.hora}`
+  const enBdCx = new Set(
+    existentesCx.map((e) =>
+      e.fecha
+        ? `F|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${(e.hora || '').slice(0, 5)}`
+        : `A|${claveTexto(e.nombre_paciente || '')}|${claveTexto(e.procedimiento || '')}`
     )
   );
-
-  const csvCampo = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-
-  const cirugiaBatch: Array<Record<string, unknown>> = [];
-  const batchMeta: Array<{ fila: number; filaOriginal: string }> = [];
-  filasCirugia.forEach((fila, i) => {
-    const key = `${(fila.nombre_paciente || '').toLowerCase()}|${fila.fecha}|${fila.hora}`;
-    const filaOriginal = [
-      fila.fecha, fila.nombre_paciente, null, fila.hora, fila.jornada, null, null, null, null,
-      fila.diagnostico, fila.procedimiento, fila.ojo, fila.lio, fila.marca_lio,
-      fila.tiempo_estimado, fila.tiempo_estancia, fila._cirujano_texto, fila.notas,
-    ].map(csvCampo).join(',');
-
-    if (existingSet.has(key)) {
-      yaExistentes.push({ fila: i + 1, nombre: fila.nombre_paciente, fecha: fila.fecha as string, fila_original: filaOriginal });
-      return;
+  const enArchivoCx = new Map<string, string>();
+  const porInsertarCx: PendCx[] = [];
+  for (const p of validasCx) {
+    if (enBdCx.has(p.dedupe)) {
+      omitirDuplicado(p.hoja, p.fila, p.data.fecha ? 'Ya existe en el sistema (mismo paciente, fecha y hora)' : 'Ya existe como aplazada (mismo paciente y procedimiento)');
+      continue;
     }
-    // También evita duplicados dentro del mismo archivo.
-    existingSet.add(key);
+    const previa = enArchivoCx.get(p.dedupe);
+    if (previa) { omitirDuplicado(p.hoja, p.fila, `Duplicada dentro del archivo (igual a ${previa})`); continue; }
+    enArchivoCx.set(p.dedupe, hojas.length > 1 ? `${p.hoja.nombre} fila ${p.fila.numero}` : `la fila ${p.fila.numero}`);
+    porInsertarCx.push(p);
+  }
+  const usadosPac = new Set(porInsertarCx.flatMap((p) => (p.paciente && 'nuevo' in p.paciente ? [p.paciente.nuevo] : [])));
+  const usadosDoc = new Set(porInsertarCx.flatMap((p) => (p.doctor && 'nuevo' in p.doctor ? [p.doctor.nuevo] : [])));
+  pacientesNuevos.forEach((_, k) => { if (!usadosPac.has(k)) pacientesNuevos.delete(k); });
+  doctoresNuevos.forEach((_, k) => { if (!usadosDoc.has(k)) doctoresNuevos.delete(k); });
 
-    const { _cirujano_texto: _c, _doctor_alias: _d, ...insertData } = fila;
-    cirugiaBatch.push(insertData);
-    batchMeta.push({ fila: i + 1, filaOriginal });
-  });
+  const resumenCx = {
+    total: totalFilas,
+    aImportar: porInsertarCx.length,
+    aplazadas: porInsertarCx.filter((p) => p.data.estado === 'aplazada').length,
+    duplicadas: duplicados.length,
+    conError: rechazos.length,
+    doctoresNuevos: Array.from(doctoresNuevos.values()),
+    pacientesNuevos: pacientesNuevos.size,
+  };
 
-  if (cirugiaBatch.length > 0) {
-    const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', cirugiaBatch, 'id, doctor_id');
-    const doctorRows: Array<Record<string, unknown>> = [];
-    resultados.forEach((r, i) => {
-      const fila = cirugiaBatch[i];
-      if (r.ok) {
-        insertadas++;
-        if (r.row.doctor_id) {
-          doctorRows.push({ cirugia_id: r.row.id, doctor_id: r.row.doctor_id, rol: 'CIRUJANO_PRINCIPAL', porcentaje_participacion: 100 });
-        }
-      } else {
-        erroresInsercion++;
-        rechazados.push({
-          fila: batchMeta[i].fila,
-          motivo: mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'),
-          nombre: fila.nombre_paciente as string,
-          fecha: fila.fecha as string,
-          fila_original: batchMeta[i].filaOriginal,
-        });
-      }
+  if (!confirmar) {
+    return NextResponse.json({
+      preview: true,
+      tipo: 'cirugias',
+      resumen: resumenCx,
+      filas: porInsertarCx.slice(0, MAX_FILAS_PREVIEW).map((p): FilaPreview => ({
+        fila: p.fila.numero,
+        fecha: (p.data.fecha as string | null) ?? null,
+        hora: (p.data.hora as string | null) ?? null,
+        paciente: p.nombre,
+        doctor: p.doctorTexto,
+        estado: p.data.estado as string,
+        paciente_nuevo: p.pacienteNuevo,
+        doctor_nuevo: p.doctorNuevo,
+      })),
+      rechazos: listaRechazos(),
+      rechazosCsv: csvRechazos(),
+      duplicadosCsv: csvDuplicados(),
     });
-    for (const lote of trozos(doctorRows, LOTE_INSERT)) {
-      const { error } = await supabase.from('agenda_cirugia_doctores').insert(lote);
-      if (error) handleSupabaseError(error, 'agenda.import.doctores');
-    }
   }
 
-  if (filasAplazadas.length > 0) {
-    const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', filasAplazadas, 'id');
-    for (const r of resultados) {
-      if (r.ok) insertadasAplazadas++;
-      else erroresInsercion++;
+  const [docs, pacs] = await Promise.all([crearDoctores(supabase, doctoresNuevos), crearPacientes(supabase, pacientesNuevos)]);
+  const filasCx: Array<{ p: PendCx; row: Record<string, unknown> }> = [];
+  for (const p of porInsertarCx) {
+    const pacienteId = idDe(p.paciente, pacs.ids);
+    if (!pacienteId) {
+      rechazar(p.hoja, p.fila, (p.paciente && 'nuevo' in p.paciente && pacs.fallos.get(p.paciente.nuevo)) || 'No se pudo crear el paciente');
+      continue;
     }
+    const doctorId = idDe(p.doctor, docs.ids);
+    if (doctorId === undefined) {
+      rechazar(p.hoja, p.fila, (p.doctor && 'nuevo' in p.doctor && docs.fallos.get(p.doctor.nuevo)) || 'No se pudo crear el doctor');
+      continue;
+    }
+    filasCx.push({ p, row: { ...p.data, paciente_id: pacienteId, doctor_id: doctorId } });
+  }
+
+  let importadas = 0;
+  let aplazadasImportadas = 0;
+  const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', filasCx.map((x) => x.row), 'id, doctor_id');
+  const doctorRows: Array<Record<string, unknown>> = [];
+  resultados.forEach((r, i) => {
+    const { p } = filasCx[i];
+    if (r.ok) {
+      if (p.data.estado === 'aplazada') aplazadasImportadas++;
+      else importadas++;
+      if (r.row.doctor_id) {
+        doctorRows.push({ cirugia_id: r.row.id, doctor_id: r.row.doctor_id, rol: 'CIRUJANO_PRINCIPAL', porcentaje_participacion: 100 });
+      }
+    } else {
+      rechazar(p.hoja, p.fila, mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'));
+    }
+  });
+  for (const lote of trozos(doctorRows, LOTE_INSERT)) {
+    const { error } = await supabase.from('agenda_cirugia_doctores').insert(lote);
+    if (error) handleSupabaseError(error, 'agenda.import.doctores');
   }
 
   await supabase.from('agenda_import_log').insert({
     usuario_id: auth.user.id,
     archivo_nombre: archivoNombre,
-    total_filas: filasCirugia.length + filasAplazadas.length,
-    filas_ok: insertadas + insertadasAplazadas,
-    filas_rechazadas: rechazados.length + yaExistentes.length + erroresCount.cirugia + erroresCount.aplazada,
-    detalle_rechazados: rechazados,
+    total_filas: totalFilas,
+    filas_ok: importadas + aplazadasImportadas,
+    filas_rechazadas: rechazos.length + duplicados.length,
+    detalle_rechazados: listaRechazos(),
   });
-
-  let rechazadosCsv: string | null = null;
-  if (rechazados.length > 0) {
-    const header = 'Fila,Motivo,Paciente,Fecha,fila_original\n';
-    const rows = rechazados.map((r) => `${r.fila},${csvCampo(r.motivo)},${csvCampo(r.nombre)},${csvCampo(r.fecha || '')},${csvCampo(r.fila_original)}`).join('\n');
-    rechazadosCsv = header + rows;
-  }
 
   return NextResponse.json({
     preview: false,
     tipo: 'cirugias',
-    importadas: insertadas,
-    aplazadasImportadas: insertadasAplazadas,
-    errores: erroresInsercion,
-    doctorNoEncontrado: doctorNoEncontradoCount,
-    rechazados,
-    yaExistentes,
-    rechazadosCsv,
+    importadas,
+    aplazadasImportadas,
+    omitidasDuplicadas: duplicados.length,
+    errores: rechazos.length,
+    doctoresCreados: docs.ids.size,
+    pacientesCreados: pacs.ids.size,
+    rechazos: listaRechazos(),
+    rechazosCsv: csvRechazos(),
+    duplicadosCsv: csvDuplicados(),
   });
 }

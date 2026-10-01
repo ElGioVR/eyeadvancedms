@@ -4,7 +4,7 @@
  * porque contienen datos clínicos (PHI) que quedarían en el dispositivo tras
  * cerrar sesión. Solo se cachean assets estáticos públicos y versionados.
  */
-const CACHE_NAME = 'ea-v3';
+const CACHE_NAME = 'ea-v4';
 const PRECACHE = ['/icons/icon-192.png', '/icons/icon-512.png', '/images/logo-eye.png'];
 
 const OFFLINE_HTML = `<!doctype html><html lang="es"><head><meta charset="utf-8">
@@ -21,7 +21,8 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Purga cachés anteriores (ea-v2 guardaba HTML con datos de pacientes)
+  // Purga cachés anteriores (ea-v2 guardaba HTML con datos de pacientes; ea-v3 podía
+  // guardar chunks sin hash)
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
@@ -51,9 +52,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Assets con hash de contenido: inmutables → cache-first
+  // Assets con hash de contenido: inmutables → cache-first.
+  // Solo archivos realmente versionados (hash en el nombre o /media/): los chunks
+  // sin hash (p. ej. webpack.js en desarrollo) nunca se sirven desde caché, o se
+  // mezclarían versiones viejas y nuevas ("Cannot read properties of undefined (reading 'call')").
   if (url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(cacheFirst(request));
+    const versionado =
+      url.pathname.startsWith('/_next/static/media/') ||
+      /[/.-][0-9a-f]{8,}\.(?:js|css|woff2?)$/i.test(url.pathname);
+    if (versionado) event.respondWith(cacheFirst(request));
     return;
   }
 

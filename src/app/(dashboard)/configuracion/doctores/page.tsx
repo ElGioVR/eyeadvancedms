@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import BadgeCompletar from '@/components/ui/BadgeCompletar';
 import {
   Plus,
   Search,
@@ -15,6 +16,8 @@ import {
 import { cn } from '@/lib/utils';
 import { getInitials } from '@/lib/text';
 import { useFetch } from '@/hooks/useFetch';
+import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
 import { useDebounce } from '@/hooks/useDebounce';
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
@@ -32,8 +35,17 @@ interface DoctorAPI {
   email: string | null;
   usuario_id: string | null;
   activo: boolean;
+  /** Personal unificado (mig. 390) */
+  tipo_personal?: 'MEDICO' | 'ENFERMERO';
+  cobra_honorarios?: boolean;
+  /** Alta automática por importación con datos por completar (mig. 400) */
+  pendiente_completar?: boolean;
+  faltantes?: string[];
   created_at: string;
 }
+
+type TipoPersonal = 'MEDICO' | 'ENFERMERO';
+const ESPECIALIDAD_ENFERMERIA = 'Enfermería';
 
 interface UsuarioOption {
   id: string;
@@ -65,6 +77,7 @@ function getAvatarColor(id: string): string {
 
 export default function DoctoresPage() {
   const { data: doctores, loading, validating, error, mutate } = useFetch<DoctorAPI>('/api/configuracion/doctores');
+  const { especialidades } = useEspecialidades();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [editingDoctor, setEditingDoctor] = useState<DoctorAPI | null>(null);
@@ -82,12 +95,20 @@ export default function DoctoresPage() {
   const [formTelefono, setFormTelefono] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formUsuarioId, setFormUsuarioId] = useState('');
+  const [formTipo, setFormTipo] = useState<TipoPersonal>('MEDICO');
+  const [formCobra, setFormCobra] = useState(true);
+  const [filtroTipo, setFiltroTipo] = useState<'' | TipoPersonal>('');
+  // ?tipo=ENFERMERO (p. ej. desde la antigua pestaña Personal clínico) preselecciona el filtro.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tipo');
+    if (t === 'ENFERMERO' || t === 'MEDICO') setFiltroTipo(t);
+  }, []);
 
   // Usuarios vinculables: misma caché que /configuracion/usuarios; solo se pide con el panel abierto.
   const panelAbierto = !!editingDoctor || showNewDoctor;
   const { data: todosUsuarios } = useFetch<UsuarioOption>('/api/configuracion/usuarios', undefined, { enabled: panelAbierto });
   const usuariosDoctor = useMemo(
-    () => todosUsuarios.filter((u) => ['doctor', 'admin'].includes(u.rol ?? '')),
+    () => todosUsuarios.filter((u) => ['doctor', 'admin', 'enfermero'].includes(u.rol ?? '')),
     [todosUsuarios]
   );
 
@@ -96,11 +117,12 @@ export default function DoctoresPage() {
     const term = debouncedSearch.toLowerCase();
     return doctores.filter(
       (d) =>
-        (d.alias || '').toLowerCase().includes(term) ||
-        (d.especialidad || '').toLowerCase().includes(term) ||
-        (d.cedula && d.cedula.toLowerCase().includes(term))
+        (!filtroTipo || (d.tipo_personal || 'MEDICO') === filtroTipo) &&
+        ((d.alias || '').toLowerCase().includes(term) ||
+          (d.especialidad || '').toLowerCase().includes(term) ||
+          (d.cedula && d.cedula.toLowerCase().includes(term)))
     );
-  }, [doctores, debouncedSearch]);
+  }, [doctores, debouncedSearch, filtroTipo]);
 
   const resetForm = useCallback(() => {
     setFormAlias('');
@@ -111,6 +133,8 @@ export default function DoctoresPage() {
     setFormTelefono('');
     setFormEmail('');
     setFormUsuarioId('');
+    setFormTipo('MEDICO');
+    setFormCobra(true);
   }, []);
 
   const handleNewDoctor = useCallback(() => {
@@ -128,6 +152,8 @@ export default function DoctoresPage() {
     setFormTelefono(doc.telefono || '');
     setFormEmail(doc.email || '');
     setFormUsuarioId(doc.usuario_id || '');
+    setFormTipo(doc.tipo_personal || 'MEDICO');
+    setFormCobra(doc.cobra_honorarios !== false);
     setFormError(null);
     setEditingDoctor(doc);
   }, []);
@@ -148,7 +174,9 @@ export default function DoctoresPage() {
     // Vacío → sin correo (el esquema del servidor rechaza '' como email).
     email: formEmail.trim() || null,
     usuario_id: formUsuarioId || null,
-  }), [formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, formUsuarioId]);
+    tipo_personal: formTipo,
+    cobra_honorarios: formCobra,
+  }), [formAlias, formNombre, formApellido, formEspecialidad, formCedula, formTelefono, formEmail, formUsuarioId, formTipo, formCobra]);
 
   /** Validación local (el servidor sigue siendo la autoridad). */
   const validar = useCallback((): string | null => {
@@ -245,7 +273,7 @@ export default function DoctoresPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar doctor por nombre, especialidad o cédula..."
+              placeholder="Buscar por nombre, especialidad o cédula..."
               className="w-full pl-8 pr-4 py-2.5 bg-surface border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
             />
           </div>
@@ -254,8 +282,19 @@ export default function DoctoresPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            NUEVO DOCTOR
+            NUEVO PERSONAL
           </button>
+          <div className="flex rounded-lg border border-line p-0.5" role="group" aria-label="Tipo de personal">
+            {([['', 'Todos'], ['MEDICO', 'Médicos'], ['ENFERMERO', 'Enfermería']] as const).map(([v, l]) => (
+              <button
+                key={l}
+                onClick={() => setFiltroTipo(v)}
+                className={cn('rounded-md px-3 py-1.5 text-xs font-bold', filtroTipo === v ? 'bg-surface-2 text-fg' : 'text-muted')}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Error */}
@@ -273,7 +312,7 @@ export default function DoctoresPage() {
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-line bg-surface p-12 text-center animate-fadeIn">
             <Stethoscope className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
-            <p className="text-sm font-medium text-muted">No se encontraron doctores</p>
+            <p className="text-sm font-medium text-muted">No se encontró personal</p>
           </div>
         ) : (
           <div className="relative" aria-busy={validating}>
@@ -291,6 +330,15 @@ export default function DoctoresPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-fg truncate">{doc.alias}</h3>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', doc.tipo_personal === 'ENFERMERO' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300')}>
+                            {doc.tipo_personal === 'ENFERMERO' ? 'Enfermería' : 'Médico'}
+                          </span>
+                          {doc.cobra_honorarios === false && (
+                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">Sin honorarios</span>
+                          )}
+                          {doc.pendiente_completar && <BadgeCompletar faltantes={doc.faltantes} />}
+                        </div>
                         {(doc.nombre || doc.apellido) && (
                           <p className="text-xs text-muted mt-0.5 truncate">
                             {[doc.nombre, doc.apellido].filter(Boolean).join(' ')}
@@ -360,13 +408,55 @@ export default function DoctoresPage() {
             <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none lg:sticky lg:top-6">
               <div className="flex items-center justify-between border-b border-line/70 px-6 py-4">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-fg">
-                  {editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}
+                  {editingDoctor ? 'Editar personal' : 'Nuevo personal'}
                 </h3>
                 <button onClick={handleCloseSidebar} aria-label="Cerrar" className="text-muted dark:text-muted hover:text-gray-600 dark:hover:text-fg dark:text-fg dark:text-muted transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="p-6 space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Tipo de personal</label>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de personal">
+                    {([['MEDICO', 'Médico'], ['ENFERMERO', 'Enfermero(a)']] as const).map(([v, l]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        role="radio"
+                        aria-checked={formTipo === v}
+                        onClick={() => {
+                          setFormTipo(v);
+                          if (v === 'ENFERMERO') {
+                            setFormEspecialidad(ESPECIALIDAD_ENFERMERIA);
+                            if (!editingDoctor) setFormCobra(false);
+                          } else if (formEspecialidad === ESPECIALIDAD_ENFERMERIA) {
+                            setFormEspecialidad('Oftalmología');
+                          }
+                        }}
+                        className={cn(
+                          'rounded-lg border px-3 py-2 text-sm font-bold',
+                          formTipo === v ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300' : 'border-line text-fg-2'
+                        )}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Enfermería se asigna en cirugías como instrumentista, enfermero(a) o circulante y aparece en la agenda.
+                  </p>
+                </div>
+                <label className="flex items-start gap-3 rounded-lg border border-line px-3 py-2.5">
+                  <input type="checkbox" checked={formCobra} onChange={(e) => setFormCobra(e.target.checked)} className="mt-0.5 h-4 w-4" />
+                  <span>
+                    <span className="block text-sm font-bold text-fg">Cobra honorarios</span>
+                    <span className="block text-[11px] text-muted">
+                      {formTipo === 'ENFERMERO'
+                        ? 'Activo: puede realizar estudios (y consultas de tipo Estudios), genera honorarios y ve «Mis honorarios». Inactivo: solo apoyo en cirugía, sin honorarios.'
+                        : 'Genera honorarios por consultas, estudios, procedimientos y cirugías.'}
+                    </span>
+                  </span>
+                </label>
                 <div>
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
                     Alias <span className="text-red-500">*</span>
@@ -402,25 +492,24 @@ export default function DoctoresPage() {
                     />
                   </div>
                 </div>
+                {formTipo === 'MEDICO' && (
                 <div>
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Especialidad</label>
                   <select
-                    value={formEspecialidad}
+                    value={buscarEspecialidad(especialidades, formEspecialidad)?.nombre ?? formEspecialidad}
                     onChange={(e) => setFormEspecialidad(e.target.value)}
                     className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm font-medium text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                   >
-                    <option value="Oftalmología">Oftalmología</option>
-                    <option value="Oftalmología Pediátrica">Oftalmología Pediátrica</option>
-                    <option value="Glaucoma">Glaucoma</option>
-                    <option value="Retina">Retina</option>
-                    <option value="Catarata y Cirugía Refractiva">Catarata y Cirugía Refractiva</option>
-                    <option value="Cornea y Superficie Ocular">Córnea y Superficie Ocular</option>
-                    <option value="Estrabismo">Estrabismo</option>
-                    <option value="Optometría">Optometría</option>
-                    <option value="Neuroftalmología">Neuroftalmología</option>
-                    <option value="Oculoplástica">Oculoplástica</option>
+                    {/* Catálogo compartido con consultas y agenda (cat_especialidades). */}
+                    {formEspecialidad && !buscarEspecialidad(especialidades, formEspecialidad) && (
+                      <option value={formEspecialidad}>{formEspecialidad}</option>
+                    )}
+                    {especialidades.map((e) => (
+                      <option key={e.clave} value={e.nombre}>{e.nombre}</option>
+                    ))}
                   </select>
                 </div>
+                )}
                 <div>
                   <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Cédula Profesional</label>
                   <input

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/supabase/server';
+import { requireRoleInventario } from '@/lib/acceso-enfermeria';
 import { translateError } from '@/lib/supabase/errors';
 import { registrarMovimiento } from '@/lib/inventario';
 import { esquemaPaginacion, leerJSON, leerQuery } from '@/lib/api/validar';
@@ -28,7 +29,7 @@ const listaQuerySchema = z.object({
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
   const q = leerQuery(request, listaQuerySchema);
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
   const data = await leerJSON(request, movimientoCreateSchema);

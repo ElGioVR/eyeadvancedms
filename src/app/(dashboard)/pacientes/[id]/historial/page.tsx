@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import useSWR from 'swr';
+import { useUser } from '@/hooks/useUser';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -22,6 +23,11 @@ import { cn } from '@/lib/utils';
 import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import BadgeCompletar from '@/components/ui/BadgeCompletar';
+import Modal from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
+import { enviarJSON } from '@/lib/fetcher';
+import { validarNombrePaciente } from '@/lib/import-agenda';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
@@ -44,6 +50,89 @@ interface PacienteData {
   created_at: string;
   consultas: ConsultaData[];
   total_consultas: number;
+  /** Alta automática por importación con datos por completar */
+  pendiente_completar?: boolean;
+  faltantes?: string[];
+}
+
+/** Edición de la ficha (completar datos tras una importación). */
+function EditarPacienteModal({
+  paciente,
+  abierto,
+  onClose,
+  onGuardado,
+}: {
+  paciente: PacienteData;
+  abierto: boolean;
+  onClose: () => void;
+  onGuardado: () => void;
+}) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    nombre_completo: paciente.nombre_completo || '',
+    sexo: paciente.sexo || '',
+    fecha_nacimiento: paciente.fecha_nacimiento || '',
+    telefono: paciente.telefono || '',
+    email: paciente.email || '',
+    direccion: paciente.direccion || '',
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const guardar = async () => {
+    const nombre = validarNombrePaciente(form.nombre_completo);
+    if (!nombre.ok) { setError(nombre.motivo); return; }
+    if (form.telefono && form.telefono.replace(/\D/g, '').length < 10) { setError('El teléfono debe tener 10 dígitos'); return; }
+    setGuardando(true);
+    setError(null);
+    try {
+      await enviarJSON(`/api/pacientes/${paciente.id}`, 'PATCH', {
+        nombre_completo: nombre.nombre,
+        ...(form.sexo ? { sexo: form.sexo } : {}),
+        ...(form.fecha_nacimiento ? { fecha_nacimiento: form.fecha_nacimiento } : {}),
+        telefono: form.telefono.trim() || null,
+        email: form.email.trim() || null,
+        direccion: form.direccion.trim() || null,
+      });
+      toast('Datos del paciente guardados', 'success');
+      onGuardado();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const campo = 'mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-primary-500 focus:outline-none';
+  const etiqueta = 'text-xs font-bold text-fg-2';
+  return (
+    <Modal isOpen={abierto} onClose={onClose}>
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-fg">Datos del paciente</h3>
+        {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="sm:col-span-2"><span className={etiqueta}>Nombre completo *</span><input className={campo} value={form.nombre_completo} onChange={set('nombre_completo')} /></label>
+          <label><span className={etiqueta}>Sexo</span>
+            <select className={campo} value={form.sexo} onChange={set('sexo')}>
+              <option value="">Sin especificar</option>
+              <option value="FEMENINO">Femenino</option>
+              <option value="MASCULINO">Masculino</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </label>
+          <label><span className={etiqueta}>Fecha de nacimiento</span><input type="date" className={campo} value={form.fecha_nacimiento} onChange={set('fecha_nacimiento')} /></label>
+          <label><span className={etiqueta}>Teléfono</span><input inputMode="tel" maxLength={20} className={campo} value={form.telefono} onChange={set('telefono')} /></label>
+          <label><span className={etiqueta}>Correo electrónico</span><input type="email" className={campo} value={form.email} onChange={set('email')} /></label>
+          <label className="sm:col-span-2"><span className={etiqueta}>Dirección</span><input className={campo} value={form.direccion} onChange={set('direccion')} /></label>
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2">Cancelar</button>
+          <button onClick={guardar} disabled={guardando} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{guardando ? 'Guardando…' : 'Guardar'}</button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 interface ConsultaData {
@@ -60,10 +149,10 @@ interface ConsultaData {
   notas: string;
   doctor: string;
   especialidad: string;
-  monto: number;
+  monto?: number;
   moneda: string;
-  metodo_pago: string;
-  pagado: boolean;
+  metodo_pago?: string;
+  pagado?: boolean;
 }
 
 const tipoConsultaColors: Record<string, string> = {
@@ -82,8 +171,13 @@ export default function HistorialMedicoPage() {
   const params = useParams();
   const id = params.id as string;
   const [activeTab, setActiveTab] = useState('Resumen');
+  // Enfermería: solo lectura clínica (sin cobros, sin crear ni abrir consultas)
+  const { user } = useUser();
+  const soloLectura = user?.rol === 'enfermero';
+  const puedeEditar = user?.rol === 'admin' || user?.rol === 'recepcionista';
+  const [editando, setEditando] = useState(false);
   // Caché compartida: al volver a esta pantalla se muestra lo último y se revalida en segundo plano.
-  const { data: paciente, error: swrError, isLoading: loading, isValidating } = useSWR<PacienteData>(
+  const { data: paciente, error: swrError, isLoading: loading, isValidating, mutate } = useSWR<PacienteData>(
     id ? `/api/pacientes/${id}` : null
   );
   const error = swrError ? (swrError instanceof Error && swrError.message ? swrError.message : 'Error al cargar paciente') : '';
@@ -205,7 +299,15 @@ export default function HistorialMedicoPage() {
             {paciente.iniciales || '??'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-extrabold text-fg">{paciente.nombre_completo}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-extrabold text-fg">{paciente.nombre_completo}</h2>
+              {paciente.pendiente_completar && <BadgeCompletar faltantes={paciente.faltantes} />}
+              {puedeEditar && (
+                <button onClick={() => setEditando(true)} className="rounded-lg border border-line px-2.5 py-1 text-xs font-bold text-primary-600 hover:bg-surface-2">
+                  {paciente.pendiente_completar ? 'Completar datos' : 'Editar datos'}
+                </button>
+              )}
+            </div>
             <p className="text-sm text-muted mt-0.5">
               {paciente.sexo === 'FEMENINO' ? 'Femenino' : paciente.sexo === 'MASCULINO' ? 'Masculino' : paciente.sexo || '—'}
               {paciente.edad ? ` · ${paciente.edad} años` : ''}
@@ -228,6 +330,22 @@ export default function HistorialMedicoPage() {
           </div>
         </div>
       </div>
+
+      {paciente.pendiente_completar && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Este paciente se dio de alta desde una importación.
+          {paciente.faltantes && paciente.faltantes.length > 0 && <> Falta: <b>{paciente.faltantes.join(', ')}</b>.</>}
+          {puedeEditar ? ' Complétalo para futuras consultas y cirugías.' : ' Pide a recepción que complete su ficha.'}
+        </div>
+      )}
+      {puedeEditar && editando && (
+        <EditarPacienteModal
+          paciente={paciente}
+          abierto={editando}
+          onClose={() => setEditando(false)}
+          onGuardado={() => { setEditando(false); void mutate(); }}
+        />
+      )}
 
       {/* Tabs */}
       <div className="border-b border-line">
@@ -266,9 +384,11 @@ export default function HistorialMedicoPage() {
                 <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
                   <Calendar className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
                   <p className="text-sm font-bold text-muted">No hay consultas registradas</p>
-                  <Link href="/consultas/nueva" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800">
-                    Crear consulta →
-                  </Link>
+                  {!soloLectura && (
+                    <Link href="/consultas/nueva" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800">
+                      Crear consulta →
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4 anim-lista">
@@ -282,9 +402,11 @@ export default function HistorialMedicoPage() {
                           </span>
                           {c.folio && <span className="text-xs font-mono text-muted">{c.folio}</span>}
                         </div>
-                        <Link href={`/consultas/${c.id}`} className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">
-                          Ver detalle <span className="text-xs">→</span>
-                        </Link>
+                        {!soloLectura && (
+                          <Link href={`/consultas/${c.id}`} className="inline-flex items-center gap-1 text-sm font-bold text-primary-600 hover:text-primary-800 transition-colors">
+                            Ver detalle <span className="text-xs">→</span>
+                          </Link>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 sm:px-6 sm:py-4">
                         <div>
@@ -300,11 +422,13 @@ export default function HistorialMedicoPage() {
                           <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Tratamiento</p>
                           <p className="text-sm text-fg-2 leading-snug">{c.notas || '—'}</p>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Cobro</p>
-                          <p className="text-sm font-bold text-fg">{formatMoney(c.monto, c.moneda)}</p>
-                          <p className="text-xs text-muted">· {c.pagado ? 'Pagado' : 'Pendiente'}</p>
-                        </div>
+                        {c.monto !== undefined && (
+                          <div>
+                            <p className="text-[10px] text-muted uppercase font-semibold tracking-wider mb-1">Cobro</p>
+                            <p className="text-sm font-bold text-fg">{formatMoney(c.monto, c.moneda)}</p>
+                            <p className="text-xs text-muted">· {c.pagado ? 'Pagado' : 'Pendiente'}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -335,12 +459,14 @@ export default function HistorialMedicoPage() {
                           <span className="text-sm font-semibold text-fg-2">· {c.doctor}</span>
                           {c.folio && <span className="text-xs font-mono text-muted">{c.folio}</span>}
                         </div>
+                        {c.monto !== undefined && (
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
                           c.pagado ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30'
                         )}>
                           {c.pagado ? <><CheckCircle className="h-3 w-3" />Pagado</> : 'Pendiente'}
                         </span>
+                        )}
                       </div>
                       <div className="px-4 py-3 sm:px-6 sm:py-4 space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -28,8 +28,12 @@
     "test:b19": "node scripts/tests/b19-mis-honorarios.test.js",
     "test:b20": "node scripts/tests/b20-inventario-doctor-movil.test.js",
     "test:b21": "node scripts/tests/b21-parse-label-lio.test.js",
+    "test:b23": "node scripts/tests/b23-agenda-intervalos-acciones.test.js",
+    "test:b24": "node scripts/tests/b24-especialidad-y-cirugia.test.js",
+    "test:b25": "node scripts/tests/b25-personal-unificado.test.js",
     "test:unit": "node --import tsx --test src/lib/__tests__/*.test.ts",
-    "test:cobertura": "node --import tsx --test --experimental-test-coverage src/lib/__tests__/*.test.ts"
+    "test:cobertura": "node --import tsx --test --experimental-test-coverage src/lib/__tests__/*.test.ts",
+    "test:import": "tsx --conditions=react-server --tsconfig scripts/tests/import/tsconfig.json scripts/tests/import/import-agenda.integration.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

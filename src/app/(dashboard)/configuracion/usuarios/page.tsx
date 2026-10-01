@@ -51,6 +51,7 @@ const rolConfig: Record<string, { label: string; color: string }> = {
   admin: { label: 'Administrador', color: 'bg-red-50 text-red-700 ring-red-200' },
   doctor: { label: 'Doctor', color: 'bg-primary-50 text-primary-700 ring-primary-200' },
   recepcionista: { label: 'Recepcionista', color: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  enfermero: { label: 'Enfermero(a)', color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
 };
 
 const avatarColors = ['bg-primary-500', 'bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500', 'bg-amber-500', 'bg-violet-500'];
@@ -453,6 +454,7 @@ export default function UsuariosPage() {
                     <option value="doctor">Doctor (Médico Especialista)</option>
                     <option value="admin">Administrador</option>
                     <option value="recepcionista">Recepcionista</option>
+                    <option value="enfermero">Enfermero(a) — solo su agenda y, si aplica, sus honorarios</option>
                   </select>
                 </div>
                 {formError && (

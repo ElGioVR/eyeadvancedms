@@ -6,10 +6,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { useInvalidar } from '@/hooks/useFetch';
 import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react';
+import { useEspecialidades } from '@/hooks/useEspecialidades';
+import {
+  ETIQUETAS_ROL,
+  ROLES_APOYO,
+  esRolApoyo,
+  equipoPorDefecto,
+  sincronizarHorario,
+  validarEquipo,
+  type MiembroEquipo,
+} from '@/lib/catalogos/equipo-quirurgico';
+import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
+import { URL_ESCRS_IOL, URL_IOLCON, coincideConModelo, etiquetaModeloLio, filtrarModelosPorTipo, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+import {
+  ANESTESIAS,
+  OJOS_CIRUGIA,
+  TIPOS_LIO,
+  esProcedimientoConLio,
+  TIPOS_DOCUMENTO_APOYO,
+  TIPO_DOCUMENTO_OTRO,
+  TIPO_MEDICINA_INTERNA,
+} from '@/lib/catalogos/cirugia';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchInput from '@/components/ui/SearchInput';
 import LIOSelector from '@/components/cirugia/LIOSelector';
+import { URL_LIOS_DISPONIBLES, obtenerLIOs, type LIODisponible } from '@/components/cirugia/LIOSelector';
 import { useToast } from '@/components/ui/Toast';
 
 // Custom Skeleton for Cirugía Form - matches actual form layout
@@ -161,6 +183,8 @@ interface Doctor {
   id: string;
   nombre: string;
   especialidad?: string | null;
+  /** Personal unificado (mig. 390): MEDICO | ENFERMERO */
+  tipo_personal?: string | null;
 }
 
 interface Rol {
@@ -190,23 +214,25 @@ interface PacienteResumen {
   expediente_id: string;
 }
 
+/** Payload de un médico del equipo hacia POST /api/cirugias. */
 interface Participante {
-  id: string;
   medico_id: string;
   rol_id: string;
+  hora_inicio: string;
+  hora_fin: string;
 }
+
 
 interface ArchivoLocal {
   id: string;
   file: File;
   tipo_documento: string;
+  /** true si eligió «Otro» y captura el tipo a mano. */
+  otro?: boolean;
 }
 
-const OJOS = [
-  { value: 'OD', label: 'OD - Ojo derecho' },
-  { value: 'OI', label: 'OI - Ojo izquierdo' },
-  { value: 'OU', label: 'OU - Ambos ojos' },
-];
+// OD / OS / OU (el valor 'OI' se conserva en BD; ver lib/catalogos/cirugia).
+const OJOS = OJOS_CIRUGIA;
 
 const EXTENSIONES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
 
@@ -285,7 +311,14 @@ function NuevaCirugiaContent() {
   const [hora, setHora] = useState('');
   const [duracionMin, setDuracionMin] = useState<number | ''>('');
   const [recursoId, setRecursoId] = useState('');
-  const [participantes, setParticipantes] = useState<Participante[]>([]);
+  // Equipo quirúrgico homologado: Rol · Persona · Horario. Roles por defecto
+  // precargados (ids deterministas para no romper la hidratación); solo el
+  // cirujano es obligatorio y se pueden agregar más filas.
+  const [participantes, setParticipantes] = useState<MiembroEquipo[]>(() => {
+    let n = 0;
+    return equipoPorDefecto('', '', () => `def-${n++}`);
+  });
+  const [altaPersonal, setAltaPersonal] = useState<{ filaId: string; nombre: string; guardando: boolean } | null>(null);
   const [inventarioItemId, setInventarioItemId] = useState<string | null>(null);
   const [lioManual, setLioManual] = useState(false);
   const [lioManualMarca, setLioManualMarca] = useState('');
@@ -294,6 +327,54 @@ function NuevaCirugiaContent() {
   const [lioManualLote, setLioManualLote] = useState('');
   const [archivos, setArchivos] = useState<ArchivoLocal[]>([]);
   const [notas, setNotas] = useState('');
+  // Punto I: diagnóstico propio (antes se copiaba a Notas) y anestesia obligatoria.
+  const [diagnostico, setDiagnostico] = useState('');
+  const [diagnosticoEditado, setDiagnosticoEditado] = useState(false);
+  const [anestesia, setAnestesia] = useState('');
+  // Punto I.1: datos generales de la cirugía
+  const [procedencia, setProcedencia] = useState('');
+  const [motivoConsulta, setMotivoConsulta] = useState('');
+  const [especialidad, setEspecialidad] = useState('');
+  const [especialidadEditada, setEspecialidadEditada] = useState(false);
+  const { especialidades } = useEspecialidades();
+  // Punto I.2: procedimientos adicionales, tipo de LIO y personal de apoyo no médico
+  const [procedimientosAdicionales, setProcedimientosAdicionales] = useState<string[]>([]);
+  const [tipoLio, setTipoLio] = useState('');
+  const [modeloLioId, setModeloLioId] = useState('');
+  const modelosLioSWR = useSWR<ModeloLio[]>('/api/catalogos/modelos-lio', OPCIONES_CATALOGO);
+  const tipoLioSel = TIPOS_LIO.find((t) => t.value === tipoLio);
+  // Flujo del LIO: 1) tipo → 2) modelo → 3) pieza del inventario de ese modelo (o manual).
+  const [verTodoInventario, setVerTodoInventario] = useState(false);
+  const liosSWR = useSWR<LIODisponible[]>(URL_LIOS_DISPONIBLES, obtenerLIOs, { revalidateOnFocus: false });
+  const modelosCompatibles = useMemo(
+    () => (tipoLioSel ? filtrarModelosPorTipo(Array.isArray(modelosLioSWR.data) ? modelosLioSWR.data : [], tipoLioSel.diseno, tipoLioSel.torico) : []),
+    [modelosLioSWR.data, tipoLioSel],
+  );
+  const modeloLioSel = modelosCompatibles.find((m) => m.id === modeloLioId) || null;
+  const piezasDelModelo = useMemo(
+    () => (modeloLioSel && Array.isArray(liosSWR.data) ? liosSWR.data.filter((i) => coincideConModelo(i, modeloLioSel)) : []),
+    [liosSWR.data, modeloLioSel],
+  );
+  /** Cambia tipo o modelo: la pieza elegida ya no aplica. */
+  const reiniciarPieza = () => {
+    setInventarioItemId(null);
+    setVerTodoInventario(false);
+  };
+  /** Captura manual con marca/modelo del catálogo precargados. */
+  const abrirLioManual = () => {
+    setInventarioItemId(null);
+    if (modeloLioSel) {
+      setLioManualMarca((v) => v || modeloLioSel.fabricante);
+      setLioManualModelo((v) => v || modeloLioSel.modelo);
+    }
+    setLioManual(true);
+  };
+  // Sin consulta de origen: precarga el diagnóstico de la última consulta del paciente
+  // (solo si el usuario no lo ha escrito/cambiado).
+  useEffect(() => {
+    const dx = resumenPaciente?.ultima_consulta?.diagnostico;
+    if (!diagnosticoEditado) setDiagnostico(dx || '');
+  }, [resumenPaciente, diagnosticoEditado]);
 
   const [guardando, setGuardando] = useState(false);
   const [pasoGuardado, setPasoGuardado] = useState<string | null>(null);
@@ -370,9 +451,10 @@ function NuevaCirugiaContent() {
           setOrigenId(consultaData.consulta.aseguranza_id);
         }
 
-        // Diagnóstico → notas
+        // Diagnóstico de la consulta de origen → campo Diagnóstico
         if (consultaData?.consulta?.diagnostico && !signal.aborted) {
-          setNotas(`Diagnóstico de consulta: ${consultaData.consulta.diagnostico}`);
+          setDiagnostico(consultaData.consulta.diagnostico);
+          setDiagnosticoEditado(true);
         }
 
         // Procedimiento - priority: direct param > consulta data
@@ -386,7 +468,7 @@ function NuevaCirugiaContent() {
         if (cirujanoId && !signal.aborted) {
           const rolCirujano = rolesRef.current.find((r) => r.clave === 'cirujano');
           if (rolCirujano) {
-            setParticipantes([{ id: crypto.randomUUID(), medico_id: cirujanoId, rol_id: rolCirujano.id }]);
+            setParticipantes((prev) => prev.map((m) => (m.rol === 'cirujano' && !m.personaId ? { ...m, personaId: cirujanoId } : m)));
             setCirujanoPendiente({ id: cirujanoId, nombre: cirujanoNombre || '' });
           } else {
             setCirujanoPendiente({ id: cirujanoId, nombre: cirujanoNombre || '' });
@@ -556,6 +638,7 @@ useEffect(() => {
       ? `aseguranza_id=${encodeURIComponent(origenConfigurado)}&tipo=PROCEDIMIENTO`
       : `paciente_id=${encodeURIComponent(pacienteSeleccionado.id)}&tipo=PROCEDIMIENTO`;
     setServicioId('');
+    setProcedimientosAdicionales([]);
     // Ignora respuestas de un paciente/origen anterior (fuera de orden)
     let vigente = true;
     fetch(`/api/catalogo-servicios?${params}`)
@@ -581,21 +664,82 @@ useEffect(() => {
     }
   }, [servicios, procedimientoPendiente]);
 
+  // ¿Algún procedimiento implica LIO (Faco + LIO)? → se ofrece el tipo de LIO.
+  const esCirugiaConLio = useMemo(
+    () => [servicioId, ...procedimientosAdicionales].some((id) => esProcedimientoConLio(servicios.find((s) => s.id === id)?.nombre)),
+    [servicioId, procedimientosAdicionales, servicios],
+  );
+
+  // Especialidad sugerida: la del cirujano principal (editable).
+  useEffect(() => {
+    if (especialidadEditada) return;
+    const cirujano = participantes.find((m) => m.rol === 'cirujano' && m.personaId);
+    const esp = buscarEspecialidad(especialidades, doctores.find((d) => d.id === cirujano?.personaId)?.especialidad);
+    if (esp) setEspecialidad(esp.clave);
+  }, [participantes, doctores, especialidades, especialidadEditada]);
+
+  // El horario de cada miembro sigue al de la cirugía hasta que se edita a mano.
+  useEffect(() => {
+    setParticipantes((prev) => sincronizarHorario(prev, hora, duracionMin));
+  }, [hora, duracionMin]);
+
+  // Roles del catálogo (médicos y de apoyo: instrumentista, enfermero, circulante).
+  const opcionesRol = useMemo(() => {
+    const delCatalogo = roles.map((r) => ({ clave: r.clave, nombre: r.nombre }));
+    // Si la mig. 390 aún no sembró 'enfermero', se muestra igual (la validación avisa).
+    const faltantes = ROLES_APOYO.filter((c) => !delCatalogo.some((r) => r.clave === c)).map((c) => ({ clave: c, nombre: ETIQUETAS_ROL[c] }));
+    return [...delCatalogo, ...faltantes];
+  }, [roles]);
+  // Personal unificado: enfermería primero para roles de apoyo; médicos para el resto.
+  const enfermeria = useMemo(() => doctores.filter((d) => d.tipo_personal === 'ENFERMERO'), [doctores]);
+  const medicosLista = useMemo(() => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO'), [doctores]);
+
   const agregarParticipante = () => {
+    const ref = participantes.find((m) => m.rol === 'cirujano');
     setParticipantes((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), medico_id: '', rol_id: '' },
+      { id: crypto.randomUUID(), rol: '', personaId: '', horaInicio: ref?.horaInicio || '', horaFin: ref?.horaFin || '', horarioEditado: false },
     ]);
   };
 
-  const actualizarParticipante = (id: string, campo: keyof Participante, valor: string) => {
+  const actualizarParticipante = (id: string, cambios: Partial<MiembroEquipo>) => {
     setParticipantes((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, [campo]: valor } : p))
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const next = { ...m, ...cambios };
+        // Cambiar de rol médico a apoyo (o al revés) cambia la lista de personas.
+        if (cambios.rol !== undefined && esRolApoyo(cambios.rol) !== esRolApoyo(m.rol)) next.personaId = '';
+        if (cambios.horaInicio !== undefined || cambios.horaFin !== undefined) next.horarioEditado = true;
+        return next;
+      })
     );
   };
 
   const eliminarParticipante = (id: string) => {
-    setParticipantes((prev) => prev.filter((p) => p.id !== id));
+    setParticipantes((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  /** Alta rápida de enfermería (Personal médico unificado), sin honorarios por defecto. */
+  const registrarPersonal = async () => {
+    if (!altaPersonal || altaPersonal.guardando || !altaPersonal.nombre.trim()) return;
+    setAltaPersonal({ ...altaPersonal, guardando: true });
+    try {
+      const nombre = altaPersonal.nombre.trim();
+      const res = await fetch('/api/configuracion/doctores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: nombre, nombre, especialidad: 'Enfermería', tipo_personal: 'ENFERMERO', cobra_honorarios: false }),
+      });
+      const creado = await res.json();
+      if (!res.ok) throw new Error(creado.error || 'No se pudo registrar');
+      await doctoresSWR.mutate();
+      actualizarParticipante(altaPersonal.filaId, { personaId: creado.id });
+      setAltaPersonal(null);
+      toast('Enfermero(a) registrado en Personal médico', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'No se pudo registrar', 'error');
+      setAltaPersonal((a) => (a ? { ...a, guardando: false } : a));
+    }
   };
 
   const handleFiles = (files: FileList | null) => {
@@ -613,6 +757,11 @@ useEffect(() => {
     setArchivos((prev) => prev.map((a) => (a.id === id ? { ...a, tipo_documento: valor } : a)));
   };
 
+  const seleccionarTipoDocumento = (id: string, valor: string) => {
+    const otro = valor === TIPO_DOCUMENTO_OTRO;
+    setArchivos((prev) => prev.map((a) => (a.id === id ? { ...a, otro, tipo_documento: otro ? '' : valor } : a)));
+  };
+
   const eliminarArchivo = (id: string) => {
     setArchivos((prev) => prev.filter((a) => a.id !== id));
   };
@@ -624,12 +773,16 @@ useEffect(() => {
     if (!fecha) return 'Debe indicar la fecha';
     if (!hora) return 'Debe indicar la hora';
     if (!duracionMin || Number(duracionMin) <= 0) return 'La duración estimada debe ser mayor a 0';
-    if (participantes.length === 0) return 'Debe asignar al menos un participante';
-    const tieneCirujano = participantes.some((p) => {
-      const rol = roles.find((r) => r.id === p.rol_id);
-      return rol?.clave === 'cirujano' && !!p.medico_id;
-    });
-    if (!tieneCirujano) return 'Debe asignar al menos un cirujano';
+    if (!anestesia) return 'Selecciona el tipo de anestesia';
+    if (!participantes.some((m) => m.personaId)) return 'Debe asignar al menos un participante';
+    if (participantes.some((m) => m.personaId && !m.rol)) return 'Elige el rol de cada participante';
+    if (!participantes.some((m) => m.rol === 'cirujano' && m.personaId)) return 'Debe asignar al menos un cirujano';
+    const errorEquipo = validarEquipo(participantes);
+    if (errorEquipo) return errorEquipo;
+    const sinCatalogo = participantes.find((m) => m.personaId && !roles.find((r) => r.clave === m.rol));
+    if (sinCatalogo) {
+      return `El rol «${ETIQUETAS_ROL[sinCatalogo.rol] || sinCatalogo.rol}» no existe en el catálogo de roles (aplica la migración 390)`;
+    }
     for (const a of archivos) {
       if (!a.tipo_documento.trim()) return `Indica el tipo de documento para "${a.file.name}"`;
     }
@@ -679,11 +832,25 @@ useEffect(() => {
         lio: lioManual ? lioManualTexto : null,
         marca_lio: lioManual ? lioManualMarca.trim() || null : null,
         consulta_id: consultaPrecargaId,
-        participantes: participantes.map((p) => ({
-          medico_id: p.medico_id,
-          rol_id: p.rol_id,
-        })),
+        // Todo el equipo (médicos y enfermería) va como participantes: mismo motor de
+        // agenda, conflictos y honorarios.
+        participantes: participantes
+          .filter((m) => m.personaId)
+          .map((m): Participante => ({
+            medico_id: m.personaId,
+            rol_id: roles.find((r) => r.clave === m.rol)!.id,
+            hora_inicio: m.horaInicio,
+            hora_fin: m.horaFin,
+          })),
         notas: notas || null,
+        diagnostico: diagnostico.trim() || null,
+        anestesia,
+        procedencia: procedencia.trim() || null,
+        motivo_consulta: motivoConsulta.trim() || null,
+        especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
+        tipo_lio: tipoLio || null,
+        modelo_lio_id: modeloLioId || null,
+        procedimientos_adicionales: procedimientosAdicionales.filter((id) => id !== servicioId),
       };
 
       const res = await fetch('/api/cirugias', {
@@ -698,6 +865,7 @@ useEffect(() => {
       }
 
       const cirugiaId = data?.cirugia_id;
+      if (data?.advertencia) toast(data.advertencia, 'warning');
       if (cirugiaId) {
         let fallidos = 0;
         for (const [i, archivo] of archivos.entries()) {
@@ -896,6 +1064,45 @@ useEffect(() => {
                   Seleccione un paciente para ver su expediente.
                 </div>
               )}
+              {pacienteSeleccionado && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Procedencia</label>
+                    <input
+                      type="text"
+                      value={procedencia}
+                      onChange={(e) => setProcedencia(e.target.value)}
+                      maxLength={255}
+                      placeholder="Ej. Ensenada"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Especialidad</label>
+                    <select
+                      value={especialidad}
+                      onChange={(e) => { setEspecialidad(e.target.value); setEspecialidadEditada(true); }}
+                      className={cn(inputCls, 'appearance-none')}
+                    >
+                      <option value="">Seleccionar</option>
+                      {especialidades.map((e) => (
+                        <option key={e.clave} value={e.clave}>{e.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Motivo de consulta</label>
+                    <input
+                      type="text"
+                      value={motivoConsulta}
+                      onChange={(e) => setMotivoConsulta(e.target.value)}
+                      maxLength={500}
+                      placeholder="Ej. Disminución de agudeza visual en OD"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* 3. Datos de cirugía */}
@@ -948,6 +1155,42 @@ useEffect(() => {
                   {servicios.length === 0 && pacienteSeleccionado && !loadingServicios && (
                     <div className="text-xs text-amber-600 mt-1">No hay procedimientos para el origen del paciente.</div>
                   )}
+                  {servicioId && (
+                    <div className="mt-2 space-y-1.5">
+                      {procedimientosAdicionales.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {procedimientosAdicionales.map((id) => (
+                            <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                              + {servicios.find((s) => s.id === id)?.nombre || 'Procedimiento'}
+                              <button
+                                type="button"
+                                onClick={() => setProcedimientosAdicionales((prev) => prev.filter((x) => x !== id))}
+                                aria-label="Quitar procedimiento"
+                                className="hover:text-red-600"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {servicios.some((s) => s.id !== servicioId && !procedimientosAdicionales.includes(s.id)) && (
+                        <select
+                          value=""
+                          onChange={(e) => { const v = e.target.value; if (v) setProcedimientosAdicionales((prev) => [...prev, v]); }}
+                          className={cn(inputCls, 'appearance-none text-xs')}
+                          aria-label="Agregar procedimiento adicional"
+                        >
+                          <option value="">+ Agregar otro procedimiento…</option>
+                          {servicios
+                            .filter((s) => s.id !== servicioId && !procedimientosAdicionales.includes(s.id))
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>{s.nombre}</option>
+                            ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Ojo</label>
@@ -969,6 +1212,48 @@ useEffect(() => {
                     >
                       {avisoOjo}
                     </p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelCls}>Anestesia *</label>
+                  <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Anestesia">
+                    {ANESTESIAS.map((a) => (
+                      <button
+                        key={a.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={anestesia === a.value}
+                        onClick={() => setAnestesia(a.value)}
+                        className={cn(
+                          'rounded-lg border px-3 py-2 text-xs font-bold transition-colors',
+                          anestesia === a.value
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                            : 'border-line text-fg-2 hover:bg-surface-2'
+                        )}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Diagnóstico</label>
+                  <textarea
+                    value={diagnostico}
+                    onChange={(e) => { setDiagnostico(e.target.value); setDiagnosticoEditado(true); }}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Diagnóstico que motiva la cirugía"
+                    className={cn(inputCls, 'resize-none')}
+                  />
+                  {resumenPaciente?.ultima_consulta?.diagnostico && !diagnostico && (
+                    <button
+                      type="button"
+                      onClick={() => { setDiagnostico(resumenPaciente.ultima_consulta!.diagnostico || ''); setDiagnosticoEditado(true); }}
+                      className="mt-1 text-xs font-bold text-primary-600 hover:underline"
+                    >
+                      Usar diagnóstico de la última consulta
+                    </button>
                   )}
                 </div>
                 <div>
@@ -1004,94 +1289,261 @@ useEffect(() => {
               </div>
             </section>
 
-            {/* 4. Asignación médica */}
+            {/* 4. Asignación médica y participantes quirúrgico (homologado) */}
             <section className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-primary-500" /> 4. Asignación médica
+              <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-1">
+                <Users className="w-4 h-4 text-primary-500" /> 4. Asignación médica y participantes quirúrgico
               </h2>
+              <p className="mb-4 text-xs text-muted">
+                Solo el cirujano es obligatorio. El horario sigue al de la cirugía hasta que lo cambies; se valida que nadie quede en dos cirugías a la vez.
+              </p>
               {!loadingInitial && roles.length === 0 && (
                 <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>No hay roles de participante disponibles. Aplica la migración <code className="font-mono text-xs">1800000000170-CreateCirugiaHomologadaTables.ts</code> en tu BD local para poblar <code className="font-mono text-xs">cat_roles_participante</code>.</span>
                 </div>
               )}
+              <div className="hidden sm:grid grid-cols-12 gap-3 mb-1">
+                <span className={cn(labelCls, 'col-span-3')}>Rol</span>
+                <span className={cn(labelCls, 'col-span-4')}>Persona</span>
+                <span className={cn(labelCls, 'col-span-2')}>Entrada</span>
+                <span className={cn(labelCls, 'col-span-2')}>Salida</span>
+              </div>
               <div className="space-y-3">
-                {participantes.map((p, idx) => (
-                  <div key={p.id} className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-5">
-                      {idx === 0 && <label className={labelCls}>Médico</label>}
-                      <select
-                        value={p.medico_id}
-                        onChange={(e) => actualizarParticipante(p.id, 'medico_id', e.target.value)}
-                        className={cn(inputCls, 'appearance-none')}
-                      >
-                        <option value="">Seleccionar médico</option>
-                        {doctores.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.nombre}
-                          </option>
-                        ))}
-                      </select>
+                {participantes.map((m) => {
+                  const apoyo = esRolApoyo(m.rol);
+                  const lista = apoyo ? [...enfermeria, ...medicosLista] : medicosLista;
+                  return (
+                    <div key={m.id} className="grid grid-cols-12 gap-3 items-start rounded-lg sm:rounded-none border border-line/70 sm:border-0 p-3 sm:p-0">
+                      <div className="col-span-12 sm:col-span-3">
+                        <select
+                          value={m.rol}
+                          onChange={(e) => actualizarParticipante(m.id, { rol: e.target.value })}
+                          className={cn(inputCls, 'appearance-none')}
+                          aria-label="Rol"
+                        >
+                          <option value="">Seleccionar rol</option>
+                          {opcionesRol.map((r) => (
+                            <option key={r.clave} value={r.clave}>
+                              {r.nombre}{r.clave === 'cirujano' ? ' *' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-12 sm:col-span-4">
+                        {altaPersonal?.filaId === m.id ? (
+                          <div className="flex gap-2">
+                            <input
+                              autoFocus
+                              value={altaPersonal.nombre}
+                              onChange={(e) => setAltaPersonal({ ...altaPersonal, nombre: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === 'Enter') void registrarPersonal(); if (e.key === 'Escape') setAltaPersonal(null); }}
+                              maxLength={120}
+                              placeholder="Nombre completo"
+                              className={inputCls}
+                            />
+                            <button type="button" onClick={() => void registrarPersonal()} disabled={altaPersonal.guardando} className="rounded-lg bg-primary-600 px-3 text-xs font-bold text-white disabled:opacity-50">
+                              {altaPersonal.guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar'}
+                            </button>
+                            <button type="button" onClick={() => setAltaPersonal(null)} className="rounded-lg border border-line px-2 text-xs text-muted" aria-label="Cancelar alta">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <select
+                            value={m.personaId}
+                            onChange={(e) => {
+                              if (e.target.value === '__nuevo__') setAltaPersonal({ filaId: m.id, nombre: '', guardando: false });
+                              else actualizarParticipante(m.id, { personaId: e.target.value });
+                            }}
+                            disabled={!m.rol}
+                            className={cn(inputCls, 'appearance-none disabled:opacity-60')}
+                            aria-label="Persona"
+                          >
+                            <option value="">{!m.rol ? 'Elige primero el rol' : apoyo ? 'Seleccionar persona' : 'Seleccionar médico'}</option>
+                            {lista.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.nombre}{apoyo && d.tipo_personal !== 'ENFERMERO' ? ' · médico' : ''}
+                              </option>
+                            ))}
+                            {apoyo && <option value="__nuevo__">+ Registrar persona nueva…</option>}
+                          </select>
+                        )}
+                      </div>
+                      <div className="col-span-5 sm:col-span-2">
+                        <input
+                          type="time"
+                          step={900}
+                          value={m.horaInicio}
+                          onChange={(e) => actualizarParticipante(m.id, { horaInicio: e.target.value })}
+                          className={inputCls}
+                          aria-label="Hora de entrada"
+                        />
+                      </div>
+                      <div className="col-span-5 sm:col-span-2">
+                        <input
+                          type="time"
+                          step={900}
+                          value={m.horaFin}
+                          onChange={(e) => actualizarParticipante(m.id, { horaFin: e.target.value })}
+                          className={inputCls}
+                          aria-label="Hora de salida"
+                        />
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <button
+                          type="button"
+                          onClick={() => eliminarParticipante(m.id)}
+                          disabled={m.rol === 'cirujano' && participantes.filter((x) => x.rol === 'cirujano').length === 1}
+                          className="w-full rounded-lg border border-red-200 dark:border-red-900/40 px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={m.rol === 'cirujano' ? 'El cirujano es obligatorio' : 'Quitar fila'}
+                        >
+                          <X className="w-4 h-4 mx-auto" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-5">
-                      {idx === 0 && <label className={labelCls}>Rol</label>}
-                      <select
-                        value={p.rol_id}
-                        onChange={(e) => actualizarParticipante(p.id, 'rol_id', e.target.value)}
-                        className={cn(inputCls, 'appearance-none')}
-                      >
-                        <option value="">Seleccionar rol</option>
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <button
-                        onClick={() => eliminarParticipante(p.id)}
-                        className="w-full rounded-lg border border-red-200 dark:border-red-900/40 px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        title="Eliminar participante"
-                      >
-                        <X className="w-4 h-4 mx-auto" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <button
+                  type="button"
                   onClick={agregarParticipante}
-                  disabled={roles.length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2"
                 >
                   <Plus className="w-4 h-4" /> Agregar participante
                 </button>
               </div>
             </section>
 
-            {/* 5. LIO / Inventario */}
+            {/* 5. LIO / Inventario — orden: tipo → modelo → pieza del inventario (o manual) */}
             <section className="rounded-2xl border border-line bg-surface p-5">
               <h2 className="text-sm font-bold text-fg flex items-center gap-2 mb-4">
                 <Eye className="w-4 h-4 text-primary-500" /> 5. Lente intraocular (LIO)
               </h2>
-              {!lioManual ? (
-                <>
-                  <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
-                  <p className="text-xs text-muted mt-2">
-                    Opcional. Solo se muestran LIOs disponibles y no caducados.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInventarioItemId(null);
-                      setLioManual(true);
-                    }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-line px-4 py-2 text-sm font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
+              {esCirugiaConLio && !tipoLio && (
+                <p className="mb-3 rounded-lg bg-primary-50/70 px-3 py-2 text-xs text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+                  Facoemulsificación + LIO: elige el tipo de lente, luego el modelo y después la pieza del inventario.
+                </p>
+              )}
+
+              {/* Paso 1: tipo */}
+              <div>
+                <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">1</span>Tipo de LIO</p>
+                <div className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label="Tipo de LIO">
+                  {TIPOS_LIO.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={tipoLio === t.value}
+                      onClick={() => { setTipoLio(tipoLio === t.value ? '' : t.value); setModeloLioId(''); reiniciarPieza(); }}
+                      className={cn(
+                        'rounded-lg border px-3 py-2 text-xs font-bold transition-colors',
+                        tipoLio === t.value
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                          : 'border-line text-fg-2 hover:bg-surface-2'
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Paso 2: modelo */}
+              {tipoLioSel && (
+                <div className="mt-4">
+                  <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">2</span>Modelo</p>
+                  <select
+                    value={modeloLioId}
+                    onChange={(e) => { setModeloLioId(e.target.value); reiniciarPieza(); }}
+                    className={cn(inputCls, 'mt-1 appearance-none')}
+                    aria-label="Modelo de LIO"
                   >
-                    <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
-                  </button>
-                </>
-              ) : (
+                    <option value="">{modelosCompatibles.length ? 'Seleccionar modelo' : 'Sin modelos de este tipo en el catálogo'}</option>
+                    {modelosCompatibles.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {etiquetaModeloLio(m)}{m.verificado ? '' : ' · por verificar'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted">
+                    <span>Catálogo en Configuración → Modelos de LIO.</span>
+                    <a href={URL_ESCRS_IOL} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                      Buscar en ESCRS ↗
+                    </a>
+                    <a href={URL_IOLCON} target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                      Ficha técnica en IOLCon ↗
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {/* Paso 3: pieza física */}
+              <div className="mt-4">
+                <p className={labelCls}><span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] text-white">3</span>Lente (pieza física)</p>
+                {!lioManual ? (
+                  !tipoLioSel ? (
+                    <div className="mt-1 space-y-2">
+                      <p className="text-xs text-muted">Elige el tipo y el modelo para ver las piezas disponibles de ese lente.</p>
+                      {!verTodoInventario ? (
+                        <button type="button" onClick={() => setVerTodoInventario(true)} className="text-xs font-bold text-primary-600 hover:underline">
+                          Elegir del inventario sin tipo ni modelo
+                        </button>
+                      ) : (
+                        <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />
+                      )}
+                    </div>
+                  ) : !modeloLioSel ? (
+                    <div className="mt-1 space-y-2">
+                      <p className="text-xs text-muted">
+                        {modelosCompatibles.length
+                          ? 'Elige el modelo para ver sus piezas en inventario.'
+                          : 'No hay modelos de este tipo en el catálogo: puedes elegir la pieza directo del inventario o capturarla a mano.'}
+                      </p>
+                      {modelosCompatibles.length === 0 && <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} />}
+                    </div>
+                  ) : piezasDelModelo.length > 0 && !verTodoInventario ? (
+                    <div className="mt-1 space-y-2">
+                      <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} soloModelo />
+                      <p className="text-xs text-muted">
+                        {piezasDelModelo.length} pieza(s) disponible(s) de este modelo, no caducadas.{' '}
+                        <button type="button" onClick={() => setVerTodoInventario(true)} className="font-bold text-primary-600 hover:underline">
+                          Ver todo el inventario
+                        </button>
+                      </p>
+                    </div>
+                  ) : piezasDelModelo.length > 0 ? (
+                    <div className="mt-1 space-y-2">
+                      <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
+                      <button type="button" onClick={() => setVerTodoInventario(false)} className="text-xs font-bold text-primary-600 hover:underline">
+                        Mostrar solo este modelo
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                      {liosSWR.isLoading ? 'Buscando piezas en inventario…' : 'No hay piezas disponibles de este modelo en inventario.'}
+                      {!liosSWR.isLoading && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={abrirLioManual}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Agregar LIO manual con este modelo
+                          </button>
+                          <button type="button" onClick={() => setVerTodoInventario(true)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-bold dark:border-amber-500/40">
+                            Elegir otra pieza del inventario
+                          </button>
+                        </div>
+                      )}
+                      {verTodoInventario && (
+                        <div className="mt-2">
+                          <LIOSelector value={inventarioItemId} onChange={setInventarioItemId} modeloPreferido={modeloLioSel} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -1155,7 +1607,17 @@ useEffect(() => {
                     ← Volver a seleccionar desde inventario
                   </button>
                 </>
-              )}
+                )}
+                {!lioManual && (
+                  <button
+                    type="button"
+                    onClick={abrirLioManual}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 dark:border-line px-4 py-2 text-sm font-bold text-gray-600 dark:text-fg-2 hover:bg-surface-2"
+                  >
+                    <Plus className="w-4 h-4" /> Agregar LIO manual (no está en inventario)
+                  </button>
+                )}
+              </div>
             </section>
 
             {/* 6. Archivos de apoyo */}
@@ -1190,6 +1652,11 @@ useEffect(() => {
                 </p>
               </div>
 
+              {!archivos.some((a) => a.tipo_documento === TIPO_MEDICINA_INTERNA) && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-300">
+                  Recomendado: adjunta la consulta de medicina interna y los exámenes complementarios.
+                </p>
+              )}
               {archivos.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {archivos.map((a) => (
@@ -1201,13 +1668,29 @@ useEffect(() => {
                         <div className="text-sm font-medium text-fg truncate">{a.file.name}</div>
                         <div className="text-xs text-muted">{formatBytes(a.file.size)}</div>
                       </div>
-                      <input
-                        type="text"
-                        value={a.tipo_documento}
-                        onChange={(e) => actualizarTipoDocumento(a.id, e.target.value)}
-                        placeholder="Tipo de documento"
-                        className={cn(inputCls, 'w-40')}
-                      />
+                      <div className="flex w-48 flex-col gap-1.5">
+                        <select
+                          value={a.otro ? TIPO_DOCUMENTO_OTRO : a.tipo_documento}
+                          onChange={(e) => seleccionarTipoDocumento(a.id, e.target.value)}
+                          className={cn(inputCls, 'appearance-none')}
+                          aria-label={`Tipo de documento de ${a.file.name}`}
+                        >
+                          <option value="">Tipo de documento</option>
+                          {TIPOS_DOCUMENTO_APOYO.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                          <option value={TIPO_DOCUMENTO_OTRO}>{TIPO_DOCUMENTO_OTRO}…</option>
+                        </select>
+                        {a.otro && (
+                          <input
+                            type="text"
+                            value={a.tipo_documento}
+                            onChange={(e) => actualizarTipoDocumento(a.id, e.target.value)}
+                            placeholder="Especifica el tipo"
+                            className={inputCls}
+                          />
+                        )}
+                      </div>
                       <button
                         onClick={() => eliminarArchivo(a.id)}
                         className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"

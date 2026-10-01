@@ -10,6 +10,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useFetch, useInvalidar } from '@/hooks/useFetch';
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
+import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
@@ -17,6 +18,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import SidebarPanel from '@/components/ui/SidebarPanel';
 import ClientDate from '@/components/ui/ClientDate';
+import BadgeCompletar from '@/components/ui/BadgeCompletar';
 
 interface PacienteAPI {
   id: string;
@@ -30,6 +32,9 @@ interface PacienteAPI {
   aseguranza_id: string | null;
   consultas_count: number;
   ultima_visita: string | null;
+  /** Alta automática por importación con datos por completar */
+  pendiente_completar?: boolean;
+  faltantes?: string[];
 }
 
 interface AseguranzaOption {
@@ -62,6 +67,9 @@ function filterByEdad(edad: number, filter: string): boolean {
 
 export default function PacientesPage() {
   const router = useRouter();
+  // Enfermería: consulta de pacientes en solo lectura (sin altas ni agendar)
+  const { user } = useUser();
+  const soloLectura = user?.rol === 'enfermero';
   const [page, setPage] = useState(1);
   // Misma URL que la precarga de /bienvenida (page=1&pageSize=15).
   const { data: pacientes, loading, validating, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
@@ -96,7 +104,7 @@ export default function PacientesPage() {
       <PageHeader
         title="PACIENTES"
         subtitle="Listado general y altas del sistema."
-        action={
+        action={soloLectura ? undefined : (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowNewPatient(true)}
@@ -106,7 +114,7 @@ export default function PacientesPage() {
               Nuevo Paciente
             </button>
           </div>
-        }
+        )}
       />
 
       <div className="flex gap-6">
@@ -204,8 +212,9 @@ export default function PacientesPage() {
                   />
 
                   <div className="flex-1 min-w-[140px]">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <h3 className="text-sm font-bold text-fg truncate">{paciente.nombre}</h3>
+                      {paciente.pendiente_completar && <BadgeCompletar faltantes={paciente.faltantes} />}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                       <span>{paciente.telefono || '—'}</span>
@@ -232,6 +241,7 @@ export default function PacientesPage() {
                       <FileText className="h-3.5 w-3.5" />
                       Historial
                     </Link>
+                    {!soloLectura && (
                     <div className="relative">
                       <button
                         onClick={() => setAgendarMenuId(agendarMenuId === paciente.id ? null : paciente.id)}
@@ -265,6 +275,7 @@ export default function PacientesPage() {
                         </>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
               ))}

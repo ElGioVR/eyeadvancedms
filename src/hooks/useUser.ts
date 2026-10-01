@@ -14,6 +14,10 @@ export interface User {
   last_sign_in_at: string | null;
   created_at: string;
   doctor_id: string | null;
+  /** Ficha de personal: MEDICO | ENFERMERO (null sin ficha). */
+  tipo_personal: string | null;
+  /** Honorarios activos en su ficha → ve «Mis honorarios». */
+  cobra_honorarios: boolean;
   modo_focus: boolean;
   preferencias: Record<string, unknown>;
 }
@@ -57,6 +61,8 @@ async function fetchUser(): Promise<User | null> {
       last_sign_in_at: me.last_sign_in_at ?? null,
       created_at: me.created_at ?? '',
       doctor_id: me.doctor_id ?? null,
+      tipo_personal: me.tipo_personal ?? null,
+      cobra_honorarios: me.cobra_honorarios !== false && !!me.doctor_id,
       modo_focus: me.modo_focus === true,
       preferencias: (me.preferencias as Record<string, unknown>) ?? {},
     };
@@ -76,6 +82,8 @@ async function fetchUser(): Promise<User | null> {
     last_sign_in_at: authUser.last_sign_in_at ?? null,
     created_at: authUser.created_at,
     doctor_id: null,
+    tipo_personal: null,
+    cobra_honorarios: false,
     modo_focus: false,
     preferencias: {},
   };

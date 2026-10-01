@@ -70,6 +70,25 @@ export async function GET(
         .limit(100),
       // Metadatos de archivos solo si el rol puede 'ver' archivos (PER-002).
       verificarPermisoArchivo(auth.user.id, 'ver'),
+      // Modificaciones agenda (punto I): consultas aparte y tolerantes a error,
+      // para que el detalle siga funcionando aunque falten las migraciones 340/350.
+      supabase
+        .from('agenda_cirugias')
+        .select('diagnostico, anestesia, procedencia, motivo_consulta, lio_diseno, lio_torico, especialidad:especialidad_id (nombre), modelo_lio:modelo_lio_id (fabricante, modelo, torico)')
+        .eq('id', id)
+        .maybeSingle(),
+      supabase
+        .from('cirugia_procedimientos')
+        .select('id, servicio_id, nombre, orden')
+        .eq('cirugia_id', id)
+        .order('orden'),
+      supabase
+        .from('cirugia_personal')
+        .select('id, rol, nombre')
+        .eq('cirugia_id', id),
+      // Horarios del equipo (mig. 370), tolerantes a que aún no existan las columnas
+      supabase.from('cirugia_personal').select('id, hora_inicio, hora_fin').eq('cirugia_id', id),
+      supabase.from('cirugia_participantes').select('id, hora_inicio, hora_fin').eq('cirugia_id', id),
     ]);
 
     // 1er intento: con embed de LIO; si el esquema de inventario no tiene esas
@@ -126,8 +145,25 @@ export async function GET(
       void relacionadasP.catch(() => undefined);
       return { noEncontrada: true } as const;
     }
-    const [participantes, archivos, productividad, historial, permisoVer] = await relacionadasP;
-    return { cirugia, participantes, archivos: permisoVer.permitido ? archivos : { data: [] }, productividad, historial } as const;
+    const [participantesBase, archivos, productividad, historial, permisoVer, clinicos, procedimientosAdic, personalBase, horariosPersonal, horariosParticipantes] = await relacionadasP;
+    type Horario = { id: string; hora_inicio: string | null; hora_fin: string | null };
+    const conHorario = <T extends { id: string }>(filas: T[] | null, horarios: Horario[] | null) =>
+      (filas || []).map((f) => {
+        const h = (horarios || []).find((x) => x.id === f.id);
+        return { ...f, hora_inicio: h?.hora_inicio ?? null, hora_fin: h?.hora_fin ?? null };
+      });
+    const participantes = { data: conHorario(participantesBase.data as { id: string }[] | null, horariosParticipantes.data as Horario[] | null) };
+    const personal = { data: conHorario(personalBase.data as { id: string }[] | null, horariosPersonal.data as Horario[] | null) };
+    if (clinicos.data) Object.assign(cirugia, clinicos.data);
+    return {
+      cirugia,
+      participantes,
+      archivos: permisoVer.permitido ? archivos : { data: [] },
+      productividad,
+      historial,
+      procedimientos_adicionales: procedimientosAdic.data || [],
+      personal: personal.data || [],
+    } as const;
   });
   if ('denegado' in r) return r.denegado;
   const resultado = r.datos;
@@ -138,7 +174,7 @@ export async function GET(
   if ('noEncontrada' in resultado) {
     return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
   }
-  const { cirugia, participantes, archivos, productividad, historial } = resultado;
+  const { cirugia, participantes, archivos, productividad, historial, procedimientos_adicionales, personal } = resultado;
 
   return NextResponse.json({
     cirugia,
@@ -146,5 +182,7 @@ export async function GET(
     archivos: archivos.data || [],
     productividad: productividad.data || [],
     historial: historial.data || [],
+    procedimientos_adicionales,
+    personal,
   });
 }

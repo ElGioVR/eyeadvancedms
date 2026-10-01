@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { faltantesPaciente } from '@/lib/import-agenda';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
@@ -18,8 +19,10 @@ export async function GET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
+  // Enfermería: consulta clínica sin datos de cobro
+  const verCobros = auth.perfil?.rol !== 'enfermero';
 
   const { id } = await params;
   const idError = validarId(id, 'ID de paciente');
@@ -28,7 +31,7 @@ export async function GET(
 
   // Paciente (+ nombre de aseguranza) y consultas (+ doctor + cobros) en paralelo:
   // 1 viaje en lugar de 4 en serie.
-  const [pacienteRes, consultasRes] = await Promise.all([
+  const [pacienteRes, consultasRes, pendienteRes] = await Promise.all([
     supabase
       .from('pacientes')
       .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at, aseguranzas:aseguranza_id (nombre)')
@@ -45,7 +48,10 @@ export async function GET(
       .eq('paciente_id', id)
       .order('fecha', { ascending: false })
       .limit(200),
+    // Alta automática con datos por completar (mig. 400; sin la columna → false)
+    supabase.from('pacientes').select('pendiente_completar').eq('id', id).maybeSingle(),
   ]);
+  const pendienteCompletar = !pendienteRes.error && (pendienteRes.data as { pendiente_completar?: boolean } | null)?.pendiente_completar === true;
 
   const patient = pacienteRes.data;
   if (pacienteRes.error || !patient) {
@@ -82,10 +88,14 @@ export async function GET(
       notas: c.notas,
       doctor: doctor?.alias || '',
       especialidad: doctor?.especialidad || '',
-      monto: cobro?.monto || 0,
-      moneda: cobro?.moneda || 'PESOS',
-      metodo_pago: cobro?.metodo_pago || 'NO_APLICA',
-      pagado: cobro?.pagado || false,
+      ...(verCobros
+        ? {
+            monto: cobro?.monto || 0,
+            moneda: cobro?.moneda || 'PESOS',
+            metodo_pago: cobro?.metodo_pago || 'NO_APLICA',
+            pagado: cobro?.pagado || false,
+          }
+        : {}),
     };
   });
 
@@ -108,6 +118,8 @@ export async function GET(
     created_at: patient.created_at,
     consultas: consultasResult,
     total_consultas: consultasResult.length,
+    pendiente_completar: pendienteCompletar,
+    faltantes: pendienteCompletar ? faltantesPaciente(patient) : [],
   });
 }
 
@@ -171,6 +183,16 @@ export async function PATCH(
   }
   if (!actualizado) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  // Alta automática por importación: se quita la marca cuando la ficha ya está completa.
+  const { data: ficha } = await supabase
+    .from('pacientes')
+    .select('sexo, fecha_nacimiento, edad, telefono, pendiente_completar')
+    .eq('id', id)
+    .maybeSingle();
+  if (ficha?.pendiente_completar && faltantesPaciente(ficha).length === 0) {
+    await supabase.from('pacientes').update({ pendiente_completar: false }).eq('id', id);
   }
 
   return NextResponse.json({ success: true });

@@ -306,8 +306,10 @@ export default function InventarioPage() {
   const cerrarKardex = useCallback(() => setKardexItemId(null), []);
 
   // Coincide con el RBAC de /api/inventario: crear puede admin/recepcionista/doctor;
-  // ajustar stock, editar y eliminar siguen siendo solo admin/recepcionista.
-  const puedeEscribir = user?.rol === 'admin' || user?.rol === 'recepcionista';
+  // ajustar stock, editar y eliminar: admin/recepcionista y enfermería con honorarios.
+  const esEnfermero = user?.rol === 'enfermero';
+  const enfermeroConInventario = esEnfermero && user?.cobra_honorarios === true;
+  const puedeEscribir = user?.rol === 'admin' || user?.rol === 'recepcionista' || enfermeroConInventario;
   const puedeCrear = puedeEscribir || user?.rol === 'doctor';
 
   const headerActions = (
@@ -322,6 +324,17 @@ export default function InventarioPage() {
       )}
     </div>
   );
+
+  if (esEnfermero && !enfermeroConInventario) {
+    return (
+      <div className="mx-auto max-w-[1440px] space-y-4 sm:space-y-6">
+        <PageHeader title="Inventario" subtitle="Lentes intraoculares, especificaciones y stock clínico." />
+        <div className="card text-center text-sm text-muted">
+          El inventario solo está disponible para enfermería con honorarios activos.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-4 sm:space-y-6">

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { faltantesPaciente } from '@/lib/import-agenda';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
@@ -62,7 +63,7 @@ function primero<T>(v: Embed<T>): T | null {
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const query = leerQuery(request, listadoQuerySchema);
@@ -165,6 +166,13 @@ export async function GET(request: Request) {
     }));
   }
 
+  // Altas automáticas (importación) con datos por completar (mig. 400; sin ella, ninguna).
+  const pendientes = new Set<string>();
+  if (filas.length) {
+    const r = await supabase.from('pacientes').select('id').in('id', filas.map((p) => p.id)).eq('pendiente_completar', true);
+    if (!r.error) for (const x of r.data || []) pendientes.add((x as { id: string }).id);
+  }
+
   const result = filas.map((p) => {
     const nombre = p.nombre_completo || '';
     const iniciales = nombre
@@ -192,6 +200,8 @@ export async function GET(request: Request) {
       numero_afiliacion: p.numero_afiliacion || null,
       consultas_count: p.consultas_count || 0,
       ultima_visita: p.ultima_visita || null,
+      pendiente_completar: pendientes.has(p.id),
+      faltantes: pendientes.has(p.id) ? faltantesPaciente(p) : [],
       created_at: p.created_at,
     };
   });

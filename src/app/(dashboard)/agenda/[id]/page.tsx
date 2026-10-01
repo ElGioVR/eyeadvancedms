@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock, User, Stethoscope, Eye, FileText, AlertTriangle, CheckCircle2, Printer } from 'lucide-react';
@@ -122,7 +123,7 @@ export default function CirugiaDetailPage() {
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Procedimiento" value={cirugia.procedimiento} />
-              <Field label="Ojo" value={cirugia.ojo} />
+              <Field label="Ojo" value={etiquetaOjo(cirugia.ojo)} />
               <Field label="LIO" value={cirugia.lio} />
               <Field label="Marca LIO" value={cirugia.marca_lio} />
               <Field label="Tiempo Estimado" value={cirugia.tiempo_estimado} />
@@ -144,7 +145,7 @@ export default function CirugiaDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Ojo</span>
-                <span className="font-bold text-fg">{cirugia.ojo || '—'}</span>
+                <span className="font-bold text-fg">{etiquetaOjo(cirugia.ojo) || '—'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">LIO</span>

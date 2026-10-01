@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { notificarRoles } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/supabase/server';
+import { requireRoleInventario } from '@/lib/acceso-enfermeria';
 import { translateError } from '@/lib/supabase/errors';
 import { registrarMovimiento, siguienteFolioLente } from '@/lib/inventario';
 import { esquemaPaginacion, leerJSON, leerQuery, validarId } from '@/lib/api/validar';
@@ -84,7 +85,7 @@ const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedo
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
   const q = leerQuery(request, listaQuerySchema);
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
   if (auth instanceof NextResponse) return auth;
   // Alta de ítem: también el doctor (solo inventario). PATCH/DELETE siguen
   // restringidos a admin/recepcionista.
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
@@ -287,7 +288,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();
@@ -387,7 +388,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
   if (roleError) return roleError;
 
   const supabase = getSupabaseAdmin();

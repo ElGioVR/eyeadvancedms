@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
+import { etiquetaModeloLio } from '@/lib/catalogos/modelos-lio';
+import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe } from '@/lib/catalogos/cirugia';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -26,6 +28,8 @@ interface Participante {
   id: string;
   medico_id: string;
   rol_id: string;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
   doctores: RelacionSimple | null;
   roles: { nombre?: string; clave?: string } | null;
 }
@@ -65,6 +69,14 @@ interface CirugiaData {
   ojo: string | null;
   duracion_min: number | null;
   notas: string | null;
+  diagnostico?: string | null;
+  anestesia?: string | null;
+  procedencia?: string | null;
+  motivo_consulta?: string | null;
+  lio_diseno?: string | null;
+  lio_torico?: boolean | null;
+  especialidad?: { nombre: string } | null;
+  modelo_lio?: { fabricante: string; modelo: string; torico: boolean } | null;
   origen_id: string | null;
   servicio_id: string | null;
   recurso_id: string | null;
@@ -84,6 +96,8 @@ interface CirugiaDetalleResponse {
   archivos: Archivo[];
   productividad: ProductividadItem[];
   historial: HistorialItem[];
+  procedimientos_adicionales?: { id: string; nombre: string }[];
+  personal?: { id: string; rol: string; nombre: string; hora_inicio?: string | null; hora_fin?: string | null }[];
 }
 
 const estadoConfig: Record<string, { bg: string; text: string; dot: string }> = {
@@ -228,19 +242,31 @@ export default function CirugiaDetailPage() {
   const [preview, setPreview] = useState<{ archivo: Archivo; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Vista previa de archivos: bloquea scroll de fondo y cierra con Escape
+  // Vista previa de archivos: bloquea scroll de fondo, cierra con Escape y con
+  // el botón «atrás» del celular (se agrega una entrada al historial al abrir).
+  const visorAbierto = preview !== null;
   useEffect(() => {
-    if (!preview) return;
+    if (!visorAbierto) return;
     document.body.style.overflow = 'hidden';
-    const handler = (e: KeyboardEvent) => {
+    window.history.pushState({ visorArchivo: true }, '');
+    let cerradoPorAtras = false;
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setPreview(null);
     };
-    window.addEventListener('keydown', handler);
+    const onPop = () => {
+      cerradoPorAtras = true;
+      setPreview(null);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('popstate', onPop);
     return () => {
       document.body.style.overflow = '';
-      window.removeEventListener('keydown', handler);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+      // Cerrado con la X / Escape: se retira la entrada que se agregó al abrir
+      if (!cerradoPorAtras && window.history.state?.visorArchivo) window.history.back();
     };
-  }, [preview]);
+  }, [visorAbierto]);
 
   async function openPreview(a: Archivo) {
     setPreview({ archivo: a, url: '' });
@@ -400,9 +426,11 @@ export default function CirugiaDetailPage() {
   }
 
   const { cirugia, participantes, archivos, productividad, historial } = data;
+  const procedimientosAdicionales = data.procedimientos_adicionales ?? [];
+  const personalApoyo = data.personal ?? [];
   const nombrePaciente = cirugia.pacientes?.nombre_completo || cirugia.nombre_paciente || '—';
   const procedimiento = cirugia.servicio?.nombre || '—';
-  const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${cirugia.ojo}` : procedimiento;
+  const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${etiquetaOjo(cirugia.ojo)}` : procedimiento;
 
   return (
     <div className="print-page relative animate-fadeIn" aria-busy={validating}>
@@ -443,7 +471,15 @@ export default function CirugiaDetailPage() {
               <Field label="Código" value={cirugia.codigo} />
               <Field label="Paciente" value={nombrePaciente} />
               <Field label="Procedimiento" value={cirugia.servicio?.nombre} />
-              <Field label="Ojo" value={cirugia.ojo} />
+              {procedimientosAdicionales.length > 0 && (
+                <Field label="Procedimientos adicionales" value={procedimientosAdicionales.map((p) => p.nombre).join(', ')} full />
+              )}
+              <Field label="Especialidad" value={cirugia.especialidad?.nombre} />
+              <Field label="Procedencia" value={cirugia.procedencia ?? undefined} />
+              <Field label="Motivo de consulta" value={cirugia.motivo_consulta ?? undefined} full />
+              <Field label="Ojo" value={etiquetaOjo(cirugia.ojo)} />
+              <Field label="Anestesia" value={etiquetaAnestesia(cirugia.anestesia) ?? undefined} />
+              <Field label="Diagnóstico" value={cirugia.diagnostico ?? undefined} full />
               <Field label="Origen" value={cirugia.origen?.nombre} />
               <Field label="Recurso / Quirófano" value={cirugia.recurso?.nombre ? `${cirugia.recurso.nombre}${cirugia.recurso.ubicacion ? ` — ${cirugia.recurso.ubicacion}` : ''}` : undefined} />
               <Field label="Fecha" value={cirugia.fecha} />
@@ -468,6 +504,19 @@ export default function CirugiaDetailPage() {
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Users className="h-4 w-4 text-sky-600" /> Equipo médico
             </h3>
+            {personalApoyo.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {personalApoyo.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-dashed border-line px-4 py-2.5">
+                    <span className="text-sm font-medium text-fg">{p.nombre}</span>
+                    <span className="text-xs font-bold text-muted uppercase">
+                      {ROLES_PERSONAL.find((r) => r.value === p.rol)?.label || p.rol}
+                      {p.hora_inicio && p.hora_fin ? ` · ${p.hora_inicio.slice(0, 5)}–${p.hora_fin.slice(0, 5)}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             {participantes.length === 0 ? (
               <p className="text-sm text-muted">Sin participantes registrados</p>
             ) : (
@@ -475,7 +524,10 @@ export default function CirugiaDetailPage() {
                 {participantes.map((p) => (
                   <div key={p.id} className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-4 py-2.5">
                     <span className="text-sm font-medium text-fg">{p.doctores?.alias || '—'}</span>
-                    <span className="text-xs font-bold text-muted uppercase">{p.roles?.nombre || p.roles?.clave || '—'}</span>
+                    <span className="text-xs font-bold text-muted uppercase">
+                      {p.roles?.nombre || p.roles?.clave || '—'}
+                      {p.hora_inicio && p.hora_fin ? ` · ${p.hora_inicio.slice(0, 5)}–${p.hora_fin.slice(0, 5)}` : ''}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -487,6 +539,12 @@ export default function CirugiaDetailPage() {
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <Eye className="h-4 w-4 text-violet-600" /> Lente Intraocular
             </h3>
+            {tipoLioDe(cirugia.lio_diseno, cirugia.lio_torico) && (
+              <p className="mb-3 text-sm"><span className="text-[10px] font-bold uppercase tracking-widest text-muted">Tipo de LIO</span><br /><span className="font-medium text-fg">{tipoLioDe(cirugia.lio_diseno, cirugia.lio_torico)!.label}</span></p>
+            )}
+            {cirugia.modelo_lio && (
+              <p className="mb-3 text-sm"><span className="text-[10px] font-bold uppercase tracking-widest text-muted">Modelo (catálogo)</span><br /><span className="font-medium text-fg">{etiquetaModeloLio(cirugia.modelo_lio)}</span></p>
+            )}
             {!cirugia.lio ? (
               <p className="text-sm text-muted">No se registró LIO</p>
             ) : (
@@ -526,11 +584,15 @@ export default function CirugiaDetailPage() {
                   <label className="block text-xs font-bold text-muted mb-1">Tipo de documento</label>
                   <input
                     type="text"
+                    list="tipos-documento-apoyo"
                     value={tipoDocumento}
                     onChange={(e) => setTipoDocumento(e.target.value)}
-                    placeholder="Ej. Consentimiento informado"
+                    placeholder="Ej. Consulta de medicina interna"
                     className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg"
                   />
+                  <datalist id="tipos-documento-apoyo">
+                    {TIPOS_DOCUMENTO_APOYO.map((t) => <option key={t} value={t} />)}
+                  </datalist>
                 </div>
                 {files.length > 0 && (
                   <div className="mt-3 space-y-2">
@@ -638,9 +700,16 @@ export default function CirugiaDetailPage() {
 
       {/* Visor de archivos (móvil y desktop) */}
       {preview && (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-black/70 backdrop-blur-sm no-print" onClick={() => setPreview(null)}>
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-black/70 backdrop-blur-sm no-print"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Vista previa de ${preview.archivo.nombre_original}`}
+          onClick={() => setPreview(null)}
+        >
+          {/* pt con safe-area: en la app instalada (iOS) la barra quedaba bajo el notch y la X no se podía tocar */}
           <div
-            className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3"
+            className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -662,14 +731,16 @@ export default function CirugiaDetailPage() {
               )}
               <button
                 onClick={() => setPreview(null)}
-                className="p-2 rounded-full hover:bg-surface-2 text-muted transition-colors"
+                className="p-2.5 rounded-full hover:bg-surface-2 text-muted transition-colors"
                 title="Cerrar"
+                aria-label="Cerrar vista previa"
               >
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </button>
             </div>
           </div>
-          <div className="flex-1 min-h-0 p-2 sm:p-4" onClick={(e) => e.stopPropagation()}>
+          {/* overflow-auto: Safari iOS ignora la altura del iframe y lo crece al tamaño del PDF */}
+          <div className="flex-1 min-h-0 overflow-auto overscroll-contain p-2 sm:p-4" onClick={(e) => e.stopPropagation()}>
             {previewLoading || !preview.url ? (
               <div className="flex h-full items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
@@ -701,6 +772,18 @@ export default function CirugiaDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+          {/* Cierre al alcance del pulgar en celular */}
+          <div
+            className="border-t border-line bg-surface px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPreview(null)}
+              className="w-full rounded-xl bg-surface-2 py-3 text-sm font-bold text-fg active:scale-[0.99]"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       )}

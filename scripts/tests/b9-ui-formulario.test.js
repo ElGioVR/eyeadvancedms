@@ -361,7 +361,8 @@ function checkNuevaPage() {
   // Hay al menos un select que itera sobre `doctores` y otro sobre `roles`.
   assertRegexMatches(
     content,
-    /doctores\.map\s*\(/,
+    // Personal unificado: la lista puede venir de doctores.map o de listas derivadas (doctores.filter).
+    /doctores\.(?:map|filter)\s*\(/,
     'renderiza <select> con doctores para médicos participantes'
   );
   assertRegexMatches(

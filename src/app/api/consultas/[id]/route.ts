@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { doctorRequerido, inicialesDe, verificarDueno } from '@/lib/consultas-acceso';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
-import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { z } from 'zod';
@@ -25,6 +25,7 @@ const consultaUpdateSchema = z.object({
   hora_fin: horaHHMM.optional().nullable(),
   tipo_consulta: z.string().max(60).optional().nullable(),
   tipo_visita: z.string().max(60).optional().nullable(),
+  especialidad_id: z.string().uuid().optional().nullable(),
   procedimiento: z.string().max(2000).optional().nullable(),
   procedimiento_doctor_id: z.string().uuid().optional().nullable(),
   estudio_1: z.string().max(255).optional().nullable(),
@@ -51,7 +52,7 @@ export async function GET(
 
   // Ronda 1 (paralelo): consulta + historial + conceptos + doctor del usuario (solo rol doctor).
   // Lecturas sin efectos: si el RBAC rechaza, se descartan sin devolverse.
-  const [consultaResult, historialResult, conceptosResult, requerido] = await Promise.all([
+  const [consultaResult, historialResult, conceptosResult, requerido, especialidadResult] = await Promise.all([
     supabase
       .from('consultas')
       .select(`
@@ -76,6 +77,13 @@ export async function GET(
       .select('id, consulta_id, tipo_concepto, concepto_id, texto_original, precio_aplicado, doctor_id, created_at')
       .eq('consulta_id', id),
     doctorRequerido(auth.user.id, auth.perfil),
+    // Especialidad (mig. 1800000000330) en lectura aparte y tolerante a error:
+    // el detalle sigue funcionando aunque la columna aún no exista.
+    supabase
+      .from('consultas')
+      .select('especialidad_id, especialidad:especialidad_id (nombre)')
+      .eq('id', id)
+      .maybeSingle(),
   ]);
 
   const { data: consulta, error: consultaError } = consultaResult;
@@ -127,6 +135,9 @@ export async function GET(
       ...consulta,
       paciente: pacienteData?.nombre_completo || null,
       iniciales: inicialesDe(pacienteData?.nombre_completo || '?'),
+      especialidad_id: (especialidadResult.data as { especialidad_id?: string | null } | null)?.especialidad_id ?? null,
+      especialidad:
+        ((especialidadResult.data as { especialidad?: { nombre: string } | { nombre: string }[] | null } | null)?.especialidad as { nombre?: string } | null)?.nombre ?? null,
       doctor: doctorData?.alias || null,
       est1_doctor: est1Doc?.alias || null,
       est2_doctor: est2Doc?.alias || null,
@@ -233,6 +244,7 @@ export async function PATCH(
   if (data.hora_fin !== undefined) updateData.hora_fin = data.hora_fin;
   if (data.tipo_consulta !== undefined) updateData.tipo_consulta = data.tipo_consulta;
   if (data.tipo_visita !== undefined) updateData.tipo_visita = data.tipo_visita;
+  if (data.especialidad_id !== undefined) updateData.especialidad_id = data.especialidad_id;
   if (data.procedimiento !== undefined) updateData.procedimiento = data.procedimiento;
   if (data.procedimiento_doctor_id !== undefined) updateData.procedimiento_doctor_id = data.procedimiento_doctor_id;
   if (data.estudio_1 !== undefined) updateData.estudio_1 = data.estudio_1;
@@ -266,7 +278,7 @@ export async function PATCH(
 
   // If any editable field changed (not just status), log as EDICION
   const hasFieldChanges = [data.diagnostico, data.notas, data.metodo_pago, data.doctor_id,
-    data.fecha, data.hora_inicio, data.hora_fin, data.tipo_consulta, data.tipo_visita,
+    data.fecha, data.hora_inicio, data.hora_fin, data.tipo_consulta, data.tipo_visita, data.especialidad_id,
     data.procedimiento, data.procedimiento_doctor_id,
     data.estudio_1, data.estudio_2, data.estudio_3,
     data.estudio_1_doctor_id, data.estudio_2_doctor_id, data.estudio_3_doctor_id,
@@ -288,6 +300,9 @@ export async function PATCH(
     .select()
     .single();
 
+  if (esEmpalmeAgenda(updateError)) {
+    return NextResponse.json({ error: MENSAJE_EMPALME, conflictos: [] }, { status: 409 });
+  }
   if (updateError) {
     return NextResponse.json(
       { error: handleSupabaseError(updateError, 'consultas.actualizar').mensaje },

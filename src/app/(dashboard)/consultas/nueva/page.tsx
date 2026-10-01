@@ -26,6 +26,11 @@ import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import PageHeader from '@/components/ui/PageHeader';
 import { FormInput, FormSelect } from '@/components/ui/FormField';
+import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
+import { DURACION_CITA_MIN, deMinutos } from '@/lib/agenda-slots';
+import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
+import { TIPOS_CONSULTA_AGENDA, opcionTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 import Skeleton from '@/components/ui/Skeleton';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 
@@ -56,6 +61,10 @@ interface DoctorAPI {
   id: string;
   alias?: string | null;
   nombre: string;
+  especialidad?: string | null;
+  /** Personal unificado (mig. 390) */
+  tipo_personal?: string | null;
+  cobra_honorarios?: boolean;
   honorario_consulta: number;
   honorario_estudio: number;
   honorario_procedimiento: number;
@@ -120,6 +129,10 @@ const visitTypeOptions = ['Primera Vez', 'Visita de Retorno'];
 const paymentMethodOptions = ['Efectivo', 'Tarjeta de Crédito', 'Tarjeta de Débito', 'Transferencia'];
 
 const TIPO_CONSULTA_MAP: Record<string, string> = {
+  // Tipos de la agenda (punto II): Primera / Subsecuente → Consulta; Estudios; Procedimientos
+  'Consulta': 'CONSULTA',
+  'Estudio': 'ESTUDIO',
+  'Procedimiento': 'PROCEDIMIENTO',
   'Primera Consulta': 'CONSULTA',
   'Consulta de Urgencia': 'CONSULTA',
   'Revisión Pre-Operatoria': 'REVISION',
@@ -234,7 +247,15 @@ function NuevaConsultaContent() {
     () => doctoresRaw.map((d) => ({ ...d, nombre: d.alias || d.nombre || d.id })),
     [doctoresRaw],
   );
+  // Personal unificado: médicos para consultas y procedimientos; enfermería con
+  // honorarios activos también puede realizar estudios (y consultas tipo Estudios).
+  const medicos = useMemo(() => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO'), [doctores]);
+  const personalEstudios = useMemo(
+    () => doctores.filter((d) => d.tipo_personal !== 'ENFERMERO' || d.cobra_honorarios !== false),
+    [doctores],
+  );
   const { data: matrizCostos } = useFetch<MatrizCosto>('/api/configuracion/matriz-costos');
+  const { especialidades } = useEspecialidades();
   const [catalogoConsultas, setCatalogoConsultas] = useState<CatalogoConsulta[]>([]);
   const [catalogoEstudios, setCatalogoEstudios] = useState<CatalogoEstudio[]>([]);
   const [catalogoProcedimientos, setCatalogoProcedimientos] = useState<CatalogoProcedimiento[]>([]);
@@ -339,6 +360,10 @@ function NuevaConsultaContent() {
     horaFin: string;
     tipo: string;
     tipoVisita: string;
+    /** Punto II: Primera consulta / Subsecuente / Estudios / Procedimientos. */
+    tipoAgenda: string;
+    /** Punto II: clave de cat_especialidades. */
+    especialidad: string;
     diagnostico: string;
     estudios: string;
     procedimiento: string;
@@ -356,8 +381,10 @@ function NuevaConsultaContent() {
       fecha: '',
       horaInicio: '',
       horaFin: '',
-      tipo: 'Primera Consulta',
+      tipo: 'Consulta',
       tipoVisita: 'Primera Vez',
+      tipoAgenda: 'PRIMERA',
+      especialidad: '',
       diagnostico: '',
       estudios: '',
       procedimiento: '',
@@ -372,19 +399,30 @@ function NuevaConsultaContent() {
 
   const [consultationData, setConsultationData] = useState<ConsultationForm>(() => defaultConsultation());
   const searchParams = useSearchParams();
+  // Enfermería solo puede ser responsable de una consulta tipo Estudios.
+  useEffect(() => {
+    if (consultationData.tipoAgenda === 'ESTUDIOS' || !consultationData.doctorId) return;
+    if (doctores.find((d) => d.id === consultationData.doctorId)?.tipo_personal === 'ENFERMERO') {
+      setConsultationData((prev) => ({ ...prev, doctorId: '' }));
+    }
+  }, [consultationData.tipoAgenda, consultationData.doctorId, doctores]);
 
   useEffect(() => {
     const now = new Date();
-    const h = now.getHours().toString().padStart(2, '0');
-    const m = now.getMinutes().toString().padStart(2, '0');
+    // Hora por defecto: el siguiente intervalo de 15 min (10:07 → 10:15).
+    const minutosAhora = now.getHours() * 60 + now.getMinutes();
+    const horaAhora = deMinutos(Math.ceil(minutosAhora / DURACION_CITA_MIN) * DURACION_CITA_MIN);
     const fechaParam = searchParams.get('fecha');
     const horaParam = searchParams.get('hora');
-    const horaInicio = horaParam && /^\d{2}:\d{2}$/.test(horaParam) ? horaParam : `${h}:${m}`;
+    const horaInicio = horaParam && /^\d{2}:\d{2}$/.test(horaParam) ? horaParam : horaAhora;
+    const tipoParam = (searchParams.get('tipo') || '').toUpperCase();
+    const opcionUrl = tipoParam === 'ESTUDIO' ? opcionTipoConsulta('ESTUDIOS') : tipoParam === 'PROCEDIMIENTO' ? opcionTipoConsulta('PROCEDIMIENTOS') : null;
     setConsultationData(f => ({
       ...f,
+      ...(opcionUrl ? { tipoAgenda: opcionUrl.value, tipo: opcionUrl.tipo, tipoVisita: opcionUrl.tipoVisita } : {}),
       fecha: fechaParam && /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : now.toISOString().split('T')[0],
       horaInicio,
-      horaFin: addMinutesToTime(horaInicio, 30),
+      horaFin: addMinutesToTime(horaInicio, DURACION_CITA_MIN),
     }));
   }, [searchParams]);
 
@@ -820,8 +858,13 @@ function NuevaConsultaContent() {
   const updateConsultation = useCallback((field: string, value: string) => {
     setConsultationData((prev) => {
       const next = { ...prev, [field]: value };
+      if (field === 'tipoAgenda') {
+        const op = opcionTipoConsulta(value);
+        next.tipo = op.tipo;
+        next.tipoVisita = op.tipoVisita;
+      }
       if (field === 'horaInicio') {
-        next.horaFin = addMinutesToTime(value, 30);
+        next.horaFin = addMinutesToTime(value, DURACION_CITA_MIN);
       }
       return next;
     });
@@ -837,7 +880,7 @@ function NuevaConsultaContent() {
       setCostosProcsEdit({});
       cargarServiciosOrigen(value || null);
     }
-    if (field === 'tipo' || field === 'tipoVisita') {
+    if (field === 'tipo' || field === 'tipoVisita' || field === 'tipoAgenda') {
       setEditingMontos(false);
       setCostoBaseEdit('');
       setCostosEstudiosEdit({});
@@ -1004,6 +1047,7 @@ function NuevaConsultaContent() {
           hora_fin: consultationData.horaFin || null,
           tipo_consulta: consultationData.tipo,
           tipo_visita: consultationData.tipoVisita,
+          especialidad_id: especialidades.find((e) => e.clave === consultationData.especialidad)?.id || null,
           aseguranza_id: consultationData.origenId || null,
           consulta_servicio_id: consultationData.consultaServicioId || null,
           diagnostico: consultationData.diagnostico,
@@ -1017,8 +1061,15 @@ function NuevaConsultaContent() {
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        const msg = err.error || 'Error al crear la consulta';
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          conflictos?: { descripcion?: string; hora_inicio?: string; hora_fin?: string }[];
+        };
+        let msg = err.error || 'Error al crear la consulta';
+        if (res.status === 409 && err.conflictos?.length) {
+          const c = err.conflictos[0];
+          msg = `${c.descripcion || 'El médico ya tiene una cita'} (${(c.hora_inicio || '').slice(0, 5)}–${(c.hora_fin || '').slice(0, 5)}). Elige otro horario.`;
+        }
         setFormError(msg);
         toast(msg, 'error');
         return;
@@ -1034,7 +1085,7 @@ function NuevaConsultaContent() {
     } finally {
       setSaving(false);
     }
-  }, [saving, pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError, invalidar]);
+  }, [saving, pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError, invalidar, especialidades]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -1230,14 +1281,43 @@ function NuevaConsultaContent() {
                   label="Asignar doctor a la consulta"
                   required
                   value={consultationData.doctorId}
-                  onChange={(v) => updateConsultation('doctorId', v)}
-                  options={['', ...doctores.map((d) => d.id)]}
-                  displayOptions={['', ...doctores.map((d) => d.nombre)]}
+                  onChange={(v) => {
+                    updateConsultation('doctorId', v);
+                    // Especialidad sugerida: la del médico (editable).
+                    const esp = buscarEspecialidad(especialidades, doctores.find((d) => d.id === v)?.especialidad);
+                    if (esp) updateConsultation('especialidad', esp.clave);
+                  }}
+                  options={['', ...(consultationData.tipoAgenda === 'ESTUDIOS' ? personalEstudios : medicos).map((d) => d.id)]}
+                  displayOptions={['', ...(consultationData.tipoAgenda === 'ESTUDIOS' ? personalEstudios : medicos).map((d) => `${d.nombre}${d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}`)]}
                 />
                 <FormInput label="Fecha de Consulta" value={consultationData.fecha} onChange={(v) => updateConsultation('fecha', v)} type="date" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormInput label="Hora Inicio" value={consultationData.horaInicio} onChange={(v) => updateConsultation('horaInicio', v)} type="time" />
+                <FormSelect
+                  label="Especialidad"
+                  value={consultationData.especialidad || ''}
+                  onChange={(v) => updateConsultation('especialidad', v)}
+                  options={['', ...especialidades.map((e) => e.clave)]}
+                  displayOptions={['Seleccionar especialidad...', ...especialidades.map((e) => e.nombre)]}
+                />
+                <FormSelect
+                  label="Tipo de consulta"
+                  required
+                  value={consultationData.tipoAgenda || 'PRIMERA'}
+                  onChange={(v) => updateConsultation('tipoAgenda', v)}
+                  options={TIPOS_CONSULTA_AGENDA.map((t) => t.value)}
+                  displayOptions={TIPOS_CONSULTA_AGENDA.map((t) => t.label)}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <SelectorHoraSlot
+                  label="Hora Inicio"
+                  required
+                  medicoId={consultationData.doctorId}
+                  fecha={consultationData.fecha}
+                  value={consultationData.horaInicio}
+                  onChange={(v) => updateConsultation('horaInicio', v)}
+                />
                 <FormInput label="Hora Fin" value={consultationData.horaFin} onChange={(v) => updateConsultation('horaFin', v)} type="time" />
               </div>
               {dateTimeError && (
@@ -1312,8 +1392,8 @@ function NuevaConsultaContent() {
                                 className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               >
                                 <option value="">Seleccionar doctor...</option>
-                                {doctores.map((d) => (
-                                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                                {personalEstudios.map((d) => (
+                                  <option key={d.id} value={d.id}>{d.nombre}{d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}</option>
                                 ))}
                               </select>
                             </div>
@@ -1423,7 +1503,7 @@ function NuevaConsultaContent() {
                                 className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
                               >
                                 <option value="">Seleccionar doctor...</option>
-                                {doctores.map((d) => (
+                                {medicos.map((d) => (
                                   <option key={d.id} value={d.id}>{d.nombre}</option>
                                 ))}
                               </select>
@@ -1890,6 +1970,8 @@ function NuevaConsultaContent() {
               <PreviewField label="Fecha" value={consultationData.fecha || '—'} />
               <PreviewField label="Hora Inicio" value={consultationData.horaInicio || '—'} />
               <PreviewField label="Hora Fin" value={consultationData.horaFin || '—'} />
+              <PreviewField label="Especialidad" value={especialidades.find((e) => e.clave === consultationData.especialidad)?.nombre || '—'} />
+              <PreviewField label="Tipo de consulta" value={opcionTipoConsulta(consultationData.tipoAgenda).label} />
               <PreviewField label="Origen" value={selectedInsurance?.nombre || '—'} />
               <PreviewField label="Consulta" value={selectedConsultaServicio?.nombre || '—'} />
             </div>

@@ -35,7 +35,8 @@ export async function doctorDelListado(userId: string, perfil: PerfilSesion | nu
 
 /** Para detalle/mutaciones: doctor_id que debe coincidir, o `undefined` si no aplica. */
 export async function doctorRequerido(userId: string, perfil: PerfilSesion | null): Promise<string | null | undefined> {
-  return perfil?.rol === 'doctor' ? resolveDoctorId(userId) : undefined;
+  // Doctor y enfermero(a) solo gestionan lo propio (su ficha en `doctores`).
+  return perfil?.rol === 'doctor' || perfil?.rol === 'enfermero' ? resolveDoctorId(userId) : undefined;
 }
 
 /** 403 si el usuario (doctor) no es el doctor de la consulta. */

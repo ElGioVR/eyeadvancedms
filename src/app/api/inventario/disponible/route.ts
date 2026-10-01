@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
+import { requireRoleInventario } from '@/lib/acceso-enfermeria';
 import { hoyTijuana } from '@/lib/rangos';
 
 // Proyecciones tolerantes a esquema: legacy (marca/modelo/lote/fecha_caducidad)
@@ -29,6 +30,9 @@ function esFechaCaducada(item: Record<string, unknown>, hoy: string): boolean {
 export async function GET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Enfermería: solo con honorarios activos (resto de roles: como antes)
+  const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
+  if (roleError) return roleError;
 
   const { searchParams } = new URL(request.url);
   const tipo = searchParams.get('tipo') || null;

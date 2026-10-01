@@ -16,8 +16,10 @@
 -- Idempotente: puede ejecutarse varias veces sin efecto secundario.
 -- Solo si Supabase devuelve error de firma ("cannot change name of input
 -- parameter"), descomenta la siguiente línea, ejecútala y vuelve a correr todo:
--- DROP FUNCTION IF EXISTS crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, UUID, JSONB, TEXT, UUID);
 -- ============================================================================
+
+-- Elimina la versión vieja (13 params, sin p_lio/p_marca_lio)
+DROP FUNCTION IF EXISTS crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, UUID, JSONB, TEXT, UUID);
 
 CREATE OR REPLACE FUNCTION crear_cirugia(
   p_paciente_id UUID,
@@ -51,6 +53,8 @@ DECLARE
   v_participante_id UUID;
   v_tiene_cirujano BOOLEAN := false;
   v_usuario_id UUID;
+  v_item JSONB;
+  v_caducidad TEXT;
 BEGIN
   v_usuario_id := COALESCE(p_created_by, auth.uid());
 
@@ -175,19 +179,28 @@ BEGIN
   END IF;
 
   IF p_inventario_item_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM inventario_items
-      WHERE id = p_inventario_item_id
-        AND (
-          tipo = 'LENTE_INTRAOCULAR'
-          OR tipo_lio IS NOT NULL
-          OR potencia_dioptrias IS NOT NULL
-        )
-        AND estado = 'DISPONIBLE'
-        AND stock >= 1
-        AND (fecha_caducidad IS NULL OR fecha_caducidad > CURRENT_DATE)
-    ) THEN
-      RAISE EXCEPTION 'El LIO seleccionado no existe, no está disponible, está caducado o no tiene stock';
+    -- Tolerante a esquema: se lee la fila como JSONB para no referenciar
+    -- columnas que pueden no existir (legacy: fecha_caducidad / nuevo:
+    -- expiration_date; tipo_lio y potencia_dioptrias pueden no existir).
+    SELECT to_jsonb(i) INTO v_item
+    FROM inventario_items i
+    WHERE i.id = p_inventario_item_id;
+
+    IF v_item IS NULL THEN
+      RAISE EXCEPTION 'El LIO seleccionado no existe';
+    END IF;
+
+    IF v_item ? 'estado' AND COALESCE(v_item->>'estado', '') <> 'DISPONIBLE' THEN
+      RAISE EXCEPTION 'El LIO seleccionado no está disponible';
+    END IF;
+
+    IF v_item ? 'stock' AND COALESCE((v_item->>'stock')::numeric, 0) < 1 THEN
+      RAISE EXCEPTION 'El LIO seleccionado no tiene stock';
+    END IF;
+
+    v_caducidad := COALESCE(v_item->>'fecha_caducidad', v_item->>'expiration_date');
+    IF v_caducidad IS NOT NULL AND left(v_caducidad, 10)::date <= CURRENT_DATE THEN
+      RAISE EXCEPTION 'El LIO seleccionado está caducado';
     END IF;
   END IF;
 
@@ -325,5 +338,8 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Permisos de ejecución (idempotente)
-GRANT EXECUTE ON FUNCTION crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, UUID, JSONB, TEXT, UUID)
+GRANT EXECUTE ON FUNCTION crear_cirugia(UUID, UUID, UUID, DATE, TIME, INTEGER, UUID, TEXT, UUID, TEXT, TEXT, UUID, JSONB, TEXT, UUID)
   TO anon, authenticated, service_role;
+
+-- Refresca el schema cache de PostgREST
+NOTIFY pgrst, 'reload schema';

@@ -22,6 +22,15 @@ const navItems: NavItem[] = [
   { icon: User, href: '/mi-perfil', label: 'Perfil' },
 ];
 
+/** Barra inferior de enfermería: inventario y honorarios solo con honorarios activos. */
+const enfermeriaItems: NavItem[] = [
+  { icon: Calendar, href: '/agenda', label: 'Agenda' },
+  { icon: Users, href: '/pacientes', label: 'Pacientes' },
+  { icon: Package, href: '/inventario', label: 'Inventario' },
+  { icon: TrendingUp, href: '/mis-honorarios', label: 'Honorarios' },
+  { icon: User, href: '/mi-perfil', label: 'Perfil' },
+];
+
 /** Barra inferior para el resto del personal; "Menú" abre el drawer lateral. */
 const staffItems: NavItem[] = [
   { icon: LayoutDashboard, href: '/dashboard', label: 'Inicio' },
@@ -58,9 +67,17 @@ export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
   if (!isMobile || !user) return null;
 
   const esDoctor = user.rol === 'doctor';
+  const esEnfermero = user.rol === 'enfermero';
   const adminEnFocus = user.rol === 'admin' && !!user.doctor_id && (focusOverride || user.modo_focus === true);
-  const modoDoctor = esDoctor || adminEnFocus;
-  const items = modoDoctor ? navItems : staffItems;
+  const modoDoctor = esDoctor || esEnfermero || adminEnFocus;
+  const base = esEnfermero ? enfermeriaItems : modoDoctor ? navItems : staffItems;
+  const items = base.filter((item) => {
+    // «Mis honorarios» solo si su ficha de personal tiene honorarios activos.
+    if (item.href === '/mis-honorarios') return user.cobra_honorarios;
+    // Enfermería: el inventario también depende de los honorarios activos.
+    if (esEnfermero && item.href === '/inventario') return user.cobra_honorarios === true;
+    return true;
+  });
 
   const isActive = (href: string) =>
     pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
