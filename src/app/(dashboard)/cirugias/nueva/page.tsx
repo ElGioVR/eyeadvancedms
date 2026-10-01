@@ -35,12 +35,14 @@ import SearchInput from '@/components/ui/SearchInput';
 import LIOSelector from '@/components/cirugia/LIOSelector';
 import { URL_LIOS_DISPONIBLES, obtenerLIOs, type LIODisponible } from '@/components/cirugia/LIOSelector';
 import { useToast } from '@/components/ui/Toast';
+import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
 
 // Custom Skeleton for Cirugía Form - matches actual form layout
 function CirugiaFormSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
       {/* PageHeader skeleton */}
+      <div className="h-5 w-20 bg-surface-2 rounded" />
       <div className="flex items-center justify-between">
         <div className="h-6 w-48 bg-surface-2 rounded" />
         <div className="h-4 w-32 bg-surface-2 rounded" />
@@ -921,7 +923,22 @@ useEffect(() => {
 
   return (
     <div className="w-full bg-transparent pb-20">
-      <PageHeader title="Nueva cirugía" subtitle="Cree una cirugía homologada en 5 pasos" />
+      <PageHeader
+        title="Nueva cirugía"
+        subtitle="Cree una cirugía homologada en 5 pasos"
+        backLink={{
+          // Si viene de una consulta regresa a ella; si no, a la Agenda (igual que Nueva consulta).
+          href: consultaPrecargaId ? `/consultas/${consultaPrecargaId}` : '/agenda',
+          label: consultaPrecargaId ? 'Consulta' : 'Agenda',
+          onClick: (event) => {
+            // Con historial, regresar a la pantalla exacta de origen (paciente, agenda, consulta…).
+            if (window.history.length > 1) {
+              event.preventDefault();
+              router.back();
+            }
+          },
+        }}
+      />
 
       <div className="mx-auto w-full max-w-6xl px-0 py-6 space-y-6">
         {error && (
@@ -1380,14 +1397,12 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Diagnóstico</label>
-                  <textarea
+                  <label htmlFor="cirugia-diagnostico" className={labelCls}>Diagnóstico</label>
+                  <BuscadorDiagnosticoCIE10
+                    id="cirugia-diagnostico"
                     value={diagnostico}
-                    onChange={(e) => { setDiagnostico(e.target.value); setDiagnosticoEditado(true); }}
-                    rows={2}
-                    maxLength={500}
-                    placeholder="Diagnóstico que motiva la cirugía"
-                    className={cn(inputCls, 'resize-none')}
+                    onChange={(v) => { setDiagnostico(v); setDiagnosticoEditado(true); }}
+                    placeholder="Diagnóstico que motiva la cirugía: código (H25.1) o término (catarata)…"
                   />
                   {resumenPaciente?.ultima_consulta?.diagnostico && !diagnostico && (
                     <button

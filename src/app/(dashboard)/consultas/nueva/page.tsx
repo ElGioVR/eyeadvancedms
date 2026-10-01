@@ -26,6 +26,7 @@ import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import PageHeader from '@/components/ui/PageHeader';
 import { FormInput, FormSelect } from '@/components/ui/FormField';
+import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
 import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
 import { DURACION_CITA_MIN, deMinutos } from '@/lib/agenda-slots';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
@@ -1375,7 +1376,14 @@ function NuevaConsultaContent() {
                   displayOptions={TIPOS_CONSULTA_AGENDA.map((t) => t.label)}
                 />
               </div>
-              <FormInput label="Diagnóstico" value={consultationData.diagnostico} onChange={(v) => updateConsultation('diagnostico', v)} placeholder="Escriba el diagnóstico del paciente..." />
+              <div>
+                <label htmlFor="consulta-diagnostico" className="mb-1.5 block text-[13px] font-medium text-fg-2">Diagnóstico</label>
+                <BuscadorDiagnosticoCIE10
+                  id="consulta-diagnostico"
+                  value={consultationData.diagnostico}
+                  onChange={(v) => updateConsultation('diagnostico', v)}
+                />
+              </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-muted">Estudios <span className="normal-case">(Opcional)</span></label>
                 <div className="space-y-3">
