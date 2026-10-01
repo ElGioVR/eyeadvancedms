@@ -76,13 +76,20 @@ function toDateStr(d: Date) { return dateStr(d.getFullYear(), d.getMonth(), d.ge
 
 type VistaCalendario = 'month' | 'week' | 'day';
 
-/** Rango de fechas que pide cada vista (mes completo, semana lun–dom o un día). */
+/**
+ * Rango de fechas que pide cada vista. Mes: la cuadrícula visible completa
+ * (lunes de la primera semana → domingo de la última), para que los días del
+ * mes anterior/siguiente que se ven en el calendario también muestren sus
+ * eventos. Semana: lun–dom. Día: ese día.
+ */
 function rangoVista(vista: VistaCalendario, d: Date): { fechaDesde: string; fechaHasta: string } {
   if (vista === 'month') {
-    return {
-      fechaDesde: dateStr(d.getFullYear(), d.getMonth(), 1),
-      fechaHasta: dateStr(d.getFullYear(), d.getMonth(), daysInMonth(d.getFullYear(), d.getMonth())),
-    };
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const fd = firstDayOfMonth(y, m);
+    const celdas = Math.ceil((fd + daysInMonth(y, m)) / 7) * 7;
+    const inicio = new Date(y, m, 1 - fd, 12);
+    return { fechaDesde: toDateStr(inicio), fechaHasta: toDateStr(addDays(inicio, celdas - 1)) };
   }
   if (vista === 'week') {
     const mon = getMonday(d);
@@ -502,12 +509,19 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     });
   }, [currentDate, todayStr]);
 
+  // Totales del periodo: en vista mes solo cuentan los días del mes (la
+  // cuadrícula también trae los días visibles del mes anterior/siguiente).
+  const prefijoMes = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-`;
+  const eventosPeriodo = useMemo(
+    () => (calendarView === 'month' ? cirugias.filter(c => (c.fecha || '').startsWith(prefijoMes)) : cirugias),
+    [cirugias, calendarView, prefijoMes]
+  );
   const stats = useMemo(() => {
-    const cirugiasItems = cirugias.filter(c => c.tipo === 'cirugia');
-    const consultasItems = cirugias.filter(c => c.tipo === 'consulta');
-    const estudiosItems = cirugias.filter(c => c.tipo === 'estudio');
+    const cirugiasItems = eventosPeriodo.filter(c => c.tipo === 'cirugia');
+    const consultasItems = eventosPeriodo.filter(c => c.tipo === 'consulta');
+    const estudiosItems = eventosPeriodo.filter(c => c.tipo === 'estudio');
     return {
-      total: cirugias.length,
+      total: eventosPeriodo.length,
       cirugias: cirugiasItems.length,
       consultas: consultasItems.length,
       estudios: estudiosItems.length,
@@ -533,7 +547,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         cancelada: estudiosItems.filter(c => c.estado === 'cancelada').length,
       },
     };
-  }, [cirugias]);
+  }, [eventosPeriodo]);
 
   const navigate = useCallback((dir: number) => {
     setTransitionDir(dir);
