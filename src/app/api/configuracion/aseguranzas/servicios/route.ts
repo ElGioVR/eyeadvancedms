@@ -29,6 +29,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   id: z.string().uuid(),
   nombre: z.string().trim().min(1).max(500).optional(),
+  tipo: z.enum(TIPOS).optional(),
   costo: monto.optional(),
   porcentaje_cobertura: z.number().finite().min(0).max(100).optional(),
   activo: z.boolean().optional(),
@@ -105,6 +106,7 @@ export async function PATCH(request: Request) {
 
   const updateData: Record<string, unknown> = {};
   if (updates.nombre !== undefined) { updateData.nombre = updates.nombre.trim(); updateData.nombre_norm = normalize(updates.nombre); }
+  if (updates.tipo !== undefined) updateData.tipo = updates.tipo;
   if (updates.costo !== undefined) updateData.costo = updates.costo;
   if (updates.porcentaje_cobertura !== undefined) updateData.porcentaje_cobertura = updates.porcentaje_cobertura;
   if (updates.activo !== undefined) updateData.activo = updates.activo;

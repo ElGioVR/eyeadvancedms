@@ -67,6 +67,8 @@ export default function ServiciosPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCosto, setEditCosto] = useState('');
   const [editCobertura, setEditCobertura] = useState('');
+  const [editNombre, setEditNombre] = useState('');
+  const [editTipo, setEditTipo] = useState<ServicioAPI['tipo']>('ESTUDIO');
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,12 +122,15 @@ export default function ServiciosPage() {
 
   const startEdit = useCallback((s: ServicioAPI) => {
     setEditingId(s.id);
+    setEditNombre(s.nombre);
+    setEditTipo(s.tipo);
     setEditCosto(s.costo.toString());
     setEditCobertura(s.porcentaje_cobertura.toString());
   }, []);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
+    setEditNombre('');
     setEditCosto('');
     setEditCobertura('');
   }, []);
@@ -134,17 +139,19 @@ export default function ServiciosPage() {
     if (savingId) return;
     const costo = editCosto.trim() === '' ? 0 : Number(editCosto);
     const cobertura = editCobertura.trim() === '' ? 0 : Number(editCobertura);
+    const nombre = editNombre.trim().replace(/\s+/g, ' ');
+    if (!nombre) { toast('El nombre no puede quedar vacío', 'error'); return; }
     if (!Number.isFinite(costo) || costo < 0) { toast('El costo debe ser un número mayor o igual a 0', 'error'); return; }
     if (!Number.isFinite(cobertura) || cobertura < 0 || cobertura > 100) { toast('La cobertura debe estar entre 0 y 100', 'error'); return; }
     const aplicar = (actual: ServiciosResp | undefined): ServiciosResp => ({
       ...(actual ?? {}),
-      data: (actual?.data ?? []).map((s) => (s.id === servId ? { ...s, costo, porcentaje_cobertura: cobertura } : s)),
+      data: (actual?.data ?? []).map((s) => (s.id === servId ? { ...s, nombre, tipo: editTipo, costo, porcentaje_cobertura: cobertura } : s)),
     });
     setSavingId(servId);
     try {
       await mutateServicios(
         async (actual) => {
-          await enviarJSON('/api/configuracion/aseguranzas/servicios', 'PATCH', { id: servId, costo, porcentaje_cobertura: cobertura });
+          await enviarJSON('/api/configuracion/aseguranzas/servicios', 'PATCH', { id: servId, nombre, tipo: editTipo, costo, porcentaje_cobertura: cobertura });
           return aplicar(actual);
         },
         { optimisticData: aplicar, rollbackOnError: true, populateCache: true, revalidate: false }
@@ -156,7 +163,7 @@ export default function ServiciosPage() {
     } finally {
       setSavingId(null);
     }
-  }, [savingId, editCosto, editCobertura, toast, cancelEdit, mutateServicios]);
+  }, [savingId, editNombre, editTipo, editCosto, editCobertura, toast, cancelEdit, mutateServicios]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent, servId: string) => {
     if (e.key === 'Enter') saveEdit(servId);
@@ -348,11 +355,38 @@ export default function ServiciosPage() {
               <tbody className="anim-lista">
                 {filtered.map((s) => (
                   <tr key={s.id} className="border-b border-gray-50 dark:border-line last:border-0 hover:bg-surface-2 transition-colors">
-                    <td className="px-5 py-3 font-medium text-fg">{s.nombre}</td>
+                    <td className="px-5 py-3 font-medium text-fg">
+                      {editingId === s.id ? (
+                        <input
+                          type="text"
+                          value={editNombre}
+                          onChange={(e) => setEditNombre(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, s.id)}
+                          autoFocus
+                          maxLength={500}
+                          aria-label="Nombre del servicio"
+                          className="w-full rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                        />
+                      ) : s.nombre}
+                    </td>
                     <td className="px-5 py-3">
-                      <span className={cn('inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold uppercase', tipoBadge[s.tipo])}>
-                        {s.tipo}
-                      </span>
+                      {editingId === s.id ? (
+                        <select
+                          value={editTipo}
+                          onChange={(e) => setEditTipo(e.target.value as ServicioAPI['tipo'])}
+                          onKeyDown={(e) => handleKeyDown(e, s.id)}
+                          aria-label="Tipo de servicio"
+                          className="rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                        >
+                          {TIPOS.filter((t) => t !== 'Todos').map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={cn('inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold uppercase', tipoBadge[s.tipo])}>
+                          {s.tipo}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {editingId === s.id ? (
@@ -361,7 +395,6 @@ export default function ServiciosPage() {
                           value={editCosto}
                           onChange={(e) => setEditCosto(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, s.id)}
-                          autoFocus
                           className="w-24 text-right rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                         />
                       ) : (
@@ -429,6 +462,30 @@ export default function ServiciosPage() {
                 </div>
                 {editingId === s.id ? (
                   <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-muted w-20">Nombre</label>
+                      <input
+                        type="text"
+                        value={editNombre}
+                        onChange={(e) => setEditNombre(e.target.value)}
+                        maxLength={500}
+                        className="flex-1 min-w-0 rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-muted w-20">Tipo</label>
+                      <select
+                          value={editTipo}
+                          onChange={(e) => setEditTipo(e.target.value as ServicioAPI['tipo'])}
+                          onKeyDown={(e) => handleKeyDown(e, s.id)}
+                          aria-label="Tipo de servicio"
+                          className="flex-1 rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                        >
+                          {TIPOS.filter((t) => t !== 'Todos').map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                    </div>
                     <div className="flex items-center gap-2">
                       <label className="text-xs font-bold text-muted w-20">Costo ($)</label>
                       <input

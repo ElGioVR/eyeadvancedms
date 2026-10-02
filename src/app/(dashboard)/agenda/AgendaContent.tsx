@@ -14,6 +14,7 @@ import useSWR, { preload, useSWRConfig } from 'swr';
 import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar, construirUrl } from '@/hooks/useFetch';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
+import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
 import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
 import { useAutosave } from '@/hooks/useAutosave';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -714,6 +715,17 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 
   const dayViewDate = toDateStr(currentDate);
+
+  // Reportes CSV (solo admin): rango propuesto = mes visible; doctor = filtro actual.
+  const reportesRango = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    return { desde: dateStr(y, m, 1), hasta: dateStr(y, m, daysInMonth(y, m)) };
+  }, [currentDate]);
+  const reportesDoctores = useMemo(() => doctores.map((d) => ({ id: d.id, nombre: d.alias })), [doctores]);
+  const reportes = userRol === 'admin' ? (
+    <ReportesAgendaCsv desde={reportesRango.desde} hasta={reportesRango.hasta} doctores={reportesDoctores} doctorId={filterDoctor} />
+  ) : null;
   const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
 
   return (
@@ -726,6 +738,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
           action={
             <div className="flex gap-2">
+              {reportes}
               {!agendaSoloPropia(userRol) && (
                 <>
                   <div className="relative">
@@ -795,6 +808,15 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
           <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
+          {userRol === 'admin' && (
+            <ReportesAgendaCsv
+              desde={reportesRango.desde}
+              hasta={reportesRango.hasta}
+              doctores={reportesDoctores}
+              doctorId={filterDoctor}
+              botonClassName="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors"
+            />
+          )}
           {!agendaSoloPropia(userRol) && (
             <>
               <div className="relative">
