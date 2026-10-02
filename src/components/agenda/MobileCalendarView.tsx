@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { ETIQUETA_ACCION, type AccionRapida } from '@/lib/agenda-acciones';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 
 const DIAS_LARGOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -384,6 +385,14 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                     <span className={cn('w-1 shrink-0 rounded-full', tipoBar[tipo] || 'bg-gray-400')} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-fg">{c.nombre_paciente}</p>
+                      <FichaPaciente
+                        variante="compacta"
+                        className="block truncate"
+                        expediente={c.paciente_expediente ?? c.expediente}
+                        sexo={c.paciente_sexo}
+                        fechaNacimiento={c.paciente_fecha_nacimiento}
+                        edad={c.paciente_edad}
+                      />
                       {c.procedimiento && <p className="mt-0.5 truncate text-xs text-muted">{c.procedimiento}</p>}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', estadoChipBg[c.estado] || 'bg-surface-2', 'text-fg-2')}>
@@ -438,6 +447,14 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base font-extrabold text-fg truncate">{selectedCirugia.nombre_paciente}</h3>
+                    <FichaPaciente
+                      variante="linea"
+                      className="mb-1 text-xs"
+                      expediente={selectedCirugia.paciente_expediente ?? selectedCirugia.expediente}
+                      sexo={selectedCirugia.paciente_sexo}
+                      fechaNacimiento={selectedCirugia.paciente_fecha_nacimiento}
+                      edad={selectedCirugia.paciente_edad}
+                    />
                     <span className={cn(
                       'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
                       estadoChipBg[selectedCirugia.estado] || 'bg-gray-500/10',

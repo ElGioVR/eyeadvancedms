@@ -86,6 +86,19 @@ function diasEntre(desde: string, hasta: string): number {
   return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
 }
 
+/** Datos de la ficha del paciente para la vista rápida de la agenda. */
+function fichaPaciente(
+  p: { sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null } | null | undefined,
+  expedienteEvento?: string | null,
+) {
+  return {
+    paciente_expediente: expedienteEvento || p?.numero_expediente || null,
+    paciente_sexo: p?.sexo ?? null,
+    paciente_fecha_nacimiento: p?.fecha_nacimiento ?? null,
+    paciente_edad: p?.edad ?? null,
+  };
+}
+
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
@@ -150,9 +163,10 @@ export async function GET(request: Request) {
   let queryCirugias = supabase
     .from('agenda_cirugias')
     .select(`
-      id, paciente_id, nombre_paciente, fecha, hora, doctor_id, estado,
+      id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
       procedimiento, procedencia, tiempo_estimado,
       doctores:doctor_id (alias),
+      paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
       origen:origen_id (nombre),
       servicio:servicio_id (nombre)
     `);
@@ -192,7 +206,7 @@ export async function GET(request: Request) {
       estatus,
       doctores:doctor_id (alias),
       especialidad:especialidad_id (nombre),
-      pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo)
+      pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente)
     `);
 
   if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
@@ -238,6 +252,7 @@ export async function GET(request: Request) {
     procedencia: c.procedencia || (c as any).origen?.nombre || null,
     tiempo_estimado: c.tiempo_estimado || null,
     tipo: 'cirugia' as const,
+    ...fichaPaciente((c as any).paciente, (c as any).expediente),
   }));
 
   const eventosConsultas = (consultas || [])
@@ -260,6 +275,7 @@ export async function GET(request: Request) {
     doctor_nombre: (c as any).doctores?.alias || null,
     estado: (ESTADO_CONSULTA_A_AGENDA[c.estatus || ''] || 'agendada') as any,
     tipo: (c.tipo_consulta?.toUpperCase().includes('ESTUDIO') ? 'estudio' : 'consulta') as 'consulta' | 'estudio',
+    ...fichaPaciente((c as any).pacientes),
   }));
 
   const todos = [...eventosCirugias, ...eventosConsultas].sort((a, b) => {

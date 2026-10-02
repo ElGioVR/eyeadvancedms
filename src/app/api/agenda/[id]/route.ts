@@ -62,7 +62,8 @@ export async function GET(
       .from('agenda_cirugias')
       .select(`
         *,
-        doctores:doctor_id (alias)
+        doctores:doctor_id (alias),
+        paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente)
       `)
       .eq('id', id)
       .maybeSingle()
@@ -78,6 +79,12 @@ export async function GET(
     ...data,
     doctor_nombre: (data as any).doctores?.alias || null,
     doctores: undefined,
+    // Ficha del paciente (si la cirugía está vinculada a uno).
+    paciente_sexo: (data as any).paciente?.sexo ?? null,
+    paciente_fecha_nacimiento: (data as any).paciente?.fecha_nacimiento ?? null,
+    paciente_edad: (data as any).paciente?.edad ?? null,
+    expediente: (data as any).expediente || (data as any).paciente?.numero_expediente || null,
+    paciente: undefined,
   });
 }
 

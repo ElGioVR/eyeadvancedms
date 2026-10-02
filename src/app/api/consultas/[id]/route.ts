@@ -57,7 +57,7 @@ export async function GET(
       .from('consultas')
       .select(`
         id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita, diagnostico, estudio_1, estudio_2, estudio_3, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento, procedimiento_doctor_id, notas, estatus, estatus_pago, costo_total, monto_pagado, fecha_pago, metodo_pago, moneda, aseguranza_id, created_at, updated_at,
-        pacientes:paciente_id (nombre_completo, fecha_nacimiento, telefono, sexo, email, numero_poliza, numero_afiliacion),
+        pacientes:paciente_id (nombre_completo, fecha_nacimiento, edad, telefono, sexo, email, numero_poliza, numero_afiliacion, numero_expediente),
         doctores:doctor_id (alias),
         est1_doc:estudio_1_doctor_id (alias),
         est2_doc:estudio_2_doctor_id (alias),
@@ -126,7 +126,7 @@ export async function GET(
     }));
   }
 
-  interface PacienteJoin { nombre_completo: string; fecha_nacimiento: string | null; telefono: string | null; sexo: string | null; email: string | null; numero_poliza: string | null; numero_afiliacion: string | null }
+  interface PacienteJoin { nombre_completo: string; fecha_nacimiento: string | null; edad?: number | null; telefono: string | null; sexo: string | null; email: string | null; numero_poliza: string | null; numero_afiliacion: string | null; numero_expediente?: string | null }
   interface DoctorJoin { alias: string }
 
   const pacienteData = (consulta as Record<string, unknown>).pacientes as PacienteJoin | undefined;
@@ -183,6 +183,8 @@ export async function GET(
       paciente_email: pacienteData?.email || null,
       paciente_poliza: pacienteData?.numero_poliza || null,
       paciente_afiliacion: pacienteData?.numero_afiliacion || null,
+      paciente_expediente: pacienteData?.numero_expediente || null,
+      paciente_edad: pacienteData?.edad ?? null,
     },
     historial,
     conceptos: conceptosResult.data ?? [],

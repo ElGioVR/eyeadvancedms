@@ -214,6 +214,11 @@ export interface AgendaCirugia {
   paciente_id: string | null;
   nombre_paciente: string;
   expediente: string | null;
+  /** Ficha del paciente (GET /api/agenda): expediente, sexo, nacimiento y edad. */
+  paciente_expediente?: string | null;
+  paciente_sexo?: string | null;
+  paciente_fecha_nacimiento?: string | null;
+  paciente_edad?: number | null;
   fecha: string | null;
   hora: string | null;
   jornada: string | null;

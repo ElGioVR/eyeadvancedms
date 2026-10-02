@@ -19,8 +19,9 @@ import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 
-interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; }
+interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null; }
 interface Origen { nombre?: string; }
 interface Servicio { nombre?: string; }
 interface Recurso { nombre?: string; ubicacion?: string; }
@@ -469,6 +470,15 @@ export default function CirugiaDetailPage() {
         <Avatar initials={nombrePaciente.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-extrabold text-fg truncate">{nombrePaciente}</h2>
+          {cirugia.pacientes && (
+            <FichaPaciente
+              variante="linea"
+              expediente={cirugia.pacientes.numero_expediente}
+              sexo={cirugia.pacientes.sexo}
+              fechaNacimiento={cirugia.pacientes.fecha_nacimiento}
+              edad={cirugia.pacientes.edad}
+            />
+          )}
           <p className="text-sm text-muted">
             {procedimientoOjo} — {cirugia.origen?.nombre || 'Sin origen'} — {cirugia.fecha || 'Sin fecha'} {cirugia.hora || ''}
           </p>

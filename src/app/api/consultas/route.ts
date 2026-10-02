@@ -153,7 +153,7 @@ export async function GET(request: Request) {
       id, folio, paciente_id, doctor_id, fecha, hora_inicio, hora_fin, tipo_consulta, tipo_visita,
       diagnostico, estudio_1, estudio_2, estudio_3, procedimiento, notas, estatus, estatus_pago,
       costo_total, monto_pagado, aseguranza_id, created_at,
-      pacientes:paciente_id (nombre_completo),
+      pacientes:paciente_id (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente),
       doctores:doctor_id (alias),
       est1_doc:estudio_1_doctor_id (alias),
       est2_doc:estudio_2_doctor_id (alias),
@@ -181,7 +181,7 @@ export async function GET(request: Request) {
   type AliasJoin = { alias?: string | null } | null;
   const result = (data || []).map((fila) => {
     const c = fila as typeof fila & {
-      pacientes: { nombre_completo?: string | null } | null;
+      pacientes: { nombre_completo?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null } | null;
       doctores: AliasJoin;
       est1_doc: AliasJoin;
       est2_doc: AliasJoin;
@@ -203,6 +203,10 @@ export async function GET(request: Request) {
       paciente_id: c.paciente_id,
       paciente: nombrePaciente,
       iniciales: inicialesDe(nombrePaciente),
+      paciente_expediente: c.pacientes?.numero_expediente || null,
+      paciente_sexo: c.pacientes?.sexo || null,
+      paciente_fecha_nacimiento: c.pacientes?.fecha_nacimiento || null,
+      paciente_edad: c.pacientes?.edad ?? null,
       doctor_id: c.doctor_id,
       doctor: nombreDoctor,
       fecha: c.fecha,

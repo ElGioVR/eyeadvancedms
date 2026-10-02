@@ -28,6 +28,7 @@ import Modal from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { enviarJSON } from '@/lib/fetcher';
 import { validarNombrePaciente } from '@/lib/import-agenda';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
@@ -44,6 +45,7 @@ interface PacienteData {
   sexo: string;
   fecha_nacimiento: string;
   edad: number;
+  numero_expediente?: string | null;
   telefono: string;
   email: string;
   direccion: string;
@@ -308,11 +310,14 @@ export default function HistorialMedicoPage() {
                 </button>
               )}
             </div>
-            <p className="text-sm text-muted mt-0.5">
-              {paciente.sexo === 'FEMENINO' ? 'Femenino' : paciente.sexo === 'MASCULINO' ? 'Masculino' : paciente.sexo || '—'}
-              {paciente.edad ? ` · ${paciente.edad} años` : ''}
-              {` · ID: #${paciente.id.slice(0, 8).toUpperCase()}`}
-            </p>
+            <FichaPaciente
+              variante="linea"
+              className="mt-0.5"
+              expediente={paciente.numero_expediente}
+              sexo={paciente.sexo}
+              fechaNacimiento={paciente.fecha_nacimiento}
+              edad={paciente.edad}
+            />
           </div>
           <div className="hidden md:flex items-center gap-8">
             <div className="text-right">

@@ -8,11 +8,15 @@ import { ArrowLeft, Calendar, Clock, User, Stethoscope, Eye, FileText, AlertTria
 import PageHeader from '@/components/ui/PageHeader';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 
 interface CirugiaDetalle {
   id: string;
   nombre_paciente: string;
   expediente: string | null;
+  paciente_sexo?: string | null;
+  paciente_fecha_nacimiento?: string | null;
+  paciente_edad?: number | null;
   fecha: string | null;
   hora: string | null;
   jornada: string | null;
@@ -92,6 +96,13 @@ export default function CirugiaDetailPage() {
         <Avatar initials={cirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h2>
+          <FichaPaciente
+            variante="linea"
+            expediente={cirugia.expediente}
+            sexo={cirugia.paciente_sexo}
+            fechaNacimiento={cirugia.paciente_fecha_nacimiento}
+            edad={cirugia.paciente_edad}
+          />
           <p className="text-sm text-muted">
             {cirugia.doctor_nombre || 'Sin doctor'} {cirugia.fecha ? `— ${cirugia.fecha} ${cirugia.hora || ''}` : ''}
           </p>

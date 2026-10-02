@@ -28,6 +28,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
 import Pagination from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
+import FichaPaciente from "@/components/ui/FichaPaciente";
 
 interface EstudioDetalle {
   nombre: string;
@@ -38,6 +39,10 @@ interface ConsultaAPI {
   id: string;
   folio: string | null;
   paciente: string;
+  paciente_expediente?: string | null;
+  paciente_sexo?: string | null;
+  paciente_fecha_nacimiento?: string | null;
+  paciente_edad?: number | null;
   iniciales: string;
   doctor: string;
   doctor_id: string;
@@ -330,9 +335,17 @@ export default function ConsultasPage() {
                           className="bg-primary-500"
                           size="sm"
                         />
-                        <span className="text-sm font-bold text-fg truncate">
-                          {c.paciente}
-                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-fg truncate">{c.paciente}</p>
+                          <FichaPaciente
+                            variante="compacta"
+                            className="block truncate"
+                            expediente={c.paciente_expediente}
+                            sexo={c.paciente_sexo}
+                            fechaNacimiento={c.paciente_fecha_nacimiento}
+                            edad={c.paciente_edad}
+                          />
+                        </div>
                       </div>
                     </td>
                     <td className="hidden md:table-cell px-5 py-4 text-sm text-fg-2">

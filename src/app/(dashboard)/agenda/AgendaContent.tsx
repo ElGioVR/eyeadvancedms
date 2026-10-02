@@ -15,6 +15,7 @@ import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar, construirUrl } from '@/
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
 import { useAutosave } from '@/hooks/useAutosave';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -1684,6 +1685,14 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
+          <FichaPaciente
+            variante="linea"
+            className="mt-0.5 text-xs"
+            expediente={cirugia.paciente_expediente ?? cirugia.expediente}
+            sexo={cirugia.paciente_sexo}
+            fechaNacimiento={cirugia.paciente_fecha_nacimiento}
+            edad={cirugia.paciente_edad}
+          />
           <div className="flex items-center gap-2 mt-1">
             <span className={cn('inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
               <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
@@ -1785,9 +1794,19 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
       style={{ left: adjustedPos.x, top: adjustedPos.y }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
-          <h3 className="text-base font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
+            <h3 className="text-base font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
+          </div>
+          <FichaPaciente
+            variante="linea"
+            className="mt-0.5 pl-6 text-xs"
+            expediente={cirugia.paciente_expediente ?? cirugia.expediente}
+            sexo={cirugia.paciente_sexo}
+            fechaNacimiento={cirugia.paciente_fecha_nacimiento}
+            edad={cirugia.paciente_edad}
+          />
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {acciones.includes('cancelar') && (

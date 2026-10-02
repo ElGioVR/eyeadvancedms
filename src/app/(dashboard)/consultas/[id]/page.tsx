@@ -17,6 +17,7 @@ import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
@@ -74,6 +75,8 @@ interface ConsultaDetalle {
   paciente_sexo: string | null;
   paciente_telefono: string | null;
   paciente_fecha_nacimiento: string | null;
+  paciente_expediente?: string | null;
+  paciente_edad?: number | null;
   paciente_email: string | null;
   paciente_poliza: string | null;
   paciente_afiliacion: string | null;
@@ -498,6 +501,13 @@ export default function ConsultaDetailPage() {
         <Avatar initials={consulta.iniciales} className="bg-primary-500" size="lg" />
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-extrabold text-fg truncate">{consulta.paciente}</h2>
+          <FichaPaciente
+            variante="linea"
+            expediente={consulta.paciente_expediente}
+            sexo={consulta.paciente_sexo}
+            fechaNacimiento={consulta.paciente_fecha_nacimiento}
+            edad={consulta.paciente_edad}
+          />
           <p className="text-sm text-muted">Dr. {consulta.doctor} — {consulta.fecha} {consulta.hora_inicio}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -512,10 +522,14 @@ export default function ConsultaDetailPage() {
           <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
             <User className="h-4 w-4 text-primary-600" /> Resumen del Paciente
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nombre</span>
               <p className="mt-0.5 font-medium text-fg">{consulta.paciente || '—'}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Expediente</span>
+              <p className="mt-0.5 font-medium text-fg">{consulta.paciente_expediente || '—'}</p>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Edad</span>

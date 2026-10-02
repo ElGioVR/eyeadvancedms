@@ -19,6 +19,7 @@ import Pagination from '@/components/ui/Pagination';
 import SidebarPanel from '@/components/ui/SidebarPanel';
 import ClientDate from '@/components/ui/ClientDate';
 import BadgeCompletar from '@/components/ui/BadgeCompletar';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 
 interface PacienteAPI {
   id: string;
@@ -26,6 +27,8 @@ interface PacienteAPI {
   iniciales: string;
   sexo: string;
   edad: number;
+  fecha_nacimiento?: string | null;
+  numero_expediente?: string | null;
   telefono: string;
   email: string;
   aseguradora: string;
@@ -222,7 +225,13 @@ export default function PacientesPage() {
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                       <span>{paciente.telefono || '—'}</span>
                       <span className="hidden sm:inline text-gray-300 dark:text-muted">|</span>
-                      <span>{paciente.sexo === 'H' ? 'M' : 'F'} · {paciente.edad != null ? `${paciente.edad} años` : 'Edad —'}</span>
+                      <FichaPaciente
+                        variante="compacta"
+                        expediente={paciente.numero_expediente}
+                        sexo={paciente.sexo}
+                        fechaNacimiento={paciente.fecha_nacimiento}
+                        edad={paciente.edad}
+                      />
                     </div>
                   </div>
 
