@@ -37,13 +37,15 @@ interface Props {
   doctorId?: string;
   /** Clases del botón (la agenda usa estilos distintos en pantalla completa). */
   botonClassName?: string;
+  /** Móvil: botón solo con ícono y menú alineado a la derecha. */
+  soloIcono?: boolean;
 }
 
 /**
  * Botón «Reportes» de la agenda: descarga en CSV los reportes de cirugías y de
  * entradas y salidas (los mismos endpoints que Productividad, solo admin).
  */
-export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '', botonClassName }: Props) {
+export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '', botonClassName, soloIcono = false }: Props) {
   const { toast } = useToast();
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [modal, setModal] = useState<ReporteAgenda | null>(null);
@@ -120,12 +122,14 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
           type="button"
           onClick={() => setMenuAbierto((p) => !p)}
           aria-expanded={menuAbierto}
+          aria-label="Reportes"
+          title="Reportes CSV"
           className={botonClassName || 'btn-secondary'}
         >
-          <FileDown className="h-4 w-4" /> Reportes
+          {soloIcono ? <FileDown className="h-[18px] w-[18px]" /> : <><FileDown className="h-4 w-4" /> Reportes</>}
         </button>
         {menuAbierto && (
-          <div className="absolute left-0 top-full mt-2 z-50 w-60">
+          <div className={cn('absolute top-full mt-2 z-50 w-60', soloIcono ? 'right-0' : 'left-0')}>
             <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Descargar CSV</p>
               {REPORTES.map((r) => (

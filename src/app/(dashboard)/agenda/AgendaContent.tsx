@@ -887,6 +887,16 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
             )}
           </button>
+          {userRol === 'admin' && (
+            <ReportesAgendaCsv
+              desde={reportesRango.desde}
+              hasta={reportesRango.hasta}
+              doctores={reportesDoctores}
+              doctorId={filterDoctor}
+              soloIcono
+              botonClassName="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors active:scale-95 dark:shadow-none"
+            />
+          )}
           {!agendaSoloPropia(userRol) && (
             <div className="relative">
               <button
