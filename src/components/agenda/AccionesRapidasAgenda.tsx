@@ -195,8 +195,10 @@ interface DoctorOpcion { id: string; alias: string; tipo_personal?: string | nul
 interface ResultadoBusqueda { tipo: string; id: string; titulo: string; subtitulo: string }
 
 
-/** La alta rápida de la agenda solo agenda consultas (Primera consulta / Subsecuente). */
-const TIPOS_ALTA_RAPIDA = TIPOS_CONSULTA_AGENDA.filter((t) => t.value === 'PRIMERA' || t.value === 'SUBSECUENTE');
+/** La alta rápida de la agenda agenda consultas (Primera consulta / Subsecuente) y estudios. */
+const TIPOS_ALTA_RAPIDA = TIPOS_CONSULTA_AGENDA.filter((t) => t.value === 'PRIMERA' || t.value === 'SUBSECUENTE' || t.value === 'ESTUDIOS');
+
+interface ServicioCatalogo { id: string; tipo: string; nombre: string }
 
 export function AgendarRapidoModal({
   fecha: fechaInicial,
@@ -226,7 +228,25 @@ export function AgendarRapidoModal({
     TIPOS_ALTA_RAPIDA.some((t) => t.value === tipoInicial) ? tipoInicial : 'PRIMERA'
   );
   const [especialidad, setEspecialidad] = useState('');
+  const [estudioId, setEstudioId] = useState('');
   const { especialidades } = useEspecialidades();
+  const esEstudio = tipo === 'ESTUDIOS';
+
+  // Estudios del catálogo de la aseguranza del paciente (más los generales).
+  const urlEstudios = esEstudio && paciente
+    ? `/api/catalogo-servicios?paciente_id=${encodeURIComponent(paciente.id)}&tipo=ESTUDIO`
+    : null;
+  const { data: catalogo, isLoading: cargandoEstudios } = useSWR<{ servicios?: ServicioCatalogo[] }>(urlEstudios, { revalidateOnFocus: false });
+  const estudios = (catalogo?.servicios || []).filter((s) => s.tipo === 'ESTUDIO');
+
+  const cambiarTipo = (nuevo: TipoConsultaAgenda) => {
+    setTipo(nuevo);
+    if (nuevo !== 'ESTUDIOS') {
+      setEstudioId('');
+      // Enfermería solo puede ser responsable de un estudio.
+      if (doctores.find((d) => d.id === doctorId)?.tipo_personal === 'ENFERMERO') { setDoctorId(''); setHora(''); }
+    }
+  };
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -237,7 +257,7 @@ export function AgendarRapidoModal({
   const { data, isLoading } = useSWR<{ results?: ResultadoBusqueda[] }>(url, { keepPreviousData: true, revalidateOnFocus: false });
   const resultados = (data?.results || []).filter((r) => r.tipo === 'paciente');
 
-  const valido = !!paciente && !!doctorId && !!fecha && !!hora;
+  const valido = !!paciente && !!doctorId && !!fecha && !!hora && (!esEstudio || !!estudioId);
 
   const guardar = async () => {
     if (!valido || guardando || !paciente) return;
@@ -254,6 +274,9 @@ export function AgendarRapidoModal({
         tipo_consulta: t.tipo,
         tipo_visita: t.tipoVisita,
         especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
+        ...(esEstudio && estudioId
+          ? { estudios: [{ id: estudioId, nombre: estudios.find((e) => e.id === estudioId)?.nombre || 'Estudio', doctor_id: doctorId }] }
+          : {}),
       });
       onDone();
     } catch (err) {
@@ -267,8 +290,12 @@ export function AgendarRapidoModal({
     <Modal isOpen onClose={onClose} maxWidth="max-w-md">
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-bold text-fg">Agendar consulta</h3>
-          <p className="text-sm text-muted">Alta rápida sin salir de la agenda. Costos y estudios se completan después en el detalle.</p>
+          <h3 className="text-lg font-bold text-fg">{esEstudio ? 'Agendar estudio' : 'Agendar consulta'}</h3>
+          <p className="text-sm text-muted">
+            {esEstudio
+              ? 'Alta rápida sin salir de la agenda. El costo se toma del catálogo de la aseguranza del paciente.'
+              : 'Alta rápida sin salir de la agenda. Costos y estudios se completan después en el detalle.'}
+          </p>
         </div>
 
         <FormField label="Paciente" required>
@@ -278,7 +305,7 @@ export function AgendarRapidoModal({
                 <p className="truncate text-sm font-bold text-fg">{paciente.titulo}</p>
                 {paciente.subtitulo && <p className="truncate text-xs text-muted">{paciente.subtitulo}</p>}
               </div>
-              <button onClick={() => { setPaciente(null); setBusqueda(''); }} className="text-xs font-bold text-primary-600 hover:underline">
+              <button onClick={() => { setPaciente(null); setBusqueda(''); setEstudioId(''); }} className="text-xs font-bold text-primary-600 hover:underline">
                 Cambiar
               </button>
             </div>
@@ -314,7 +341,7 @@ export function AgendarRapidoModal({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Tipo de consulta" required>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoConsultaAgenda)} className="input-field">
+            <select value={tipo} onChange={(e) => cambiarTipo(e.target.value as TipoConsultaAgenda)} className="input-field">
               {TIPOS_ALTA_RAPIDA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </FormField>
@@ -324,7 +351,24 @@ export function AgendarRapidoModal({
               {especialidades.map((e) => <option key={e.clave} value={e.clave}>{e.nombre}</option>)}
             </select>
           </FormField>
-          <FormField label="Médico" required>
+          {esEstudio && (
+            <div className="sm:col-span-2">
+              <FormField label="Estudio" required>
+                <select
+                  value={estudioId}
+                  onChange={(e) => setEstudioId(e.target.value)}
+                  disabled={!paciente || cargandoEstudios}
+                  className="input-field"
+                >
+                  <option value="">
+                    {!paciente ? 'Primero selecciona al paciente' : cargandoEstudios ? 'Cargando estudios…' : estudios.length ? 'Seleccionar estudio' : 'Sin estudios en el catálogo'}
+                  </option>
+                  {estudios.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select>
+              </FormField>
+            </div>
+          )}
+          <FormField label={esEstudio ? 'Realizado por' : 'Médico'} required>
             <select value={doctorId} onChange={(e) => { setDoctorId(e.target.value); setHora(''); }} className="input-field">
               <option value="">Seleccionar</option>
               {doctores
