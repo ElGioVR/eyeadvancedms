@@ -2,7 +2,8 @@
 
 import { Mail, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mensajeCita, urlCorreo, urlWhatsApp, type DatosCita } from '@/lib/mensajes-paciente';
+import { mensajeCitaConPlantilla, urlCorreo, urlWhatsApp, type DatosCita } from '@/lib/mensajes-paciente';
+import { useMensajesPaciente } from '@/hooks/useMensajesPaciente';
 
 interface Props {
   cita: DatosCita;
@@ -17,11 +18,12 @@ interface Props {
  * Botones «WhatsApp» y «Correo» con el mensaje de la cita ya escrito.
  * WhatsApp abre wa.me (WhatsApp Web o la app); correo abre el cliente de
  * correo del equipo. Sin datos de contacto, el botón queda deshabilitado con
- * el motivo en el tooltip. Todo se calcula de props (sin estado del navegador),
- * así que el HTML de servidor y cliente coincide.
+ * el motivo en el tooltip. El texto sale de la plantilla de Configuración ›
+ * Mensajes (si hay) o del mensaje por defecto mientras carga.
  */
 export default function EnviarPaciente({ cita, telefono, email, variante = 'header', className }: Props) {
-  const { asunto, cuerpo } = mensajeCita(cita);
+  const plantillas = useMensajesPaciente();
+  const { asunto, cuerpo } = mensajeCitaConPlantilla(cita, plantillas);
   const wa = urlWhatsApp(telefono, cuerpo);
   const correo = urlCorreo(email, asunto, cuerpo);
 

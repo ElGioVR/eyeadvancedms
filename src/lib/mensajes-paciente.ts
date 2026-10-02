@@ -120,3 +120,86 @@ export function urlCorreo(email: string | null | undefined, asunto: string, cuer
   if (!correoValido(email)) return null;
   return `mailto:${(email || '').trim()}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
 }
+
+// ─── Plantillas configurables (Configuración › Mensajes) ─────────────────────
+
+/** Plantillas guardadas en configuracion_sistema (clave «mensajes_paciente»). Vacío = mensaje por defecto. */
+export interface PlantillasMensaje {
+  consulta?: string | null;
+  cirugia?: string | null;
+}
+
+export const CLAVE_CONFIG_MENSAJES = 'mensajes_paciente';
+
+/** Variables disponibles en las plantillas, con su descripción para la pantalla de configuración. */
+export const VARIABLES_PLANTILLA: Array<{ clave: string; descripcion: string }> = [
+  { clave: 'paciente', descripcion: 'Nombre del paciente' },
+  { clave: 'fecha', descripcion: 'Fecha larga (lunes 6 de octubre de 2026)' },
+  { clave: 'hora', descripcion: 'Hora (9:30 a. m.)' },
+  { clave: 'medico', descripcion: 'Médico de la cita' },
+  { clave: 'detalle', descripcion: 'Consulta: tipo · Cirugía: procedimiento' },
+  { clave: 'folio', descripcion: 'Folio' },
+  { clave: 'clinica', descripcion: 'Nombre de la clínica' },
+  { clave: 'direccion', descripcion: 'Dirección de la clínica' },
+  { clave: 'telefono', descripcion: 'Teléfono de la clínica' },
+];
+
+/** Plantilla equivalente al mensaje por defecto (punto de partida para editar). */
+export function plantillaPorDefecto(tipo: 'consulta' | 'cirugia'): string {
+  const esCirugia = tipo === 'cirugia';
+  return [
+    'Hola, {paciente}.',
+    `Le compartimos los datos de su ${esCirugia ? 'cirugía' : 'consulta'} en {clinica}:`,
+    '',
+    '• Fecha: {fecha}',
+    '• Hora: {hora}',
+    '• Médico: {medico}',
+    `• ${esCirugia ? 'Procedimiento' : 'Tipo'}: {detalle}`,
+    '• Folio: {folio}',
+    '• Dirección: {direccion}',
+    '',
+    esCirugia
+      ? 'Le pedimos llegar con anticipación, acompañado(a), y seguir las indicaciones de ayuno que le dio su médico.'
+      : 'Le pedimos llegar 15 minutos antes de su cita.',
+    'Si necesita cambiar su cita, comuníquese al {telefono}.',
+  ].join('\n');
+}
+
+/**
+ * Sustituye {variable} en la plantilla. Una línea cuyas variables quedan todas
+ * vacías se omite (así «• Folio: {folio}» desaparece si no hay folio). Las
+ * variables desconocidas se dejan tal cual. «Hola, {paciente}.» sin nombre → «Hola.».
+ */
+export function aplicarPlantilla(plantilla: string, c: DatosCita): string {
+  const valores: Record<string, string> = {
+    paciente: (c.paciente || '').trim(),
+    fecha: fechaLarga(c.fecha) || '',
+    hora: horaLegible(c.hora) || '',
+    medico: (c.doctor || '').trim(),
+    detalle: (c.detalle || '').trim(),
+    folio: (c.folio || '').trim(),
+    clinica: CLINICA_NOMBRE,
+    direccion: CLINICA_DIRECCION,
+    telefono: CLINICA_TELEFONO,
+  };
+  const re = /\{(\w+)\}/g;
+  const lineas: string[] = [];
+  for (const linea of plantilla.replace(/\r\n?/g, '\n').split('\n')) {
+    const claves = [...linea.matchAll(re)].map((m) => m[1]).filter((k) => k in valores);
+    if (claves.length > 0 && claves.every((k) => !valores[k])) {
+      // Caso especial del saludo: «Hola, {paciente}.» → «Hola.»
+      if (claves.length === 1 && claves[0] === 'paciente' && /^\s*hola\b/i.test(linea)) lineas.push('Hola.');
+      continue;
+    }
+    lineas.push(linea.replace(re, (todo, k: string) => (k in valores ? valores[k] : todo)));
+  }
+  // Sin líneas en blanco repetidas ni al inicio/final.
+  return lineas.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Igual que mensajeCita, pero con la plantilla configurada si existe. */
+export function mensajeCitaConPlantilla(c: DatosCita, plantillas?: PlantillasMensaje | null): MensajeCita {
+  const base = mensajeCita(c);
+  const plantilla = (c.tipo === 'cirugia' ? plantillas?.cirugia : plantillas?.consulta)?.trim();
+  return plantilla ? { asunto: base.asunto, cuerpo: aplicarPlantilla(plantilla, c) } : base;
+}

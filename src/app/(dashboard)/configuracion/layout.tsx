@@ -12,6 +12,7 @@ const tabs = [
   { label: 'Personal médico', href: '/configuracion/doctores' },
   { label: 'Aseguranzas', href: '/configuracion/aseguranzas' },
   { label: 'Marcas', href: '/configuracion/marcas' },
+  { label: 'Mensajes', href: '/configuracion/mensajes' },
   { label: 'Sistema', href: '/configuracion/sistema' },
 ];
 

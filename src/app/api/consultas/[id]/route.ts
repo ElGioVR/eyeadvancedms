@@ -52,7 +52,7 @@ export async function GET(
 
   // Ronda 1 (paralelo): consulta + historial + conceptos + doctor del usuario (solo rol doctor).
   // Lecturas sin efectos: si el RBAC rechaza, se descartan sin devolverse.
-  const [consultaResult, historialResult, conceptosResult, requerido, especialidadResult] = await Promise.all([
+  const [consultaResult, historialResult, conceptosResult, requerido, especialidadResult, indicadosResult] = await Promise.all([
     supabase
       .from('consultas')
       .select(`
@@ -84,6 +84,12 @@ export async function GET(
       .select('especialidad_id, especialidad:especialidad_id (nombre)')
       .eq('id', id)
       .maybeSingle(),
+    // «Indicado por» (mig. 1800000000460) en lectura aparte y tolerante a error.
+    supabase
+      .from('consulta_conceptos')
+      .select('id, tipo_concepto, texto_original, indicado_por_id, indicado:indicado_por_id (alias)')
+      .eq('consulta_id', id)
+      .in('tipo_concepto', ['ESTUDIO', 'PROCEDIMIENTO']),
   ]);
 
   const { data: consulta, error: consultaError } = consultaResult;
@@ -130,6 +136,30 @@ export async function GET(
   const est3Doc = (consulta as Record<string, unknown>).est3_doc as DoctorJoin | undefined;
   const procDoc = (consulta as Record<string, unknown>).proc_doc as DoctorJoin | undefined;
 
+  // «Indicado por» de cada estudio / procedimiento. Se empareja por nombre y,
+  // si no coincide, por orden. Registros anteriores (sin dato) → doctor de la consulta.
+  type IndicadoRow = { tipo_concepto: string; texto_original: string | null; indicado: DoctorJoin | DoctorJoin[] | null };
+  const indicadoRows = (indicadosResult.error ? [] : (indicadosResult.data ?? [])) as unknown as IndicadoRow[];
+  const aliasDe = (r: IndicadoRow) => (Array.isArray(r.indicado) ? r.indicado[0]?.alias : r.indicado?.alias) || null;
+  const norm = (t: string | null | undefined) => (t || '').trim().toLowerCase();
+  const estudiosRows = indicadoRows.filter((r) => r.tipo_concepto === 'ESTUDIO');
+  const usados = new Set<IndicadoRow>();
+  const indicadoEstudio = (nombre: string | null, idx: number): string | null => {
+    if (!nombre) return null;
+    const porNombre = estudiosRows.find((r) => !usados.has(r) && norm(r.texto_original) === norm(nombre));
+    const fila = porNombre ?? estudiosRows.filter((r) => !usados.has(r))[0] ?? estudiosRows[idx];
+    if (fila) usados.add(fila);
+    return (fila && aliasDe(fila)) || doctorData?.alias || null;
+  };
+  const c = consulta as { estudio_1?: string | null; estudio_2?: string | null; estudio_3?: string | null; procedimiento?: string | null };
+  const est1Indicado = indicadoEstudio(c.estudio_1 ?? null, 0);
+  const est2Indicado = indicadoEstudio(c.estudio_2 ?? null, 1);
+  const est3Indicado = indicadoEstudio(c.estudio_3 ?? null, 2);
+  const procIndicados = [...new Set(
+    indicadoRows.filter((r) => r.tipo_concepto === 'PROCEDIMIENTO').map(aliasDe).filter((a): a is string => !!a)
+  )];
+  const procIndicado = c.procedimiento ? (procIndicados.length ? procIndicados.join(', ') : doctorData?.alias || null) : null;
+
   return NextResponse.json({
     consulta: {
       ...consulta,
@@ -143,6 +173,10 @@ export async function GET(
       est2_doctor: est2Doc?.alias || null,
       est3_doctor: est3Doc?.alias || null,
       proc_doctor: procDoc?.alias || null,
+      est1_indicado: est1Indicado,
+      est2_indicado: est2Indicado,
+      est3_indicado: est3Indicado,
+      proc_indicado: procIndicado,
       paciente_sexo: pacienteData?.sexo || null,
       paciente_telefono: pacienteData?.telefono || null,
       paciente_fecha_nacimiento: pacienteData?.fecha_nacimiento || null,

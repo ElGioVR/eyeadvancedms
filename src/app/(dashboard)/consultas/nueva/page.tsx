@@ -118,6 +118,8 @@ interface EstudioSeleccionado {
   id: string;
   mismoDoctor: boolean;
   doctorId?: string;
+  /** Médico que indica el estudio; vacío = doctor de la consulta. */
+  indicadoPorId?: string;
 }
 
 interface ProcedimientoSeleccionado {
@@ -125,6 +127,8 @@ interface ProcedimientoSeleccionado {
   motivo?: string;
   mismoDoctor: boolean;
   doctorId?: string;
+  /** Médico que indica el procedimiento; vacío = doctor de la consulta. */
+  indicadoPorId?: string;
 }
 
 const consultTypeOptions = ['Primera Consulta', 'Consulta de Urgencia', 'Revisión Pre-Operatoria', 'Control Post-Operatorio'];
@@ -894,6 +898,18 @@ function NuevaConsultaContent() {
     );
   }, []);
 
+  const setEstudioIndicadoPor = useCallback((index: number, indicadoPorId: string) => {
+    setEstudiosSeleccionados((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, indicadoPorId: indicadoPorId || undefined } : e))
+    );
+  }, []);
+
+  const setProcedimientoIndicadoPor = useCallback((index: number, indicadoPorId: string) => {
+    setProcedimientosSeleccionados((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, indicadoPorId: indicadoPorId || undefined } : p))
+    );
+  }, []);
+
   const [agregarOtroProcedimiento, setAgregarOtroProcedimiento] = useState(false);
 
   const updateConsultation = useCallback((field: string, value: string) => {
@@ -1063,13 +1079,13 @@ function NuevaConsultaContent() {
       const estudiosData = estudiosSeleccionados.map((e) => {
         const estudio = catalogoEstudios.find((c) => c.id === e.id);
         const doctorId = e.mismoDoctor ? consultationData.doctorId : (e.doctorId || null);
-        return { id: e.id, nombre: estudio?.nombre || '', doctor_id: doctorId };
+        return { id: e.id, nombre: estudio?.nombre || '', doctor_id: doctorId, indicado_por_id: e.indicadoPorId || consultationData.doctorId || null };
       });
 
       const procedimientosData = procedimientosSeleccionados.map((p) => {
         const proc = catalogoProcedimientos.find((c) => c.id === p.id);
         const doctorId = p.mismoDoctor ? consultationData.doctorId : (p.doctorId || null);
-        return { id: p.id, nombre: proc?.nombre || '', doctor_id: doctorId, motivo: p.motivo || null };
+        return { id: p.id, nombre: proc?.nombre || '', doctor_id: doctorId, motivo: p.motivo || null, indicado_por_id: p.indicadoPorId || consultationData.doctorId || null };
       });
 
       const primerProcedimiento = procedimientosSeleccionados[0];
@@ -1414,8 +1430,18 @@ function NuevaConsultaContent() {
                             </svg>
                           </button>
                         </div>
-                        <div className="text-xs text-muted">
-                          Indicado por: <span className="font-semibold text-fg-2">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
+                        <div className="flex items-center gap-2 text-xs text-muted">
+                          <span className="font-medium">Indicado por:</span>
+                          <select
+                            value={estudio.indicadoPorId || ''}
+                            onChange={(e) => setEstudioIndicadoPor(index, e.target.value)}
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
+                          >
+                            <option value="">{doctorSeleccionado?.nombre ? `${doctorSeleccionado.nombre} (doctor de la consulta)` : 'Doctor de la consulta'}</option>
+                            {medicos.filter((d) => d.id !== consultationData.doctorId).map((d) => (
+                              <option key={d.id} value={d.id}>{d.nombre}</option>
+                            ))}
+                          </select>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -1525,8 +1551,18 @@ function NuevaConsultaContent() {
                             </svg>
                           </button>
                         </div>
-                        <div className="text-xs text-muted">
-                          Indicado por: <span className="font-semibold text-fg-2">{doctorSeleccionado?.nombre || 'Doctor de la consulta'}</span>
+                        <div className="flex items-center gap-2 text-xs text-muted">
+                          <span className="font-medium">Indicado por:</span>
+                          <select
+                            value={proc.indicadoPorId || ''}
+                            onChange={(e) => setProcedimientoIndicadoPor(index, e.target.value)}
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 dark:border-line dark:bg-surface dark:text-fg"
+                          >
+                            <option value="">{doctorSeleccionado?.nombre ? `${doctorSeleccionado.nombre} (doctor de la consulta)` : 'Doctor de la consulta'}</option>
+                            {medicos.filter((d) => d.id !== consultationData.doctorId).map((d) => (
+                              <option key={d.id} value={d.id}>{d.nombre}</option>
+                            ))}
+                          </select>
                         </div>
                         <div className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer">

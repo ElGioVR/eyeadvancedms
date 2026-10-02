@@ -50,3 +50,21 @@ describe('lib/mensajes-paciente mensajes y URLs', () => {
     assert.equal(urlCorreo(null, 'a', 'b'), null);
   });
 });
+
+describe('lib/mensajes-paciente plantillas', () => {
+  const cita = { tipo: 'consulta' as const, paciente: 'Ana', fecha: '2026-10-01', hora: '09:30', doctor: 'DR X', detalle: null, folio: null };
+  it('sustituye variables y omite líneas sin dato', async () => {
+    const { aplicarPlantilla } = await import('../mensajes-paciente');
+    const out = aplicarPlantilla('Hola, {paciente}.\n• Fecha: {fecha} {hora}\n• Folio: {folio}\nGracias {desconocida}', cita);
+    assert.equal(out, 'Hola, Ana.\n• Fecha: jueves 1 de octubre de 2026 9:30 a. m.\nGracias {desconocida}');
+  });
+  it('saludo sin nombre → «Hola.»', async () => {
+    const { aplicarPlantilla } = await import('../mensajes-paciente');
+    assert.equal(aplicarPlantilla('Hola, {paciente}.\nCita: {fecha}', { ...cita, paciente: '' }), 'Hola.\nCita: jueves 1 de octubre de 2026');
+  });
+  it('sin plantilla usa el mensaje por defecto', async () => {
+    const { mensajeCitaConPlantilla } = await import('../mensajes-paciente');
+    assert.deepEqual(mensajeCitaConPlantilla(cita, { consulta: '  ' }), mensajeCita(cita));
+    assert.equal(mensajeCitaConPlantilla(cita, { consulta: 'Hola {paciente}' }).cuerpo, 'Hola Ana');
+  });
+});

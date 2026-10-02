@@ -49,6 +49,7 @@ const estudioConDoctorSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
+  indicado_por_id: z.string().uuid().optional().nullable(),
   cantidad: z.number().int().min(1).max(99).optional().nullable(),
   ojo: ojoSchema.optional().nullable(),
 }).strict();
@@ -57,6 +58,7 @@ const procedimientoConDoctorSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   nombre: z.string().max(255),
   doctor_id: z.string().uuid().optional().nullable(),
+  indicado_por_id: z.string().uuid().optional().nullable(),
   motivo: z.string().max(500).optional().nullable(),
   cantidad: z.number().int().min(1).max(99).optional().nullable(),
   ojo: ojoSchema.optional().nullable(),
@@ -243,12 +245,13 @@ export async function POST(request: Request) {
   const tipoVisita = tipoVisitaMap[data.tipo_visita || ''] || data.tipo_visita || 'PRIMERA_VEZ';
 
   // Parse estudios - support both string and {id, nombre, doctor_id} formats
-  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null; cantidad?: number | null; ojo?: 'OD' | 'OI' | 'OU' | null }) => {
-    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null, cantidad: 1, ojo: null };
+  const parseEstudio = (e: string | { id?: string | null; nombre: string; doctor_id?: string | null; indicado_por_id?: string | null; cantidad?: number | null; ojo?: 'OD' | 'OI' | 'OU' | null }) => {
+    if (typeof e === 'string') return { id: null, nombre: e, doctor_id: null, indicado_por_id: null, cantidad: 1, ojo: null };
     return {
       id: 'id' in e ? e.id || null : null,
       nombre: e.nombre,
       doctor_id: e.doctor_id || null,
+      indicado_por_id: e.indicado_por_id || null,
       cantidad: Math.max(1, Number(e.cantidad) || 1),
       ojo: e.ojo || null,
     };
@@ -260,7 +263,7 @@ export async function POST(request: Request) {
   const procedimientos = data.procedimientos?.length
     ? data.procedimientos
     : data.procedimiento
-      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, motivo: null, cantidad: 1, ojo: null }]
+      ? [{ id: null, nombre: data.procedimiento, doctor_id: data.procedimiento_doctor_id || null, indicado_por_id: null as string | null, motivo: null, cantidad: 1, ojo: null }]
       : [];
 
   // Cache de resolución de servicios (evita N+1 cuando la consulta repite estudios)
@@ -399,6 +402,8 @@ export async function POST(request: Request) {
   // Conceptos clínicos (consulta_id se asigna tras el insert)
   const conceptos: Array<{
     doctor_id: string;
+    /** Médico que indicó el servicio (mig. 1800000000460). */
+    indicado_por_id: string | null;
     tipo_concepto: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO';
     concepto_id: string | null;
     texto_original: string | null;
@@ -410,6 +415,7 @@ export async function POST(request: Request) {
   if (servicioConsulta.nombre || servicioConsulta.id) {
     conceptos.push({
       doctor_id: data.doctor_id,
+      indicado_por_id: data.doctor_id,
       tipo_concepto: 'CONSULTA',
       concepto_id: servicioConsulta.id,
       texto_original: servicioConsulta.nombre || data.tipo_consulta || 'Consulta',
@@ -423,6 +429,7 @@ export async function POST(request: Request) {
     const servicio = serviciosEstudios[i];
     conceptos.push({
       doctor_id: estudio.doctor_id || data.doctor_id,
+      indicado_por_id: estudio.indicado_por_id || data.doctor_id,
       tipo_concepto: 'ESTUDIO',
       concepto_id: servicio.id,
       texto_original: servicio.nombre || estudio.nombre || null,
@@ -436,6 +443,7 @@ export async function POST(request: Request) {
     const servicio = serviciosProcedimientos[i];
     conceptos.push({
       doctor_id: procedimiento.doctor_id || data.doctor_id,
+      indicado_por_id: procedimiento.indicado_por_id || data.doctor_id,
       tipo_concepto: 'PROCEDIMIENTO',
       concepto_id: servicio.id,
       texto_original: servicio.nombre || procedimiento.nombre || null,
@@ -528,9 +536,16 @@ export async function POST(request: Request) {
   // ── Ronda 4: conceptos clínicos (un solo insert); si falla se revierte la consulta
   const conceptosRows = conceptos.map((concepto) => ({ consulta_id: consultaData.id, ...concepto }));
   if (conceptosRows.length > 0) {
-    const { error: conceptosError } = await supabase
+    let { error: conceptosError } = await supabase
       .from('consulta_conceptos')
       .insert(conceptosRows);
+
+    // Tolerante a BD sin la columna `indicado_por_id` (mig. 1800000000460 aún no aplicada).
+    if (conceptosError && /indicado_por_id/.test(`${conceptosError.message} ${conceptosError.details ?? ''}`)) {
+      ({ error: conceptosError } = await supabase
+        .from('consulta_conceptos')
+        .insert(conceptosRows.map(({ indicado_por_id: _omit, ...resto }) => resto)));
+    }
 
     if (conceptosError) {
       await supabase.from('consultas').delete().eq('id', consultaData.id);

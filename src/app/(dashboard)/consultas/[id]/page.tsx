@@ -61,6 +61,10 @@ interface ConsultaDetalle {
   estudio_3_doctor_id?: string | null;
   procedimiento: string | null;
   proc_doctor: string | null;
+  est1_indicado?: string | null;
+  est2_indicado?: string | null;
+  est3_indicado?: string | null;
+  proc_indicado?: string | null;
   notas: string | null;
   estatus: string;
   estatus_pago: string;
@@ -625,7 +629,10 @@ export default function ConsultaDetailPage() {
                   <div className="mt-1.5 space-y-1.5">
                     {consulta.estudio_1 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-fg">{consulta.estudio_1}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-fg">{consulta.estudio_1}</span>
+                          {consulta.est1_indicado && <p className="text-xs text-muted">Indicado por: <span className="font-semibold text-fg-2">{consulta.est1_indicado}</span></p>}
+                        </div>
                         <div className="flex items-center gap-2">
                           {consulta.est1_doctor && <span className="text-xs text-muted">Dr. {consulta.est1_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
@@ -661,7 +668,10 @@ export default function ConsultaDetailPage() {
                     )}
                     {consulta.estudio_2 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-fg">{consulta.estudio_2}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-fg">{consulta.estudio_2}</span>
+                          {consulta.est2_indicado && <p className="text-xs text-muted">Indicado por: <span className="font-semibold text-fg-2">{consulta.est2_indicado}</span></p>}
+                        </div>
                         <div className="flex items-center gap-2">
                           {consulta.est2_doctor && <span className="text-xs text-muted">Dr. {consulta.est2_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
@@ -697,7 +707,10 @@ export default function ConsultaDetailPage() {
                     )}
                     {consulta.estudio_3 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-fg">{consulta.estudio_3}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-fg">{consulta.estudio_3}</span>
+                          {consulta.est3_indicado && <p className="text-xs text-muted">Indicado por: <span className="font-semibold text-fg-2">{consulta.est3_indicado}</span></p>}
+                        </div>
                         <div className="flex items-center gap-2">
                           {consulta.est3_doctor && <span className="text-xs text-muted">Dr. {consulta.est3_doctor}</span>}
                           {(user?.rol === 'admin' || user?.rol === 'recepcionista') && (
@@ -738,7 +751,10 @@ export default function ConsultaDetailPage() {
                 <div className="rounded-lg border border-line bg-surface-2 px-4 py-3">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Procedimiento</span>
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-sm font-medium text-fg">{consulta.procedimiento}</span>
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-fg">{consulta.procedimiento}</span>
+                      {consulta.proc_indicado && <p className="text-xs text-muted">Indicado por: <span className="font-semibold text-fg-2">{consulta.proc_indicado}</span></p>}
+                    </div>
                     {consulta.proc_doctor && (
                       <span className="text-xs text-muted">Dr. {consulta.proc_doctor}</span>
                     )}

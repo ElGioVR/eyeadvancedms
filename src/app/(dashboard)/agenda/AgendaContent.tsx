@@ -38,8 +38,10 @@ import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 interface Doctor { id: string; alias: string; usuario_id?: string | null; tipo_personal?: string | null; cobra_honorarios?: boolean | null; }
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
-const HOUR_START = 9;
-const HOUR_END = 22;
+// Rango por defecto de la cuadrícula semana/día. Se amplía automáticamente
+// para mostrar cualquier evento que empiece antes o termine después.
+const DEFAULT_HOUR_START = 9;
+const DEFAULT_HOUR_END = 22;
 const HOUR_HEIGHT = 64;
 
 const tipoConfig: Record<string, { bg: string; text: string }> = {
@@ -385,15 +387,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, todayStr]);
 
-  useEffect(() => {
-    if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current) {
-      const viewDate = calendarView === 'day' ? (selectedDate || todayStr) : todayStr;
-      if (viewDate === todayStr) {
-        const px = Math.max(0, (now.getHours() - HOUR_START) * HOUR_HEIGHT - 100);
-        timeGridRef.current.scrollTo({ top: px, behavior: 'smooth' });
-      }
-    }
-  }, [calendarView, now, todayStr, selectedDate]);
 
   // Atajos de teclado: se leen las versiones vigentes vía ref (antes el listener
   // se registraba una vez y ← / → usaban siempre la vista inicial «mes»).
@@ -675,7 +668,46 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     return cells;
   }, [currentDate, todayStr]);
 
-  const hours = useMemo(() => Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i), []);
+  // Rango dinámico de horas: arranca en la primera consulta/cirugía visible
+  // (si es antes de las 9) y se extiende hasta la que termine más tarde.
+  const visibleDates = useMemo(
+    () => (calendarView === 'day' ? [toDateStr(currentDate)] : weekDays.map(wd => wd.dateStr)),
+    [calendarView, currentDate, weekDays],
+  );
+  const { HOUR_START, HOUR_END, firstEventMin } = useMemo(() => {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const ds of visibleDates) {
+      for (const c of cirugiasPorFecha[ds] || []) {
+        if (!c.hora) continue;
+        const st = parseTimeToMinutes(c.hora);
+        const dur = c.tiempo_estimado ? parseInt(c.tiempo_estimado) || 60 : 60;
+        if (st < minStart) minStart = st;
+        if (st + dur > maxEnd) maxEnd = st + dur;
+      }
+    }
+    const start = Number.isFinite(minStart) ? Math.max(0, Math.min(DEFAULT_HOUR_START, Math.floor(minStart / 60))) : DEFAULT_HOUR_START;
+    const end = Number.isFinite(maxEnd) ? Math.min(24, Math.max(DEFAULT_HOUR_END, Math.ceil(maxEnd / 60))) : DEFAULT_HOUR_END;
+    return { HOUR_START: start, HOUR_END: Math.max(end, start + 1), firstEventMin: Number.isFinite(minStart) ? minStart : null };
+  }, [visibleDates, cirugiasPorFecha]);
+
+  const hours = useMemo(() => Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i), [HOUR_START, HOUR_END]);
+
+  // Al abrir semana/día se desplaza a la primera consulta visible; si no hay
+  // eventos y es el día de hoy, a la hora actual.
+  useEffect(() => {
+    if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current) {
+      let px: number | null = null;
+      if (firstEventMin !== null) {
+        px = Math.max(0, ((firstEventMin - HOUR_START * 60) / 60) * HOUR_HEIGHT - 8);
+      } else {
+        const viewDate = calendarView === 'day' ? (selectedDate || todayStr) : todayStr;
+        if (viewDate === todayStr) px = Math.max(0, (new Date().getHours() - HOUR_START) * HOUR_HEIGHT - 100);
+      }
+      if (px !== null) timeGridRef.current.scrollTo({ top: px, behavior: 'smooth' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarView, todayStr, selectedDate, visibleDates.join(','), firstEventMin, HOUR_START]);
 
   const nowMinutes = mounted ? now.getHours() * 60 + now.getMinutes() : 0;
   const showTimeIndicator = mounted && (calendarView === 'week' || calendarView === 'day') && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
