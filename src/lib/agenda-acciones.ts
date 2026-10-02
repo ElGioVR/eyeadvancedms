@@ -3,6 +3,7 @@
  * Sin dependencias de React: se prueba en src/lib/__tests__/agenda-acciones.test.ts.
  */
 import type { AgendaCirugia } from '@/types';
+import { puedeGestionarAgenda } from '@/lib/permisos-agenda';
 
 export type AccionRapida = 'aplazar' | 'reagendar' | 'cancelar';
 
@@ -19,18 +20,17 @@ export function esEventoConsulta(e: Pick<AgendaCirugia, 'tipo'>): boolean {
 /**
  * Acciones válidas para el evento según su tipo, estado y el rol del usuario.
  * Cirugías: máquina de estados (agendada → aplazada|reagendada|cancelada;
- * reagendada solo admite moverla de nuevo) y solo admin/recepción.
- * Consultas/estudios: cualquier estado activo; el doctor solo las suyas (lo valida la API).
+ * reagendada solo admite moverla de nuevo).
+ * Consultas/estudios: cualquier estado activo.
+ * Admin, recepción y doctor gestionan toda la agenda; enfermería solo la consulta.
  */
 export function accionesDisponibles(
   evento: Pick<AgendaCirugia, 'tipo' | 'estado'>,
   userRol: string
 ): AccionRapida[] {
-  // Enfermería (rol restringido): solo consulta su agenda.
-  if (userRol === 'enfermero') return [];
+  if (!puedeGestionarAgenda(userRol)) return [];
   if (evento.estado === 'completada' || evento.estado === 'cancelada') return [];
   if (esEventoConsulta(evento)) return ['aplazar', 'reagendar', 'cancelar'];
-  if (userRol === 'doctor') return [];
   if (evento.estado === 'agendada') return ['aplazar', 'reagendar', 'cancelar'];
   if (evento.estado === 'reagendada') return ['reagendar'];
   return [];

@@ -18,8 +18,9 @@ import ClientDate from '@/components/ui/ClientDate';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import EnviarPaciente from '@/components/ui/EnviarPaciente';
 
-interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; }
+interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; }
 interface Origen { nombre?: string; }
 interface Servicio { nombre?: string; }
 interface Recurso { nombre?: string; ubicacion?: string; }
@@ -431,6 +432,8 @@ export default function CirugiaDetailPage() {
   const nombrePaciente = cirugia.pacientes?.nombre_completo || cirugia.nombre_paciente || '—';
   const procedimiento = cirugia.servicio?.nombre || '—';
   const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${etiquetaOjo(cirugia.ojo)}` : procedimiento;
+  const cirujano =
+    participantes.find((p) => /CIRUJANO/i.test(p.roles?.clave || p.roles?.nombre || ''))?.doctores?.alias || null;
 
   return (
     <div className="print-page relative animate-fadeIn" aria-busy={validating}>
@@ -440,7 +443,20 @@ export default function CirugiaDetailPage() {
         subtitle={`${nombrePaciente} — ${cirugia.fecha || 'Sin fecha'} ${cirugia.hora || ''}`}
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <EnviarPaciente
+              cita={{
+                tipo: 'cirugia',
+                paciente: nombrePaciente === '—' ? null : nombrePaciente,
+                fecha: cirugia.fecha,
+                hora: cirugia.hora,
+                doctor: cirujano,
+                detalle: procedimiento === '—' ? null : procedimientoOjo,
+                folio: cirugia.codigo,
+              }}
+              telefono={cirugia.pacientes?.telefono}
+              email={cirugia.pacientes?.email}
+            />
             <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors no-print">
               <Printer className="h-4 w-4" /> Imprimir
             </button>

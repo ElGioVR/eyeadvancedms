@@ -2,16 +2,10 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { SESION_TEMPORAL_COOKIE } from '@/lib/supabase/constants';
+import { cerrarSesionActual } from '@/services/sesion-unica';
 
 export async function POST() {
-  const supabase = createClient();
-  try {
-    // Sin sesión (o token ya revocado) signOut devuelve error: igual se limpian cookies.
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error('[auth.logout]', error.message);
-  } catch (err) {
-    console.error('[auth.logout]', err);
-  }
+  await cerrarSesionActual(createClient());
   try {
     cookies().delete(SESION_TEMPORAL_COOKIE);
   } catch {

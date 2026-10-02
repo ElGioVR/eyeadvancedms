@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { errorTranslations } from '@/lib/supabase/errors';
 import { detectarConflictosAgenda, detectarConflictosPersonal } from '@/lib/agenda-conflictos';
 import { horarioCirugia, seTraslapan } from '@/lib/catalogos/equipo-quirurgico';
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ROLES_GESTION_AGENDA);
   if (roleError) return roleError;
 
   const data = await leerJSON(request, cirugiaCreateSchema);

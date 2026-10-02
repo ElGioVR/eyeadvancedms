@@ -2,9 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { cerrarSesionActual } from '@/services/sesion-unica';
 
 export async function logout() {
-  const supabase = createClient();
-  await supabase.auth.signOut();
+  await cerrarSesionActual(createClient());
   redirect('/login');
 }

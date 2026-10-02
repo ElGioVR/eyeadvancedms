@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import useSWR, { preload, useSWRConfig } from 'swr';
-import { useFetch, useInvalidar, construirUrl } from '@/hooks/useFetch';
+import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar, construirUrl } from '@/hooks/useFetch';
+import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
+import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
 import { useAutosave } from '@/hooks/useAutosave';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -61,8 +63,6 @@ const estadoLabels: Record<AgendaCirugiaEstado, string> = {
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-/** Doctor y enfermero(a) ven solo su propia ocupación y no administran la agenda. */
-function esRolPropio(rol: string) { return rol === 'doctor' || rol === 'enfermero'; }
 
 /**
  * URL de «Agendar consulta» desde un evento de la agenda: precarga paciente,
@@ -270,10 +270,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date(`${initialDate}T12:00:00`));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  // Doctor: su filtro se conoce desde las props (determinista en SSR y cliente), así
+  // Enfermería: su filtro se conoce desde las props (determinista en SSR y cliente), así
   // la primera petición ya sale con él y no se repite al aplicar el efecto.
   const [filterDoctor, setFilterDoctor] = useState(() =>
-    esRolPropio(userRol) ? doctores.find((d) => d.usuario_id === userId)?.id ?? '' : ''
+    agendaSoloPropia(userRol) ? doctores.find((d) => d.usuario_id === userId)?.id ?? '' : ''
   );
   const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
   // Punto II: filtro por especialidad ('' = todas). Solo aplica a consultas/estudios.
@@ -310,9 +310,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const stripRef = useRef<HTMLDivElement>(null);
   const stripSelectedRef = useRef<HTMLButtonElement>(null);
 
-  // Auto-filter for doctor role: show only own operations
+  // Enfermería (solo agenda propia): filtro fijo a su ficha de personal
   useEffect(() => {
-    if (esRolPropio(userRol) && doctores.length > 0 && userId) {
+    if (agendaSoloPropia(userRol) && doctores.length > 0 && userId) {
       const myDoctor = doctores.find(d => d.usuario_id === userId);
       if (myDoctor) setFilterDoctor(myDoctor.id);
     }
@@ -423,7 +423,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const fetchParams = paramsPara(currentDate);
   const { fechaDesde, fechaHasta } = fetchParams;
 
-  const { data: cirugias, loading, validating, refetch: refetchAgenda, mutate: mutateAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams);
+  const { data: cirugias, loading, validating, refetch: refetchAgenda, mutate: mutateAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams, { refreshInterval: REFRESCO_COMPARTIDO_MS });
   const urlActual = urlAgenda(fetchParams);
   const invalidar = useInvalidar();
   const { cache } = useSWRConfig();
@@ -694,7 +694,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
           action={
             <div className="flex gap-2">
-              {!esRolPropio(userRol) && (
+              {!agendaSoloPropia(userRol) && (
                 <>
                   <div className="relative">
                     <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="btn-secondary">
@@ -763,7 +763,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
           <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
-          {!esRolPropio(userRol) && (
+          {!agendaSoloPropia(userRol) && (
             <>
               <div className="relative">
                 <button onClick={() => { setShowImportChoice(p => !p); setShowCreateChoice(false); }} className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors">
@@ -833,7 +833,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
             )}
           </button>
-          {!esRolPropio(userRol) && (
+          {!agendaSoloPropia(userRol) && (
             <div className="relative">
               <button
                 onClick={() => { setShowCreateChoice(p => !p); setShowImportChoice(false); }}
@@ -1016,7 +1016,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 setCalendarView('month');
                 setCurrentDate(new Date(y, m, 1, 12));
               }}
-              onAdd={!esRolPropio(userRol) ? (_date: string) => { setShowCreateChoice(true); } : undefined}
+              onAdd={!agendaSoloPropia(userRol) ? (_date: string) => { setShowCreateChoice(true); } : undefined}
               onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
               getAcciones={(c) => accionesDisponibles(c, userRol)}
               onAccion={(c, accion) => setAccionRapida({ evento: c, accion })}
@@ -1097,7 +1097,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         <div className="space-y-px">
                           {dayCx.slice(0, 3).map(c => (
                             <div key={c.id}
-                              draggable={!esRolPropio(userRol)}
+                              draggable={!agendaSoloPropia(userRol)}
                               onDragStart={e => handleDragStart(e, c.id)}
                               onClick={e => handleEventClick(e, c)}
                               className={cn(
@@ -1170,9 +1170,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           )}>
                           {hours.map(h => (
                             <div key={h}
-                              onClick={(e) => !esRolPropio(userRol) && handleQuickAdd(wd.dateStr, h, e)}
+                              onClick={(e) => !agendaSoloPropia(userRol) && handleQuickAdd(wd.dateStr, h, e)}
                               className={cn('border-b border-line/70 transition-colors',
-                                !esRolPropio(userRol) && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
+                                !agendaSoloPropia(userRol) && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
                               )} style={{ height: HOUR_HEIGHT }} />
                           ))}
 
@@ -1205,7 +1205,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
                             return (
                               <div key={c.id}
-                                draggable={!esRolPropio(userRol)}
+                                draggable={!agendaSoloPropia(userRol)}
                                 onDragStart={e => handleDragStart(e, c.id)}
                               onClick={e => handleEventClick(e, c)}
                                 className={cn(
@@ -1284,9 +1284,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       className="relative">
                       {hours.map(h => (
                         <div key={h}
-                          onClick={(e) => !esRolPropio(userRol) && handleQuickAdd(dayViewDate, h, e)}
+                          onClick={(e) => !agendaSoloPropia(userRol) && handleQuickAdd(dayViewDate, h, e)}
                           className={cn('border-b border-line/70 transition-colors',
-                            !esRolPropio(userRol) && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
+                            !agendaSoloPropia(userRol) && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
                           )} style={{ height: HOUR_HEIGHT }} />
                       ))}
 
@@ -1319,7 +1319,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
                         return (
                           <div key={c.id}
-                            draggable={!esRolPropio(userRol)}
+                            draggable={!agendaSoloPropia(userRol)}
                             onDragStart={e => handleDragStart(e, c.id)}
                             onClick={e => handleEventClick(e, c)}
                             className={cn(
@@ -1463,7 +1463,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           hora={agendarRapido.hora}
           tipoInicial={agendarRapido.tipo}
           doctores={doctores}
-          doctorInicial={esRolPropio(userRol) ? doctores.find((d) => d.usuario_id === userId)?.id : undefined}
+          doctorInicial={agendaSoloPropia(userRol) ? doctores.find((d) => d.usuario_id === userId)?.id : undefined}
           onClose={() => setAgendarRapido(null)}
           onDone={() => {
             setAgendarRapido(null);
@@ -1646,7 +1646,7 @@ function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { 
           <p className="text-sm text-fg-2">{cirugia.notas}</p>
         </div>
       )}
-      {!esRolPropio(userRol) && (
+      {!agendaSoloPropia(userRol) && (
         <div className="flex gap-2 pt-2 border-t border-line/70">
           {cirugia.estado === 'agendada' && (
             <>
@@ -1679,6 +1679,11 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
   const [adjustedPos, setAdjustedPos] = useState(position);
   const esCirugia = !cirugia.tipo || cirugia.tipo === 'cirugia';
   const acciones = accionesDisponibles(cirugia, userRol);
+  // Contacto del paciente para WhatsApp/correo: solo al abrir la ventana (payload mínimo).
+  const { data: contacto } = useSWR<{ telefono: string | null; email: string | null }>(
+    cirugia.paciente_id && puedeGestionarAgenda(userRol) ? `/api/pacientes/${cirugia.paciente_id}/contacto` : null,
+    { revalidateOnFocus: false }
+  );
 
   useEffect(() => {
     if (!cardRef.current) return;
@@ -1833,13 +1838,13 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
             {estadoLabels[cirugia.estado]}
           </span>
           <div className="flex-1" />
-          {esCirugia && !esRolPropio(userRol) && cirugia.estado === 'agendada' && (
+          {esCirugia && !agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
             <button onClick={() => updateEstado('completada')} disabled={updating}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
               Completar
             </button>
           )}
-          {esCirugia && !esRolPropio(userRol) && (
+          {esCirugia && !agendaSoloPropia(userRol) && (
             <button onClick={onEdit}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-line text-fg-2 hover:bg-surface-2 transition-colors">
               Editar
@@ -1860,6 +1865,21 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
               </button>
             ))}
           </div>
+        )}
+        {cirugia.paciente_id && puedeGestionarAgenda(userRol) && (
+          <EnviarPaciente
+            variante="compacto"
+            cita={{
+              tipo: esCirugia ? 'cirugia' : 'consulta',
+              paciente: cirugia.nombre_paciente,
+              fecha: cirugia.fecha,
+              hora: cirugia.hora,
+              doctor: cirugia.doctor_nombre,
+              detalle: esCirugia ? cirugia.procedimiento : (cirugia.tipo_consulta_label || cirugia.procedimiento),
+            }}
+            telefono={contacto?.telefono}
+            email={contacto?.email}
+          />
         )}
         {cirugia.paciente_id && userRol !== 'enfermero' && (
           <button
@@ -1973,7 +1993,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
       const doctor = doctores.find((d) => d.id === form.doctor_id);
       onSaved(cirugiaId, cirugiaId ? {
         ...(body as Partial<AgendaCirugia>),
-        ...(!esRolPropio(userRol) ? { doctor_nombre: doctor?.alias ?? null } : {}),
+        ...(!agendaSoloPropia(userRol) ? { doctor_nombre: doctor?.alias ?? null } : {}),
       } : undefined);
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error desconocido'); } finally { setSaving(false); }
   };
@@ -2006,7 +2026,7 @@ function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, o
         <div><label className={labelCls}>Hora</label><input type="time" value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} className={inputCls} /></div>
         <div><label className={labelCls}>Jornada</label><input type="text" value={form.jornada} onChange={e => setForm(f => ({ ...f, jornada: e.target.value }))} placeholder="Ej. TIJUANA" className={inputCls} /></div>
       </div>
-      {!esRolPropio(userRol) && (
+      {!agendaSoloPropia(userRol) && (
         <div><label className={labelCls}>Doctor / Cirujano</label>
           <select value={form.doctor_id} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
             <option value="">Sin asignar</option>

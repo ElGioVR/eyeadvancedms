@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { clearUserCache } from '@/hooks/useUser';
 import { guardarOrigenLogo, type RectLogo } from '@/lib/transicion-bienvenida';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Activity, Users, FileText, ArrowRight, ShieldCheck, Check } from 'lucide-react';
+import { CLAVE_TOMAR_PESTANA } from '@/lib/sesion-pestana';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Activity, Users, FileText, ArrowRight, ShieldCheck, Check, MonitorSmartphone, Loader2 } from 'lucide-react';
 
 const MAX_ATTEMPTS = 5;
 // «Recordarme»: guarda el correo en este dispositivo y mantiene la sesión abierta.
@@ -59,6 +60,11 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Sesión única: aviso al volver por sesión tomada en otro dispositivo y
+  // confirmación «Trabajar aquí» cuando la cuenta está abierta en otro lado.
+  const [aviso, setAviso] = useState('');
+  const [sesionPendiente, setSesionPendiente] = useState<{ dispositivo: string; desde: string | null } | null>(null);
+  const [tomando, setTomando] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [footerYear, setFooterYear] = useState('');
@@ -81,6 +87,12 @@ export default function LoginPage() {
     }
     // Descarga anticipada de la pantalla de bienvenida: la transición tras login es inmediata
     router.prefetch('/bienvenida');
+    const motivo = new URLSearchParams(window.location.search).get('motivo');
+    if (motivo === 'otra-sesion') {
+      setAviso('Tu sesión se cerró porque se inició en otro dispositivo.');
+    } else if (motivo === 'otra-ventana') {
+      setAviso('Tu sesión se cerró en esta ventana porque se está trabajando en otra. Si entras aquí, la otra se cerrará.');
+    }
   }, [router]);
 
   useEffect(() => {
@@ -91,6 +103,37 @@ export default function LoginPage() {
   }, []);
 
   const isLocked = lockedUntil !== null && Date.now() < lockedUntil;
+
+  /** Tras un login aceptado: preferencias, transición y paso a /bienvenida. */
+  const completarEntrada = useCallback(() => {
+    if (rememberMe) {
+      escribirLS(LS_RECORDAR, '1');
+      escribirLS(LS_EMAIL, email.trim().toLowerCase());
+    } else {
+      escribirLS(LS_RECORDAR, null);
+      escribirLS(LS_EMAIL, null);
+    }
+    clearUserCache();
+    // Entrar con usuario y contraseña es elegir esta ventana: toma la prioridad
+    // al llegar al panel (las demás ventanas del navegador se cierran).
+    try { window.sessionStorage.setItem(CLAVE_TOMAR_PESTANA, '1'); } catch { /* sin storage */ }
+    // Logo visible (cabecera móvil) → origen de la transición compartida.
+    const l = logoRef.current?.getBoundingClientRect();
+    const logo = l && l.width > 0 ? { x: l.left, y: l.top, w: l.width, h: l.height } : null;
+    const m = marcaRef.current?.getBoundingClientRect();
+    setMarcaRect(m && m.width > 0 ? { x: m.left, y: m.top, w: m.width, h: m.height } : null);
+    const b = submitRef.current?.getBoundingClientRect();
+    setTransicion({
+      x: logo ? logo.x + logo.w / 2 : b ? b.left + b.width / 2 : window.innerWidth / 2,
+      y: logo ? logo.y + logo.h / 2 : b ? b.top + b.height / 2 : window.innerHeight / 2,
+      logo,
+    });
+    if (logo) guardarOrigenLogo(logo);
+    // Se navega cuando el círculo ya cubre la pantalla; la capa sigue visible
+    // hasta que la bienvenida (mismo fondo) la reemplaza → sin salto.
+    const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.setTimeout(() => router.replace('/bienvenida'), reducido ? 150 : 820);
+  }, [email, rememberMe, router]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +159,19 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim().toLowerCase(), password, recordarme: rememberMe }),
       });
 
+      if (res.status === 409) {
+        const data = await res.json().catch(() => null);
+        if (data?.requiereConfirmacion) {
+          // La cuenta está abierta en otro dispositivo: la primera sesión tiene prioridad.
+          const desde = typeof data.desde === 'string' && data.desde
+            ? new Date(data.desde).toLocaleString('es-MX', { timeZone: 'America/Tijuana', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+            : null;
+          setSesionPendiente({ dispositivo: data.dispositivo || 'otro dispositivo', desde });
+          setLoading(false);
+          return;
+        }
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         const newAttempts = attempts + 1;
@@ -133,40 +189,79 @@ export default function LoginPage() {
         return;
       }
 
-      if (rememberMe) {
-        escribirLS(LS_RECORDAR, '1');
-        escribirLS(LS_EMAIL, email.trim().toLowerCase());
-      } else {
-        escribirLS(LS_RECORDAR, null);
-        escribirLS(LS_EMAIL, null);
-      }
-      clearUserCache();
-      // Logo visible (cabecera móvil) → origen de la transición compartida.
-      const l = logoRef.current?.getBoundingClientRect();
-      const logo = l && l.width > 0 ? { x: l.left, y: l.top, w: l.width, h: l.height } : null;
-      const m = marcaRef.current?.getBoundingClientRect();
-      setMarcaRect(m && m.width > 0 ? { x: m.left, y: m.top, w: m.width, h: m.height } : null);
-      const b = submitRef.current?.getBoundingClientRect();
-      setTransicion({
-        x: logo ? logo.x + logo.w / 2 : b ? b.left + b.width / 2 : window.innerWidth / 2,
-        y: logo ? logo.y + logo.h / 2 : b ? b.top + b.height / 2 : window.innerHeight / 2,
-        logo,
-      });
-      if (logo) guardarOrigenLogo(logo);
-      // Se navega cuando el círculo ya cubre la pantalla; la capa sigue visible
-      // hasta que la bienvenida (mismo fondo) la reemplaza → sin salto.
-      const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      window.setTimeout(() => router.replace('/bienvenida'), reducido ? 150 : 820);
+      completarEntrada();
     } catch {
       setError('Error de conexión. Intenta de nuevo.');
       setLoading(false);
     }
-  }, [email, password, rememberMe, isLocked, lockedUntil, attempts, router]);
+  }, [email, password, rememberMe, isLocked, lockedUntil, attempts, completarEntrada]);
+
+  /** «Trabajar aquí»: esta sesión toma la prioridad y la otra se cierra sola. */
+  const trabajarAqui = useCallback(async () => {
+    if (tomando) return;
+    setTomando(true);
+    try {
+      const res = await fetch('/api/auth/sesion/tomar', { method: 'POST', credentials: 'same-origin' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'No se pudo activar la sesión.');
+      }
+      setSesionPendiente(null);
+      setLoading(true);
+      completarEntrada();
+    } catch (err) {
+      setSesionPendiente(null);
+      setError(err instanceof Error ? err.message : 'No se pudo activar la sesión.');
+    } finally {
+      setTomando(false);
+    }
+  }, [tomando, completarEntrada]);
+
+  /** Cancelar: se cierra solo esta sesión nueva; la otra sigue intacta. */
+  const cancelarSesionNueva = useCallback(async () => {
+    setSesionPendiente(null);
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined);
+  }, []);
 
   const exito = transicion !== null;
 
   return (
     <>
+      {sesionPendiente && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="sesion-titulo">
+          <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+              <MonitorSmartphone className="h-6 w-6" />
+            </div>
+            <h2 id="sesion-titulo" className="text-lg font-extrabold text-slate-900 dark:text-white">Tu cuenta está abierta en otro dispositivo</h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Sesión activa en <span className="font-bold">{sesionPendiente.dispositivo}</span>
+              {sesionPendiente.desde ? <> desde el {sesionPendiente.desde}</> : null}.
+              Si trabajas aquí, esa sesión se cerrará automáticamente.
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+              <button
+                type="button"
+                onClick={trabajarAqui}
+                disabled={tomando}
+                autoFocus
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+              >
+                {tomando && <Loader2 className="h-4 w-4 animate-spin" />}
+                Trabajar aquí
+              </button>
+              <button
+                type="button"
+                onClick={cancelarSesionNueva}
+                disabled={tomando}
+                className="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {exito && (
         <div
           aria-hidden
@@ -352,6 +447,12 @@ export default function LoginPage() {
 
               {/* Error */}
               <div role="alert" aria-live="assertive">
+                {aviso && !error && (
+                  <div role="status" className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+                    <MonitorSmartphone className="w-5 h-5 shrink-0" />
+                    <span>{aviso}</span>
+                  </div>
+                )}
                 {error && (
                   <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300">
                     <AlertCircle className="w-5 h-5 shrink-0" />

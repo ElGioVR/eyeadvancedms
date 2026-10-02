@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
+import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { consumirLIO, liberarLIO } from '@/lib/inventario';
@@ -90,7 +91,7 @@ export async function PATCH(
 
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const rolP = requireRole(auth.user, ['admin', 'recepcionista']);
+  const rolP = requireRole(auth.user, ROLES_GESTION_AGENDA);
   const supabase = getSupabaseAdmin();
 
   // Lectura del estado actual (solo lectura) en paralelo con la verificación de

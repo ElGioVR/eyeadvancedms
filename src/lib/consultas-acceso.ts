@@ -2,14 +2,17 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import { resolveDoctorId } from '@/lib/auth-helpers';
+import { agendaSoloPropia } from '@/lib/permisos-agenda';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { PerfilSesion } from '@/lib/supabase/server';
 
 /**
  * Reglas de acceso a consultas (exclusivo de /api/consultas/**):
- *  - doctor: solo sus consultas (consultas.doctor_id = su doctores.id).
- *  - admin con modo_focus (doctor-jefe con registro en doctores): el LISTADO se
- *    limita a sus consultas; el detalle no se restringe (igual que antes).
+ *  - LISTADO del módulo Consultas: el doctor ve solo las suyas; el admin con
+ *    modo_focus (doctor-jefe con registro en doctores) también.
+ *  - Detalle y mutaciones (abrir, editar, aplazar, reagendar, cancelar): el
+ *    doctor tiene acceso total, como en la Agenda (ver lib/permisos-agenda.ts).
+ *    Solo el rol de agenda propia (enfermería) queda limitado a lo suyo.
  *  - admin / recepcionista: todo.
  * Usa `auth.perfil` (ya cacheado por requireAuth) en lugar de volver a leer `usuarios`.
  */
@@ -35,11 +38,11 @@ export async function doctorDelListado(userId: string, perfil: PerfilSesion | nu
 
 /** Para detalle/mutaciones: doctor_id que debe coincidir, o `undefined` si no aplica. */
 export async function doctorRequerido(userId: string, perfil: PerfilSesion | null): Promise<string | null | undefined> {
-  // Doctor y enfermero(a) solo gestionan lo propio (su ficha en `doctores`).
-  return perfil?.rol === 'doctor' || perfil?.rol === 'enfermero' ? resolveDoctorId(userId) : undefined;
+  // Solo enfermería gestiona únicamente lo propio (su ficha en `doctores`).
+  return agendaSoloPropia(perfil?.rol) ? resolveDoctorId(userId) : undefined;
 }
 
-/** 403 si el usuario (doctor) no es el doctor de la consulta. */
+/** 403 si el usuario (rol de agenda propia) no es el responsable de la consulta. */
 export function verificarDueno(
   requerido: string | null | undefined,
   consultaDoctorId: string | null | undefined,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from "react";
 import useSWR from "swr";
+import { REFRESCO_COMPARTIDO_MS } from "@/hooks/useFetch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -158,7 +159,7 @@ export default function DashboardContent({
     data: chartData,
     isLoading: chartsCargando,
     isValidating: chartsValidando,
-  } = useSWR<ChartData>("/api/dashboard/charts");
+  } = useSWR<ChartData>("/api/dashboard/charts", { refreshInterval: REFRESCO_COMPARTIDO_MS });
   // «Ver como»: la navegación va en transición → se conserva el dashboard
   // visible (sin volver al skeleton) mientras llega el nuevo render del servidor.
   const [cambiandoVista, iniciarTransicion] = useTransition();

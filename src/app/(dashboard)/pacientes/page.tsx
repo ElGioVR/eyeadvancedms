@@ -7,7 +7,7 @@ import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors } fr
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useFetch, useInvalidar } from '@/hooks/useFetch';
+import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar } from '@/hooks/useFetch';
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
@@ -48,7 +48,8 @@ const edadOptions = ['Todos', '0-18', '19-35', '36-50', '51+'] as const;
 const nuevoPacienteSchema = z.object({
   nombre_completo: z.string().min(1, 'El nombre es requerido').max(255, 'Máximo 255 caracteres'),
   sexo: z.enum(['H', 'M'], { errorMap: () => ({ message: 'Selecciona un sexo' }) }),
-  fecha_nacimiento: z.string().min(1, 'La fecha de nacimiento es requerida'),
+  // Opcional: se puede completar después desde el expediente del paciente.
+  fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha no válida').optional().or(z.literal('')),
   telefono: z.string().trim().min(1, 'El teléfono es requerido').max(20, 'Máximo 20 caracteres'),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   aseguranza_id: z.string().optional().or(z.literal('')),
@@ -56,8 +57,10 @@ const nuevoPacienteSchema = z.object({
   tel_emergencia: z.string().max(20, 'Máximo 20 caracteres').optional().or(z.literal('')),
 });
 
-function filterByEdad(edad: number, filter: string): boolean {
+function filterByEdad(edad: number | null | undefined, filter: string): boolean {
   if (filter === 'Todos') return true;
+  // Sin fecha de nacimiento no hay edad: solo aparece con «Todos».
+  if (edad === null || edad === undefined) return false;
   if (filter === '0-18') return edad <= 18;
   if (filter === '19-35') return edad >= 19 && edad <= 35;
   if (filter === '36-50') return edad >= 36 && edad <= 50;
@@ -72,7 +75,7 @@ export default function PacientesPage() {
   const soloLectura = user?.rol === 'enfermero';
   const [page, setPage] = useState(1);
   // Misma URL que la precarga de /bienvenida (page=1&pageSize=15).
-  const { data: pacientes, loading, validating, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' });
+  const { data: pacientes, loading, validating, error, total, page: currentPage } = useFetch<PacienteAPI>('/api/pacientes', { page: String(page), pageSize: '15' }, { refreshInterval: REFRESCO_COMPARTIDO_MS });
   const { data: aseguranzas } = useFetch<AseguranzaOption>('/api/configuracion/aseguranzas');
   const invalidar = useInvalidar();
   const { toast } = useToast();
@@ -219,7 +222,7 @@ export default function PacientesPage() {
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                       <span>{paciente.telefono || '—'}</span>
                       <span className="hidden sm:inline text-gray-300 dark:text-muted">|</span>
-                      <span>{paciente.sexo === 'H' ? 'M' : 'F'} · {paciente.edad} años</span>
+                      <span>{paciente.sexo === 'H' ? 'M' : 'F'} · {paciente.edad != null ? `${paciente.edad} años` : 'Edad —'}</span>
                     </div>
                   </div>
 
@@ -326,7 +329,7 @@ export default function PacientesPage() {
                     {formErrors.sexo && <p className="mt-1 text-xs text-red-500">{formErrors.sexo}</p>}
                   </div>
                   <div>
-                    <label htmlFor="fecha-nacimiento" className="block text-xs font-bold text-muted mb-1">Fecha de Nacimiento <span className="text-red-500">*</span></label>
+                    <label htmlFor="fecha-nacimiento" className="block text-xs font-bold text-muted mb-1">Fecha de Nacimiento <span className="font-normal">(opcional)</span></label>
                     <input id="fecha-nacimiento" type="date" className={cn("w-full rounded-lg border bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.fecha_nacimiento ? 'border-red-500 dark:border-red-500' : 'border-line')} />
                     {formErrors.fecha_nacimiento && <p className="mt-1 text-xs text-red-500">{formErrors.fecha_nacimiento}</p>}
                   </div>
@@ -413,9 +416,9 @@ export default function PacientesPage() {
                   const payload: Record<string, unknown> = {
                     nombre_completo: result.data.nombre_completo,
                     sexo: result.data.sexo,
-                    fecha_nacimiento: result.data.fecha_nacimiento,
                     telefono: result.data.telefono,
                   };
+                  if (result.data.fecha_nacimiento) payload.fecha_nacimiento = result.data.fecha_nacimiento;
                   if (result.data.email) payload.email = result.data.email;
                   if (result.data.aseguranza_id) payload.aseguranza_id = result.data.aseguranza_id;
                   if (result.data.contacto_emergencia) payload.contacto_emergencia = result.data.contacto_emergencia;

@@ -12,7 +12,8 @@ interface Entry {
 }
 
 const store = new Map<string, Entry>();
-const DEFAULT_TTL = 120_000;
+// Corto: la agenda y los pacientes cambian por acción de otros usuarios.
+const DEFAULT_TTL = 30_000;
 
 async function getJSON(url: string, signal?: AbortSignal): Promise<unknown> {
   const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', signal });

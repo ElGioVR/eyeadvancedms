@@ -19,7 +19,7 @@ export default function SWRProvider({ children }: { children: React.ReactNode })
         keepPreviousData: true,
         dedupingInterval: 3_000,
         revalidateOnFocus: true,
-        focusThrottleInterval: 15_000,
+        focusThrottleInterval: 5_000,
         revalidateOnReconnect: true,
         errorRetryCount: 2,
         errorRetryInterval: 3_000,

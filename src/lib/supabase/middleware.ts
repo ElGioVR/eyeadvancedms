@@ -72,8 +72,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from login
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // Redirect authenticated users away from login (salvo «Ir a login» desde una
+  // ventana cuya sesión se cerró: ?motivo=otra-ventana / otra-sesion)
+  if (user && request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.searchParams.has('motivo')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

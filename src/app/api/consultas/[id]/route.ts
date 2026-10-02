@@ -91,7 +91,7 @@ export async function GET(
     return NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 });
   }
 
-  // RBAC: doctor solo ve sus propias consultas
+  // RBAC: solo el rol de agenda propia queda limitado a lo suyo (doctor: acceso total)
   const denegado = verificarDueno(requerido, consulta.doctor_id);
   if (denegado) return denegado;
 
@@ -188,7 +188,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
 
-  // RBAC: el doctor solo modifica sus propias consultas (igual que en GET)
+  // RBAC: igual que en GET
   const denegado = verificarDueno(requerido, existing.doctor_id);
   if (denegado) return denegado;
 
@@ -378,7 +378,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
 
-  // RBAC: el doctor solo cancela sus propias consultas
+  // RBAC: igual que en GET
   const denegado = verificarDueno(requerido, existing.doctor_id);
   if (denegado) return denegado;
 

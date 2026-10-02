@@ -3,6 +3,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { z } from "zod";
 import { checkRateLimit, recordFailedAttempt, recordSuccessfulLogin } from "@/lib/rate-limit";
 import { SESION_TEMPORAL_COOKIE, opcionesCookieAuth } from "@/lib/supabase/constants";
+import { decidirSesion, etiquetaDispositivo, sessionIdDeToken } from "@/lib/sesion-unica";
+import { leerSesionUsuario, registrarSesion, revocarSesion } from "@/services/sesion-unica";
 
 const loginSchema = z
   .object({
@@ -95,7 +97,13 @@ export async function POST(request: NextRequest) {
     },
   );
 
-  const { error } = await supabase.auth.signInWithPassword({
+  // Sesión previa de ESTE navegador (p. ej. «Ir a login» desde una ventana
+  // desplazada): se revoca al entrar con la nueva y no cuenta como otro dispositivo.
+  const { data: previa } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  const tokenPrevio = previa.session?.access_token ?? null;
+  const sesionPrevia = sessionIdDeToken(tokenPrevio);
+
+  const { data: acceso, error } = await supabase.auth.signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
   });
@@ -140,6 +148,36 @@ export async function POST(request: NextRequest) {
     });
   } else {
     response.cookies.set({ name: SESION_TEMPORAL_COOKIE, value: "", path: "/", maxAge: 0 });
+  }
+
+  // Sesión única: la primera sesión conserva la prioridad. Si otra sigue activa,
+  // esta queda en espera hasta que el usuario confirme «Trabajar aquí»
+  // (POST /api/auth/sesion/tomar) o cancele (POST /api/auth/logout).
+  const userId = acceso.user?.id;
+  const sessionId = sessionIdDeToken(acceso.session?.access_token);
+  if (tokenPrevio && sesionPrevia && sesionPrevia !== sessionId) await revocarSesion(tokenPrevio);
+  if (userId && sessionId) {
+    const actual = await leerSesionUsuario(userId);
+    if (actual) {
+      const mismoNavegador = !!sesionPrevia && actual.activaId === sesionPrevia;
+      const decision = mismoNavegador
+        ? "libre"
+        : decidirSesion({ activaId: actual.activaId, vistaAt: actual.vistaAt, nuevaId: sessionId, ahoraMs: Date.now() });
+      if (decision === "ocupada") {
+        const espera = NextResponse.json(
+          {
+            requiereConfirmacion: true,
+            dispositivo: actual.dispositivo || "otro dispositivo",
+            desde: actual.desde,
+          },
+          { status: 409 },
+        );
+        // Mismas cookies de auth: «Trabajar aquí» usa esta sesión recién creada.
+        response.cookies.getAll().forEach((c) => espera.cookies.set(c));
+        return espera;
+      }
+      await registrarSesion(userId, sessionId, etiquetaDispositivo(request.headers.get("user-agent")));
+    }
   }
   return response;
 }

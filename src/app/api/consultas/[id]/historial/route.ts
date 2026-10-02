@@ -5,6 +5,7 @@ import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error'
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON, validarId } from '@/lib/api/validar';
 import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
+import { agendaSoloPropia } from '@/lib/permisos-agenda';
 
 /** Tipos admitidos por el CHECK de consulta_historial.tipo_evento (migración 090). */
 const TIPOS_EVENTO = ['CREACION', 'CAMBIO_ESTATUS', 'EDICION', 'CANCELACION', 'REAGENDADO', 'PAGADO', 'FINALIZADO'] as const;
@@ -45,12 +46,12 @@ export async function GET(
       .order('created_at', { ascending: false })
       .limit(500),
     requeridoP,
-    auth.perfil?.rol === 'doctor'
+    agendaSoloPropia(auth.perfil?.rol)
       ? supabase.from('consultas').select('doctor_id').eq('id', id).maybeSingle()
       : Promise.resolve(null),
   ]);
 
-  // RBAC: el doctor solo ve el historial de sus propias consultas (como en GET /consultas/[id])
+  // RBAC: el rol de agenda propia solo ve el historial de lo suyo (como en GET /consultas/[id])
   if (requerido !== undefined) {
     const denegado = verificarDueno(requerido, consultaResult?.data?.doctor_id);
     if (denegado) return denegado;

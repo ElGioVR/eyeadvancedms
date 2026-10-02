@@ -71,7 +71,9 @@ describe('agenda-acciones (aplazar / reagendar / cancelar)', () => {
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'recepcionista'), ['aplazar', 'reagendar', 'cancelar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'reagendada' }, 'admin'), ['reagendar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'aplazada' }, 'admin'), []);
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'doctor'), []);
+    // Doctor con acceso total a la agenda (oct 2026); enfermería solo consulta.
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'doctor'), ['aplazar', 'reagendar', 'cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), []);
     assert.deepEqual(accionesDisponibles({ estado: 'agendada' }, 'admin'), ['aplazar', 'reagendar', 'cancelar']);
   });
 });

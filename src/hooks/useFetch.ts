@@ -3,6 +3,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig, type KeyedMutator } from 'swr';
 
+/**
+ * Intervalo de refresco para datos que cambian por la acción de OTROS usuarios
+ * (agenda, pacientes, consultas, dashboard). Solo corre con la pestaña visible.
+ */
+export const REFRESCO_COMPARTIDO_MS = 30_000;
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;

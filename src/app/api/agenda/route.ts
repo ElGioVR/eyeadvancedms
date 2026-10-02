@@ -4,6 +4,7 @@ import { notificarAsignacion } from '@/services/notificaciones';
 import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { ROLES_GESTION_AGENDA, ROLES_VER_AGENDA, agendaSoloPropia } from '@/lib/permisos-agenda';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { consumirLIO } from '@/lib/inventario';
 import { errorInterno, fechaISO, horaHHMM, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
@@ -119,16 +120,15 @@ export async function GET(request: Request) {
 
   // RBAC con el perfil que ya trae requireAuth (sin otra consulta a `usuarios`).
   const profile = auth.perfil;
-  const ROLES_AGENDA = ['admin', 'doctor', 'recepcionista', 'enfermero'];
-  if (!profile || profile.activo !== true || !ROLES_AGENDA.includes(profile.rol)) {
+  if (!profile || profile.activo !== true || !ROLES_VER_AGENDA.includes(profile.rol)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
   const userRole = profile.rol;
-  // Doctor y enfermero(a) ven solo su propia ocupación.
-  const propia = userRole === 'doctor' || userRole === 'enfermero';
+  // Enfermería ve solo su propia ocupación; admin, recepción y doctor ven todo.
+  const propia = agendaSoloPropia(userRole);
   const focus = userRole === 'admin' && profile.preferencias?.modo_focus === true;
 
-  // El vínculo usuario → doctores solo se consulta cuando filtra (doctor o admin en modo focus).
+  // El vínculo usuario → doctores solo se consulta cuando filtra (enfermería o admin en modo focus).
   let sessionDoctorId: string | null = null;
   if (propia || focus) {
     const { data: doctorProfile } = await supabase
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
   const filtrarPorDoctor = propia || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
 
-  // Un doctor sin vínculo a `doctores` no debe ver la agenda de todos.
+  // Enfermería sin vínculo a `doctores` no debe ver la agenda de todos.
   if (propia && !sessionDoctorId) {
     return NextResponse.json({ data: [], total: 0, page, pageSize });
   }
@@ -282,7 +282,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ROLES_GESTION_AGENDA);
   if (roleError) return roleError;
 
   const data = await leerJSON(request, cirugiaCreateBodySchema);

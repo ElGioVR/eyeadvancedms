@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import { cookies, headers } from 'next/headers';
 import { SESION_TEMPORAL_COOKIE, VERIFIED_USER_HEADER, opcionesCookieAuth } from './constants';
+import { CODIGO_SESION_REEMPLAZADA, LATIDO_MS, sesionVigente } from '@/lib/sesion-unica';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 /**
  * Roles de usuario. 'enfermero' es restringido: solo su propia agenda y, si
@@ -61,6 +63,8 @@ export function createClient() {
 export interface SesionUser {
   id: string;
   email: string | null;
+  /** Claim `session_id` del JWT (sesión de Supabase Auth); null si no viene. */
+  sessionId?: string | null;
 }
 
 export interface PerfilSesion {
@@ -69,6 +73,8 @@ export interface PerfilSesion {
   nombre: string | null;
   email: string | null;
   preferencias: Record<string, unknown>;
+  /** Sesión con prioridad (sesión única). null = sin registrar o sin migración 450. */
+  sesionActivaId: string | null;
 }
 
 /*
@@ -113,6 +119,10 @@ function subSinVerificar(token: string): string | null {
   }
 }
 
+const COLUMNAS_PERFIL = 'rol, activo, nombre, email, preferencias';
+/** false si la BD aún no tiene las columnas de sesión única (se detecta una vez). */
+let columnasSesion = true;
+
 /** Perfil del usuario (rol, activo, preferencias) con caché corta por instancia. */
 export function obtenerPerfil(userId: string): Promise<PerfilSesion | null> {
   const ahora = Date.now();
@@ -121,13 +131,17 @@ export function obtenerPerfil(userId: string): Promise<PerfilSesion | null> {
 
   // Import diferido: este módulo también lo usan Server Components.
   const promise = import('./admin')
-    .then(({ getSupabaseAdmin }) =>
-      getSupabaseAdmin()
-        .from('usuarios')
-        .select('rol, activo, nombre, email, preferencias')
-        .eq('id', userId)
-        .maybeSingle(),
-    )
+    .then(async ({ getSupabaseAdmin }) => {
+      const leer = (columnas: string) =>
+        getSupabaseAdmin().from('usuarios').select(columnas).eq('id', userId).maybeSingle<Record<string, unknown>>();
+      if (columnasSesion) {
+        const r = await leer(`${COLUMNAS_PERFIL}, sesion_activa_id`);
+        // 42703 = columna inexistente: la migración 450 aún no se aplica → sin sesión única.
+        if (!r.error || r.error.code !== '42703') return r;
+        columnasSesion = false;
+      }
+      return leer(COLUMNAS_PERFIL);
+    })
     .then(({ data, error }) => {
       if (error || !data) {
         perfiles.delete(userId); // no cachear fallos
@@ -142,6 +156,7 @@ export function obtenerPerfil(userId: string): Promise<PerfilSesion | null> {
           data.preferencias && typeof data.preferencias === 'object'
             ? (data.preferencias as Record<string, unknown>)
             : {},
+        sesionActivaId: typeof data.sesion_activa_id === 'string' ? data.sesion_activa_id : null,
       } satisfies PerfilSesion;
     })
     .catch(() => {
@@ -171,7 +186,11 @@ async function verificarToken(
   const claims = data?.claims;
   if (error || !claims || typeof claims.sub !== 'string') return null;
 
-  const user: SesionUser = { id: claims.sub, email: typeof claims.email === 'string' ? claims.email : null };
+  const user: SesionUser = {
+    id: claims.sub,
+    email: typeof claims.email === 'string' ? claims.email : null,
+    sessionId: typeof (claims as { session_id?: unknown }).session_id === 'string' ? (claims as { session_id: string }).session_id : null,
+  };
   const expMs = typeof claims.exp === 'number' ? claims.exp * 1000 : ahora;
   const hasta = Math.min(ahora + AUTH_TTL_MS, expMs);
   if (hasta > ahora) {
@@ -204,7 +223,13 @@ export async function requireAuth(): Promise<{ user: SesionUser; perfil: PerfilS
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
-  const perfil = await (user.id === idProbable && perfilEspeculativo ? perfilEspeculativo : obtenerPerfil(user.id));
+  let perfil = await (user.id === idProbable && perfilEspeculativo ? perfilEspeculativo : obtenerPerfil(user.id));
+  // La sesión vigente pudo cambiar hace instantes (renovación en otra instancia):
+  // antes de rechazar, se confirma con el perfil recién leído (caso raro).
+  if (perfil && !sesionVigente(perfil.sesionActivaId, user.sessionId)) {
+    invalidarPerfil(user.id);
+    perfil = await obtenerPerfil(user.id);
+  }
   // Sin fila en `usuarios` (cuenta de Auth ajena a la clínica) o desactivado → sin acceso
   if (!perfil) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
@@ -212,8 +237,41 @@ export async function requireAuth(): Promise<{ user: SesionUser; perfil: PerfilS
   if (!perfil.activo) {
     return NextResponse.json({ error: 'Usuario inactivo' }, { status: 403 });
   }
+  // Sesión única: si otro dispositivo tomó la sesión («Trabajar aquí»), esta se cierra.
+  if (!sesionVigente(perfil.sesionActivaId, user.sessionId)) {
+    return NextResponse.json(
+      { error: 'Tu sesión se cerró porque se inició en otro dispositivo.', code: CODIGO_SESION_REEMPLAZADA },
+      { status: 401 },
+    );
+  }
+  if (perfil.sesionActivaId && user.sessionId) registrarActividad(user.id, user.sessionId);
 
   return { user, perfil };
+}
+
+const ultimoLatido = new Map<string, number>();
+
+/**
+ * Marca actividad de la sesión con prioridad (como máximo 1 vez por minuto por
+ * usuario e instancia). Así un login en otro dispositivo sabe si esta sesión
+ * sigue en uso o puede reemplazarse sin preguntar.
+ */
+function registrarActividad(userId: string, sessionId: string): void {
+  const ahora = Date.now();
+  if ((ultimoLatido.get(userId) ?? 0) + LATIDO_MS > ahora) return;
+  if (ultimoLatido.size > MAX_ENTRADAS) ultimoLatido.clear();
+  ultimoLatido.set(userId, ahora);
+  const tarea = import('./admin').then(({ getSupabaseAdmin }) =>
+    getSupabaseAdmin()
+      .from('usuarios')
+      .update({ sesion_vista_at: new Date(ahora).toISOString() })
+      .eq('id', userId)
+      .eq('sesion_activa_id', sessionId)
+      .then(({ error }) => {
+        if (error) ultimoLatido.delete(userId);
+      }),
+  );
+  enSegundoPlano(tarea, 'sesion.latido');
 }
 
 export async function requireRole(

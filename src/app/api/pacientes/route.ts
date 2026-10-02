@@ -223,10 +223,12 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
+  // La fecha de nacimiento es opcional (migración 1800000000440): sin dato se
+  // guarda NULL, ya no la fecha ficticia 2000-01-01.
   const insertData: Record<string, unknown> = {
     nombre_completo: data.nombre_completo || data.nombre,
     sexo: 'MASCULINO',
-    fecha_nacimiento: '2000-01-01',
+    fecha_nacimiento: null,
   };
 
   if (data.sexo) {

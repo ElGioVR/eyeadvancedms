@@ -25,6 +25,8 @@ interface HistorialOjo {
 }
 
 const MAX_RESULTS_PER_TYPE = 5;
+/** Pacientes: algo más holgado que el resto (es la búsqueda más usada). */
+const MAX_PACIENTES = 8;
 const MIN_QUERY = 2;
 const MAX_QUERY = 60;
 const MAX_PACIENTES_CON_FILTRO = 50;
@@ -64,24 +66,29 @@ export async function GET(request: NextRequest) {
 
   // Con filtro de ojo solo interesan pacientes (evita 5 consultas por tecla).
   const limitePacientes =
-    filtroOjo && filtroOjo !== 'todos' ? MAX_PACIENTES_CON_FILTRO : MAX_RESULTS_PER_TYPE;
+    filtroOjo && filtroOjo !== 'todos' ? MAX_PACIENTES_CON_FILTRO : MAX_PACIENTES;
 
+  // Más recientes primero: con nombres comunes, el paciente recién dado de alta
+  // (p. ej. por otro usuario) debe aparecer en la lista y no quedar fuera del límite.
   const pacientesQuery = supabase
     .from('pacientes')
-    .select('id,nombre_completo,telefono,email')
-    .or(`nombre_completo.ilike.${pattern},telefono.ilike.${pattern},email.ilike.${pattern}`)
+    .select('id,nombre_completo,telefono,email,numero_expediente')
+    .or(`nombre_completo.ilike.${pattern},telefono.ilike.${pattern},email.ilike.${pattern},numero_expediente.ilike.${pattern}`)
+    .order('created_at', { ascending: false })
     .limit(limitePacientes);
 
   const historial = new Map<string, HistorialOjo>();
   const results: SearchResult[] = [];
 
-  const agregarPacientes = (lista: Array<{ id: string; nombre_completo: string; telefono: string | null; email: string | null }>) => {
+  const agregarPacientes = (lista: Array<{ id: string; nombre_completo: string; telefono: string | null; email: string | null; numero_expediente?: string | null }>) => {
     for (const p of lista) {
       const item: SearchResult = {
         tipo: 'paciente',
         id: p.id,
         titulo: p.nombre_completo,
-        subtitulo: [p.telefono, p.email].filter(Boolean).join(' · ') || 'Sin datos de contacto',
+        subtitulo:
+          [p.numero_expediente ? `Exp. ${p.numero_expediente}` : null, p.telefono, p.email].filter(Boolean).join(' · ') ||
+          'Sin datos de contacto',
         href: `/pacientes/${p.id}/historial`,
       };
       if (filtroOjo) {
@@ -124,7 +131,7 @@ export async function GET(request: NextRequest) {
       } else if (filtroOjo === 'segundo') {
         listaPacientes = listaPacientes.filter((p) => (historial.get(p.id)?.total || 0) > 0);
       }
-      listaPacientes = listaPacientes.slice(0, MAX_RESULTS_PER_TYPE);
+      listaPacientes = listaPacientes.slice(0, MAX_PACIENTES);
     }
 
     agregarPacientes(listaPacientes);

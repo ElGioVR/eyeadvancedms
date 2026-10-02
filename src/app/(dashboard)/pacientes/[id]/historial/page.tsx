@@ -624,7 +624,9 @@ export default function HistorialMedicoPage() {
               </div>
               <div className="px-5 py-3">
                 <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Fecha de Nacimiento</p>
-                <p className="text-sm font-bold text-fg mt-1"><ClientDate date={paciente.fecha_nacimiento} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /></p>
+                <p className="text-sm font-bold text-fg mt-1">{paciente.fecha_nacimiento
+                  ? <ClientDate date={paciente.fecha_nacimiento} options={{ day: 'numeric', month: 'short', year: 'numeric' }} />
+                  : <span className="font-medium text-amber-600 dark:text-amber-400">Sin capturar</span>}</p>
               </div>
               <div className="px-5 py-3">
                 <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Paciente desde</p>

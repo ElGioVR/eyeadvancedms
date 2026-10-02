@@ -53,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: 'La consulta no existe' }, { status: 404 });
   }
 
-  // RBAC: el doctor solo gestiona sus propias consultas
+  // RBAC: solo el rol de agenda propia (enfermería) queda limitado a lo suyo
   const denegado = verificarDueno(requerido, existing.doctor_id);
   if (denegado) return denegado;
 

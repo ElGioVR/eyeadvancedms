@@ -289,8 +289,9 @@ function checkAgendaRoute() {
     content,
     // requireRole(...) o la verificación equivalente en la misma lectura del perfil
     // (rol + activo) que usa el GET optimizado.
-    /requireRole\s*\(\s*auth\.user\s*,\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)|ROLES_AGENDA\s*=\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*(?:,\s*['"]enfermero['"]\s*)?\][\s\S]*profile\.activo !== true/,
+    /requireRole\s*\(\s*auth\.user\s*,\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)|ROLES_AGENDA\s*=\s*\[\s*['"]admin['"]\s*,\s*['"]doctor['"]\s*,\s*['"]recepcionista['"]\s*(?:,\s*['"]enfermero['"]\s*)?\][\s\S]*profile\.activo !== true|profile\.activo !== true\s*\|\|\s*!ROLES_VER_AGENDA\.includes\(profile\.rol\)/,
     // + 'enfermero' (rol restringido, solo su agenda) desde la mig. 390
+    // + ROLES_VER_AGENDA (lib/permisos-agenda.ts) desde oct 2026
     'GET mantiene RBAC de los roles de agenda (sin regresión)'
   );
 }
@@ -378,8 +379,8 @@ function checkLegacyAgendaEndpoints() {
     // requireAuth + RBAC preservados
     assertRegexMatches(
       postContent,
-      /requireRole\s*\(\s*auth\.user\s*,\s*\[\s*['"]admin['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)/,
-      'POST mantiene RBAC admin/recepcionista (sin regresión)'
+      /requireRole\s*\(\s*auth\.user\s*,\s*ROLES_GESTION_AGENDA\s*\)/,
+      'POST mantiene RBAC con ROLES_GESTION_AGENDA (admin, recepción y doctor)'
     );
 
     // Campos legacy que no se deben eliminar (cambios aditivos según

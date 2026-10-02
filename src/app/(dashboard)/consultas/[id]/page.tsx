@@ -16,6 +16,7 @@ import { TIPOS_CONSULTA_AGENDA, etiquetaTipoConsulta, tipoAgendaDesdeBd, valores
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
@@ -415,6 +416,19 @@ export default function ConsultaDetailPage() {
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
+            <EnviarPaciente
+              cita={{
+                tipo: 'consulta',
+                paciente: consulta.paciente,
+                fecha: consulta.fecha,
+                hora: consulta.hora_inicio,
+                doctor: consulta.doctor,
+                detalle: [consulta.especialidad, etiquetaTipoConsulta(consulta.tipo_consulta, consulta.tipo_visita)].filter(Boolean).join(' · ') || null,
+                folio: consulta.folio,
+              }}
+              telefono={consulta.paciente_telefono}
+              email={consulta.paciente_email}
+            />
             {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && !!consulta.procedimiento && (
               <button
                 onClick={() => {

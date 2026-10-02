@@ -743,8 +743,8 @@ useEffect(() => {
     const telefono = altaPaciente.telefono.trim();
     const error = !nombre
       ? 'El nombre es requerido'
-      : !/^\d{4}-\d{2}-\d{2}$/.test(altaPaciente.fecha_nacimiento)
-        ? 'La fecha de nacimiento es requerida'
+      : altaPaciente.fecha_nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(altaPaciente.fecha_nacimiento)
+        ? 'La fecha de nacimiento no es válida'
         : expediente.length > 50
           ? 'El número de expediente admite máximo 50 caracteres'
           : telefono.length > 20
@@ -753,7 +753,9 @@ useEffect(() => {
     if (error) { setAltaPaciente({ ...altaPaciente, error }); return; }
     setAltaPaciente({ ...altaPaciente, guardando: true, error: null });
     try {
-      const payload: Record<string, string> = { nombre_completo: nombre, sexo: altaPaciente.sexo, fecha_nacimiento: altaPaciente.fecha_nacimiento };
+      // Fecha de nacimiento opcional: solo se envía si se capturó.
+      const payload: Record<string, string> = { nombre_completo: nombre, sexo: altaPaciente.sexo };
+      if (altaPaciente.fecha_nacimiento) payload.fecha_nacimiento = altaPaciente.fecha_nacimiento;
       if (expediente) payload.numero_expediente = expediente;
       if (telefono) payload.telefono = telefono;
       const res = await fetch('/api/pacientes', {
@@ -764,6 +766,7 @@ useEffect(() => {
       const creado = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(creado.error || 'No se pudo crear el paciente');
       setAltaPaciente(null);
+      void invalidar('/api/pacientes', '/api/search');
       toast('Paciente creado', 'success');
       await seleccionarPaciente({
         id: creado.id,
@@ -951,7 +954,7 @@ useEffect(() => {
       }
 
       // La agenda, listas de cirugías y el dashboard se revalidan en segundo plano.
-      void invalidar('/api/agenda', '/api/cirugias', '/api/dashboard', '/api/inventario');
+      void invalidar('/api/agenda', '/api/cirugias', '/api/dashboard', '/api/inventario', '/api/pacientes', '/api/search');
       toast('Cirugía creada', 'success');
       router.push(`/cirugias/${cirugiaId}`);
     } catch (err: unknown) {
@@ -1136,7 +1139,7 @@ useEffect(() => {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="alta-nacimiento" className={labelCls}>Fecha de nacimiento *</label>
+                      <label htmlFor="alta-nacimiento" className={labelCls}>Fecha de nacimiento (opcional)</label>
                       <input
                         id="alta-nacimiento"
                         type="date"

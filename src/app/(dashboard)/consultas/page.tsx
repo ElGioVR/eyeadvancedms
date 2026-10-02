@@ -16,6 +16,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useFetch, useDebounce, useInvalidar } from "@/hooks";
+import { REFRESCO_COMPARTIDO_MS } from "@/hooks/useFetch";
 import { enviarJSON } from "@/lib/fetcher";
 import BarraRevalidando from "@/components/ui/BarraRevalidando";
 import StatCard from "@/components/ui/StatCard";
@@ -111,7 +112,7 @@ export default function ConsultasPage() {
   } = useFetch<ConsultaAPI>("/api/consultas", {
     page: String(page),
     pageSize: "15",
-  });
+  }, { refreshInterval: REFRESCO_COMPARTIDO_MS });
   const [search, setSearch] = useState("");
   const [filterDoctor, setFilterDoctor] = useState("Todos");
   const [today, setToday] = useState('');

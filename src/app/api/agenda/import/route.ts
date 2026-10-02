@@ -3,6 +3,7 @@ import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error'
 import { errorInterno } from '@/lib/api/validar';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { ROLES_IMPORTAR_AGENDA } from '@/lib/permisos-agenda';
 import { invalidarDoctorDeUsuario } from '@/lib/auth-helpers';
 import {
   claveTexto,
@@ -375,7 +376,7 @@ interface FilaPreview {
 export async function POST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ROLES_IMPORTAR_AGENDA);
   if (roleError) return roleError;
 
   const largo = Number(request.headers.get('content-length') || 0);

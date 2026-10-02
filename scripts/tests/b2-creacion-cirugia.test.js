@@ -120,7 +120,8 @@ function checkRouteFile() {
   const content = fileExistsOrFail(ROUTE_FILE, 'archivo de endpoint existe');
   if (content === null) return;
 
-  // 1. RBAC: requireAuth + requireRole con roles admin y recepcionista
+  // 1. RBAC: requireAuth + requireRole con los roles que gestionan la agenda
+  //    (admin, recepcionista y, desde oct 2026, doctor: lib/permisos-agenda.ts)
   assertContainsAll(
     content,
     ['requireAuth', 'requireRole'],
@@ -128,8 +129,8 @@ function checkRouteFile() {
   );
   assertRegexMatches(
     content,
-    /requireRole\s*\(\s*[^,]+,\s*\[\s*['"]admin['"]\s*,\s*['"]recepcionista['"]\s*\]\s*\)/,
-    "requireRole llamado con ['admin', 'recepcionista']"
+    /requireRole\s*\(\s*[^,]+,\s*ROLES_GESTION_AGENDA\s*\)/,
+    'requireRole llamado con ROLES_GESTION_AGENDA'
   );
 
   // 2. Esquema Zod: campos obligatorios del cuerpo

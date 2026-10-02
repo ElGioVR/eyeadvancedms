@@ -37,7 +37,7 @@ export async function GET(
     consulta_id,
     created_by,
     created_at,
-    pacientes:paciente_id (nombre_completo),
+    pacientes:paciente_id (nombre_completo, telefono, email),
     origen:origen_id (nombre),
     servicio:servicio_id (nombre),
     recurso:recurso_id (nombre, ubicacion)

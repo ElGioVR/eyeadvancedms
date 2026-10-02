@@ -190,8 +190,8 @@ function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: st
   const nombre = p.nombre_completo.trim();
   if (!nombre) return 'El nombre es requerido';
   if (nombre.length > 255) return 'El nombre admite máximo 255 caracteres';
-  if (!p.fecha_nacimiento) return 'La fecha de nacimiento es requerida';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.fecha_nacimiento)) return 'La fecha de nacimiento no es válida';
+  // Opcional: si se captura, debe ser una fecha válida.
+  if (p.fecha_nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(p.fecha_nacimiento)) return 'La fecha de nacimiento no es válida';
   if (p.telefono.trim().length > 20) return 'El teléfono admite máximo 20 caracteres';
   const email = p.email.trim();
   if (email && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Email inválido';
@@ -1246,7 +1246,7 @@ function NuevaConsultaContent() {
                     <FormInput label="Número de expediente" value={newPatient.numero_expediente} onChange={(v) => setNewPatient((p) => ({ ...p, numero_expediente: v }))} placeholder="Ej. 12345" />
                     <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
                     <FormSelect label="Sexo" required value={newPatient.sexo} onChange={(v) => setNewPatient((p) => ({ ...p, sexo: v }))} options={['H', 'M']} displayOptions={['Hombre', 'Mujer']} />
-                    <FormInput label="Fecha de nacimiento" required value={newPatient.fecha_nacimiento} onChange={(v) => setNewPatient((p) => ({ ...p, fecha_nacimiento: v }))} type="date" />
+                    <FormInput label="Fecha de nacimiento (opcional)" value={newPatient.fecha_nacimiento} onChange={(v) => setNewPatient((p) => ({ ...p, fecha_nacimiento: v }))} type="date" />
                     <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
                     <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
                     <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
