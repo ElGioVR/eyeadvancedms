@@ -1,29 +1,49 @@
--- Servicios predeterminados (consultas, estudios y procedimientos) para TODAS las aseguradoras.
--- Fuente: catalogo de conceptos de la licitacion ISSSTECALI DNPA-LP-23032026-ISSSTECALI-001 BIS
--- (Tijuana partida 95 y Ensenada partida 97, junio 2026). Precio: Tijuana; Ensenada si el concepto
--- solo viene ahi. 163 conceptos.
--- - Los servicios que una aseguradora ya tiene con el mismo nombre toman el precio de la licitacion.
--- - Los que faltan se agregan a cada aseguradora.
--- - Las aseguradoras nuevas reciben el catalogo automaticamente (trigger).
+-- Servicios predeterminados (consultas, estudios y procedimientos) por aseguradora.
+--
+-- ISSSTECALI: catalogo de la licitacion DNPA-LP-23032026-ISSSTECALI-001 BIS (Tijuana partida 95 y
+--   Ensenada partida 97, junio 2026). 163 conceptos. Precio Tijuana; Ensenada si solo viene ahi.
+-- Demas aseguradoras: catalogo GENERAL (Libro1.xlsx, oct 2026). 42 conceptos con precio en USD
+--   convertido a pesos con el tipo de cambio de Configuracion > Honorarios (tipo_cambio_default,
+--   17.50 si no existe). Los conceptos con precio por ojo y por 2 ojos son dos servicios.
+--
+-- - ISSSTECALI: los servicios con el mismo nombre toman el precio de la licitacion; se agregan los que faltan.
+-- - Demas aseguradoras: los servicios de la licitacion que se les copiaron en bloque se DESACTIVAN
+--   (activo = false, no se borran); si el concepto tambien existe en el catalogo general toma su precio.
+--   Se agregan los servicios generales que falten. Los servicios propios de cada aseguradora no se tocan.
+-- - Aseguradoras nuevas: reciben su catalogo automaticamente (trigger).
 -- Idempotente. Pegar completo en el SQL Editor de Supabase.
+-- Para fijar otro tipo de cambio, cambiar la linea marcada con  <-- TIPO DE CAMBIO
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS servicios_predeterminados (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tipo TEXT NOT NULL CHECK (tipo IN ('ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA')),
   nombre TEXT NOT NULL,
-  nombre_norm TEXT NOT NULL UNIQUE,
+  nombre_norm TEXT NOT NULL,
   costo NUMERIC(10,2) NOT NULL DEFAULT 0,
   fuente TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE servicios_predeterminados ADD COLUMN IF NOT EXISTS catalogo TEXT NOT NULL DEFAULT 'ISSSTECALI';
+ALTER TABLE servicios_predeterminados ADD COLUMN IF NOT EXISTS costo_usd NUMERIC(10,2);
+ALTER TABLE servicios_predeterminados DROP CONSTRAINT IF EXISTS servicios_predeterminados_nombre_norm_key;
+ALTER TABLE servicios_predeterminados DROP CONSTRAINT IF EXISTS servicios_predeterminados_catalogo_check;
+ALTER TABLE servicios_predeterminados ADD CONSTRAINT servicios_predeterminados_catalogo_check CHECK (catalogo IN ('ISSSTECALI', 'GENERAL'));
+CREATE UNIQUE INDEX IF NOT EXISTS servicios_predeterminados_catalogo_nombre_uq ON servicios_predeterminados (catalogo, nombre_norm);
 ALTER TABLE servicios_predeterminados ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS servicios_predeterminados_read ON servicios_predeterminados;
 CREATE POLICY servicios_predeterminados_read ON servicios_predeterminados FOR SELECT TO authenticated USING (true);
 
-INSERT INTO servicios_predeterminados (tipo, nombre, nombre_norm, costo, fuente)
-SELECT v.tipo, v.nombre, v.nombre_norm, v.costo, 'Licitacion ISSSTECALI 001 BIS, junio 2026'
+-- ISSSTECALI: true si el nombre es ISSSTECALI con variantes de captura (Isstecali, ISSSTE CALI, ...).
+CREATE OR REPLACE FUNCTION es_aseguradora_issstecali(p_nombre TEXT)
+RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(lower(coalesce(p_nombre, '')), '[^a-z]', '', 'g') ~ 'is+tecal+i'
+$$;
+
+-- Catalogo ISSSTECALI (licitacion)
+INSERT INTO servicios_predeterminados (catalogo, tipo, nombre, nombre_norm, costo, fuente)
+SELECT 'ISSSTECALI', v.tipo, v.nombre, v.nombre_norm, v.costo, 'Licitacion ISSSTECALI 001 BIS, junio 2026'
 FROM (VALUES
   ('CONSULTA', 'Consulta Cornea', 'consulta cornea', 400.00),
   ('CONSULTA', 'Consulta de Estrabismo', 'consulta de estrabismo', 400.00),
@@ -189,26 +209,138 @@ FROM (VALUES
   ('PROCEDIMIENTO', U&'Vitrectom\00EDa Simple', 'vitrectomia simple', 36800.00),
   ('PROCEDIMIENTO', 'Yag Laser Por Ojo', 'yag laser por ojo', 2000.00)
 ) AS v(tipo, nombre, nombre_norm, costo)
-ON CONFLICT (nombre_norm) DO UPDATE
+ON CONFLICT (catalogo, nombre_norm) DO UPDATE
   SET tipo = EXCLUDED.tipo, nombre = EXCLUDED.nombre, costo = EXCLUDED.costo, fuente = EXCLUDED.fuente, updated_at = now();
 
--- 1) Servicios existentes con el mismo nombre (en cualquier tipo): toman el precio.
+-- Catalogo GENERAL (resto de aseguradoras). costo = USD x tipo de cambio, o precio fijo en pesos.
+WITH tc AS (
+  SELECT COALESCE(
+    (SELECT NULLIF(valor->>'tipo_cambio_default', '')::numeric FROM configuracion_sistema WHERE clave = 'honorarios'),
+    17.50
+  ) AS tc   -- <-- TIPO DE CAMBIO (para fijarlo: SELECT 18.50::numeric AS tc)
+)
+INSERT INTO servicios_predeterminados (catalogo, tipo, nombre, nombre_norm, costo, costo_usd, fuente)
+SELECT 'GENERAL', v.tipo, v.nombre, v.nombre_norm,
+       COALESCE(v.costo_mxn, round(v.costo_usd * tc.tc, 2)), v.costo_usd,
+       'Catalogo general (Libro1.xlsx), oct 2026; USD a ' || tc.tc || ' MXN'
+FROM (VALUES
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser (Iridotom\00EDa) Glaucoma por Ojo', 'yag laser (iridotomia) glaucoma por ojo', 250.00, NULL),
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser (Iridotom\00EDa) Glaucoma Ambos Ojos', 'yag laser (iridotomia) glaucoma ambos ojos', 400.00, NULL),
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser (Capsulotom\00EDa) por Ojo', 'yag laser (capsulotomia) por ojo', 150.00, NULL),
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser (Capsulotom\00EDa) Ambos Ojos', 'yag laser (capsulotomia) ambos ojos', 250.00, NULL),
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser SLT (Trabeculoplastia Selectiva L\00E1ser) por Ojo', 'yag laser slt (trabeculoplastia selectiva laser) por ojo', 350.00, NULL),
+  ('PROCEDIMIENTO', U&'YAG L\00E1ser SLT (Trabeculoplastia Selectiva L\00E1ser) Ambos Ojos', 'yag laser slt (trabeculoplastia selectiva laser) ambos ojos', 550.00, NULL),
+  ('PROCEDIMIENTO', U&'MLT (Trabeculoplastia L\00E1ser de Micropulsado) en Glaucoma por Ojo', 'mlt (trabeculoplastia laser de micropulsado) en glaucoma por ojo', 450.00, NULL),
+  ('PROCEDIMIENTO', U&'MLT (Trabeculoplastia L\00E1ser de Micropulsado) en Glaucoma Ambos Ojos', 'mlt (trabeculoplastia laser de micropulsado) en glaucoma ambos ojos', 800.00, NULL),
+  ('PROCEDIMIENTO', U&'Fotocoagulaci\00F3n por Ojo', 'fotocoagulacion por ojo', 350.00, NULL),
+  ('PROCEDIMIENTO', U&'Fotocoagulaci\00F3n Ambos Ojos', 'fotocoagulacion ambos ojos', 945.00, NULL),
+  ('PROCEDIMIENTO', U&'Panfotocoagulaci\00F3n Panretiniana por Ojo', 'panfotocoagulacion panretiniana por ojo', 686.00, NULL),
+  ('PROCEDIMIENTO', U&'Panfotocoagulaci\00F3n Panretiniana Ambos Ojos', 'panfotocoagulacion panretiniana ambos ojos', 1300.00, NULL),
+  ('PROCEDIMIENTO', U&'Chalazi\00F3n', 'chalazion', 575.00, NULL),
+  ('PROCEDIMIENTO', 'Drenaje de Absceso', 'drenaje de absceso', 65.00, NULL),
+  ('PROCEDIMIENTO', U&'Exploraci\00F3n de V\00EDas Lagrimales por Ojo', 'exploracion de vias lagrimales por ojo', 60.00, NULL),
+  ('PROCEDIMIENTO', U&'Exploraci\00F3n de V\00EDas Lagrimales Ambos Ojos', 'exploracion de vias lagrimales ambos ojos', 120.00, NULL),
+  ('PROCEDIMIENTO', U&'Extracci\00F3n de Rebaba por Ojo', 'extraccion de rebaba por ojo', 100.00, NULL),
+  ('PROCEDIMIENTO', U&'Extracci\00F3n de Rebaba Ambos Ojos', 'extraccion de rebaba ambos ojos', 200.00, NULL),
+  ('PROCEDIMIENTO', 'Sutura de Herida', 'sutura de herida', 850.00, NULL),
+  ('ESTUDIO', U&'Tomograf\00EDas (Topograf\00EDa, C\00E1lculo de Lente y Estudio de Queratocono)', 'tomografias (topografia, calculo de lente y estudio de queratocono)', 100.00, NULL),
+  ('ESTUDIO', U&'Paquete Glaucoma (Tomograf\00EDa del Nervio \00D3ptico y de las Capas de C\00E9lulas Ganglionares de la Retina)', 'paquete glaucoma (tomografia del nervio optico y de las capas de celulas ganglionares de la retina)', 150.00, NULL),
+  ('ESTUDIO', U&'OCT (Tomograf\00EDa de Coherencia \00D3ptica) Retina M\00E1cula', 'oct (tomografia de coherencia optica) retina macula', 120.00, NULL),
+  ('ESTUDIO', U&'OCT (Tomograf\00EDa de Coherencia \00D3ptica) Retina Subsecuente', 'oct (tomografia de coherencia optica) retina subsecuente', 100.00, NULL),
+  ('ESTUDIO', U&'OCT M\00E1cula + OCT Nervio \00D3ptico', 'oct macula + oct nervio optico', 220.00, NULL),
+  ('ESTUDIO', 'Campos Visuales', 'campos visuales', 150.00, NULL),
+  ('ESTUDIO', U&'Paquete OCT Nervio \00D3ptico y Campos Visuales', 'paquete oct nervio optico y campos visuales', 235.00, NULL),
+  ('ESTUDIO', U&'Fluorangiograf\00EDa Complementaria', 'fluorangiografia complementaria', 130.00, NULL),
+  ('ESTUDIO', U&'Fluorangiograf\00EDa', 'fluorangiografia', 200.00, NULL),
+  ('ESTUDIO', U&'Angiograf\00EDa con Verde de Indocianina (ICG)', 'angiografia con verde de indocianina (icg)', 250.00, NULL),
+  ('ESTUDIO', 'Potenciales Evocados', 'potenciales evocados', 410.00, NULL),
+  ('ESTUDIO', 'Electrorretinograma', 'electrorretinograma', 345.00, NULL),
+  ('ESTUDIO', U&'Fluorangiograf\00EDa + OCT Macular', 'fluorangiografia + oct macular', 250.00, NULL),
+  ('ESTUDIO', U&'C\00E1lculo por Ultrasonido por Ojo', 'calculo por ultrasonido por ojo', 50.00, NULL),
+  ('ESTUDIO', U&'C\00E1lculo por Ultrasonido Ambos Ojos', 'calculo por ultrasonido ambos ojos', 75.00, NULL),
+  ('ESTUDIO', 'Ultrasonido', 'ultrasonido', 120.00, NULL),
+  ('ESTUDIO', U&'Angiograf\00EDa + OCT + Subsecuente', 'angiografia + oct + subsecuente', 250.00, NULL),
+  ('CONSULTA', 'Consulta C/6', 'consulta c/6', 120.00, NULL),
+  ('CONSULTA', 'Consulta Subsecuente', 'consulta subsecuente', 70.00, NULL),
+  ('CONSULTA', 'Interconsulta C/3', 'interconsulta c/3', 55.00, NULL),
+  ('CONSULTA', U&'Consulta (Retinograf\00EDa + Agudeza)', 'consulta (retinografia + agudeza)', 100.00, NULL),
+  ('CONSULTA', U&'Consulta (Retinograf\00EDa + Agudeza) For\00E1nea', 'consulta (retinografia + agudeza) foranea', NULL, 1750.00),
+  ('CONSULTA', 'Consulta C/0 (Sin Costo)', 'consulta c/0 (sin costo)', 0.00, NULL)
+) AS v(tipo, nombre, nombre_norm, costo_usd, costo_mxn)
+CROSS JOIN tc
+ON CONFLICT (catalogo, nombre_norm) DO UPDATE
+  SET tipo = EXCLUDED.tipo, nombre = EXCLUDED.nombre, costo = EXCLUDED.costo, costo_usd = EXCLUDED.costo_usd,
+      fuente = EXCLUDED.fuente, updated_at = now();
+
+-- 1) ISSSTECALI: servicios existentes con el mismo nombre toman el precio de la licitacion.
 UPDATE aseguranza_servicios s
    SET costo = p.costo, updated_at = now()
-  FROM servicios_predeterminados p
- WHERE s.nombre_norm = p.nombre_norm
+  FROM servicios_predeterminados p, aseguranzas a
+ WHERE p.catalogo = 'ISSSTECALI'
+   AND s.nombre_norm = p.nombre_norm
+   AND a.id = s.aseguranza_id
+   AND es_aseguradora_issstecali(a.nombre)
    AND s.costo IS DISTINCT FROM p.costo;
 
--- 2) Los que faltan, en todas las aseguradoras.
+-- 2) ISSSTECALI: los que faltan.
 INSERT INTO aseguranza_servicios (aseguranza_id, tipo, nombre, nombre_norm, costo)
 SELECT a.id, p.tipo, p.nombre, p.nombre_norm, p.costo
   FROM aseguranzas a
  CROSS JOIN servicios_predeterminados p
- WHERE NOT EXISTS (
-   SELECT 1 FROM aseguranza_servicios s WHERE s.aseguranza_id = a.id AND s.nombre_norm = p.nombre_norm
- );
+ WHERE p.catalogo = 'ISSSTECALI'
+   AND es_aseguradora_issstecali(a.nombre)
+   AND NOT EXISTS (
+     SELECT 1 FROM aseguranza_servicios s WHERE s.aseguranza_id = a.id AND s.nombre_norm = p.nombre_norm
+   );
 
--- 3) Aseguradoras nuevas: copian el catalogo predeterminado al crearse.
+-- 3) Demas aseguradoras: servicios de la licitacion copiados en bloque (version anterior de este
+--    parche o del trigger). Se reconocen porque llegaron juntos: >= 50 con la misma fecha de creacion.
+CREATE TEMP TABLE _copias_licitacion ON COMMIT DROP AS
+SELECT s.id, s.nombre_norm
+  FROM aseguranza_servicios s
+  JOIN aseguranzas a ON a.id = s.aseguranza_id
+  JOIN servicios_predeterminados p ON p.catalogo = 'ISSSTECALI' AND p.nombre_norm = s.nombre_norm
+ WHERE NOT es_aseguradora_issstecali(a.nombre)
+   AND (s.aseguranza_id, s.created_at) IN (
+     SELECT s2.aseguranza_id, s2.created_at
+       FROM aseguranza_servicios s2
+       JOIN servicios_predeterminados p2 ON p2.catalogo = 'ISSSTECALI' AND p2.nombre_norm = s2.nombre_norm
+      GROUP BY s2.aseguranza_id, s2.created_at
+     HAVING count(*) >= 50
+   );
+
+-- 3a) Si el concepto tambien es del catalogo general, se queda activo con el precio general.
+UPDATE aseguranza_servicios s
+   SET tipo = g.tipo, nombre = g.nombre, costo = g.costo, activo = true, updated_at = now()
+  FROM _copias_licitacion c, servicios_predeterminados g
+ WHERE s.id = c.id
+   AND g.catalogo = 'GENERAL' AND g.nombre_norm = c.nombre_norm
+   AND (s.costo IS DISTINCT FROM g.costo OR s.tipo <> g.tipo OR NOT s.activo)
+   AND NOT EXISTS (  -- respeta UNIQUE (aseguranza_id, tipo, nombre_norm)
+     SELECT 1 FROM aseguranza_servicios x
+      WHERE x.aseguranza_id = s.aseguranza_id AND x.tipo = g.tipo AND x.nombre_norm = g.nombre_norm AND x.id <> s.id
+   );
+
+-- 3b) El resto se desactiva (no se borra: puede estar referenciado en consultas o cirugias).
+UPDATE aseguranza_servicios s
+   SET activo = false, updated_at = now()
+  FROM _copias_licitacion c
+ WHERE s.id = c.id
+   AND s.activo
+   AND NOT EXISTS (SELECT 1 FROM servicios_predeterminados g WHERE g.catalogo = 'GENERAL' AND g.nombre_norm = c.nombre_norm);
+
+-- 4) Demas aseguradoras: los servicios generales que falten. Los existentes conservan su precio.
+INSERT INTO aseguranza_servicios (aseguranza_id, tipo, nombre, nombre_norm, costo)
+SELECT a.id, p.tipo, p.nombre, p.nombre_norm, p.costo
+  FROM aseguranzas a
+ CROSS JOIN servicios_predeterminados p
+ WHERE p.catalogo = 'GENERAL'
+   AND NOT es_aseguradora_issstecali(a.nombre)
+   AND NOT EXISTS (
+     SELECT 1 FROM aseguranza_servicios s WHERE s.aseguranza_id = a.id AND s.nombre_norm = p.nombre_norm
+   );
+
+-- 5) Aseguradoras nuevas: ISSSTECALI copia la licitacion; las demas, el catalogo general.
 CREATE OR REPLACE FUNCTION copiar_servicios_predeterminados()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -219,6 +351,7 @@ BEGIN
   INSERT INTO aseguranza_servicios (aseguranza_id, tipo, nombre, nombre_norm, costo)
   SELECT NEW.id, p.tipo, p.nombre, p.nombre_norm, p.costo
     FROM servicios_predeterminados p
+   WHERE p.catalogo = CASE WHEN es_aseguradora_issstecali(NEW.nombre) THEN 'ISSSTECALI' ELSE 'GENERAL' END
   ON CONFLICT (aseguranza_id, tipo, nombre_norm) DO NOTHING;
   RETURN NEW;
 END;
@@ -230,9 +363,13 @@ CREATE TRIGGER trg_aseguranzas_servicios_predeterminados
 
 COMMIT;
 
--- Verificacion: servicios del catalogo por aseguradora (debe ser 163 en cada una)
-SELECT a.nombre AS aseguradora, count(s.id) AS servicios_del_catalogo
+-- Verificacion: ISSSTECALI debe tener 163 activos de la licitacion; las demas, 42 activos del general
+-- y 0 activos de la licitacion copiados en bloque.
+SELECT a.nombre AS aseguradora,
+       CASE WHEN es_aseguradora_issstecali(a.nombre) THEN 'ISSSTECALI' ELSE 'GENERAL' END AS catalogo,
+       count(s.id) FILTER (WHERE s.activo AND s.nombre_norm IN (SELECT nombre_norm FROM servicios_predeterminados WHERE catalogo = 'ISSSTECALI')) AS activos_licitacion,
+       count(s.id) FILTER (WHERE s.activo AND s.nombre_norm IN (SELECT nombre_norm FROM servicios_predeterminados WHERE catalogo = 'GENERAL')) AS activos_general,
+       count(s.id) FILTER (WHERE NOT s.activo) AS inactivos
   FROM aseguranzas a
-  LEFT JOIN aseguranza_servicios s
-    ON s.aseguranza_id = a.id AND s.nombre_norm IN (SELECT nombre_norm FROM servicios_predeterminados)
+  LEFT JOIN aseguranza_servicios s ON s.aseguranza_id = a.id
  GROUP BY a.nombre ORDER BY a.nombre;

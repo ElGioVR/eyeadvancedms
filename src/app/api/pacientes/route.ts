@@ -22,6 +22,7 @@ const pacienteCreateSchema = z
     aseguranza_id: uuid.optional().nullable(),
     numero_poliza: z.string().max(100).optional().nullable(),
     numero_afiliacion: z.string().max(100).optional().nullable(),
+    numero_expediente: z.string().trim().max(50).optional().nullable(),
   })
   .strict()
   .refine((data) => data.nombre_completo || data.nombre, {
@@ -35,7 +36,7 @@ const listadoQuerySchema = z.object({
 });
 
 const COLUMNAS_PACIENTE =
-  'id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at';
+  'id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at';
 
 interface PacienteFila {
   id: string;
@@ -51,6 +52,7 @@ interface PacienteFila {
   aseguranza_id: string | null;
   numero_poliza: string | null;
   numero_afiliacion: string | null;
+  numero_expediente: string | null;
   created_at: string;
 }
 
@@ -92,7 +94,7 @@ export async function GET(request: Request) {
     .limit(1, { referencedTable: 'ultima' })
     .range(from, to);
   if (patron) {
-    consulta = consulta.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron}`);
+    consulta = consulta.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron},numero_expediente.ilike.${patron}`);
   }
 
   const { data, error, count } = await consulta;
@@ -198,6 +200,7 @@ export async function GET(request: Request) {
       aseguradora: p.aseguranza_id ? p.aseguradora : null,
       numero_poliza: p.numero_poliza || null,
       numero_afiliacion: p.numero_afiliacion || null,
+      numero_expediente: p.numero_expediente || null,
       consultas_count: p.consultas_count || 0,
       ultima_visita: p.ultima_visita || null,
       pendiente_completar: pendientes.has(p.id),
@@ -239,14 +242,18 @@ export async function POST(request: Request) {
   if (data.aseguranza_id) insertData.aseguranza_id = data.aseguranza_id;
   if (data.numero_poliza) insertData.numero_poliza = data.numero_poliza;
   if (data.numero_afiliacion) insertData.numero_afiliacion = data.numero_afiliacion;
+  if (data.numero_expediente) insertData.numero_expediente = data.numero_expediente;
 
   const { data: paciente, error } = await supabase
     .from('pacientes')
     .insert(insertData)
-    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, aseguranza_id, numero_poliza, numero_afiliacion, created_at')
+    .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at')
     .single();
 
   if (error) {
+    if (error.code === '23505' && /numero_expediente/.test(`${error.message} ${error.details ?? ''}`)) {
+      return NextResponse.json({ error: `Ya existe un paciente con el número de expediente ${data.numero_expediente}` }, { status: 409 });
+    }
     return NextResponse.json({ error: handleSupabaseError(error, 'pacientes.crear').mensaje }, { status: 500 });
   }
 
@@ -263,6 +270,7 @@ export async function POST(request: Request) {
     aseguranza_id: paciente.aseguranza_id || null,
     numero_poliza: paciente.numero_poliza || null,
     numero_afiliacion: paciente.numero_afiliacion || null,
+    numero_expediente: paciente.numero_expediente || null,
     created_at: paciente.created_at,
   }, { status: 201 });
 }

@@ -27,7 +27,7 @@ export async function GET(
   const [pacienteResult, ultimaConsultaResult, consultasCountResult, cirugiasCountResult] = await Promise.all([
     supabase
       .from('pacientes')
-      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, aseguranza_id, numero_poliza, numero_afiliacion, created_at, aseguranzas:aseguranza_id (id, nombre)')
+      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at, aseguranzas:aseguranza_id (id, nombre)')
       .eq('id', id)
       .maybeSingle(),
     supabase
@@ -63,15 +63,15 @@ export async function GET(
       aseguranza_id: paciente.aseguranza_id || null,
       numero_poliza: paciente.numero_poliza,
       numero_afiliacion: paciente.numero_afiliacion,
+      numero_expediente: paciente.numero_expediente || null,
       created_at: paciente.created_at,
     },
     aseguranza,
     ultima_consulta: ultimaConsultaResult.data || null,
     consultas_previas: consultasCountResult.count || 0,
     cirugias_previas: cirugiasCountResult.count || 0,
-    // Expediente: placeholder mientras no exista tabla expedientes;
-    // se representa con el identificador interno del paciente.
-    expediente_id: `EXP-${String(paciente.created_at ? new Date(paciente.created_at).getFullYear() : 2026).slice(-2)}${paciente.id.slice(0, 6).toUpperCase()}`,
+    // Expediente: el número capturado; si no hay, el identificador interno del paciente.
+    expediente_id: paciente.numero_expediente || `EXP-${String(paciente.created_at ? new Date(paciente.created_at).getFullYear() : 2026).slice(-2)}${paciente.id.slice(0, 6).toUpperCase()}`,
   };
 
   return NextResponse.json(resumen);

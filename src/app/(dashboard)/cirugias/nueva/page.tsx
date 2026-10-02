@@ -298,6 +298,11 @@ function NuevaCirugiaContent() {
   const [buscandoPacientes, setBuscandoPacientes] = useState(false);
   const [mostrarPacientes, setMostrarPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null);
+  // Alta rápida de paciente desde la cirugía (con número de expediente).
+  const [altaPaciente, setAltaPaciente] = useState<null | {
+    numero_expediente: string; nombre_completo: string; sexo: 'H' | 'M'; fecha_nacimiento: string; telefono: string;
+    guardando: boolean; error: string | null;
+  }>(null);
   const [resumenPaciente, setResumenPaciente] = useState<PacienteResumen | null>(null);
   const [filtroOjo, setFiltroOjo] = useState<FiltroOjo>('todos');
   const [historialOjo, setHistorialOjo] = useState<HistorialOjo | null>(null);
@@ -730,6 +735,49 @@ useEffect(() => {
     setParticipantes((prev) => prev.filter((m) => m.id !== id));
   };
 
+  /** Alta rápida de paciente: lo crea y lo deja seleccionado. */
+  const registrarPaciente = async () => {
+    if (!altaPaciente || altaPaciente.guardando) return;
+    const nombre = altaPaciente.nombre_completo.trim();
+    const expediente = altaPaciente.numero_expediente.trim();
+    const telefono = altaPaciente.telefono.trim();
+    const error = !nombre
+      ? 'El nombre es requerido'
+      : !/^\d{4}-\d{2}-\d{2}$/.test(altaPaciente.fecha_nacimiento)
+        ? 'La fecha de nacimiento es requerida'
+        : expediente.length > 50
+          ? 'El número de expediente admite máximo 50 caracteres'
+          : telefono.length > 20
+            ? 'El teléfono admite máximo 20 caracteres'
+            : null;
+    if (error) { setAltaPaciente({ ...altaPaciente, error }); return; }
+    setAltaPaciente({ ...altaPaciente, guardando: true, error: null });
+    try {
+      const payload: Record<string, string> = { nombre_completo: nombre, sexo: altaPaciente.sexo, fecha_nacimiento: altaPaciente.fecha_nacimiento };
+      if (expediente) payload.numero_expediente = expediente;
+      if (telefono) payload.telefono = telefono;
+      const res = await fetch('/api/pacientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const creado = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(creado.error || 'No se pudo crear el paciente');
+      setAltaPaciente(null);
+      toast('Paciente creado', 'success');
+      await seleccionarPaciente({
+        id: creado.id,
+        nombre_completo: creado.nombre_completo || nombre,
+        telefono: creado.telefono ?? null,
+        email: creado.email ?? null,
+        aseguranza_id: creado.aseguranza_id ?? null,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo crear el paciente';
+      setAltaPaciente((a) => (a ? { ...a, guardando: false, error: msg } : a));
+    }
+  };
+
   /** Alta rápida de enfermería (Personal médico unificado), sin honorarios por defecto. */
   const registrarPersonal = async () => {
     if (!altaPersonal || altaPersonal.guardando || !altaPersonal.nombre.trim()) return;
@@ -1027,6 +1075,111 @@ useEffect(() => {
                   </div>
                 )}
               </div>
+
+              {!altaPaciente && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostrarPacientes(false);
+                    setAltaPaciente({
+                      numero_expediente: '',
+                      nombre_completo: pacienteSeleccionado ? '' : queryPaciente.trim(),
+                      sexo: 'H',
+                      fecha_nacimiento: '',
+                      telefono: '',
+                      guardando: false,
+                      error: null,
+                    });
+                  }}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-primary-600 hover:underline"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Nuevo paciente
+                </button>
+              )}
+
+              {altaPaciente && (
+                <div className="mt-4 rounded-lg border border-line bg-surface-2 p-4">
+                  <div className="mb-3 text-sm font-bold text-fg">Nuevo paciente</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="alta-expediente" className={labelCls}>Número de expediente</label>
+                      <input
+                        id="alta-expediente"
+                        value={altaPaciente.numero_expediente}
+                        onChange={(e) => setAltaPaciente({ ...altaPaciente, numero_expediente: e.target.value })}
+                        maxLength={50}
+                        placeholder="Ej. 12345"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="alta-nombre" className={labelCls}>Nombre completo *</label>
+                      <input
+                        id="alta-nombre"
+                        value={altaPaciente.nombre_completo}
+                        onChange={(e) => setAltaPaciente({ ...altaPaciente, nombre_completo: e.target.value })}
+                        maxLength={255}
+                        placeholder="Nombre del paciente"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="alta-sexo" className={labelCls}>Sexo *</label>
+                      <select
+                        id="alta-sexo"
+                        value={altaPaciente.sexo}
+                        onChange={(e) => setAltaPaciente({ ...altaPaciente, sexo: e.target.value === 'M' ? 'M' : 'H' })}
+                        className={inputCls}
+                      >
+                        <option value="H">Hombre</option>
+                        <option value="M">Mujer</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="alta-nacimiento" className={labelCls}>Fecha de nacimiento *</label>
+                      <input
+                        id="alta-nacimiento"
+                        type="date"
+                        value={altaPaciente.fecha_nacimiento}
+                        onChange={(e) => setAltaPaciente({ ...altaPaciente, fecha_nacimiento: e.target.value })}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="alta-telefono" className={labelCls}>Teléfono</label>
+                      <input
+                        id="alta-telefono"
+                        value={altaPaciente.telefono}
+                        onChange={(e) => setAltaPaciente({ ...altaPaciente, telefono: e.target.value })}
+                        maxLength={20}
+                        placeholder="Número de teléfono"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                  {altaPaciente.error && (
+                    <p role="alert" className="mt-3 text-xs font-semibold text-red-600">{altaPaciente.error}</p>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAltaPaciente(null)}
+                      className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={registrarPaciente}
+                      disabled={altaPaciente.guardando || !altaPaciente.nombre_completo.trim()}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      {altaPaciente.guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Guardar y seleccionar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {pacienteSeleccionado && resumenPaciente && (
                 <div className="mt-4 rounded-lg border border-primary-100 dark:border-primary-900/30 bg-primary-50/50 dark:bg-primary-900/10 p-4">

@@ -47,6 +47,7 @@ interface PacienteAPI {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  numero_expediente?: string | null;
   /** true = viene de /api/search (sin edad/sexo/aseguranza); se completa al seleccionarlo. */
   parcial?: boolean;
   subtitulo?: string;
@@ -185,7 +186,7 @@ function normalizarPacienteDetalle(p: PacienteDetalleAPI): PacienteAPI {
   };
 }
 
-function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: string; telefono: string; email: string; direccion: string }): string | null {
+function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: string; telefono: string; email: string; direccion: string; numero_expediente?: string }): string | null {
   const nombre = p.nombre_completo.trim();
   if (!nombre) return 'El nombre es requerido';
   if (nombre.length > 255) return 'El nombre admite máximo 255 caracteres';
@@ -195,6 +196,7 @@ function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: st
   const email = p.email.trim();
   if (email && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Email inválido';
   if (p.direccion.trim().length > 1000) return 'La dirección admite máximo 1000 caracteres';
+  if ((p.numero_expediente ?? '').trim().length > 50) return 'El número de expediente admite máximo 50 caracteres';
   return null;
 }
 
@@ -354,6 +356,7 @@ function NuevaConsultaContent() {
     telefono: '',
     email: '',
     direccion: '',
+    numero_expediente: '',
   });
 
   interface ConsultationForm {
@@ -1217,6 +1220,7 @@ function NuevaConsultaContent() {
                 <div key={pacienteSeleccionado.id} className="mt-3 animate-fadeIn flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-muted">
                   <Avatar initials={getInitials(pacienteSeleccionado.nombre_completo)} className={getAvatarColor(pacienteSeleccionado.id)} size="sm" />
                   <span className="font-medium text-fg">{pacienteSeleccionado.nombre_completo}</span>
+                  {pacienteSeleccionado.numero_expediente && <span>Exp. {pacienteSeleccionado.numero_expediente}</span>}
                   {pacienteSeleccionado.edad && <span className="hidden sm:inline">{pacienteSeleccionado.edad} años</span>}
                   {pacienteSeleccionado.sexo && <span className="hidden sm:inline">{pacienteSeleccionado.sexo === 'M' ? 'Mujer' : 'Hombre'}</span>}
                   {pacienteSeleccionado.aseguradora && <span className="font-medium text-primary-600">{pacienteSeleccionado.aseguradora}</span>}
@@ -1239,6 +1243,7 @@ function NuevaConsultaContent() {
                     <button onClick={() => setShowNewPatientForm(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-muted dark:hover:bg-surface-2 transition-colors">Cancelar</button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormInput label="Número de expediente" value={newPatient.numero_expediente} onChange={(v) => setNewPatient((p) => ({ ...p, numero_expediente: v }))} placeholder="Ej. 12345" />
                     <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
                     <FormSelect label="Sexo" required value={newPatient.sexo} onChange={(v) => setNewPatient((p) => ({ ...p, sexo: v }))} options={['H', 'M']} displayOptions={['Hombre', 'Mujer']} />
                     <FormInput label="Fecha de nacimiento" required value={newPatient.fecha_nacimiento} onChange={(v) => setNewPatient((p) => ({ ...p, fecha_nacimiento: v }))} type="date" />
@@ -1269,13 +1274,14 @@ function NuevaConsultaContent() {
                         if (newPatient.telefono.trim()) payload.telefono = newPatient.telefono.trim();
                         if (newPatient.email.trim()) payload.email = newPatient.email.trim();
                         if (newPatient.direccion.trim()) payload.direccion = newPatient.direccion.trim();
+                        if (newPatient.numero_expediente.trim()) payload.numero_expediente = newPatient.numero_expediente.trim();
                         setSavingPaciente(true);
                         try {
                           const created = await enviarJSON<PacienteAPI>('/api/pacientes', 'POST', payload);
                           pacienteSelIdRef.current = created.id;
                           setPacienteSeleccionado(created);
                           setShowNewPatientForm(false);
-                          setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '' });
+                          setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '', numero_expediente: '' });
                           setEstudiosSeleccionados([]);
                           setProcedimientosSeleccionados([]);
                           updateConsultation('origenId', created?.aseguranza_id || '');

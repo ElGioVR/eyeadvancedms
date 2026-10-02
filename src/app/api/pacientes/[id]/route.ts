@@ -34,7 +34,7 @@ export async function GET(
   const [pacienteRes, consultasRes, pendienteRes] = await Promise.all([
     supabase
       .from('pacientes')
-      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, created_at, aseguranzas:aseguranza_id (nombre)')
+      .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at, aseguranzas:aseguranza_id (nombre)')
       .eq('id', id)
       .maybeSingle(),
     supabase
@@ -115,6 +115,7 @@ export async function GET(
     aseguradora: aseguradoraNombre,
     numero_poliza: patient.numero_poliza || null,
     numero_afiliacion: patient.numero_afiliacion || null,
+    numero_expediente: patient.numero_expediente || null,
     created_at: patient.created_at,
     consultas: consultasResult,
     total_consultas: consultasResult.length,
@@ -138,6 +139,7 @@ const pacienteUpdateSchema = z
     aseguranza_id: uuid.optional().nullable(),
     numero_poliza: z.string().max(100).optional().nullable(),
     numero_afiliacion: z.string().max(100).optional().nullable(),
+    numero_expediente: z.string().trim().max(50).optional().nullable(),
   })
   .strict();
 
@@ -168,6 +170,7 @@ export async function PATCH(
   if (data.aseguranza_id !== undefined) updates.aseguranza_id = data.aseguranza_id || null;
   if (data.numero_poliza !== undefined) updates.numero_poliza = data.numero_poliza?.trim() || null;
   if (data.numero_afiliacion !== undefined) updates.numero_afiliacion = data.numero_afiliacion?.trim() || null;
+  if (data.numero_expediente !== undefined) updates.numero_expediente = data.numero_expediente?.trim() || null;
 
   const supabase = getSupabaseAdmin();
   const { data: actualizado, error } = await supabase
@@ -178,6 +181,9 @@ export async function PATCH(
     .maybeSingle();
 
   if (error) {
+    if (error.code === '23505' && /numero_expediente/.test(`${error.message} ${error.details ?? ''}`)) {
+      return NextResponse.json({ error: `Ya existe un paciente con el número de expediente ${data.numero_expediente}` }, { status: 409 });
+    }
     const { mensaje, traducido } = handleSupabaseError(error, 'pacientes.actualizar');
     return NextResponse.json({ error: traducido ? mensaje : 'Error al actualizar el paciente' }, { status: 500 });
   }
