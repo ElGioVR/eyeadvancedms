@@ -45,6 +45,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useDebounce, useInvalidar } from '@/hooks';
 import { ApiError, enviarJSON, fetchJSON } from '@/lib/fetcher';
 import { formatCurrency } from '@/lib/money';
+import { descargarReporte as exportarReporte, type FormatoDescarga } from '@/lib/exportar-reporte';
 import { formatFechaCsv, rangoMesActual } from '@/lib/rangos';
 import { useUser } from '@/hooks/useUser';
 import type { MetricasPayload } from '@/lib/productividad/metricas';
@@ -93,7 +94,7 @@ const REPORTES: Array<{
     icon: Scissors,
     titulo: 'Reporte de cirugías',
     descripcion: 'Cirugías de la agenda con paciente, LIO, tiempos y cirujano.',
-    title: 'Descargar reporte CSV de cirugías del rango seleccionado',
+    title: 'Descargar reporte de cirugías (CSV, Excel o PDF)',
   },
   {
     id: 'entradas_salidas',
@@ -101,7 +102,7 @@ const REPORTES: Array<{
     icon: ArrowLeftRight,
     titulo: 'Reporte de entradas y salidas',
     descripcion: 'Consultas del rango con ingreso, egreso y datos del paciente.',
-    title: 'Descargar reporte CSV de entradas y salidas de consultas',
+    title: 'Descargar reporte de entradas y salidas (CSV, Excel o PDF)',
   },
   {
     id: 'honorarios',
@@ -662,7 +663,7 @@ export default function ProductividadPage() {
   );
 
   const descargarReporte = useCallback(
-    async (tipo: ReporteCsvTab, rango?: RangoFechas, doctorSel?: string) => {
+    async (tipo: ReporteCsvTab, rango?: RangoFechas, doctorSel?: string, formato: FormatoDescarga = 'csv') => {
       const fdesde = rango?.desde || desde;
       const fhasta = rango?.hasta || hasta;
       if (!fdesde || !fhasta) return;
@@ -695,6 +696,14 @@ export default function ProductividadPage() {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(body?.error || 'No se pudo generar el CSV');
         }
+        if (formato !== 'csv') {
+          // Excel / PDF: se convierte en el navegador a partir del CSV.
+          const titulo = REPORTES.find((r) => r.id === tipo)?.titulo || 'Reporte';
+          const doctorNombre = doctorElegido ? doctores.find((d) => d.id === doctorElegido)?.nombre : null;
+          await exportarReporte(await res.text(), nombre.replace(/\.csv$/, ''), formato, titulo, `${fdesde} a ${fhasta}${doctorNombre ? ` · ${doctorNombre}` : ''}`);
+          setReporteModal(null);
+          return;
+        }
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -707,12 +716,12 @@ export default function ProductividadPage() {
         setReporteModal(null);
       } catch (err) {
         if (esAbort(err)) return;
-        toast(err instanceof Error ? err.message : 'Error al descargar CSV', 'error');
+        toast(err instanceof Error ? err.message : 'Error al descargar el reporte', 'error');
       } finally {
         if (abortReporteRef.current === controller) setReporteCargando(false);
       }
     },
-    [desde, hasta, doctorId, toast]
+    [desde, hasta, doctorId, doctores, toast]
   );
 
   const cerrarReporte = useCallback(() => {
@@ -722,11 +731,11 @@ export default function ProductividadPage() {
   }, []);
 
   const confirmarReporte = useCallback(
-    (rango: RangoFechas, doctorSel?: string) => {
+    (rango: RangoFechas, doctorSel?: string, formato?: FormatoDescarga) => {
       const tipo = reporteModal;
       if (!tipo) return;
-      if (tipo === 'cirugias') void descargarReporte('cirugias', rango, doctorSel);
-      else if (tipo === 'entradas_salidas') void descargarReporte('entradas_salidas', rango, doctorSel);
+      if (tipo === 'cirugias') void descargarReporte('cirugias', rango, doctorSel, formato);
+      else if (tipo === 'entradas_salidas') void descargarReporte('entradas_salidas', rango, doctorSel, formato);
       else if (tipo === 'honorarios') void descargarReporte('honorarios', rango, doctorSel);
       else if (tipo === 'pagos') void descargarReporte('pagos', rango, doctorSel);
       else void descargarReporte('metricas', rango, doctorSel);
@@ -783,7 +792,7 @@ export default function ProductividadPage() {
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-line bg-surface text-fg-2 hover:bg-surface-2 disabled:opacity-50"
                 >
                   <Icon className="w-4 h-4" />
-                  {r.label} (CSV)
+                  {r.label}{r.id === 'honorarios' ? ' (CSV)' : ''}
                 </button>
               );
             })}
@@ -1260,6 +1269,7 @@ export default function ProductividadPage() {
         cargando={reporteCargando}
         doctores={doctores}
         doctorId={doctorId}
+        conFormato={reporteModal === 'cirugias' || reporteModal === 'entradas_salidas'}
         onConfirm={confirmarReporte}
       />
     </div>

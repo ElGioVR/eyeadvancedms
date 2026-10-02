@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 import ModalRangoFechas, { type OpcionDoctor, type RangoFechas } from '@/components/productividad/ModalRangoFechas';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+import { descargarReporte, type FormatoDescarga } from '@/lib/exportar-reporte';
 
 type ReporteAgenda = 'cirugias' | 'entradas_salidas';
 
@@ -42,7 +43,7 @@ interface Props {
 }
 
 /**
- * Botón «Reportes» de la agenda: descarga en CSV los reportes de cirugías y de
+ * Botón «Reportes» de la agenda: descarga (CSV, Excel o PDF) los reportes de cirugías y de
  * entradas y salidas (los mismos endpoints que Productividad, solo admin).
  */
 export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '', botonClassName, soloIcono = false }: Props) {
@@ -71,7 +72,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
     setModal(null);
   }, []);
 
-  const descargar = useCallback(async (rango: RangoFechas, doctorSel?: string) => {
+  const descargar = useCallback(async (rango: RangoFechas, doctorSel?: string, formato: FormatoDescarga = 'csv') => {
     if (!modal) return;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -84,34 +85,29 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
       let nombre: string;
       if (modal === 'cirugias') {
         url = `/api/productividad/reportes/cirugias?${params}`;
-        nombre = `cirugias-${rango.desde}_${rango.hasta}.csv`;
+        nombre = `cirugias-${rango.desde}_${rango.hasta}`;
       } else {
         params.set('tab', 'entradas_salidas');
         url = `/api/productividad?${params}`;
-        nombre = `productividad-entradas_salidas-${rango.desde}_${rango.hasta}.csv`;
+        nombre = `entradas-salidas-${rango.desde}_${rango.hasta}`;
       }
       const res = await fetch(url, { signal: controller.signal, credentials: 'same-origin' });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || 'No se pudo generar el CSV');
+        throw new Error(body?.error || 'No se pudo generar el reporte');
       }
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = nombre;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objectUrl);
+      const csv = await res.text();
+      const info = REPORTES.find((r) => r.id === modal);
+      const doctor = doctorSel ? doctores.find((d) => d.id === doctorSel)?.nombre : null;
+      await descargarReporte(csv, nombre, formato, info?.titulo || 'Reporte', `${rango.desde} a ${rango.hasta}${doctor ? ` · ${doctor}` : ''}`);
       setModal(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast(err instanceof Error ? err.message : 'Error al descargar CSV', 'error');
+      toast(err instanceof Error ? err.message : 'Error al descargar el reporte', 'error');
     } finally {
       if (abortRef.current === controller) setCargando(false);
     }
-  }, [modal, toast]);
+  }, [modal, toast, doctores]);
 
   const info = REPORTES.find((r) => r.id === modal) || null;
 
@@ -123,7 +119,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
           onClick={() => setMenuAbierto((p) => !p)}
           aria-expanded={menuAbierto}
           aria-label="Reportes"
-          title="Reportes CSV"
+          title="Reportes"
           className={botonClassName || 'btn-secondary'}
         >
           {soloIcono ? <FileDown className="h-[18px] w-[18px]" /> : <><FileDown className="h-4 w-4" /> Reportes</>}
@@ -131,7 +127,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
         {menuAbierto && (
           <div className={cn('absolute top-full mt-2 z-50 w-60', soloIcono ? 'right-0' : 'left-0')}>
             <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
-              <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Descargar CSV</p>
+              <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Descargar reporte</p>
               {REPORTES.map((r) => (
                 <button
                   key={r.id}
@@ -157,6 +153,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
         cargando={cargando}
         doctores={doctores}
         doctorId={doctorId}
+        conFormato
         onConfirm={descargar}
       />
     </>

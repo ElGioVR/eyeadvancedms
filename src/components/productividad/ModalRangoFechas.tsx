@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarRange, Loader2, Download } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { cn } from '@/lib/utils';
+import { FORMATOS_DESCARGA, type FormatoDescarga } from '@/lib/exportar-reporte';
 
 export interface RangoFechas {
   desde: string;
@@ -25,7 +27,9 @@ interface ModalRangoFechasProps {
   textoConfirmar?: string;
   doctores?: OpcionDoctor[];
   doctorId?: string;
-  onConfirm: (rango: RangoFechas, doctorId?: string) => void;
+  /** Si se pasa, se pregunta el formato (CSV / Excel / PDF). */
+  conFormato?: boolean;
+  onConfirm: (rango: RangoFechas, doctorId?: string, formato?: FormatoDescarga) => void;
 }
 
 const inputCls =
@@ -42,11 +46,13 @@ export default function ModalRangoFechas({
   textoConfirmar = 'Descargar',
   doctores,
   doctorId = '',
+  conFormato = false,
   onConfirm,
 }: ModalRangoFechasProps) {
   const [fechaDesde, setFechaDesde] = useState(desde);
   const [fechaHasta, setFechaHasta] = useState(hasta);
   const [doctorSel, setDoctorSel] = useState(doctorId);
+  const [formato, setFormato] = useState<FormatoDescarga>('csv');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,7 +75,7 @@ export default function ModalRangoFechas({
       return;
     }
     setError(null);
-    onConfirm({ desde: fechaDesde, hasta: fechaHasta }, doctorSel);
+    onConfirm({ desde: fechaDesde, hasta: fechaHasta }, doctorSel, conFormato ? formato : undefined);
   };
 
   return (
@@ -119,6 +125,31 @@ export default function ModalRangoFechas({
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {conFormato && (
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Formato</label>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Formato de descarga">
+              {FORMATOS_DESCARGA.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={formato === f.id}
+                  onClick={() => setFormato(f.id)}
+                  className={cn(
+                    'rounded-lg border px-3 py-2 text-sm font-bold transition-colors',
+                    formato === f.id
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                      : 'border-line bg-surface-2 text-fg-2 hover:border-gray-300 dark:hover:border-line-strong'
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
