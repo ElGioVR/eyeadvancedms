@@ -18,6 +18,9 @@ import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import EditarServiciosConsulta, { type ServicioEditable } from '@/components/consultations/EditarServiciosConsulta';
+import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import Link from 'next/link';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
@@ -76,6 +79,8 @@ interface ConsultaDetalle {
   paciente_telefono: string | null;
   paciente_fecha_nacimiento: string | null;
   paciente_expediente?: string | null;
+  estudios_editables?: ServicioEditable[];
+  procedimientos_editables?: ServicioEditable[];
   paciente_edad?: number | null;
   paciente_email: string | null;
   paciente_poliza: string | null;
@@ -271,6 +276,8 @@ export default function ConsultaDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editCosto, setEditCosto] = useState('');
   const [editNotas, setEditNotas] = useState('');
+  const [editDiagnostico, setEditDiagnostico] = useState('');
+  const [editandoServicios, setEditandoServicios] = useState(false);
   // Punto II: especialidad y tipo de consulta editables
   const [editEspecialidadId, setEditEspecialidadId] = useState('');
   const [editTipo, setEditTipo] = useState<TipoConsultaAgenda>('PRIMERA');
@@ -332,6 +339,7 @@ export default function ConsultaDetailPage() {
   function startEditing() {
     setEditCosto(String(consulta?.costo_total ?? 0));
     setEditNotas(consulta?.notas || '');
+    setEditDiagnostico(consulta?.diagnostico || '');
     setEditEspecialidadId(consulta?.especialidad_id || '');
     setEditTipo(tipoAgendaDesdeBd(consulta?.tipo_consulta, consulta?.tipo_visita));
     setEditError(null);
@@ -355,6 +363,7 @@ export default function ConsultaDetailPage() {
     if (!consulta || savingEdit) return;
     const body: Record<string, unknown> = {};
     if ((consulta.notas || '') !== editNotas) body.notas = editNotas;
+    if ((consulta.diagnostico || '') !== editDiagnostico) body.diagnostico = editDiagnostico.trim() || null;
     if ((consulta.especialidad_id || '') !== editEspecialidadId) body.especialidad_id = editEspecialidadId || null;
     if (tipoAgendaDesdeBd(consulta.tipo_consulta, consulta.tipo_visita) !== editTipo) {
       Object.assign(body, valoresBdTipoConsulta(editTipo));
@@ -407,6 +416,9 @@ export default function ConsultaDetailPage() {
   }
 
   const consultaCerrada = consulta.estatus === 'COMPLETADA' || consulta.estatus === 'CANCELADA';
+  // Admin, doctor y recepción editan; al concluir la consulta (COMPLETADA) todavía
+  // se agregan estudios, procedimientos, diagnóstico y nota. Cancelada: solo lectura.
+  const puedeEditar = (user?.rol === 'admin' || user?.rol === 'doctor' || user?.rol === 'recepcionista') && consulta.estatus !== 'CANCELADA';
 
   return (
     <div className="print-page relative" aria-busy={validandoDetalle}>
@@ -465,7 +477,7 @@ export default function ConsultaDetailPage() {
                 {completing ? 'Completando...' : 'Completar'}
               </button>
             )}
-            {user?.rol === 'admin' && !editing && !consultaCerrada && (
+            {puedeEditar && !editing && (
               <button
                 onClick={startEditing}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
@@ -473,7 +485,7 @@ export default function ConsultaDetailPage() {
                 <Edit3 className="h-4 w-4" /> Editar
               </button>
             )}
-            {user?.rol === 'admin' && editing && !consultaCerrada && (
+            {puedeEditar && editing && (
               <>
                 <button
                   onClick={() => { setEditing(false); setEditError(null); }}
@@ -578,6 +590,14 @@ export default function ConsultaDetailPage() {
           >
             {showPatientDetails ? 'Mostrar menos' : 'Mostrar más'}
           </button>
+          {(user?.rol === 'admin' || user?.rol === 'recepcionista') && consulta.paciente_id && (
+            <Link
+              href={`/pacientes/${consulta.paciente_id}/historial?editar=1`}
+              className="no-print ml-4 mt-3 inline-block text-xs font-bold text-primary-600 hover:text-primary-700"
+            >
+              Editar datos del paciente
+            </Link>
+          )}
         </div>
       )}
 
@@ -627,15 +647,35 @@ export default function ConsultaDetailPage() {
               <Field label="Fecha y Hora" value={consulta.fecha && consulta.hora_inicio ? `${consulta.fecha} ${consulta.hora_inicio.slice(0, 5)}` : '—'} />
               <Field label="Hora Fin" value={consulta.hora_fin ? consulta.hora_fin.slice(0, 5) : '—'} />
               <Field label="Método de Pago" value={consulta.metodo_pago || '—'} />
-              <Field label="Diagnóstico" value={consulta.diagnostico} full />
+              {editing ? (
+                <div className="col-span-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Diagnóstico</span>
+                  <div className="mt-1">
+                    <BuscadorDiagnosticoCIE10 id="editar-diagnostico" value={editDiagnostico} onChange={setEditDiagnostico} />
+                  </div>
+                </div>
+              ) : (
+                <Field label="Diagnóstico" value={consulta.diagnostico} full />
+              )}
             </div>
           </div>
 
           {/* Clinical details */}
           <div className="bg-surface border border-line rounded-xl p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
-              <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
-            </h3>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
+                <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
+              </h3>
+              {puedeEditar && (
+                <button
+                  type="button"
+                  onClick={() => setEditandoServicios(true)}
+                  className="no-print inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-bold text-primary-600 hover:bg-surface-2"
+                >
+                  <Edit3 className="h-3.5 w-3.5" /> Estudios y procedimientos
+                </button>
+              )}
+            </div>
             <div className="space-y-3 text-sm">
               {(consulta.estudio_1 || consulta.estudio_2 || consulta.estudio_3) && (
                 <div className="rounded-lg border border-line bg-surface-2 px-4 py-3">
@@ -1025,6 +1065,25 @@ export default function ConsultaDetailPage() {
           void invalidar('/api/consultas', '/api/agenda', '/api/dashboard');
         }}
       />
+
+      {editandoServicios && (
+        <EditarServiciosConsulta
+          consultaId={consulta.id}
+          pacienteId={consulta.paciente_id}
+          doctorConsultaId={consulta.doctor_id}
+          doctorConsultaNombre={consulta.doctor}
+          estudios={consulta.estudios_editables ?? []}
+          procedimientos={consulta.procedimientos_editables ?? []}
+          onClose={() => setEditandoServicios(false)}
+          onSaved={() => {
+            setEditandoServicios(false);
+            toast('Estudios y procedimientos actualizados');
+            void mutateDetalle();
+            void mutateHistorial();
+            void invalidar('/api/consultas', '/api/agenda', '/api/dashboard', '/api/productividad');
+          }}
+        />
+      )}
     </div>
   );
 }

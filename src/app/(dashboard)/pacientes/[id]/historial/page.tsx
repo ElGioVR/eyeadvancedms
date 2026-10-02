@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import useSWR from 'swr';
 import { useUser } from '@/hooks/useUser';
 import { useParams } from 'next/navigation';
@@ -72,6 +72,7 @@ function EditarPacienteModal({
   const { toast } = useToast();
   const [form, setForm] = useState({
     nombre_completo: paciente.nombre_completo || '',
+    numero_expediente: paciente.numero_expediente || '',
     sexo: paciente.sexo || '',
     fecha_nacimiento: paciente.fecha_nacimiento || '',
     telefono: paciente.telefono || '',
@@ -91,6 +92,7 @@ function EditarPacienteModal({
     try {
       await enviarJSON(`/api/pacientes/${paciente.id}`, 'PATCH', {
         nombre_completo: nombre.nombre,
+        numero_expediente: form.numero_expediente.trim() || null,
         ...(form.sexo ? { sexo: form.sexo } : {}),
         ...(form.fecha_nacimiento ? { fecha_nacimiento: form.fecha_nacimiento } : {}),
         telefono: form.telefono.trim() || null,
@@ -115,6 +117,7 @@ function EditarPacienteModal({
         {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="sm:col-span-2"><span className={etiqueta}>Nombre completo *</span><input className={campo} value={form.nombre_completo} onChange={set('nombre_completo')} /></label>
+          <label><span className={etiqueta}>Número de expediente</span><input maxLength={50} className={campo} value={form.numero_expediente} onChange={set('numero_expediente')} /></label>
           <label><span className={etiqueta}>Sexo</span>
             <select className={campo} value={form.sexo} onChange={set('sexo')}>
               <option value="">Sin especificar</option>
@@ -178,6 +181,10 @@ export default function HistorialMedicoPage() {
   const soloLectura = user?.rol === 'enfermero';
   const puedeEditar = user?.rol === 'admin' || user?.rol === 'recepcionista';
   const [editando, setEditando] = useState(false);
+  // ?editar=1 (desde el detalle de una consulta): abre la edición de datos.
+  useEffect(() => {
+    if (puedeEditar && new URLSearchParams(window.location.search).get('editar') === '1') setEditando(true);
+  }, [puedeEditar]);
   // Caché compartida: al volver a esta pantalla se muestra lo último y se revalida en segundo plano.
   const { data: paciente, error: swrError, isLoading: loading, isValidating, mutate } = useSWR<PacienteData>(
     id ? `/api/pacientes/${id}` : null

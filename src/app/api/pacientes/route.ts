@@ -6,6 +6,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { esquemaPaginacion, fechaISO, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
 import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
+import { hoyTijuana } from '@/lib/rangos';
 
 const pacienteCreateSchema = z
   .object({
@@ -91,6 +92,9 @@ export async function GET(request: Request) {
     )
     .order('created_at', { ascending: false })
     .order('fecha', { referencedTable: 'ultima', ascending: false })
+    // Última visita = la consulta más reciente hasta hoy (no citas futuras ni canceladas).
+    .lte('ultima.fecha', hoyTijuana())
+    .neq('ultima.estatus', 'CANCELADA')
     .limit(1, { referencedTable: 'ultima' })
     .range(from, to);
   if (patron) {
@@ -146,7 +150,7 @@ export async function GET(request: Request) {
     const asegIds = [...new Set(pacientes.map((p) => p.aseguranza_id).filter((v): v is string => !!v))];
     const [consultasRes, asegRes] = await Promise.all([
       ids.length
-        ? supabase.from('consultas').select('paciente_id, fecha').in('paciente_id', ids)
+        ? supabase.from('consultas').select('paciente_id, fecha, estatus').in('paciente_id', ids)
         : Promise.resolve({ data: [] as Array<{ paciente_id: string; fecha: string }> }),
       asegIds.length
         ? supabase.from('aseguranzas').select('id, nombre').in('id', asegIds).eq('activo', true)
@@ -154,10 +158,11 @@ export async function GET(request: Request) {
     ]);
     const asegMap = new Map((asegRes.data || []).map((a) => [a.id, a.nombre]));
     const cMap = new Map<string, { count: number; ultima: string }>();
+    const hoy = hoyTijuana();
     for (const c of consultasRes.data || []) {
       const e = cMap.get(c.paciente_id) || { count: 0, ultima: '' };
       e.count++;
-      if (c.fecha > e.ultima) e.ultima = c.fecha;
+      if (c.fecha > e.ultima && c.fecha <= hoy && (c as { estatus?: string }).estatus !== 'CANCELADA') e.ultima = c.fecha;
       cMap.set(c.paciente_id, e);
     }
     filas = pacientes.map((p) => ({

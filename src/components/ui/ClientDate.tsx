@@ -14,7 +14,10 @@ export default function ClientDate({ date, options, fallback = '...', dateTime =
   const optionsKey = JSON.stringify(options ?? {});
 
   useEffect(() => {
-    const value = new Date(date);
+    // 'YYYY-MM-DD' (fecha civil) se interpreta en hora local: new Date('2026-10-02')
+    // es medianoche UTC y en Tijuana se mostraba como el día anterior (1 oct).
+    const civil = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+    const value = civil ? new Date(Number(civil[1]), Number(civil[2]) - 1, Number(civil[3])) : new Date(date);
     setFormatted(dateTime
       ? value.toLocaleString('es-MX', options)
       : value.toLocaleDateString('es-MX', options));

@@ -160,6 +160,33 @@ export async function GET(
   )];
   const procIndicado = c.procedimiento ? (procIndicados.length ? procIndicados.join(', ') : doctorData?.alias || null) : null;
 
+  // Estudios y procedimientos editables (PUT /api/consultas/[id]/servicios).
+  type ConceptoRow = { id: string; tipo_concepto: string; concepto_id: string | null; texto_original: string | null; doctor_id: string | null };
+  const indicadoPorId = new Map(
+    ((indicadosResult.error ? [] : indicadosResult.data ?? []) as Array<{ id: string; indicado_por_id?: string | null }>).map((r) => [r.id, r.indicado_por_id ?? null]),
+  );
+  const conceptosRows = (conceptosResult.data ?? []) as ConceptoRow[];
+  const aEditable = (r: ConceptoRow) => ({
+    id: r.concepto_id,
+    nombre: r.texto_original || '',
+    doctor_id: r.doctor_id,
+    indicado_por_id: indicadoPorId.get(r.id) ?? null,
+  });
+  const cc = consulta as typeof c & { estudio_1_doctor_id?: string | null; estudio_2_doctor_id?: string | null; estudio_3_doctor_id?: string | null; procedimiento_doctor_id?: string | null };
+  let estudiosEditables = conceptosRows.filter((r) => r.tipo_concepto === 'ESTUDIO').map(aEditable);
+  if (!estudiosEditables.length) {
+    // Consultas antiguas o importadas: solo texto en las columnas.
+    estudiosEditables = [
+      [c.estudio_1, cc.estudio_1_doctor_id],
+      [c.estudio_2, cc.estudio_2_doctor_id],
+      [c.estudio_3, cc.estudio_3_doctor_id],
+    ].filter(([n]) => !!n).map(([n, d]) => ({ id: null, nombre: n as string, doctor_id: (d as string | null) ?? null, indicado_por_id: null }));
+  }
+  let procedimientosEditables = conceptosRows.filter((r) => r.tipo_concepto === 'PROCEDIMIENTO').map(aEditable);
+  if (!procedimientosEditables.length && c.procedimiento) {
+    procedimientosEditables = [{ id: null, nombre: c.procedimiento, doctor_id: cc.procedimiento_doctor_id ?? null, indicado_por_id: null }];
+  }
+
   return NextResponse.json({
     consulta: {
       ...consulta,
@@ -177,6 +204,8 @@ export async function GET(
       est2_indicado: est2Indicado,
       est3_indicado: est3Indicado,
       proc_indicado: procIndicado,
+      estudios_editables: estudiosEditables,
+      procedimientos_editables: procedimientosEditables,
       paciente_sexo: pacienteData?.sexo || null,
       paciente_telefono: pacienteData?.telefono || null,
       paciente_fecha_nacimiento: pacienteData?.fecha_nacimiento || null,
