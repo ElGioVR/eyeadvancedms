@@ -20,6 +20,8 @@ import SidebarPanel from '@/components/ui/SidebarPanel';
 import ClientDate from '@/components/ui/ClientDate';
 import BadgeCompletar from '@/components/ui/BadgeCompletar';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
 
 interface PacienteAPI {
   id: string;
@@ -91,6 +93,7 @@ export default function PacientesPage() {
   const [filterAseguradora, setFilterAseguradora] = useState('Todas');
   const [newPatientAseguranzaId, setNewPatientAseguranzaId] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [nuevosTelefonos, setNuevosTelefonos] = useState<TelefonoPaciente[]>([]);
 
   const debouncedSearch = useDebounce(search);
 
@@ -344,8 +347,8 @@ export default function PacientesPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="telefono" className="block text-xs font-bold text-muted mb-1">Teléfono <span className="text-red-500">*</span></label>
-                  <input id="telefono" type="tel" placeholder="Ej. 664 123 4567" className={cn("w-full rounded-lg border bg-surface-2 px-4 py-2.5 text-sm text-fg placeholder:text-gray-400 dark:placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500", formErrors.telefono ? 'border-red-500 dark:border-red-500' : 'border-line')} />
+                  <span className="block text-xs font-bold text-muted mb-1">Teléfonos <span className="text-red-500">*</span> <span className="font-medium">(hasta 3)</span></span>
+                  <EditorTelefonos value={nuevosTelefonos} onChange={setNuevosTelefonos} />
                   {formErrors.telefono && <p className="mt-1 text-xs text-red-500">{formErrors.telefono}</p>}
                 </div>
                 <div>
@@ -396,7 +399,7 @@ export default function PacientesPage() {
                   const nombreEl = document.getElementById('nombre-completo') as HTMLInputElement;
                   const sexoEl = document.getElementById('sexo') as HTMLSelectElement;
                   const fechaEl = document.getElementById('fecha-nacimiento') as HTMLInputElement;
-                  const telEl = document.getElementById('telefono') as HTMLInputElement;
+                  const telefonosLimpios = normalizarTelefonos(nuevosTelefonos);
                   const emailEl = document.getElementById('email') as HTMLInputElement;
                   const contactoEl = document.getElementById('contacto-nombre') as HTMLInputElement;
                   const contactoTelEl = document.getElementById('contacto-telefono') as HTMLInputElement;
@@ -405,7 +408,7 @@ export default function PacientesPage() {
                     nombre_completo: nombreEl?.value?.trim() || '',
                     sexo: sexoEl?.value || '',
                     fecha_nacimiento: fechaEl?.value || '',
-                    telefono: telEl?.value || '',
+                    telefono: telefonoPrincipal(telefonosLimpios) || '',
                     email: emailEl?.value || '',
                     aseguranza_id: newPatientAseguranzaId || '',
                     contacto_emergencia: contactoEl?.value || '',
@@ -426,6 +429,7 @@ export default function PacientesPage() {
                     nombre_completo: result.data.nombre_completo,
                     sexo: result.data.sexo,
                     telefono: result.data.telefono,
+                    telefonos: telefonosLimpios,
                   };
                   if (result.data.fecha_nacimiento) payload.fecha_nacimiento = result.data.fecha_nacimiento;
                   if (result.data.email) payload.email = result.data.email;
@@ -439,6 +443,7 @@ export default function PacientesPage() {
                     await enviarJSON('/api/pacientes', 'POST', payload);
                     setShowNewPatient(false);
                     setNewPatientAseguranzaId('');
+                    setNuevosTelefonos([]);
                     setFormErrors({});
                     toast('Paciente registrado');
                     // Solo se refrescan los datos (lista, búsquedas y resúmenes); la pantalla no se desmonta.

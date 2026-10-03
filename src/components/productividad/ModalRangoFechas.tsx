@@ -29,6 +29,8 @@ interface ModalRangoFechasProps {
   doctorId?: string;
   /** Si se pasa, se pregunta el formato (CSV / Excel / PDF). */
   conFormato?: boolean;
+  /** Formato marcado al abrir (por defecto CSV). */
+  formatoInicial?: FormatoDescarga;
   onConfirm: (rango: RangoFechas, doctorId?: string, formato?: FormatoDescarga) => void;
 }
 
@@ -47,12 +49,13 @@ export default function ModalRangoFechas({
   doctores,
   doctorId = '',
   conFormato = false,
+  formatoInicial = 'csv',
   onConfirm,
 }: ModalRangoFechasProps) {
   const [fechaDesde, setFechaDesde] = useState(desde);
   const [fechaHasta, setFechaHasta] = useState(hasta);
   const [doctorSel, setDoctorSel] = useState(doctorId);
-  const [formato, setFormato] = useState<FormatoDescarga>('csv');
+  const [formato, setFormato] = useState<FormatoDescarga>(formatoInicial);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,8 +63,9 @@ export default function ModalRangoFechas({
     setFechaDesde(desde);
     setFechaHasta(hasta);
     setDoctorSel(doctorId);
+    setFormato(formatoInicial);
     setError(null);
-  }, [isOpen, desde, hasta, doctorId]);
+  }, [isOpen, desde, hasta, doctorId, formatoInicial]);
 
   const valido = !!fechaDesde && !!fechaHasta && fechaDesde <= fechaHasta;
 

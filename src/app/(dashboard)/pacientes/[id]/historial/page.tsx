@@ -29,6 +29,8 @@ import { useToast } from '@/components/ui/Toast';
 import { enviarJSON } from '@/lib/fetcher';
 import { validarNombrePaciente } from '@/lib/import-agenda';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
@@ -47,6 +49,7 @@ interface PacienteData {
   edad: number;
   numero_expediente?: string | null;
   telefono: string;
+  telefonos?: TelefonoPaciente[];
   email: string;
   direccion: string;
   created_at: string;
@@ -79,6 +82,7 @@ function EditarPacienteModal({
     email: paciente.email || '',
     direccion: paciente.direccion || '',
   });
+  const [telefonos, setTelefonos] = useState<TelefonoPaciente[]>(() => normalizarTelefonos(paciente.telefonos, paciente.telefono));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -86,7 +90,8 @@ function EditarPacienteModal({
   const guardar = async () => {
     const nombre = validarNombrePaciente(form.nombre_completo);
     if (!nombre.ok) { setError(nombre.motivo); return; }
-    if (form.telefono && form.telefono.replace(/\D/g, '').length < 10) { setError('El teléfono debe tener 10 dígitos'); return; }
+    const listaTel = normalizarTelefonos(telefonos);
+    if (listaTel.some((t) => t.numero.replace(/\D/g, '').length < 10)) { setError('Cada teléfono debe tener al menos 10 dígitos'); return; }
     setGuardando(true);
     setError(null);
     try {
@@ -95,7 +100,8 @@ function EditarPacienteModal({
         numero_expediente: form.numero_expediente.trim() || null,
         ...(form.sexo ? { sexo: form.sexo } : {}),
         ...(form.fecha_nacimiento ? { fecha_nacimiento: form.fecha_nacimiento } : {}),
-        telefono: form.telefono.trim() || null,
+        telefono: telefonoPrincipal(listaTel),
+        telefonos: listaTel,
         email: form.email.trim() || null,
         direccion: form.direccion.trim() || null,
       });
@@ -127,7 +133,7 @@ function EditarPacienteModal({
             </select>
           </label>
           <label><span className={etiqueta}>Fecha de nacimiento</span><input type="date" className={campo} value={form.fecha_nacimiento} onChange={set('fecha_nacimiento')} /></label>
-          <label><span className={etiqueta}>Teléfono</span><input inputMode="tel" maxLength={20} className={campo} value={form.telefono} onChange={set('telefono')} /></label>
+          <div className="sm:col-span-2"><span className={etiqueta}>Teléfonos (hasta 3)</span><div className="mt-1"><EditorTelefonos value={telefonos} onChange={setTelefonos} inputClassName={campo.replace('mt-1 ', '')} /></div></div>
           <label><span className={etiqueta}>Correo electrónico</span><input type="email" className={campo} value={form.email} onChange={set('email')} /></label>
           <label className="sm:col-span-2"><span className={etiqueta}>Dirección</span><input className={campo} value={form.direccion} onChange={set('direccion')} /></label>
         </div>
@@ -278,6 +284,7 @@ export default function HistorialMedicoPage() {
   }
 
   const { consultas, consultasConProcedimiento, estudiosFromConsultas, diagnosticos } = derivados;
+  const listaTelefonos = normalizarTelefonos(paciente.telefonos, paciente.telefono);
 
   return (
     <div className="relative mx-auto max-w-[1440px] space-y-6" aria-busy={isValidating}>
@@ -325,11 +332,20 @@ export default function HistorialMedicoPage() {
               fechaNacimiento={paciente.fecha_nacimiento}
               edad={paciente.edad}
             />
+            {listaTelefonos.length > 0 && (
+              <p className="mt-0.5 text-sm text-muted md:hidden">
+                {listaTelefonos.map((t) => `${t.numero} (${t.etiqueta})`).join(' · ')}
+              </p>
+            )}
           </div>
           <div className="hidden md:flex items-center gap-8">
             <div className="text-right">
-              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Teléfono</p>
-              <p className="text-sm font-bold text-fg mt-0.5">{paciente.telefono || '—'}</p>
+              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Teléfono{listaTelefonos.length > 1 ? 's' : ''}</p>
+              {listaTelefonos.length ? listaTelefonos.map((t) => (
+                <p key={t.numero} className="text-sm font-bold text-fg mt-0.5">
+                  {t.numero} <span className="text-[10px] font-semibold text-muted">{t.etiqueta}{t.principal && listaTelefonos.length > 1 ? ' · principal' : ''}</span>
+                </p>
+              )) : <p className="text-sm font-bold text-fg mt-0.5">—</p>}
             </div>
             <div className="text-right">
               <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Correo Electrónico</p>

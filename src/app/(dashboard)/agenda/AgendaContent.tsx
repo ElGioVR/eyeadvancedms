@@ -16,6 +16,7 @@ import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
 import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
 import { useAutosave } from '@/hooks/useAutosave';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -309,7 +310,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   // Acciones rápidas (aplazar / reagendar / cancelar) y alta rápida sin salir de la agenda.
   const [accionRapida, setAccionRapida] = useState<{ evento: AgendaCirugia; accion: AccionRapida } | null>(null);
   // Alta rápida desde un hueco de la agenda: solo consultas (los estudios van en el formulario completo).
-  const [agendarRapido, setAgendarRapido] = useState<{ fecha: string; hora: string; tipo: 'PRIMERA' } | null>(null);
+  const [agendarRapido, setAgendarRapido] = useState<{ fecha: string; hora: string; tipo: 'PRIMERA' | 'ESTUDIOS' } | null>(null);
   const [mobileOpenDay, setMobileOpenDay] = useState<{ date: string; key: number } | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const stripSelectedRef = useRef<HTMLButtonElement>(null);
@@ -724,8 +725,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     return { desde: dateStr(y, m, 1), hasta: dateStr(y, m, daysInMonth(y, m)) };
   }, [currentDate]);
   const reportesDoctores = useMemo(() => doctores.map((d) => ({ id: d.id, nombre: d.alias })), [doctores]);
-  const reportes = userRol === 'admin' ? (
-    <ReportesAgendaCsv desde={reportesRango.desde} hasta={reportesRango.hasta} doctores={reportesDoctores} doctorId={filterDoctor} />
+  // Reportes: pacientes atendidos para admin, recepción y doctor; cirugías y entradas/salidas solo admin.
+  const verReportes = userRol === 'admin' || userRol === 'recepcionista' || userRol === 'doctor';
+  const reportes = verReportes ? (
+    <ReportesAgendaCsv rol={userRol} desde={reportesRango.desde} hasta={reportesRango.hasta} doctores={reportesDoctores} doctorId={filterDoctor} />
   ) : null;
   const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
 
@@ -752,11 +755,11 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
                           <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
                           <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Importar</p>
-                          <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
-                            <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
-                          </button>
                           <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
+                          </button>
+                          <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                            <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                           </button>
                         </div>
                       </div>
@@ -772,11 +775,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
                           <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
                           <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
-                          <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
-                            <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-                          </button>
                           <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                             <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
+                          </button>
+                          <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                            <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
+                          </button>
+                          <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                            <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
                           </button>
                         </div>
                       </div>
@@ -809,8 +815,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
           <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
-          {userRol === 'admin' && (
+          {verReportes && (
             <ReportesAgendaCsv
+              rol={userRol}
               desde={reportesRango.desde}
               hasta={reportesRango.hasta}
               doctores={reportesDoctores}
@@ -830,11 +837,11 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       <div className="absolute -top-2 left-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
                       <div className="absolute -top-[7px] left-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
                       <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Importar</p>
-                      <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
-                        <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
-                      </button>
                       <button onClick={() => { setShowImportChoice(false); setShowImportConsultas(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consultas
+                      </button>
+                      <button onClick={() => { setShowImportChoice(false); setShowImport(true); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                        <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugías
                       </button>
                     </div>
                   </div>
@@ -850,11 +857,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       <div className="absolute -top-2 right-6 h-0 w-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[7px] border-b-gray-200 dark:border-b-line" />
                       <div className="absolute -top-[7px] right-6 h-0 w-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-white dark:border-b-surface" />
                       <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
-                      <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
-                        <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-                      </button>
                       <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
                         <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
+                      </button>
+                      <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                        <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
+                      </button>
+                      <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left">
+                        <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
                       </button>
                     </div>
                   </div>
@@ -888,8 +898,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
             )}
           </button>
-          {userRol === 'admin' && (
+          {verReportes && (
             <ReportesAgendaCsv
+              rol={userRol}
               desde={reportesRango.desde}
               hasta={reportesRango.hasta}
               doctores={reportesDoctores}
@@ -910,11 +921,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 <div className="absolute right-0 top-full z-50 mt-2 w-52">
                   <div className="rounded-2xl border border-line bg-surface p-1.5 shadow-pop animate-popIn">
                     <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Crear</p>
-                    <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
-                      <span className="h-2 w-3 rounded-sm border-l-2 border-l-violet-500 bg-violet-200" /> Cirugía
-                    </button>
                     <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
                       <span className="h-2 w-3 rounded-sm border-l-2 border-l-amber-500 bg-amber-200" /> Consulta
+                    </button>
+                    <button onClick={() => { setShowCreateChoice(false); router.push('/consultas/nueva?tipo=ESTUDIO'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
+                      <span className="h-2 w-3 rounded-sm border-l-2 border-l-sky-500 bg-sky-200" /> Estudio
+                    </button>
+                    <button onClick={() => { setShowCreateChoice(false); router.push('/cirugias/nueva'); }} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-surface-2">
+                      <span className="h-2 w-3 rounded-sm border-l-2 border-l-violet-500 bg-violet-200" /> Cirugía
                     </button>
                   </div>
                 </div>
@@ -981,9 +995,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">Tipos</p>
               <div className="space-y-1 mb-3">
                 {[
-                  { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
                   { key: 'consulta', label: 'Consulta', bg: 'bg-amber-200', border: 'border-l-amber-500' },
                   { key: 'estudio', label: 'Estudio', bg: 'bg-sky-200', border: 'border-l-sky-500' },
+                  { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
                 ].map(t => (
                   <button key={t.key} onClick={() => {
                     setFilterTipos(prev => {
@@ -1462,6 +1476,28 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 const fecha = dayCreate.date;
                 const hora = dayCreate.hour || '';
                 setDayCreate(null);
+                setAgendarRapido({ fecha, hora, tipo: 'PRIMERA' });
+              }}
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
+            >
+              <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
+            </button>
+            <button
+              onClick={() => {
+                const fecha = dayCreate.date;
+                const hora = dayCreate.hour || '';
+                setDayCreate(null);
+                setAgendarRapido({ fecha, hora, tipo: 'ESTUDIOS' });
+              }}
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
+            >
+              <span className="h-2 w-3 rounded-sm border-l-2 bg-sky-200 border-l-sky-500" /> Estudio
+            </button>
+            <button
+              onClick={() => {
+                const fecha = dayCreate.date;
+                const hora = dayCreate.hour || '';
+                setDayCreate(null);
                 // Punto I: toda cirugía nueva se crea en el asistente completo (anestesia,
                 // datos generales, tipo/modelo de LIO, equipo…), con fecha y hora precargadas.
                 router.push(`/cirugias/nueva?fecha=${encodeURIComponent(fecha)}${hora ? `&hora=${encodeURIComponent(hora)}` : ''}`);
@@ -1469,17 +1505,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
             >
               <span className="h-2 w-3 rounded-sm border-l-2 bg-violet-200 border-l-violet-500" /> Cirugía
-            </button>
-            <button
-              onClick={() => {
-                const fecha = dayCreate.date;
-                const hora = dayCreate.hour || '';
-                setDayCreate(null);
-                setAgendarRapido({ fecha, hora, tipo: 'PRIMERA' });
-              }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-fg-2 hover:bg-surface-2 transition-colors text-left"
-            >
-              <span className="h-2 w-3 rounded-sm border-l-2 bg-amber-200 border-l-amber-500" /> Consulta
             </button>
           </div>
         </div>
@@ -1590,9 +1615,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 <label className="block text-xs font-bold text-muted mb-1.5">Tipo</label>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
                     { key: 'consulta', label: 'Consulta', bg: 'bg-amber-200', border: 'border-l-amber-500' },
                     { key: 'estudio', label: 'Estudio', bg: 'bg-sky-200', border: 'border-l-sky-500' },
+                    { key: 'cirugia', label: 'Cirugía', bg: 'bg-violet-200', border: 'border-l-violet-500' },
                   ].map(t => (
                     <button key={t.key} onClick={() => {
                       setFilterTipos(prev => { const n = new Set(prev); if (n.has(t.key)) n.delete(t.key); else n.add(t.key); return n; });
@@ -1753,7 +1778,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
   const esCirugia = !cirugia.tipo || cirugia.tipo === 'cirugia';
   const acciones = accionesDisponibles(cirugia, userRol);
   // Contacto del paciente para WhatsApp/correo: solo al abrir la ventana (payload mínimo).
-  const { data: contacto } = useSWR<{ telefono: string | null; email: string | null }>(
+  const { data: contacto } = useSWR<{ telefono: string | null; telefonos?: TelefonoPaciente[]; email: string | null }>(
     cirugia.paciente_id && puedeGestionarAgenda(userRol) ? `/api/pacientes/${cirugia.paciente_id}/contacto` : null,
     { revalidateOnFocus: false }
   );
@@ -1961,6 +1986,7 @@ function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEsta
               detalle: esCirugia ? cirugia.procedimiento : (cirugia.tipo_consulta_label || cirugia.procedimiento),
             }}
             telefono={contacto?.telefono}
+            telefonos={contacto?.telefonos}
             email={contacto?.email}
           />
         )}

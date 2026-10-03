@@ -4,6 +4,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { validarId } from '@/lib/api/validar';
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
+import { leerTelefonos } from '@/lib/telefonos-paciente-db';
 
 export async function GET(
   _request: Request,
@@ -155,6 +156,11 @@ export async function GET(
     const participantes = { data: conHorario(participantesBase.data as { id: string }[] | null, horariosParticipantes.data as Horario[] | null) };
     const personal = { data: conHorario(personalBase.data as { id: string }[] | null, horariosPersonal.data as Horario[] | null) };
     if (clinicos.data) Object.assign(cirugia, clinicos.data);
+    // Teléfonos del paciente para WhatsApp (varios números, mig. 1800000000470).
+    const pacienteId = cirugia.paciente_id as string | null;
+    if (pacienteId && cirugia.pacientes && typeof cirugia.pacientes === 'object') {
+      (cirugia.pacientes as Record<string, unknown>).telefonos = (await leerTelefonos([pacienteId])).get(pacienteId) ?? [];
+    }
     return {
       cirugia,
       participantes,

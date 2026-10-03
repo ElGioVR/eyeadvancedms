@@ -8,6 +8,7 @@ import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/li
 import { MotorDevengoService } from '@/services/productividad';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { z } from 'zod';
+import { leerTelefonos } from '@/lib/telefonos-paciente-db';
 
 const consultaUpdateSchema = z.object({
   estatus: z.enum(['BORRADOR', 'AGENDADA', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
@@ -100,6 +101,7 @@ export async function GET(
   // RBAC: solo el rol de agenda propia queda limitado a lo suyo (doctor: acceso total)
   const denegado = verificarDueno(requerido, consulta.doctor_id);
   if (denegado) return denegado;
+  const telefonosP = leerTelefonos([(consulta as { paciente_id?: string }).paciente_id || '']);
 
   // Ronda 2 (paralelo): aseguranza, cobertura y nombres de usuarios del historial
   const historialBase = historialResult.data ?? [];
@@ -213,6 +215,7 @@ export async function GET(
       paciente_poliza: pacienteData?.numero_poliza || null,
       paciente_afiliacion: pacienteData?.numero_afiliacion || null,
       paciente_expediente: pacienteData?.numero_expediente || null,
+      paciente_telefonos: (await telefonosP).get((consulta as { paciente_id?: string }).paciente_id || '') ?? [],
       paciente_edad: pacienteData?.edad ?? null,
     },
     historial,

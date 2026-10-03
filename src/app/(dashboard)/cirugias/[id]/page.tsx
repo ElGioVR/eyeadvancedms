@@ -20,8 +20,9 @@ import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
 
-interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null; }
+interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null; telefonos?: TelefonoPaciente[]; }
 interface Origen { nombre?: string; }
 interface Servicio { nombre?: string; }
 interface Recurso { nombre?: string; ubicacion?: string; }
@@ -456,6 +457,7 @@ export default function CirugiaDetailPage() {
                 folio: cirugia.codigo,
               }}
               telefono={cirugia.pacientes?.telefono}
+              telefonos={cirugia.pacientes?.telefonos}
               email={cirugia.pacientes?.email}
             />
             <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors no-print">

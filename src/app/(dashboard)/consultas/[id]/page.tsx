@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
 import EditarServiciosConsulta, { type ServicioEditable } from '@/components/consultations/EditarServiciosConsulta';
 import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
 import Link from 'next/link';
@@ -79,6 +80,7 @@ interface ConsultaDetalle {
   paciente_telefono: string | null;
   paciente_fecha_nacimiento: string | null;
   paciente_expediente?: string | null;
+  paciente_telefonos?: TelefonoPaciente[];
   estudios_editables?: ServicioEditable[];
   procedimientos_editables?: ServicioEditable[];
   paciente_edad?: number | null;
@@ -446,6 +448,7 @@ export default function ConsultaDetailPage() {
                 folio: consulta.folio,
               }}
               telefono={consulta.paciente_telefono}
+              telefonos={consulta.paciente_telefonos}
               email={consulta.paciente_email}
             />
             {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && !!consulta.procedimiento && (

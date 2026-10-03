@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, leerJSON, uuid, validarId } from '@/lib/api/validar';
+import { columnasTelefonos, faltanColumnasTelefonos, leerTelefonos, telefonosSchema } from '@/lib/telefonos-paciente-db';
 
 interface CobroJoin {
   monto: number | null;
@@ -58,6 +59,7 @@ export async function GET(
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
   const consultas = consultasRes.data;
+  const telefonos = await leerTelefonos([patient.id]);
 
   const nombre = patient.nombre_completo || '';
   const iniciales = nombre.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
@@ -116,6 +118,7 @@ export async function GET(
     numero_poliza: patient.numero_poliza || null,
     numero_afiliacion: patient.numero_afiliacion || null,
     numero_expediente: patient.numero_expediente || null,
+    telefonos: telefonos.get(patient.id) ?? [],
     created_at: patient.created_at,
     consultas: consultasResult,
     total_consultas: consultasResult.length,
@@ -132,6 +135,7 @@ const pacienteUpdateSchema = z
     sexo: z.enum(['H', 'M', 'MASCULINO', 'FEMENINO', 'OTRO']).optional(),
     fecha_nacimiento: fechaISO.optional(),
     telefono: z.string().max(20).optional().nullable(),
+    telefonos: telefonosSchema.optional(),
     email: z.string().email().max(255).optional().nullable(),
     direccion: z.string().max(1000).optional().nullable(),
     contacto_emergencia: z.string().max(255).optional().nullable(),
@@ -171,14 +175,21 @@ export async function PATCH(
   if (data.numero_poliza !== undefined) updates.numero_poliza = data.numero_poliza?.trim() || null;
   if (data.numero_afiliacion !== undefined) updates.numero_afiliacion = data.numero_afiliacion?.trim() || null;
   if (data.numero_expediente !== undefined) updates.numero_expediente = data.numero_expediente?.trim() || null;
+  if (data.telefonos !== undefined) Object.assign(updates, columnasTelefonos(data.telefonos));
 
   const supabase = getSupabaseAdmin();
-  const { data: actualizado, error } = await supabase
+  const actualizar = (cambios: Record<string, unknown>) => supabase
     .from('pacientes')
-    .update(updates)
+    .update(cambios)
     .eq('id', id)
     .select('id')
     .maybeSingle();
+  let { data: actualizado, error } = await actualizar(updates);
+  // BD sin las columnas de teléfonos (mig. 1800000000470): se guarda solo el principal.
+  if (error && faltanColumnasTelefonos(error)) {
+    const { telefonos: _t, telefonos_busqueda: _b, ...sinLista } = updates;
+    ({ data: actualizado, error } = await actualizar(sinLista));
+  }
 
   if (error) {
     if (error.code === '23505' && /numero_expediente/.test(`${error.message} ${error.details ?? ''}`)) {

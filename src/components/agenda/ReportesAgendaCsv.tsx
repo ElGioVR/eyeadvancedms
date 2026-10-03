@@ -1,16 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, FileDown, Scissors } from 'lucide-react';
+import { ArrowLeftRight, FileDown, Scissors, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import ModalRangoFechas, { type OpcionDoctor, type RangoFechas } from '@/components/productividad/ModalRangoFechas';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { descargarReporte, type FormatoDescarga } from '@/lib/exportar-reporte';
 
-type ReporteAgenda = 'cirugias' | 'entradas_salidas';
+type ReporteAgenda = 'pacientes_atendidos' | 'cirugias' | 'entradas_salidas';
 
-const REPORTES: Array<{ id: ReporteAgenda; label: string; icon: LucideIcon; titulo: string; descripcion: string; punto: string }> = [
+const REPORTES: Array<{ id: ReporteAgenda; label: string; icon: LucideIcon; titulo: string; descripcion: string; punto: string; roles: string[] }> = [
+  {
+    id: 'pacientes_atendidos',
+    label: 'Pacientes atendidos',
+    icon: Users,
+    titulo: 'Reporte de pacientes atendidos',
+    descripcion: 'Pacientes del periodo con diagnóstico, estudios y procedimientos, y el médico que los indicó y realizó.',
+    punto: 'bg-emerald-200 border-l-emerald-500',
+    roles: ['admin', 'recepcionista', 'doctor'],
+  },
   {
     id: 'cirugias',
     label: 'Cirugías',
@@ -18,6 +27,7 @@ const REPORTES: Array<{ id: ReporteAgenda; label: string; icon: LucideIcon; titu
     titulo: 'Reporte de cirugías',
     descripcion: 'Cirugías de la agenda con paciente, LIO, tiempos y cirujano.',
     punto: 'bg-violet-200 border-l-violet-500',
+    roles: ['admin'],
   },
   {
     id: 'entradas_salidas',
@@ -26,6 +36,7 @@ const REPORTES: Array<{ id: ReporteAgenda; label: string; icon: LucideIcon; titu
     titulo: 'Reporte de entradas y salidas',
     descripcion: 'Consultas del rango con ingreso, egreso y datos del paciente.',
     punto: 'bg-amber-200 border-l-amber-500',
+    roles: ['admin'],
   },
 ];
 
@@ -40,13 +51,15 @@ interface Props {
   botonClassName?: string;
   /** Móvil: botón solo con ícono y menú alineado a la derecha. */
   soloIcono?: boolean;
+  /** Rol del usuario: cada reporte indica qué roles lo ven. */
+  rol: string;
 }
 
 /**
  * Botón «Reportes» de la agenda: descarga (CSV, Excel o PDF) los reportes de cirugías y de
  * entradas y salidas (los mismos endpoints que Productividad, solo admin).
  */
-export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '', botonClassName, soloIcono = false }: Props) {
+export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '', botonClassName, soloIcono = false, rol }: Props) {
   const { toast } = useToast();
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [modal, setModal] = useState<ReporteAgenda | null>(null);
@@ -83,7 +96,10 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
       if (doctorSel) params.set('doctor_id', doctorSel);
       let url: string;
       let nombre: string;
-      if (modal === 'cirugias') {
+      if (modal === 'pacientes_atendidos') {
+        url = `/api/reportes/pacientes-atendidos?${params}`;
+        nombre = `pacientes-atendidos-${rango.desde}_${rango.hasta}`;
+      } else if (modal === 'cirugias') {
         url = `/api/productividad/reportes/cirugias?${params}`;
         nombre = `cirugias-${rango.desde}_${rango.hasta}`;
       } else {
@@ -110,6 +126,8 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
   }, [modal, toast, doctores]);
 
   const info = REPORTES.find((r) => r.id === modal) || null;
+  const visibles = REPORTES.filter((r) => r.roles.includes(rol));
+  if (visibles.length === 0) return null;
 
   return (
     <>
@@ -128,7 +146,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
           <div className={cn('absolute top-full mt-2 z-50 w-60', soloIcono ? 'right-0' : 'left-0')}>
             <div className="relative rounded-2xl border border-line bg-surface shadow-xl p-1.5">
               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">Descargar reporte</p>
-              {REPORTES.map((r) => (
+              {visibles.map((r) => (
                 <button
                   key={r.id}
                   type="button"
@@ -154,6 +172,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
         doctores={doctores}
         doctorId={doctorId}
         conFormato
+        formatoInicial={modal === 'pacientes_atendidos' ? 'xlsx' : 'csv'}
         onConfirm={descargar}
       />
     </>

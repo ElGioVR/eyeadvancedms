@@ -70,12 +70,21 @@ export async function GET(request: NextRequest) {
 
   // Más recientes primero: con nombres comunes, el paciente recién dado de alta
   // (p. ej. por otro usuario) debe aparecer en la lista y no quedar fuera del límite.
-  const pacientesQuery = supabase
+  // También busca en los teléfonos adicionales (mig. 1800000000470); sin la
+  // columna se repite la búsqueda sin ella.
+  const digitos = qSanitizada.replace(/\D/g, '');
+  const filtroBase = `nombre_completo.ilike.${pattern},telefono.ilike.${pattern},email.ilike.${pattern},numero_expediente.ilike.${pattern}`;
+  const buscarPacientes = (filtro: string) => supabase
     .from('pacientes')
     .select('id,nombre_completo,telefono,email,numero_expediente')
-    .or(`nombre_completo.ilike.${pattern},telefono.ilike.${pattern},email.ilike.${pattern},numero_expediente.ilike.${pattern}`)
+    .or(filtro)
     .order('created_at', { ascending: false })
     .limit(limitePacientes);
+  const pacientesQuery = (async () => {
+    if (digitos.length < 4) return buscarPacientes(filtroBase);
+    const r = await buscarPacientes(`${filtroBase},telefonos_busqueda.ilike.%${digitos}%`);
+    return r.error ? buscarPacientes(filtroBase) : r;
+  })();
 
   const historial = new Map<string, HistorialOjo>();
   const results: SearchResult[] = [];

@@ -7,6 +7,7 @@ import { esquemaPaginacion, fechaISO, leerJSON, leerQuery, uuid } from '@/lib/ap
 import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
 import { hoyTijuana } from '@/lib/rangos';
+import { columnasTelefonos, faltanColumnasTelefonos, telefonosSchema } from '@/lib/telefonos-paciente-db';
 
 const pacienteCreateSchema = z
   .object({
@@ -16,6 +17,7 @@ const pacienteCreateSchema = z
     fecha_nacimiento: fechaISO.optional(),
     edad: z.number().int().min(0).max(150).optional(),
     telefono: z.string().max(20).optional(),
+    telefonos: telefonosSchema.optional(),
     email: z.string().email().max(255).optional(),
     direccion: z.string().max(1000).optional(),
     contacto_emergencia: z.string().max(255).optional(),
@@ -98,7 +100,11 @@ export async function GET(request: Request) {
     .limit(1, { referencedTable: 'ultima' })
     .range(from, to);
   if (patron) {
-    consulta = consulta.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron},numero_expediente.ilike.${patron}`);
+    // Teléfonos adicionales (mig. 1800000000470); si la columna no existe,
+    // el respaldo de abajo repite la búsqueda sin ella.
+    const digitos = busqueda.replace(/\D/g, '');
+    const extra = digitos.length >= 4 ? `,telefonos_busqueda.ilike.%${digitos}%` : '';
+    consulta = consulta.or(`nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron},numero_expediente.ilike.${patron}${extra}`);
   }
 
   const { data, error, count } = await consulta;
@@ -250,15 +256,22 @@ export async function POST(request: Request) {
   if (data.numero_poliza) insertData.numero_poliza = data.numero_poliza;
   if (data.numero_afiliacion) insertData.numero_afiliacion = data.numero_afiliacion;
   if (data.numero_expediente) insertData.numero_expediente = data.numero_expediente;
+  if (data.telefonos) Object.assign(insertData, columnasTelefonos(data.telefonos));
 
-  const { data: paciente, error } = await supabase
+  const insertar = (fila: Record<string, unknown>) => supabase
     .from('pacientes')
-    .insert(insertData)
+    .insert(fila)
     .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at')
     .single();
+  let { data: paciente, error } = await insertar(insertData);
+  // BD sin las columnas de teléfonos (mig. 1800000000470): se guarda solo el principal.
+  if (error && faltanColumnasTelefonos(error)) {
+    const { telefonos: _t, telefonos_busqueda: _b, ...sinLista } = insertData;
+    ({ data: paciente, error } = await insertar(sinLista));
+  }
 
-  if (error) {
-    if (error.code === '23505' && /numero_expediente/.test(`${error.message} ${error.details ?? ''}`)) {
+  if (error || !paciente) {
+    if (error?.code === '23505' && /numero_expediente/.test(`${error.message} ${error.details ?? ''}`)) {
       return NextResponse.json({ error: `Ya existe un paciente con el número de expediente ${data.numero_expediente}` }, { status: 409 });
     }
     return NextResponse.json({ error: handleSupabaseError(error, 'pacientes.crear').mensaje }, { status: 500 });
