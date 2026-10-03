@@ -36,6 +36,8 @@ import LIOSelector from '@/components/cirugia/LIOSelector';
 import { URL_LIOS_DISPONIBLES, obtenerLIOs, type LIODisponible } from '@/components/cirugia/LIOSelector';
 import { useToast } from '@/components/ui/Toast';
 import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
 
 // Custom Skeleton for Cirugía Form - matches actual form layout
 function CirugiaFormSkeleton() {
@@ -301,6 +303,7 @@ function NuevaCirugiaContent() {
   // Alta rápida de paciente desde la cirugía (con número de expediente).
   const [altaPaciente, setAltaPaciente] = useState<null | {
     numero_expediente: string; nombre_completo: string; sexo: 'H' | 'M'; fecha_nacimiento: string; telefono: string;
+    telefonos: TelefonoPaciente[];
     guardando: boolean; error: string | null;
   }>(null);
   const [resumenPaciente, setResumenPaciente] = useState<PacienteResumen | null>(null);
@@ -740,7 +743,8 @@ useEffect(() => {
     if (!altaPaciente || altaPaciente.guardando) return;
     const nombre = altaPaciente.nombre_completo.trim();
     const expediente = altaPaciente.numero_expediente.trim();
-    const telefono = altaPaciente.telefono.trim();
+    const telefonosAlta = normalizarTelefonos(altaPaciente.telefonos);
+    const telefono = telefonoPrincipal(telefonosAlta) ?? '';
     const error = !nombre
       ? 'El nombre es requerido'
       : altaPaciente.fecha_nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(altaPaciente.fecha_nacimiento)
@@ -754,10 +758,13 @@ useEffect(() => {
     setAltaPaciente({ ...altaPaciente, guardando: true, error: null });
     try {
       // Fecha de nacimiento opcional: solo se envía si se capturó.
-      const payload: Record<string, string> = { nombre_completo: nombre, sexo: altaPaciente.sexo };
+      const payload: Record<string, unknown> = { nombre_completo: nombre, sexo: altaPaciente.sexo };
       if (altaPaciente.fecha_nacimiento) payload.fecha_nacimiento = altaPaciente.fecha_nacimiento;
       if (expediente) payload.numero_expediente = expediente;
-      if (telefono) payload.telefono = telefono;
+      if (telefono) {
+        payload.telefono = telefono;
+        payload.telefonos = telefonosAlta;
+      }
       const res = await fetch('/api/pacientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1090,6 +1097,7 @@ useEffect(() => {
                       sexo: 'H',
                       fecha_nacimiento: '',
                       telefono: '',
+                      telefonos: [],
                       guardando: false,
                       error: null,
                     });
@@ -1148,15 +1156,12 @@ useEffect(() => {
                         className={inputCls}
                       />
                     </div>
-                    <div>
-                      <label htmlFor="alta-telefono" className={labelCls}>Teléfono</label>
-                      <input
-                        id="alta-telefono"
-                        value={altaPaciente.telefono}
-                        onChange={(e) => setAltaPaciente({ ...altaPaciente, telefono: e.target.value })}
-                        maxLength={20}
-                        placeholder="Número de teléfono"
-                        className={inputCls}
+                    <div className="sm:col-span-2">
+                      <span className={labelCls}>Teléfonos (hasta 3)</span>
+                      <EditorTelefonos
+                        value={altaPaciente.telefonos}
+                        onChange={(lista) => setAltaPaciente({ ...altaPaciente, telefonos: lista })}
+                        inputClassName={inputCls}
                       />
                     </div>
                   </div>

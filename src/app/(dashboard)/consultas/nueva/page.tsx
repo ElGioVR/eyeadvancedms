@@ -27,6 +27,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import PageHeader from '@/components/ui/PageHeader';
 import { FormInput, FormSelect } from '@/components/ui/FormField';
 import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
 import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
 import { DURACION_CITA_MIN, deMinutos } from '@/lib/agenda-slots';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
@@ -361,6 +363,7 @@ function NuevaConsultaContent() {
     email: '',
     direccion: '',
     numero_expediente: '',
+    telefonos: [] as TelefonoPaciente[],
   });
 
   interface ConsultationForm {
@@ -1263,8 +1266,11 @@ function NuevaConsultaContent() {
                     <FormInput label="Nombre completo" required value={newPatient.nombre_completo} onChange={(v) => setNewPatient((p) => ({ ...p, nombre_completo: v }))} placeholder="Nombre del paciente" />
                     <FormSelect label="Sexo" required value={newPatient.sexo} onChange={(v) => setNewPatient((p) => ({ ...p, sexo: v }))} options={['H', 'M']} displayOptions={['Hombre', 'Mujer']} />
                     <FormInput label="Fecha de nacimiento (opcional)" value={newPatient.fecha_nacimiento} onChange={(v) => setNewPatient((p) => ({ ...p, fecha_nacimiento: v }))} type="date" />
-                    <FormInput label="Teléfono" value={newPatient.telefono} onChange={(v) => setNewPatient((p) => ({ ...p, telefono: v }))} placeholder="Número de teléfono" />
                     <FormInput label="Email" value={newPatient.email} onChange={(v) => setNewPatient((p) => ({ ...p, email: v }))} placeholder="correo@ejemplo.com" type="email" />
+                    <div className="sm:col-span-2">
+                      <span className="mb-1.5 block text-[13px] font-medium text-fg-2">Teléfonos <span className="text-muted">(hasta 3)</span></span>
+                      <EditorTelefonos value={newPatient.telefonos ?? []} onChange={(lista) => setNewPatient((p) => ({ ...p, telefonos: lista }))} />
+                    </div>
                     <FormInput label="Dirección" value={newPatient.direccion} onChange={(v) => setNewPatient((p) => ({ ...p, direccion: v }))} placeholder="Dirección del paciente" />
                   </div>
                   {newPatientError && (
@@ -1282,12 +1288,17 @@ function NuevaConsultaContent() {
                         if (error) { setNewPatientError(error); return; }
                         setNewPatientError(null);
                         // No enviar campos vacíos (el servidor rechaza p. ej. email '').
-                        const payload: Record<string, string> = {
+                        const payload: Record<string, unknown> = {
                           nombre_completo: newPatient.nombre_completo.trim(),
                           sexo: newPatient.sexo,
                         };
                         if (newPatient.fecha_nacimiento) payload.fecha_nacimiento = newPatient.fecha_nacimiento;
-                        if (newPatient.telefono.trim()) payload.telefono = newPatient.telefono.trim();
+                        // Varios teléfonos (el principal también va en `telefono`); borradores antiguos traen solo `telefono`.
+                        const telefonosNuevo = normalizarTelefonos(newPatient.telefonos, newPatient.telefono.trim() || null);
+                        if (telefonosNuevo.length) {
+                          payload.telefonos = telefonosNuevo;
+                          payload.telefono = telefonoPrincipal(telefonosNuevo);
+                        }
                         if (newPatient.email.trim()) payload.email = newPatient.email.trim();
                         if (newPatient.direccion.trim()) payload.direccion = newPatient.direccion.trim();
                         if (newPatient.numero_expediente.trim()) payload.numero_expediente = newPatient.numero_expediente.trim();
@@ -1297,7 +1308,7 @@ function NuevaConsultaContent() {
                           pacienteSelIdRef.current = created.id;
                           setPacienteSeleccionado(created);
                           setShowNewPatientForm(false);
-                          setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '', numero_expediente: '' });
+                          setNewPatient({ nombre_completo: '', sexo: 'H', fecha_nacimiento: '', telefono: '', email: '', direccion: '', numero_expediente: '', telefonos: [] });
                           setEstudiosSeleccionados([]);
                           setProcedimientosSeleccionados([]);
                           updateConsultation('origenId', created?.aseguranza_id || '');
