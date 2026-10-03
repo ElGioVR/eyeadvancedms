@@ -30,6 +30,7 @@ import { enviarJSON } from '@/lib/fetcher';
 import { validarNombrePaciente } from '@/lib/import-agenda';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import ListaTelefonos from '@/components/pacientes/ListaTelefonos';
 import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
 
 const historialTabs = [
@@ -333,19 +334,13 @@ export default function HistorialMedicoPage() {
               edad={paciente.edad}
             />
             {listaTelefonos.length > 0 && (
-              <p className="mt-0.5 text-sm text-muted md:hidden">
-                {listaTelefonos.map((t) => `${t.numero} (${t.etiqueta})`).join(' · ')}
-              </p>
+              <ListaTelefonos telefonos={listaTelefonos} className="mt-3 md:hidden" />
             )}
           </div>
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-start gap-8">
             <div className="text-right">
-              <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Teléfono{listaTelefonos.length > 1 ? 's' : ''}</p>
-              {listaTelefonos.length ? listaTelefonos.map((t) => (
-                <p key={t.numero} className="text-sm font-bold text-fg mt-0.5">
-                  {t.numero} <span className="text-[10px] font-semibold text-muted">{t.etiqueta}{t.principal && listaTelefonos.length > 1 ? ' · principal' : ''}</span>
-                </p>
-              )) : <p className="text-sm font-bold text-fg mt-0.5">—</p>}
+              <p className="mb-1.5 text-[10px] text-muted uppercase font-semibold tracking-wider">Teléfono{listaTelefonos.length > 1 ? 's' : ''}</p>
+              <ListaTelefonos telefonos={listaTelefonos} alineacion="derecha" />
             </div>
             <div className="text-right">
               <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Correo Electrónico</p>
