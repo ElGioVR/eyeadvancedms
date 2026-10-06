@@ -104,9 +104,13 @@ AS $$
      AND (p.consultas_count IS DISTINCT FROM s.total OR p.ultima_visita IS DISTINCT FROM s.ultima);
 $$;
 
+-- SECURITY DEFINER: corre con el dueño de la función. Sin esto, el rol que
+-- inserta la consulta (service_role) no podía llamar recalcular_resumen_paciente
+-- (se le quitó EXECUTE a PUBLIC) → «permission denied» y la consulta no se guardaba.
 CREATE OR REPLACE FUNCTION trg_consultas_resumen_paciente()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
@@ -125,6 +129,9 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON FUNCTION recalcular_resumen_paciente(uuid) FROM anon, authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    GRANT EXECUTE ON FUNCTION recalcular_resumen_paciente(uuid) TO service_role;
   END IF;
 END $$;
 
