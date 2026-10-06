@@ -33,6 +33,7 @@ export interface ImportPreviewResp {
   resumen: ImportResumen;
   filas: ImportFilaPreview[];
   rechazos: ImportRechazo[];
+  avisos?: string[];
   rechazosCsv: string | null;
   duplicadosCsv: string | null;
 }
@@ -45,6 +46,7 @@ export interface ImportResultado {
   doctoresCreados: number;
   pacientesCreados: number;
   rechazos: ImportRechazo[];
+  avisos?: string[];
   rechazosCsv: string | null;
   duplicadosCsv: string | null;
 }
@@ -80,6 +82,15 @@ export function BotonesCsv({ tipo, rechazosCsv, duplicadosCsv }: { tipo: 'cirugi
           <Download className="h-3.5 w-3.5" /> Descargar duplicadas omitidas
         </button>
       )}
+    </div>
+  );
+}
+
+export function ListaAvisos({ avisos }: { avisos?: string[] }) {
+  if (!avisos || avisos.length === 0) return null;
+  return (
+    <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+      {avisos.map((a, i) => <p key={i}>{a}</p>)}
     </div>
   );
 }
@@ -202,6 +213,7 @@ export function ImportAgenda({
             {r.aImportar > preview.filas.length && <p className="text-center text-muted py-1.5">… y {r.aImportar - preview.filas.length} más</p>}
             {r.aImportar === 0 && <p className="text-center text-muted py-3">No hay {etiqueta} nuevas para agregar.</p>}
           </div>
+          <ListaAvisos avisos={preview.avisos} />
           <ListaRechazos rechazos={preview.rechazos} />
           <BotonesCsv tipo={tipo} rechazosCsv={preview.rechazosCsv} duplicadosCsv={preview.duplicadosCsv} />
           <div className="flex justify-end gap-3">
@@ -228,6 +240,7 @@ export function ImportAgenda({
           {(result.pacientesCreados > 0 || result.doctoresCreados > 0) && (
             <p className="text-xs text-muted">Complétalos en Pacientes y en Configuración → Personal médico (aparecen con «Completar información»).</p>
           )}
+          <ListaAvisos avisos={result.avisos} />
           <ListaRechazos rechazos={result.rechazos} />
           <BotonesCsv tipo={tipo} rechazosCsv={result.rechazosCsv} duplicadosCsv={result.duplicadosCsv} />
           <div className="flex justify-end">

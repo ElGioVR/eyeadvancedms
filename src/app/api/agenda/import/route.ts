@@ -14,6 +14,8 @@ import {
   limpiarEspacios,
   normalizarSexo,
   parseFechaImport,
+  detectarOrdenFechas,
+  fechasInvertidasPorExcel,
   parseHoraImport,
   validarNombrePaciente,
   valorCelda,
@@ -135,7 +137,8 @@ interface Hoja {
 
 function hojaDesdeMatriz(nombre: string, matriz: Array<Array<string | number>>): Hoja {
   const encabezados = (matriz[0] || []).map((h) => String(h ?? '').trim());
-  const claves = dedupeHeaders(encabezados);
+  // Claves en MAYÚSCULAS: «Fecha» y «FECHA» son la misma columna.
+  const claves = dedupeHeaders(encabezados.map((h) => h.toUpperCase()));
   const filas: Hoja['filas'] = [];
   matriz.slice(1).forEach((valores, i) => {
     if (valores.every((v) => String(v ?? '').trim() === '')) return; // fila vacía
@@ -423,6 +426,12 @@ async function manejarPOST(request: Request) {
     return NextResponse.json({ error: 'Nombre de archivo no válido' }, { status: 400 });
   }
   const extRaw = file.name.split('.').pop()?.toLowerCase() || '';
+  if (extRaw === 'xls') {
+    return NextResponse.json(
+      { error: 'Los archivos .xls (Excel 97-2003) no se pueden leer. Ábrelo en Excel y usa «Guardar como» → Libro de Excel (.xlsx)' },
+      { status: 400 }
+    );
+  }
   if (extRaw !== 'xlsx' && extRaw !== 'csv') {
     return NextResponse.json({ error: 'Formato no soportado. Usa .xlsx o .csv' }, { status: 400 });
   }
@@ -497,6 +506,7 @@ async function manejarPOST(request: Request) {
   const rechazos: FilaRechazada[] = [];
   const duplicados: FilaRechazada[] = [];
   const doctoresNuevos = new Map<string, string>(); // clave → alias MAYÚSCULAS
+  const avisos: string[] = [];
   const pacientesNuevos = new Map<string, PacienteNuevo>(); // clave → datos
   const valoresTexto = (valores: Array<string | number>) => valores.map((v) => String(v ?? ''));
   const rechazar = (hoja: Hoja, fila: Hoja['filas'][number], motivo: string) =>
@@ -585,6 +595,14 @@ async function manejarPOST(request: Request) {
       v: Array<string | number>;
     }
     const validas: Pend[] = [];
+    // Orden día/mes o mes/día por columna (Excel en inglés exporta 9/15/2026).
+    const ordenFecha = detectarOrdenFechas(hoja.filas.map((f) => crudo(f.valores, idx.fecha)));
+    const invertidas = ext === 'xlsx' ? fechasInvertidasPorExcel(hoja.filas.map((f) => crudo(f.valores, idx.fecha))) : 0;
+    if (invertidas > 0) avisos.push(`La columna FECHA mezcla fechas escritas como texto mes/día («7/22/2026») con celdas de fecha que Excel guardó día/mes. Se leyeron ${invertidas} celdas como mes/día (01/08/2026 → 1 de agosto). Revisa las fechas antes de confirmar.`);
+    const ordenFnac = detectarOrdenFechas(
+      hoja.filas.map((f) => crudo(f.valores, idx.fnac)),
+      idx.fnac >= 0 && /\bmes\b.*\bdia\b|mm\/dd/.test(headers[idx.fnac]) ? 'mdy' : 'dmy'
+    );
 
     for (const fila of hoja.filas) {
       const v = fila.valores;
@@ -592,8 +610,8 @@ async function manejarPOST(request: Request) {
       if (!nombreV.ok) { rechazar(hoja, fila, nombreV.motivo); continue; }
       const fechaTxt = crudo(v, idx.fecha);
       if (String(fechaTxt).trim() === '') { rechazar(hoja, fila, 'Falta la fecha'); continue; }
-      const fecha = parseFechaImport(fechaTxt);
-      if (!fecha) { rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa AAAA-MM-DD o DD/MM/AAAA`); continue; }
+      const fecha = parseFechaImport(fechaTxt, ordenFecha, invertidas > 0);
+      if (!fecha) { rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa DD/MM/AAAA, AAAA-MM-DD o «1 sep 2026»`); continue; }
       const ingresoTxt = crudo(v, idx.ingreso);
       const horaInicio = parseHoraImport(ingresoTxt);
       if (String(ingresoTxt).trim() !== '' && !horaInicio) { rechazar(hoja, fila, `Hora de ingreso no válida («${texto(ingresoTxt)}»)`); continue; }
@@ -610,7 +628,7 @@ async function manejarPOST(request: Request) {
         nombre_completo: nombreV.nombre,
         telefono: get(v, idx.telefono).slice(0, 20) || null,
         sexo: normalizarSexo(get(v, idx.sexo)),
-        fecha_nacimiento: parseFechaImport(crudo(v, idx.fnac)),
+        fecha_nacimiento: parseFechaImport(crudo(v, idx.fnac), ordenFnac),
         edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
       });
       validas.push({
@@ -686,6 +704,7 @@ async function manejarPOST(request: Request) {
           doctor_nuevo: p.doctorNuevo,
         })),
         rechazos: listaRechazos(),
+        avisos,
         rechazosCsv: csvRechazos(),
         duplicadosCsv: csvDuplicados(),
       });
@@ -774,6 +793,7 @@ async function manejarPOST(request: Request) {
       doctoresCreados: docs.ids.size,
       pacientesCreados: pacs.ids.size,
       rechazos: listaRechazos(),
+      avisos,
       rechazosCsv: csvRechazos(),
       duplicadosCsv: csvDuplicados(),
     });
@@ -796,6 +816,11 @@ async function manejarPOST(request: Request) {
   }
   const validasCx: PendCx[] = [];
   const val = (o: Record<string, string | number>, k: string) => texto(o[k]);
+  const todasFilas = hojas.flatMap((h) => h.filas);
+  const ordenFechaCx = detectarOrdenFechas(todasFilas.map((f) => f.obj['FECHA']));
+  const invertidasCx = ext === 'xlsx' ? fechasInvertidasPorExcel(todasFilas.map((f) => f.obj['FECHA'])) : 0;
+  if (invertidasCx > 0) avisos.push(`La columna FECHA mezcla fechas escritas como texto mes/día («7/22/2026») con celdas de fecha que Excel guardó día/mes. Se leyeron ${invertidasCx} celdas como mes/día (01/08/2026 → 1 de agosto). Revisa las fechas antes de confirmar.`);
+  const ordenFnacCx = detectarOrdenFechas(todasFilas.map((f) => f.obj['FECHA NAC.']));
 
   for (const hoja of hojas) {
     const esAplazados = hoja.nombre === 'APLAZADOS';
@@ -808,9 +833,9 @@ async function manejarPOST(request: Request) {
       let hora: string | null = null;
       if (!esAplazados) {
         const fechaTxt = o['FECHA'] ?? '';
-        fecha = parseFechaImport(fechaTxt);
+        fecha = parseFechaImport(fechaTxt, ordenFechaCx, invertidasCx > 0);
         if (String(fechaTxt).trim() !== '' && !fecha) {
-          rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa AAAA-MM-DD o DD/MM/AAAA; déjala vacía para aplazada`);
+          rechazar(hoja, fila, `Fecha no válida («${texto(fechaTxt)}»). Usa DD/MM/AAAA, AAAA-MM-DD o «1 sep 2026»; déjala vacía para aplazada`);
           continue;
         }
         const horaTxt = o['HORA CX'] ?? '';
@@ -835,7 +860,7 @@ async function manejarPOST(request: Request) {
         nombre_completo: nombreV.nombre,
         telefono: (val(o, 'TELEFONO') || val(o, 'TELÉFONO')).slice(0, 20) || null,
         sexo: normalizarSexo(val(o, 'SEXO')),
-        fecha_nacimiento: parseFechaImport(o['FECHA NAC.'] ?? ''),
+        fecha_nacimiento: parseFechaImport(o['FECHA NAC.'] ?? '', ordenFnacCx),
         edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
       });
 
@@ -962,6 +987,7 @@ async function manejarPOST(request: Request) {
         doctor_nuevo: p.doctorNuevo,
       })),
       rechazos: listaRechazos(),
+      avisos,
       rechazosCsv: csvRechazos(),
       duplicadosCsv: csvDuplicados(),
     });
@@ -1023,6 +1049,7 @@ async function manejarPOST(request: Request) {
     doctoresCreados: docs.ids.size,
     pacientesCreados: pacs.ids.size,
     rechazos: listaRechazos(),
+    avisos,
     rechazosCsv: csvRechazos(),
     duplicadosCsv: csvDuplicados(),
   });

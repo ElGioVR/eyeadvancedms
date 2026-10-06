@@ -8,6 +8,8 @@ import {
   generarCsvRechazos,
   normalizarSexo,
   parseFechaImport,
+  detectarOrdenFechas,
+  fechasInvertidasPorExcel,
   parseHoraImport,
   validarAliasDoctor,
   validarNombrePaciente,
@@ -127,4 +129,55 @@ test('CSV de rechazos con motivo por fila', () => {
 test('faltantes de paciente', () => {
   assert.deepEqual(faltantesPaciente({ sexo: 'F', edad: 40, telefono: '1' }), []);
   assert.deepEqual(faltantesPaciente({}), ['sexo', 'fecha de nacimiento', 'teléfono']);
+});
+
+test('fechas: formatos de Excel en español/inglés y orden mes/día por columna', () => {
+  // Con hora pegada (CSV exportado desde Excel)
+  assert.equal(parseFechaImport('01/09/2026 00:00'), '2026-09-01');
+  assert.equal(parseFechaImport('9/15/2026 12:00:00 AM'), '2026-09-15');
+  // Mes/día sin ambigüedad (día > 12)
+  assert.equal(parseFechaImport('9/15/2026'), '2026-09-15');
+  // Ambiguas: deciden por la columna
+  const col = ['9/1/2026', '9/15/2026'];
+  const orden = detectarOrdenFechas(col);
+  assert.equal(orden, 'mdy');
+  assert.equal(parseFechaImport('9/1/2026', orden), '2026-09-01');
+  assert.equal(parseFechaImport('9/1/2026'), '2026-01-09'); // México por defecto
+  assert.equal(detectarOrdenFechas(['1/9/2026', '15/9/2026']), 'dmy');
+  assert.equal(detectarOrdenFechas(['06/05/1958'], 'mdy'), 'mdy');
+  // Mes en texto
+  assert.equal(parseFechaImport('01-sep-2026'), '2026-09-01');
+  assert.equal(parseFechaImport('1-Sep-26'), '2026-09-01');
+  assert.equal(parseFechaImport('martes, 1 de septiembre de 2026'), '2026-09-01');
+  assert.equal(parseFechaImport('Sep 1, 2026'), '2026-09-01');
+  assert.equal(parseFechaImport('2026/09/01'), '2026-09-01');
+  assert.equal(parseFechaImport('46225'), '2026-07-22');
+  assert.equal(parseFechaImport('05/06/58'), '1958-06-05');
+  assert.equal(parseFechaImport('13/13/2026'), null);
+});
+
+test('horas: a. m./p. m. de Excel en español y variantes', () => {
+  assert.equal(parseHoraImport('10:00 a. m.'), '10:00:00');
+  assert.equal(parseHoraImport('3:30 p. m.'), '15:30:00');
+  assert.equal(parseHoraImport('10:00:00\u202fa.\u202fm.'), '10:00:00');
+  assert.equal(parseHoraImport('10 AM'), '10:00:00');
+  assert.equal(parseHoraImport('10:00 hrs'), '10:00:00');
+  assert.equal(parseHoraImport('13:00 PM'), null);
+  assert.equal(parseHoraImport('10'), null);
+});
+
+test('valorCelda: fórmula sin resultado guardado → vacío', () => {
+  assert.equal(valorCelda({ formula: 'DATE(2026,9,1)' }), '');
+});
+
+test('xlsx mezclado: texto mes/día + celdas de fecha invertidas por Excel es-MX', () => {
+  // Caso real CIRUGIAS 2026: «7/29/2026» quedó como texto; «8/1/2026» Excel lo guardó como 8 de enero.
+  const col = ['7/29/2026', '2026-01-08', '2026-08-08', '8/24/2026', '2026-02-09'];
+  assert.equal(fechasInvertidasPorExcel(col), 2);
+  assert.equal(parseFechaImport('2026-01-08', 'mdy', true), '2026-08-01');
+  assert.equal(parseFechaImport('2026-08-08', 'mdy', true), '2026-08-08');
+  assert.equal(parseFechaImport('2026-02-09', 'mdy', true), '2026-09-02');
+  // Sin texto mes/día no se invierte nada
+  assert.equal(fechasInvertidasPorExcel(['2026-01-08', '15/09/2026']), 0);
+  assert.equal(fechasInvertidasPorExcel(['2026-01-08', '2026-02-09']), 0);
 });

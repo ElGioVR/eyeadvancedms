@@ -220,6 +220,8 @@ export function valorCelda(v: unknown): string | number {
     if (o.result !== undefined) return valorCelda(o.result);
     if (o.text !== undefined) return valorCelda(o.text);
     if (o.error !== undefined) return '';
+    // Fórmula sin resultado guardado: no hay valor que leer.
+    if ('formula' in o || 'sharedFormula' in o) return '';
   }
   return String(v);
 }
@@ -258,53 +260,163 @@ export function generarCsvRechazos(encabezados: string[], filas: FilaRechazada[]
 
 /* ─────────── Fechas y horas ─────────── */
 
-/** Fecha del archivo → «YYYY-MM-DD» o null. Acepta serial de Excel, ISO, d/m/aaaa y «Tuesday, September 1, 2026». */
-export function parseFechaImport(val: unknown): string | null {
+/** Orden de fechas numéricas ambiguas («05/09/2026»): día/mes (México) o mes/día (Excel en inglés). */
+export type OrdenFecha = 'dmy' | 'mdy';
+
+const MESES: Record<string, number> = {
+  enero: 1, ene: 1, january: 1, jan: 1,
+  febrero: 2, feb: 2, february: 2,
+  marzo: 3, mar: 3, march: 3,
+  abril: 4, abr: 4, april: 4, apr: 4,
+  mayo: 5, may: 5,
+  junio: 6, jun: 6, june: 6,
+  julio: 7, jul: 7, july: 7,
+  agosto: 8, ago: 8, august: 8, aug: 8,
+  septiembre: 9, setiembre: 9, sep: 9, sept: 9, set: 9, september: 9,
+  octubre: 10, oct: 10, october: 10,
+  noviembre: 11, nov: 11, november: 11,
+  diciembre: 12, dic: 12, december: 12, dec: 12,
+};
+const DIAS_SEMANA = new Set([
+  'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo',
+  'lun', 'mie', 'jue', 'vie', 'sab', 'dom',
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'mon', 'tue', 'tues', 'wed', 'thu', 'thur', 'thurs', 'fri', 'sat', 'sun',
+]);
+
+/** Año de 2 dígitos con la regla de Excel: 00–29 → 20xx, 30–99 → 19xx. */
+const anio4 = (y: string) => (y.length <= 2 ? (+y <= 29 ? 2000 + +y : 1900 + +y) : +y);
+
+const fechaValida = (y: number, m: number, d: number): string | null => {
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d && y >= 1900 && y <= 2100
+    ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    : null;
+};
+
+const RE_NUMERICA = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?=$|[\sT,])/;
+
+/**
+ * Detecta el orden de una columna de fechas numéricas: si alguna fecha solo
+ * cabe como mes/día («9/15/2026») y ninguna como día/mes («15/9/2026»), la
+ * columna es mes/día. Sin evidencia se usa `preferido`.
+ */
+export function detectarOrdenFechas(valores: unknown[], preferido: OrdenFecha = 'dmy'): OrdenFecha {
+  let dmy = 0;
+  let mdy = 0;
+  for (const v of valores) {
+    if (typeof v !== 'string') continue;
+    const m = v.trim().match(RE_NUMERICA);
+    if (!m) continue;
+    if (+m[1] > 12 && +m[2] <= 12) dmy++;
+    else if (+m[2] > 12 && +m[1] <= 12) mdy++;
+  }
+  if (mdy > 0 && dmy === 0) return 'mdy';
+  if (dmy > 0 && mdy === 0) return 'dmy';
+  return preferido;
+}
+
+/**
+ * En un .xlsx, si la columna tiene fechas escritas como texto mes/día
+ * («7/22/2026») es porque Excel (configurado día/mes, es-MX) no las pudo
+ * convertir; las que sí convirtió («8/1/2026» → 8 de enero) quedaron con día y
+ * mes invertidos. Devuelve cuántas celdas de fecha hay que invertir (0 = nada).
+ */
+export function fechasInvertidasPorExcel(valores: unknown[]): number {
+  let mdyTexto = 0;
+  let dmyTexto = 0;
+  let invertibles = 0;
+  for (const v of valores) {
+    if (typeof v !== 'string') continue;
+    const s = v.trim();
+    const n = s.match(RE_NUMERICA);
+    if (n) {
+      if (+n[2] > 12 && +n[1] <= 12) mdyTexto++;
+      else if (+n[1] > 12 && +n[2] <= 12) dmyTexto++;
+      continue;
+    }
+    const iso = s.match(/^\d{4}-(\d{2})-(\d{2})/);
+    if (iso && +iso[2] <= 12 && iso[1] !== iso[2]) invertibles++;
+  }
+  return mdyTexto > 0 && dmyTexto === 0 ? invertibles : 0;
+}
+
+/**
+ * Fecha del archivo → «YYYY-MM-DD» o null. Acepta serial de Excel (número o
+ * texto), ISO (con o sin hora), d/m/aaaa o m/d/aaaa (con o sin hora; las
+ * ambiguas usan `orden`), y fechas con mes en texto en español o inglés:
+ * «1-sep-2026», «martes, 1 de septiembre de 2026», «Tuesday, September 1, 2026».
+ */
+export function parseFechaImport(val: unknown, orden: OrdenFecha = 'dmy', invertirIso = false): string | null {
   if (val === null || val === undefined || val === '') return null;
-  const valida = (y: number, m: number, d: number) => {
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d && y >= 1900 && y <= 2100
-      ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      : null;
+  const desdeSerial = (n: number) => {
+    if (n < 1 || n > 80000) return null;
+    const date = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return fechaValida(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
   };
-  if (typeof val === 'number') {
-    if (val < 1 || val > 80000) return null;
-    const date = new Date(Math.round((val - 25569) * 86400 * 1000));
-    return valida(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
-  }
-  const str = String(val).trim();
+  if (typeof val === 'number') return desdeSerial(val);
+  const str = String(val).replace(/[  ]/g, ' ').trim();
   if (!str) return null;
-  const iso = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) return valida(+iso[1], +iso[2], +iso[3]);
-  // México: día/mes/año
-  const dmy = str.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
-  if (dmy) {
-    const y = dmy[3].length === 2 ? 2000 + +dmy[3] : +dmy[3];
-    return valida(y, +dmy[2], +dmy[1]);
+  // Serial de Excel guardado como texto (CSV): «45901» o «45901.5»
+  if (/^\d{5}(\.\d+)?$/.test(str)) return desdeSerial(parseFloat(str));
+  const iso = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?=$|[\sT,])/);
+  if (iso) {
+    // Celda de fecha que Excel guardó con día y mes invertidos (ver fechasInvertidasPorExcel).
+    if (invertirIso && +iso[3] <= 12) return fechaValida(+iso[1], +iso[3], +iso[2]);
+    return fechaValida(+iso[1], +iso[2], +iso[3]);
   }
-  const larga = str.match(/^(?:[A-Za-z]+,\s*)?([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
-  if (larga) {
-    const MESES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-    const m = MESES.indexOf(larga[1].toLowerCase());
-    if (m >= 0) return valida(+larga[3], m + 1, +larga[2]);
+  const num = str.match(RE_NUMERICA);
+  if (num) {
+    const a = +num[1];
+    const b = +num[2];
+    const y = anio4(num[3]);
+    // Si uno de los dos pasa de 12 no hay ambigüedad.
+    if (a > 12) return fechaValida(y, b, a);
+    if (b > 12) return fechaValida(y, a, b);
+    return orden === 'mdy' ? fechaValida(y, a, b) : fechaValida(y, b, a);
+  }
+  // Mes en texto: se quitan día de la semana, «de», comas y ordinales.
+  const tokens = str
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[,./-]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t && t !== 'de' && t !== 'del' && !DIAS_SEMANA.has(t))
+    .map((t) => t.replace(/^(\d{1,2})(st|nd|rd|th|o|º)$/, '$1'));
+  if (tokens.length >= 3) {
+    const [t1, t2, t3] = tokens;
+    if (/^\d{1,2}$/.test(t1) && MESES[t2] && /^\d{2}(\d{2})?$/.test(t3)) return fechaValida(anio4(t3), MESES[t2], +t1);
+    if (MESES[t1] && /^\d{1,2}$/.test(t2) && /^\d{2}(\d{2})?$/.test(t3)) return fechaValida(anio4(t3), MESES[t1], +t2);
   }
   return null;
 }
 
-/** Hora del archivo → «HH:MM:00» o null. Acepta fracción de día de Excel, «10:00AM», «9:30 pm», «14:05:00». */
+/**
+ * Hora del archivo → «HH:MM:00» o null. Acepta fracción de día de Excel,
+ * «10:00AM», «9:30 pm», «10:00 a. m.» (Excel en español), «14:05:00»,
+ * «10 AM» y «10:00 hrs».
+ */
 export function parseHoraImport(val: unknown): string | null {
   if (val === null || val === undefined || val === '') return null;
   if (typeof val === 'number') {
     const frac = val % 1;
-    const total = Math.round(frac * 24 * 60);
-    if (total < 0 || total >= 24 * 60) return null;
+    const total = Math.round(frac * 24 * 60) % (24 * 60);
+    if (total < 0) return null;
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}:00`;
   }
-  const str = String(val).trim().toUpperCase().replace(/\./g, '');
-  const m = str.match(/(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/);
-  if (!m) return null;
+  const str = String(val)
+    .replace(/[  ]/g, ' ')
+    .toUpperCase()
+    .replace(/\./g, '')
+    .replace(/\b([AP])\s*M\b/, '$1M')
+    .replace(/\s*(HRS|HR|H)$/, '')
+    .trim();
+  const m = str.match(/(?:^|\s|T)(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(AM|PM)?$/);
+  if (!m || (m[2] === undefined && !m[3])) return null; // «10» sola no es hora
   let h = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
+  const min = m[2] === undefined ? 0 : parseInt(m[2], 10);
+  if (m[3] && (h < 1 || h > 12)) return null;
   if (m[3] === 'PM' && h < 12) h += 12;
   if (m[3] === 'AM' && h === 12) h = 0;
   if (h > 23 || min > 59) return null;
