@@ -49,3 +49,25 @@ test('detalle de la tarjeta según el tipo', () => {
   assert.equal(detalleEvento({ tipo: 'consulta', tipo_consulta: 'CONSULTA', tipo_consulta_label: 'Subsecuente', especialidad: 'Retina' }), 'Subsecuente · Retina');
   assert.equal(detalleEvento({ tipo: 'consulta', tipo_consulta_label: 'Primera consulta' }), 'Primera consulta');
 });
+
+test('seguimiento: resultado de la cita', async () => {
+  const { resultadoCita } = await import('../bandeja-agenda');
+  const r = (tipo: 'cirugia' | 'consulta', estado: string, fecha: string | null, hora: string | null = '09:00') =>
+    resultadoCita({ tipo, estado, fecha, hora }, ahora);
+  assert.equal(r('consulta', 'COMPLETADA', '2026-10-01').clave, 'completada');
+  assert.equal(r('consulta', 'PROCESADA', '2026-10-01').clave, 'completada');
+  assert.equal(r('consulta', 'AGENDADA', '2026-10-01').clave, 'sin_cerrar');
+  assert.equal(r('consulta', 'AGENDADA', '2026-10-07').clave, 'proxima');
+  assert.deepEqual(r('consulta', 'PENDIENTE_ESTUDIO', '2026-10-01'), { clave: 'pendiente', detalle: 'Pendiente de estudio' });
+  assert.equal(r('cirugia', 'cancelada', '2026-10-01').clave, 'cancelada');
+  assert.deepEqual(r('cirugia', 'aplazada', null, null), { clave: 'aplazada', detalle: 'Sin fecha nueva' });
+  assert.equal(r('cirugia', 'reagendada', '2026-10-02').clave, 'sin_cerrar');
+});
+
+test('seguimiento: historial legible', async () => {
+  const { describirEventoHistorial: d } = await import('../bandeja-agenda');
+  assert.deepEqual(d('cirugia', 'ESTADO_CAMBIADO', { de: 'agendada', a: 'cancelada', motivo: 'No se presentó' }), { titulo: 'Agendada → Cancelada', motivo: 'No se presentó' });
+  assert.deepEqual(d('consulta', 'REAGENDADO', { accion: 'reagendar', motivo: 'Paciente pidió cambio', fecha_anterior: '2026-10-01', hora_anterior: '09:00:00', fecha_nueva: '2026-10-08', hora_nueva: '10:30' }), { titulo: 'Reagendada: 01/10/2026 09:00 → 08/10/2026 10:30', motivo: 'Paciente pidió cambio' });
+  assert.deepEqual(d('consulta', 'CAMBIO_ESTATUS', { de: 'AGENDADA', a: 'COMPLETADA' }), { titulo: 'Agendada → Completada', motivo: null });
+  assert.equal(d('cirugia', 'ARCHIVO_AGREGADO', {}), null);
+});

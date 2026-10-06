@@ -161,3 +161,108 @@ export function detalleEvento(e: {
   const esp = limpio(e.especialidad);
   return esp ? `${tipo} · ${esp}` : tipo;
 }
+
+/* ─────────── Seguimiento: qué pasó con una cita pasada ─────────── */
+
+export type ResultadoClave = 'completada' | 'cancelada' | 'aplazada' | 'pendiente' | 'sin_cerrar' | 'proxima';
+export const ETIQUETA_RESULTADO: Record<ResultadoClave, string> = {
+  completada: 'Completada',
+  cancelada: 'Cancelada',
+  aplazada: 'Aplazada',
+  pendiente: 'Pendiente',
+  sin_cerrar: 'Sin cerrar',
+  proxima: 'Próxima',
+};
+/** Filtros del buscador de seguimiento. */
+export const FILTROS_SEGUIMIENTO = ['todas', 'sin_cerrar', 'completada', 'cancelada', 'aplazada', 'pendiente'] as const;
+export type FiltroSeguimiento = (typeof FILTROS_SEGUIMIENTO)[number];
+
+/**
+ * Resultado de la cita a partir de su estado en BD.
+ * - Cirugía: agendada/reagendada → sin cerrar (si ya pasó) o próxima.
+ * - Consulta: PROCESADA/COMPLETADA/FINALIZADA → completada; PENDIENTE_ESTUDIO /
+ *   PENDIENTE_CIRUGIA → pendiente (requiere seguimiento); el resto activo → sin cerrar.
+ */
+export function resultadoCita(
+  e: { tipo: TipoEventoBandeja; estado: string; fecha: string | null; hora: string | null; hora_fin?: string | null; duracion_min?: number | null },
+  ahora: AhoraClinica,
+): { clave: ResultadoClave; detalle: string | null } {
+  const est = (e.estado || '').toUpperCase();
+  const paso = () => {
+    if (!e.fecha) return false;
+    if (e.fecha < ahora.fecha) return true;
+    if (e.fecha > ahora.fecha) return false;
+    const fin = finCitaMin({ tipo: e.tipo, fecha: e.fecha, hora: e.hora, hora_fin: e.hora_fin, duracion_min: e.duracion_min });
+    return fin !== null && fin <= ahora.minutos;
+  };
+  if (e.tipo === 'cirugia') {
+    if (est === 'COMPLETADA') return { clave: 'completada', detalle: null };
+    if (est === 'CANCELADA') return { clave: 'cancelada', detalle: null };
+    if (est === 'APLAZADA') return { clave: 'aplazada', detalle: e.fecha ? null : 'Sin fecha nueva' };
+    return paso() ? { clave: 'sin_cerrar', detalle: null } : { clave: 'proxima', detalle: est === 'REAGENDADA' ? 'Reagendada' : null };
+  }
+  if (est === 'PROCESADA' || est === 'COMPLETADA' || est === 'FINALIZADA') return { clave: 'completada', detalle: null };
+  if (est === 'CANCELADA') return { clave: 'cancelada', detalle: null };
+  if (est === 'PENDIENTE_ESTUDIO') return { clave: 'pendiente', detalle: 'Pendiente de estudio' };
+  if (est === 'PENDIENTE_CIRUGIA') return { clave: 'pendiente', detalle: 'Pendiente de cirugía' };
+  if (paso()) return { clave: 'sin_cerrar', detalle: est === 'APLAZADA' ? 'Aplazada' : est === 'REAGENDADA' ? 'Reagendada' : null };
+  return { clave: 'proxima', detalle: est === 'REAGENDADA' ? 'Reagendada' : est === 'APLAZADA' ? 'Aplazada' : null };
+}
+
+export function pasaFiltro(clave: ResultadoClave, filtro: FiltroSeguimiento): boolean {
+  return filtro === 'todas' || clave === filtro;
+}
+
+const ESTADO_LEGIBLE: Record<string, string> = {
+  agendada: 'Agendada', aplazada: 'Aplazada', reagendada: 'Reagendada', completada: 'Completada', cancelada: 'Cancelada',
+  BORRADOR: 'Borrador', AGENDADA: 'Agendada', PROCESADA: 'Procesada', PENDIENTE_ESTUDIO: 'Pendiente de estudio',
+  PENDIENTE_CIRUGIA: 'Pendiente de cirugía', APLAZADA: 'Aplazada', REAGENDADA: 'Reagendada', COMPLETADA: 'Completada',
+  CANCELADA: 'Cancelada', FINALIZADA: 'Finalizada',
+};
+const legible = (v: unknown) => (typeof v === 'string' ? ESTADO_LEGIBLE[v] || v : '');
+const fechaHora = (f: unknown, h: unknown) => {
+  const fs = typeof f === 'string' ? f : '';
+  const hs = typeof h === 'string' ? h.slice(0, 5) : '';
+  if (!fs && !hs) return '';
+  const [y, m, d] = fs.split('-');
+  return `${fs ? `${d}/${m}/${y}` : ''}${hs ? ` ${hs}` : ''}`.trim();
+};
+
+/**
+ * Texto de un evento del historial (consulta_historial o cirugia_historial).
+ * Devuelve { titulo, motivo } o null si el evento no aporta al seguimiento.
+ */
+export function describirEventoHistorial(
+  tipo: TipoEventoBandeja,
+  evento: string,
+  datos: Record<string, unknown> | null | undefined,
+): { titulo: string; motivo: string | null } | null {
+  const p = datos || {};
+  const motivo = typeof p.motivo === 'string' && p.motivo.trim() ? p.motivo.trim() : null;
+  if (tipo === 'cirugia') {
+    if (evento === 'ESTADO_CAMBIADO') {
+      return { titulo: `${legible(p.de) || '—'} → ${legible(p.a) || '—'}`, motivo };
+    }
+    return null; // archivos y demás: no son seguimiento de la cita
+  }
+  switch (evento) {
+    case 'CREACION':
+      return { titulo: 'Cita creada', motivo: null };
+    case 'CAMBIO_ESTATUS':
+      return { titulo: `${legible(p.de) || '—'} → ${legible(p.a) || '—'}`, motivo };
+    case 'CANCELACION':
+      return { titulo: 'Cancelada', motivo };
+    case 'REAGENDADO': {
+      const ant = fechaHora(p.fecha_anterior, p.hora_anterior);
+      const nva = fechaHora(p.fecha_nueva, p.hora_nueva);
+      const que = p.accion === 'aplazamiento' ? 'Aplazada' : 'Reagendada';
+      return { titulo: ant || nva ? `${que}: ${ant || '—'} → ${nva || '—'}` : que, motivo };
+    }
+    case 'PAGADO':
+      return { titulo: 'Pago registrado', motivo: null };
+    case 'EDICION':
+      return { titulo: 'Datos editados', motivo: null };
+    default:
+      return null;
+  }
+}
