@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient, obtenerPerfil } from '@/lib/supabase/server';
 import { etiquetaDispositivo, sessionIdDeToken } from '@/lib/sesion-unica';
 import { registrarSesion } from '@/services/sesion-unica';
+import { ruta } from '@/lib/api/ruta';
 
 /**
  * «Trabajar aquí»: esta sesión (recién iniciada con usuario y contraseña) toma
@@ -11,7 +12,7 @@ import { registrarSesion } from '@/services/sesion-unica';
  *  2. signOut({ scope: 'others' }) revoca los refresh tokens de los demás.
  * No usa requireAuth(): esta sesión todavía no es la vigente.
  */
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const supabase = createClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -35,3 +36,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }
+
+export const POST = ruta('auth/sesion/tomar#POST', manejarPOST);

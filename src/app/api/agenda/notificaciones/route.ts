@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { procesarRecordatoriosCirugia } from '@/services/recordatorios';
+import { ruta } from '@/lib/api/ruta';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
@@ -26,3 +27,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Error al procesar recordatorios' }, { status: 500 });
   }
 }
+
+export const GET = ruta('agenda/notificaciones#GET', manejarGET);

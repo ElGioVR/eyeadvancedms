@@ -1,6 +1,8 @@
 'use client';
 
+import Aislado from '@/components/ui/Aislado';
 import { useState, useCallback } from 'react';
+import { enviarJSON, mensajeDeError } from '@/lib/fetcher';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -127,17 +129,11 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
         payload.stock_minimo = 0;
       }
 
-      const res = await fetch('/api/inventario', {
-        method: mode === 'edit' ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: mode === 'edit' ? JSON.stringify({ id: initialData?.id, ...payload }) : JSON.stringify(payload),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErrors({ general: data.error || 'Error al guardar' });
-        return;
-      }
+      const data = await enviarJSON<{ fusionado?: boolean; folio?: string; agregado?: number; stock?: number }>(
+        '/api/inventario',
+        mode === 'edit' ? 'PATCH' : 'POST',
+        mode === 'edit' ? { id: initialData?.id, ...payload } : payload,
+      );
 
       // Lista, ficha y KPIs se revalidan en segundo plano (sin vaciar la lista al volver).
       invalidar('/api/inventario', '/api/dashboard');
@@ -146,8 +142,8 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       else if (data.fusionado) toast(`Ya existía ${data.folio || 'este lente'}: se sumó ${data.agregado ?? 1} al stock (ahora ${data.stock})`);
       else toast('Lente registrado correctamente');
       router.push('/inventario');
-    } catch {
-      setErrors({ general: 'Error de conexion' });
+    } catch (err) {
+      setErrors({ general: mensajeDeError(err, 'Error al guardar') });
     } finally {
       setSaving(false);
     }
@@ -191,7 +187,11 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       )}
 
       {/* Foto de la etiqueta (solo al crear) */}
-      {mode === 'create' && <LabelScanner onParsed={handleLabelParsed} />}
+      {mode === 'create' && (
+        <Aislado nombre="el lector de etiquetas" contexto="inventario.ocr">
+          <LabelScanner onParsed={handleLabelParsed} />
+        </Aislado>
+      )}
 
       {/* Datos de la etiqueta */}
       <section className="card space-y-6">

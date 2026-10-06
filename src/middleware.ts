@@ -34,12 +34,13 @@ export async function middleware(request: NextRequest) {
  * - Páginas: refresca/verifica la sesión y redirige a /login si no hay.
  * - `/api/*`: solo la verificación de origen (CSRF), sin tocar Supabase; cada
  *   route handler valida la sesión con `requireAuth()`.
+ * - `/monitoring` es el túnel de Sentry (sin sesión, no debe redirigir a /login).
  * - Archivos públicos (manifest, sw.js, iconos, PDFs, fuentes) no requieren sesión
  *   y no deben redirigir a /login (rompía el manifest/PWA sin sesión).
  */
 export const config = {
   matcher: [
     '/api/:path*',
-    '/((?!api/|_next/static|_next/image|favicon.ico|images/|icons/|docs/|sw\\.js|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|pdf|woff2?|txt|xml|webmanifest)$).*)',
+    '/((?!api/|monitoring|_next/static|_next/image|favicon.ico|images/|icons/|docs/|sw\\.js|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|pdf|woff2?|txt|xml|webmanifest)$).*)',
   ],
 };

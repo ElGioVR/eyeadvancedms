@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { leerQuery, uuid } from '@/lib/api/validar';
+import { ruta } from '@/lib/api/ruta';
 
 const querySchema = z.object({
   // IDs no UUID se ignoran (antes: aseguranza_id se descartaba en silencio y un
@@ -18,7 +19,7 @@ const querySchema = z.object({
 /** Máximo de servicios devueltos (catálogo de una aseguranza + genéricos). */
 const MAX_SERVICIOS = 1000;
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Rol restringido (solo agenda propia): sin acceso a métricas, montos ni catálogo de precios
@@ -82,3 +83,5 @@ export async function GET(request: Request) {
     servicios: servicios || [],
   });
 }
+
+export const GET = ruta('catalogo-servicios#GET', manejarGET);

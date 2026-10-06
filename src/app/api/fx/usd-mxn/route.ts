@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/supabase/server';
+import { ruta } from '@/lib/api/ruta';
 
 // Caché por instancia + deduplicación de peticiones simultáneas.
 let cachedRate: { rate: number; timestamp: number } | null = null;
@@ -25,7 +26,7 @@ async function obtenerTipoCambio(): Promise<number> {
   return rate;
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -55,3 +56,5 @@ export async function GET() {
     return NextResponse.json({ rate: RATE_RESPALDO, source: 'estimado', warning: 'Rate from fallback, may not reflect current market', updated_at: new Date().toISOString() });
   }
 }
+
+export const GET = ruta('fx/usd-mxn#GET', manejarGET);

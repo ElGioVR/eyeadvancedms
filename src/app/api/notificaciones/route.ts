@@ -4,6 +4,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const markReadSchema = z.object({
   ids: z.array(z.string().uuid()).max(200).optional(),
@@ -12,7 +13,7 @@ const markReadSchema = z.object({
   message: 'Debe proporcionar "ids" o "all: true"',
 });
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -31,7 +32,7 @@ export async function GET() {
   return NextResponse.json({ data });
 }
 
-export async function PATCH(request: NextRequest) {
+async function manejarPATCH(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -62,3 +63,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('notificaciones#GET', manejarGET);
+export const PATCH = ruta('notificaciones#PATCH', manejarPATCH);

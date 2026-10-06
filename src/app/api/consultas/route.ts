@@ -15,6 +15,8 @@ import { DURACION_CITA_MIN, duracionEntre, sumarMinutos } from '@/lib/agenda-slo
 import { notificarAsignacion } from '@/services/notificaciones';
 import { z } from 'zod';
 import { enSegundoPlano } from '@/lib/segundo-plano';
+import { ruta } from '@/lib/api/ruta';
+import { idempotente } from '@/lib/api/idempotencia';
 
 const tipoConsultaMap: Record<string, string> = {
   'Primera Consulta': 'CONSULTA',
@@ -122,7 +124,7 @@ function defaultHoraFin(horaInicio: string): string {
   return sumarMinutos(horaInicio, DURACION_CITA_MIN, horaInicio.split(':').length === 3);
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -233,7 +235,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ data: result, total: count || 0, page, pageSize });
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -615,3 +617,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json(consultaData, { status: 201 });
 }
+
+export const GET = ruta('consultas#GET', manejarGET);
+export const POST = ruta('consultas#POST', idempotente('consultas#POST', manejarPOST));

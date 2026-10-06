@@ -9,6 +9,8 @@ import { MotorDevengoService } from '@/services/productividad';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { z } from 'zod';
 import { leerTelefonos } from '@/lib/telefonos-paciente-db';
+import { ruta } from '@/lib/api/ruta';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 const consultaUpdateSchema = z.object({
   estatus: z.enum(['BORRADOR', 'AGENDADA', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
@@ -37,7 +39,7 @@ const consultaUpdateSchema = z.object({
   estudio_3_doctor_id: z.string().uuid().optional().nullable(),
 }).strict();
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -225,7 +227,7 @@ export async function GET(
   });
 }
 
-export async function PATCH(
+async function manejarPATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -416,13 +418,14 @@ export async function PATCH(
           if (error) handleSupabaseError(error, 'consultas.actualizar.historial');
         })
       : null,
-    notificar().catch(() => undefined),
   ]);
+  // Notificar no retrasa la respuesta (best-effort, sigue vivo con waitUntil).
+  enSegundoPlano(notificar(), 'consultas.actualizar.notificar');
 
   return NextResponse.json(updated);
 }
 
-export async function DELETE(
+async function manejarDELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -478,3 +481,7 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+export const GET = ruta('consultas/[id]#GET', manejarGET);
+export const PATCH = ruta('consultas/[id]#PATCH', manejarPATCH);
+export const DELETE = ruta('consultas/[id]#DELETE', manejarDELETE);

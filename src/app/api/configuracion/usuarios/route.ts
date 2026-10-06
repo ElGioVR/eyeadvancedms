@@ -6,6 +6,7 @@ import { leerJSON } from '@/lib/api/validar';
 import { idDeQuery } from '@/lib/api/configuracion';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 function esUrlStoragePropio(v: string): boolean {
   try {
@@ -99,7 +100,7 @@ async function passwordActualValida(email: string, password: string): Promise<bo
   }
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -147,7 +148,7 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
   }, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -293,7 +294,7 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -321,3 +322,8 @@ export async function DELETE(request: Request) {
   invalidarPerfil(id);
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/usuarios#GET', manejarGET);
+export const POST = ruta('configuracion/usuarios#POST', manejarPOST);
+export const PATCH = ruta('configuracion/usuarios#PATCH', manejarPATCH);
+export const DELETE = ruta('configuracion/usuarios#DELETE', manejarDELETE);

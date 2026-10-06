@@ -14,6 +14,8 @@ import { enSegundoPlano } from '@/lib/segundo-plano';
 import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
+import { ruta } from '@/lib/api/ruta';
+import { idempotente } from '@/lib/api/idempotencia';
 
 /** Tope del listado (se usa filtrado por paciente o consulta). */
 const MAX_LISTADO = 500;
@@ -23,7 +25,7 @@ const listarQuerySchema = z.object({
   paciente_id: uuid.optional(),
 });
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Perfil ya memorizado por requireAuth: sin viaje extra.
@@ -124,7 +126,7 @@ const cirugiaCreateSchema = z.object({
     { message: 'La misma persona de apoyo aparece dos veces en horarios que se empalman' }
   );
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -351,3 +353,6 @@ export async function POST(request: Request) {
   }
   return NextResponse.json(result, { status: 201 });
 }
+
+export const GET = ruta('cirugias#GET', manejarGET);
+export const POST = ruta('cirugias#POST', idempotente('cirugias#POST', manejarPOST));

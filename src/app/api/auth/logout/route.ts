@@ -3,8 +3,9 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { SESION_TEMPORAL_COOKIE } from '@/lib/supabase/constants';
 import { cerrarSesionActual } from '@/services/sesion-unica';
+import { ruta } from '@/lib/api/ruta';
 
-export async function POST() {
+async function manejarPOST() {
   await cerrarSesionActual(createClient());
   try {
     cookies().delete(SESION_TEMPORAL_COOKIE);
@@ -13,3 +14,5 @@ export async function POST() {
   }
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }
+
+export const POST = ruta('auth/logout#POST', manejarPOST);

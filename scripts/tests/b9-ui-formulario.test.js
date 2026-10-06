@@ -67,6 +67,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -416,7 +417,7 @@ function checkNuevaPage() {
   // 12. POST a /api/cirugias con los campos requeridos.
   assertRegexMatches(
     content,
-    /fetch\(\s*[`'"]\/api\/cirugias['"]\s*,[^)]*method:\s*['"]POST['"]/,
+    /(?:fetch\(\s*[`'"]\/api\/cirugias['"]\s*,[^)]*method:\s*['"]POST['"]|enviarJSON(?:<[^>]*>)?\(\s*['"]\/api\/cirugias['"]\s*,\s*['"]POST['"])/,
     "hace fetch POST a '/api/cirugias' al enviar"
   );
   const camposBody = [
@@ -556,7 +557,7 @@ function checkRolesEndpoint() {
   // 1. Exporta GET
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
 
@@ -615,7 +616,7 @@ function checkRecursosEndpoint() {
   // 1. Exporta GET
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
 
@@ -674,7 +675,7 @@ function checkResumenEndpoint() {
   // 1. Exporta GET con params (Next.js App Router)
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
   assertRegexMatches(

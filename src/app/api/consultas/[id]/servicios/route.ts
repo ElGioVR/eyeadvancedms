@@ -6,6 +6,7 @@ import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
 import { leerJSON, validarId } from '@/lib/api/validar';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { MotorDevengoService } from '@/services/productividad';
+import { ruta } from '@/lib/api/ruta';
 
 /**
  * PUT /api/consultas/[id]/servicios
@@ -43,7 +44,7 @@ interface ConceptoFila {
 
 const norm = (t: string | null | undefined) => (t || '').trim().toLowerCase();
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function manejarPUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -243,3 +244,5 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   return NextResponse.json(actualizada);
 }
+
+export const PUT = ruta('consultas/[id]/servicios#PUT', manejarPUT);

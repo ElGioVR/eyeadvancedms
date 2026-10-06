@@ -3,10 +3,11 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { procesarRecordatoriosSiToca } from '@/services/recordatorios';
+import { ruta } from '@/lib/api/ruta';
 
 // Cada pestaña lo sondea cada 30 s: conteo `head` (sin filas) sobre el índice
 // idx_notificaciones_leido (user_id, leido).
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -30,3 +31,5 @@ export async function GET() {
 
   return NextResponse.json({ count: count ?? 0 }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
+
+export const GET = ruta('notificaciones/unread-count#GET', manejarGET);

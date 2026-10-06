@@ -8,6 +8,8 @@ import { leerTodo, leerTodoEnLotes, mapConLimite } from '@/lib/productividad/lot
 import { fechaReal, MAX_DIAS_REPORTE, MAX_DIAS_SYNC, validarRango } from '@/lib/productividad/validacion';
 import { z } from 'zod';
 import { MotorDevengoService, type ResultadoDevengo } from '@/services/productividad/MotorDevengoService';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 // Un sync de un rango amplio hace cientos de escrituras.
 export const maxDuration = 60;
@@ -62,9 +64,11 @@ function agregarSet(mapa: Map<string, Set<string>>, clave: string, valor: string
   set.add(valor);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('sync', auth.user.id);
+  if (limite) return limite;
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
@@ -303,7 +307,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -344,3 +348,6 @@ export async function GET(request: Request) {
 
   return NextResponse.json(data || []);
 }
+
+export const POST = ruta('productividad/sync#POST', manejarPOST);
+export const GET = ruta('productividad/sync#GET', manejarGET);

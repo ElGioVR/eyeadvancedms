@@ -59,6 +59,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  // false hasta que React toma el control: antes de eso el botón queda deshabilitado
+  // para que el navegador NUNCA envíe el formulario por su cuenta (lo mandaba por GET
+  // con el correo y la contraseña en la URL cuando el JS aún no cargaba).
+  const [hidratado, setHidratado] = useState(false);
   const [error, setError] = useState('');
   // Sesión única: aviso al volver por sesión tomada en otro dispositivo y
   // confirmación «Trabajar aquí» cuando la cuenta está abierta en otro lado.
@@ -78,6 +82,15 @@ export default function LoginPage() {
   const [marcaRect, setMarcaRect] = useState<RectLogo | null>(null);
 
   useEffect(() => {
+    setHidratado(true);
+    // Si alguna vez quedaron credenciales en la URL, se quitan de la barra y del historial.
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.has('password') || qs.has('email')) {
+      qs.delete('password');
+      qs.delete('email');
+      const limpia = qs.toString();
+      window.history.replaceState(null, '', window.location.pathname + (limpia ? `?${limpia}` : ''));
+    }
     setFooterYear(String(new Date().getFullYear()));
     // Preferencias guardadas (solo cliente, tras el montaje → sin problemas de hidratación)
     if (leerLS(LS_RECORDAR) === '1') {
@@ -358,6 +371,8 @@ export default function LoginPage() {
 
             {/* Form */}
             <form
+              method="post"
+              action="/login"
               onSubmit={handleSubmit}
               className={`flex flex-col gap-4 transition-all duration-500 ease-out sm:gap-5 ${exito ? 'login-form-salida' : ''}`}
               noValidate
@@ -465,7 +480,7 @@ export default function LoginPage() {
               <button
                 ref={submitRef}
                 type="submit"
-                disabled={loading || isLocked}
+                disabled={!hidratado || loading || isLocked}
                 className="mt-2 inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 text-base font-bold text-white shadow-lg shadow-primary-900/20 transition-all hover:from-primary-600 hover:to-primary-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:mt-2 sm:min-h-[52px] sm:text-sm"
               >
                 {exito ? (

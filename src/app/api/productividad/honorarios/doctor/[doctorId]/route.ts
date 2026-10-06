@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerQuery, validarId } from '@/lib/api/validar';
 import { panelDoctorHonorarios } from '@/lib/productividad';
 import { fechaReal, validarRango } from '@/lib/productividad/validacion';
+import { ruta } from '@/lib/api/ruta';
 
 const querySchema = z.object({
   referencia: fechaReal.optional(),
@@ -14,7 +15,7 @@ const querySchema = z.object({
   pageSize: z.string().max(10).optional(),
 });
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ doctorId: string }> }
 ) {
@@ -76,3 +77,5 @@ export async function GET(
     return response;
   }
 }
+
+export const GET = ruta('productividad/honorarios/doctor/[doctorId]#GET', manejarGET);

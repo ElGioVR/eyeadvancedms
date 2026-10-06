@@ -5,6 +5,7 @@ import { leerJSON, leerQuery } from '@/lib/api/validar';
 import { monto, respuestaErrorDb } from '@/lib/api/configuracion';
 import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const TIPOS = ['ESTUDIO', 'PROCEDIMIENTO', 'CONSULTA'] as const;
 
@@ -39,7 +40,7 @@ function normalize(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ data });
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -122,3 +123,7 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const GET = ruta('configuracion/aseguranzas/servicios#GET', manejarGET);
+export const POST = ruta('configuracion/aseguranzas/servicios#POST', manejarPOST);
+export const PATCH = ruta('configuracion/aseguranzas/servicios#PATCH', manejarPATCH);

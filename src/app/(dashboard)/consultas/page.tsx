@@ -1,5 +1,6 @@
 "use client";
 
+import { precargarDatos } from '@/lib/fetcher';
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -378,6 +379,8 @@ export default function ConsultasPage() {
                         )}
                         <button
                           aria-label={`Ver consulta de ${c.paciente}`}
+                          onMouseEnter={() => precargarDatos(`/api/consultas/${c.id}`)}
+                          onFocus={() => precargarDatos(`/api/consultas/${c.id}`)}
                           onClick={() => router.push(`/consultas/${c.id}`)}
                           className="text-muted hover:text-primary-600 transition-colors"
                         >

@@ -8,6 +8,8 @@ import { sanitizarBusqueda } from '@/lib/text';
 import { z } from 'zod';
 import { hoyTijuana } from '@/lib/rangos';
 import { columnasTelefonos, faltanColumnasTelefonos, telefonosSchema } from '@/lib/telefonos-paciente-db';
+import { ruta } from '@/lib/api/ruta';
+import { idempotente } from '@/lib/api/idempotencia';
 
 const pacienteCreateSchema = z
   .object({
@@ -65,7 +67,55 @@ function primero<T>(v: Embed<T>): T | null {
   return v ?? null;
 }
 
-export async function GET(request: Request) {
+type Enriquecido = PacienteFila & {
+  aseguradora: string | null;
+  consultas_count: number;
+  ultima_visita: string | null;
+};
+
+function filaRespuesta(p: Enriquecido, pendiente: boolean) {
+  const nombre = p.nombre_completo || '';
+  const iniciales = nombre
+    .split(' ')
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+  return {
+    id: p.id,
+    nombre: p.nombre_completo,
+    nombre_completo: p.nombre_completo,
+    iniciales,
+    sexo: p.sexo === 'MASCULINO' ? 'H' : 'M',
+    fecha_nacimiento: p.fecha_nacimiento,
+    edad: p.edad,
+    telefono: p.telefono,
+    email: p.email,
+    direccion: p.direccion,
+    contacto_emergencia: p.contacto_emergencia,
+    tel_emergencia: p.tel_emergencia,
+    aseguranza_id: p.aseguranza_id || null,
+    aseguradora: p.aseguranza_id ? p.aseguradora : null,
+    numero_poliza: p.numero_poliza || null,
+    numero_afiliacion: p.numero_afiliacion || null,
+    numero_expediente: p.numero_expediente || null,
+    consultas_count: p.consultas_count || 0,
+    ultima_visita: p.ultima_visita || null,
+    pendiente_completar: pendiente,
+    faltantes: pendiente ? faltantesPaciente(p) : [],
+    created_at: p.created_at,
+  };
+}
+
+/**
+ * Columnas resumen `pacientes.consultas_count` / `ultima_visita` (migración
+ * de performance 1800000000480, mantenidas por trigger). Si aún no existen,
+ * se usa el camino anterior (subconsultas embebidas) y se reintenta en 5 min.
+ */
+let resumenNoDisponibleHasta = 0;
+const REINTENTO_RESUMEN_MS = 5 * 60_000;
+
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
@@ -80,6 +130,51 @@ export async function GET(request: Request) {
   const patron = busqueda ? `%${busqueda}%` : '';
 
   const supabase = getSupabaseAdmin();
+  const digitosBusqueda = busqueda.replace(/\D/g, '');
+  const filtroBusqueda = patron
+    ? `nombre_completo.ilike.${patron},telefono.ilike.${patron},email.ilike.${patron},numero_expediente.ilike.${patron}` +
+      (digitosBusqueda.length >= 4 ? `,telefonos_busqueda.ilike.%${digitosBusqueda}%` : '')
+    : '';
+
+  // Camino rápido: resumen precalculado → 1 consulta simple por página, sin
+  // subconsultas por fila ni segundo viaje para «pendiente de completar».
+  if (Date.now() >= resumenNoDisponibleHasta) {
+    let q = supabase
+      .from('pacientes')
+      .select(`${COLUMNAS_PACIENTE}, consultas_count, ultima_visita, pendiente_completar, aseguranzas:aseguranza_id (nombre, activo)`, {
+        count: 'exact',
+      })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (filtroBusqueda) q = q.or(filtroBusqueda);
+    const r = await q;
+    if (!r.error) {
+      const filasRapidas = (r.data as unknown as Array<
+        PacienteFila & {
+          consultas_count: number | null;
+          ultima_visita: string | null;
+          pendiente_completar: boolean | null;
+          aseguranzas: Embed<{ nombre: string | null; activo: boolean | null }>;
+        }
+      >).map((p) => {
+        const aseg = primero(p.aseguranzas);
+        const fila: Enriquecido = {
+          ...p,
+          aseguradora: aseg && aseg.activo ? aseg.nombre ?? null : null,
+          consultas_count: p.consultas_count ?? 0,
+          ultima_visita: p.ultima_visita ?? null,
+        };
+        return filaRespuesta(fila, p.pendiente_completar === true);
+      });
+      return NextResponse.json({ data: filasRapidas, total: r.count || 0, page, pageSize });
+    }
+    // Columna inexistente (migración sin aplicar): desactivar el camino rápido un rato.
+    if (r.error.code === '42703' || r.error.code === 'PGRST204' || /column|does not exist/i.test(r.error.message)) {
+      resumenNoDisponibleHasta = Date.now() + REINTENTO_RESUMEN_MS;
+    } else {
+      handleSupabaseError(r.error, 'pacientes.listar.rapido');
+    }
+  }
 
   // Un solo viaje: pacientes + nombre de la aseguranza + conteo de consultas
   // + fecha de la última consulta (limitada a 1 fila por paciente).
@@ -109,11 +204,6 @@ export async function GET(request: Request) {
 
   const { data, error, count } = await consulta;
 
-  type Enriquecido = PacienteFila & {
-    aseguradora: string | null;
-    consultas_count: number;
-    ultima_visita: string | null;
-  };
   let filas: Enriquecido[];
   let total = count || 0;
 
@@ -186,44 +276,12 @@ export async function GET(request: Request) {
     if (!r.error) for (const x of r.data || []) pendientes.add((x as { id: string }).id);
   }
 
-  const result = filas.map((p) => {
-    const nombre = p.nombre_completo || '';
-    const iniciales = nombre
-      .split(' ')
-      .map((n: string) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-    return {
-      id: p.id,
-      nombre: p.nombre_completo,
-      nombre_completo: p.nombre_completo,
-      iniciales,
-      sexo: p.sexo === 'MASCULINO' ? 'H' : 'M',
-      fecha_nacimiento: p.fecha_nacimiento,
-      edad: p.edad,
-      telefono: p.telefono,
-      email: p.email,
-      direccion: p.direccion,
-      contacto_emergencia: p.contacto_emergencia,
-      tel_emergencia: p.tel_emergencia,
-      aseguranza_id: p.aseguranza_id || null,
-      aseguradora: p.aseguranza_id ? p.aseguradora : null,
-      numero_poliza: p.numero_poliza || null,
-      numero_afiliacion: p.numero_afiliacion || null,
-      numero_expediente: p.numero_expediente || null,
-      consultas_count: p.consultas_count || 0,
-      ultima_visita: p.ultima_visita || null,
-      pendiente_completar: pendientes.has(p.id),
-      faltantes: pendientes.has(p.id) ? faltantesPaciente(p) : [],
-      created_at: p.created_at,
-    };
-  });
+  const result = filas.map((p) => filaRespuesta(p, pendientes.has(p.id)));
 
   return NextResponse.json({ data: result, total, page, pageSize });
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -294,3 +352,6 @@ export async function POST(request: Request) {
     created_at: paciente.created_at,
   }, { status: 201 });
 }
+
+export const GET = ruta('pacientes#GET', manejarGET);
+export const POST = ruta('pacientes#POST', idempotente('pacientes#POST', manejarPOST));

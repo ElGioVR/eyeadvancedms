@@ -10,6 +10,7 @@ import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 /** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
 const ojoSchema = z
@@ -42,7 +43,7 @@ const cirugiaUpdateSchema = z.object({
   inventario_item_id: z.string().uuid().optional().nullable(),
 }).strict();
 
-export async function GET(
+async function manejarGET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -88,7 +89,7 @@ export async function GET(
   });
 }
 
-export async function PATCH(
+async function manejarPATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -310,7 +311,7 @@ export async function PATCH(
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(
+async function manejarDELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -339,3 +340,7 @@ export async function DELETE(
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('agenda/[id]#GET', manejarGET);
+export const PATCH = ruta('agenda/[id]#PATCH', manejarPATCH);
+export const DELETE = ruta('agenda/[id]#DELETE', manejarDELETE);

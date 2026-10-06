@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 // Importación de matrices grandes: parseo + inserts por lotes.
 export const maxDuration = 60;
@@ -143,9 +145,11 @@ async function leerExistentes(
   return set;
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('importacion', auth.user.id);
+  if (limite) return limite;
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
@@ -388,3 +392,5 @@ export async function POST(request: Request) {
     rechazados,
   });
 }
+
+export const POST = ruta('configuracion/aseguranzas/servicios/import#POST', manejarPOST);

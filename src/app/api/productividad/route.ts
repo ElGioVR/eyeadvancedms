@@ -12,6 +12,7 @@ import {
   rangoPersonalizado,
 } from '@/lib/rangos';
 import { listarResumenHonorarios, type ResumenFila } from '@/lib/productividad';
+import { ruta } from '@/lib/api/ruta';
 
 type TabId = 'honorarios' | 'por_doctor' | 'cirugias' | 'entradas_salidas' | 'estudios' | 'pagos' | 'tarifas' | 'periodos' | 'sync';
 
@@ -502,7 +503,7 @@ function csvParaTab(tab: TabId, data: ProductividadData): string {
   }
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -566,3 +567,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad#GET', manejarGET);

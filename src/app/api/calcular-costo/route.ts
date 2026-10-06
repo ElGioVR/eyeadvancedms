@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const conceptoSchema = z.object({
   id: z.string().uuid(),
@@ -17,7 +18,7 @@ const calcularSchema = z.object({
   aseguranza_id: z.string().uuid().optional().nullable(),
 }).strict();
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -139,3 +140,5 @@ export async function POST(request: Request) {
     desglose_procedimientos: desgloseProcedimientos,
   });
 }
+
+export const POST = ruta('calcular-costo#POST', manejarPOST);

@@ -8,6 +8,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 const http = require('http');
 
@@ -113,14 +114,14 @@ assert(page.includes('setShowScanner(true)'), 'escáner sigue visible (solo lect
 
 // 4b. RBAC por método: el doctor solo puede DAR DE ALTA (POST) en inventario
 const postSection = api.slice(
-  api.indexOf('export async function POST'),
-  api.indexOf('export async function PATCH'),
+  api.indexOf('async function manejarPOST'),
+  api.indexOf('async function manejarPATCH'),
 );
 const patchSection = api.slice(
-  api.indexOf('export async function PATCH'),
-  api.indexOf('export async function DELETE'),
+  api.indexOf('async function manejarPATCH'),
+  api.indexOf('async function manejarDELETE'),
 );
-const deleteSection = api.slice(api.indexOf('export async function DELETE'));
+const deleteSection = api.slice(api.indexOf('async function manejarDELETE'));
 assert(
   /requireRole(?:Inventario)?\(auth\.user, \['admin', 'doctor', 'recepcionista'\]\)/.test(postSection),
   'POST /api/inventario permite rol doctor (alta de ítem)'

@@ -23,8 +23,8 @@ export default function SWRProvider({ children }: { children: React.ReactNode })
         revalidateOnReconnect: true,
         errorRetryCount: 2,
         errorRetryInterval: 3_000,
-        // Solo se reintentan errores de red o del servidor (no 4xx)
-        shouldRetryOnError: (err: unknown) => !(err instanceof ApiError) || err.status >= 500,
+        // Solo se reintentan errores de red (status 0), timeouts o del servidor (no 4xx)
+        shouldRetryOnError: (err: unknown) => !(err instanceof ApiError) || err.status === 0 || err.status >= 500,
       }}
     >
       {children}

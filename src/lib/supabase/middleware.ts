@@ -3,6 +3,18 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { SESION_TEMPORAL_COOKIE, VERIFIED_USER_HEADER, opcionesCookieAuth } from './constants';
 
+/**
+ * Las redirecciones deben llevar las cookies que Supabase actualizó en esta
+ * petición. Sin esto, cuando el refresh token ya no existe (sesión cerrada en
+ * otro lado, sesión única, logout) Supabase borra las cookies pero el borrado
+ * se perdía en el redirect: el navegador las volvía a mandar y en cada petición
+ * salía «Invalid Refresh Token: Refresh Token Not Found».
+ */
+function conCookies(destino: NextResponse, origen: NextResponse): NextResponse {
+  origen.cookies.getAll().forEach((c) => destino.cookies.set(c));
+  return destino;
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
   const temporal = request.cookies.has(SESION_TEMPORAL_COOKIE);
@@ -69,7 +81,7 @@ export async function updateSession(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    return conCookies(NextResponse.redirect(url), response);
   }
 
   // Redirect authenticated users away from login (salvo «Ir a login» desde una
@@ -77,7 +89,7 @@ export async function updateSession(request: NextRequest) {
   if (user && request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.searchParams.has('motivo')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+    return conCookies(NextResponse.redirect(url), response);
   }
 
   return response;

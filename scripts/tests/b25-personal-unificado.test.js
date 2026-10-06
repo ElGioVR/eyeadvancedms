@@ -6,6 +6,7 @@
  */
 'use strict';
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const leer = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');

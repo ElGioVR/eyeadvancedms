@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { respuestaErrorDb } from '@/lib/api/configuracion';
 import { ROLES_APOYO } from '@/lib/catalogos/equipo-quirurgico';
+import { ruta } from '@/lib/api/ruta';
 
 /** Personal de apoyo de quirófano (instrumentista, enfermero, circulante). */
 
@@ -32,7 +33,7 @@ async function autorizar() {
 }
 
 /** GET — todo el personal, incluido el inactivo. */
-export async function GET() {
+async function manejarGET() {
   const denegado = await autorizar();
   if (denegado) return denegado;
   const { data, error } = await getSupabaseAdmin().from('personal_clinico').select(COLUMNAS).order('nombre').limit(1000);
@@ -40,7 +41,7 @@ export async function GET() {
   return NextResponse.json(data || []);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const denegado = await autorizar();
   if (denegado) return denegado;
   const data = await leerJSON(request, crearSchema);
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
 }
 
 /** PATCH — editar o activar/desactivar (no se borra: puede estar en cirugías). */
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const denegado = await autorizar();
   if (denegado) return denegado;
   const data = await leerJSON(request, actualizarSchema);
@@ -71,3 +72,7 @@ export async function PATCH(request: Request) {
   if (error) return respuestaErrorDb(error, 'configuracion.personal-clinico', { duplicado: 'Ya existe una persona con ese nombre' });
   return NextResponse.json(actualizado);
 }
+
+export const GET = ruta('configuracion/personal-clinico#GET', manejarGET);
+export const POST = ruta('configuracion/personal-clinico#POST', manejarPOST);
+export const PATCH = ruta('configuracion/personal-clinico#PATCH', manejarPATCH);

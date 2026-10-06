@@ -71,6 +71,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -244,7 +245,7 @@ function checkAgendaRoute() {
 
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
 
@@ -373,7 +374,7 @@ function checkLegacyAgendaEndpoints() {
   if (postContent !== null) {
     assertRegexMatches(
       postContent,
-      /export\s+async\s+function\s+POST\s*\(/,
+      /export\s+(?:async\s+function\s+POST\s*\(|const\s+POST\s*=\s*ruta\()/,
       'exporta async function POST (sin regresión)'
     );
     // requireAuth + RBAC preservados
@@ -420,17 +421,17 @@ function checkLegacyAgendaEndpoints() {
   if (patchContent !== null) {
     assertRegexMatches(
       patchContent,
-      /export\s+async\s+function\s+PATCH\s*\(/,
+      /export\s+(?:async\s+function\s+PATCH\s*\(|const\s+PATCH\s*=\s*ruta\()/,
       'exporta async function PATCH (sin regresión)'
     );
     assertRegexMatches(
       patchContent,
-      /export\s+async\s+function\s+GET\s*\(/,
+      /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
       'mantiene export async function GET en /api/agenda/[id]'
     );
     assertRegexMatches(
       patchContent,
-      /export\s+async\s+function\s+DELETE\s*\(/,
+      /export\s+(?:async\s+function\s+DELETE\s*\(|const\s+DELETE\s*=\s*ruta\()/,
       'mantiene export async function DELETE en /api/agenda/[id]'
     );
     // Campos legacy siguen siendo actualizables (mismos nombres).

@@ -5,8 +5,9 @@ import { generarUrlFirmada, eliminarArchivoDeStorage, URL_FIRMADA_TTL_S } from '
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
 import { validarId } from '@/lib/api/validar';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { ruta } from '@/lib/api/ruta';
 
-export async function GET(
+async function manejarGET(
   _request: Request,
   { params }: { params: Promise<{ id: string; archivoId: string }> }
 ) {
@@ -51,7 +52,7 @@ export async function GET(
   return NextResponse.json({ archivo: archivoPublico, signedUrl: url.url });
 }
 
-export async function DELETE(
+async function manejarDELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; archivoId: string }> }
 ) {
@@ -118,3 +119,6 @@ export async function DELETE(
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('cirugias/[id]/archivos/[archivoId]#GET', manejarGET);
+export const DELETE = ruta('cirugias/[id]/archivos/[archivoId]#DELETE', manejarDELETE);

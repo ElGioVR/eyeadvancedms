@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { enviarJSON, mensajeDeError } from '@/lib/fetcher';
 import { CalendarClock, CalendarPlus, CalendarX2, X, Loader2, Plus, Clock } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
@@ -107,20 +108,12 @@ export default function ConsultaAccionesFab({
         payload.hora_inicio = nuevaHora;
         if (nuevaHoraFin) payload.hora_fin = nuevaHoraFin;
       }
-      const res = await fetch(`/api/consultas/${consultaId}/acciones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Error al aplicar la acción');
-      }
+      await enviarJSON(`/api/consultas/${consultaId}/acciones`, 'POST', payload);
       toast(exitoLabels[accion]);
       setAccion(null);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al aplicar la acción');
+      setError(mensajeDeError(err, 'Error al aplicar la acción'));
     } finally {
       setSaving(false);
     }

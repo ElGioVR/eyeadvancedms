@@ -6,8 +6,9 @@ import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { invalidarPerfil, requireAuth } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -99,7 +100,7 @@ const patchSchema = z.object({
   preferencias: preferenciasSchema.optional(),
 }).strict();
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -148,3 +149,6 @@ export async function PATCH(request: Request) {
   invalidarPerfil(auth.user.id);
   return NextResponse.json({ ok: true });
 }
+
+export const GET = ruta('usuarios/me#GET', manejarGET);
+export const PATCH = ruta('usuarios/me#PATCH', manejarPATCH);

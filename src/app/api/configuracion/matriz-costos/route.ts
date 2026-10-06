@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { idDeQuery, monto, respuestaErrorDb, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const updateSchema = z.object({
   id: z.string().uuid(),
@@ -19,7 +20,7 @@ const createSchema = z.object({
   descripcion: textoLargo.optional().nullable(),
 }).strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -35,7 +36,7 @@ export async function GET() {
   return NextResponse.json(data || []);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
   return NextResponse.json(data, { status: 201 });
 }
 
-export async function PUT(request: Request) {
+async function manejarPUT(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -84,7 +85,7 @@ export async function PUT(request: Request) {
   return NextResponse.json(data);
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -105,3 +106,8 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/matriz-costos#GET', manejarGET);
+export const POST = ruta('configuracion/matriz-costos#POST', manejarPOST);
+export const PUT = ruta('configuracion/matriz-costos#PUT', manejarPUT);
+export const DELETE = ruta('configuracion/matriz-costos#DELETE', manejarDELETE);

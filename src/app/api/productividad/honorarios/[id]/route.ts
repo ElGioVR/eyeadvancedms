@@ -5,6 +5,7 @@ import { validarId } from '@/lib/api/validar';
 import { editarMontoHonorario } from '@/lib/productividad';
 import { leerJSONTolerante, MONTO_MAXIMO } from '@/lib/productividad/validacion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const patchSchema = z
   .object({
@@ -16,7 +17,7 @@ const patchSchema = z
   })
   .strict();
 
-export async function PATCH(
+async function manejarPATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -45,3 +46,5 @@ export async function PATCH(
     return NextResponse.json({ error: message }, { status });
   }
 }
+
+export const PATCH = ruta('productividad/honorarios/[id]#PATCH', manejarPATCH);

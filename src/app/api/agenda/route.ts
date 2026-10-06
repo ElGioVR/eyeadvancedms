@@ -9,6 +9,8 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { consumirLIO } from '@/lib/inventario';
 import { errorInterno, fechaISO, horaHHMM, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 /** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
 const ojoSchema = z
@@ -99,7 +101,7 @@ function fichaPaciente(
   };
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -295,7 +297,7 @@ export async function GET(request: Request) {
   return response;
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ROLES_GESTION_AGENDA);
@@ -375,16 +377,22 @@ export async function POST(request: Request) {
   }
 
   // Notifica al doctor asignado (best-effort: un fallo no invalida la cirugía ya creada)
-  await notificarAsignacion({
-    doctorId: cirugia.doctor_id,
-    tipoServicio: 'Cirugía',
-    paciente: cirugia.nombre_paciente,
-    fecha: cirugia.fecha,
-    hora: cirugia.hora,
-    entidadTipo: 'agenda_cirugia',
-    entidadId: cirugia.id,
-    actorUserId: auth.user.id,
-  }).catch(() => undefined);
+  enSegundoPlano(
+    notificarAsignacion({
+      doctorId: cirugia.doctor_id,
+      tipoServicio: 'Cirugía',
+      paciente: cirugia.nombre_paciente,
+      fecha: cirugia.fecha,
+      hora: cirugia.hora,
+      entidadTipo: 'agenda_cirugia',
+      entidadId: cirugia.id,
+      actorUserId: auth.user.id,
+    }),
+    'agenda.crear.notificar',
+  );
 
   return NextResponse.json(cirugia, { status: 201 });
 }
+
+export const GET = ruta('agenda#GET', manejarGET);
+export const POST = ruta('agenda#POST', manejarPOST);

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import Script from 'next/script';
 import SWRProvider from '@/components/providers/SWRProvider';
+import MonitoreoCliente from '@/components/providers/MonitoreoCliente';
 import './globals.css';
 
 const inter = Inter({
@@ -55,6 +56,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="theme">
           <SWRProvider>{children}</SWRProvider>
+          <MonitoreoCliente />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' ? (
           <Script id="sw-register" strategy="afterInteractive">

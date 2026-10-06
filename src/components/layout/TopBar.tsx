@@ -20,11 +20,13 @@ import {
   Wallet,
 } from "lucide-react";
 import { useUser, clearUserCache } from "@/hooks/useUser";
+import { borrarTodosLosBorradores } from '@/lib/borradores';
 import Avatar from "@/components/ui/Avatar";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { enviarJSON } from "@/lib/fetcher";
 import BarraRevalidando from "@/components/ui/BarraRevalidando";
 import { cn } from "@/lib/utils";
+import Modal from "@/components/ui/Modal";
 
 interface SearchResult {
   tipo: string;
@@ -132,6 +134,17 @@ export default function TopBar(_props: TopBarProps) {
   const [listaSolicitada, setListaSolicitada] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [confirmarSalida, setConfirmarSalida] = useState(false);
+  const [saliendo, setSaliendo] = useState(false);
+  const cerrarSesion = async () => {
+    if (saliendo) return;
+    setSaliendo(true);
+    clearUserCache();
+    borrarTodosLosBorradores();
+    // Aunque falle la red, se sale a /login (la sesión expira sola).
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    window.location.href = "/login";
+  };
   const [modoFocus, setModoFocus] = useState(false);
   const invalidarDatos = useInvalidar();
   const [now, setNow] = useState<Date | null>(null);
@@ -607,10 +620,10 @@ export default function TopBar(_props: TopBarProps) {
                   )}
                   <ThemeToggle withLabel className="w-full justify-start px-3 text-fg sm:hidden" />
                   <button
-                    onClick={async () => {
-                      clearUserCache();
-                      await fetch("/api/auth/logout", { method: "POST" });
-                      window.location.href = "/login";
+                    onClick={() => {
+                      // Mismo paso de confirmación que en el menú lateral.
+                      setUserMenuOpen(false);
+                      setConfirmarSalida(true);
                     }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                   >
@@ -623,6 +636,26 @@ export default function TopBar(_props: TopBarProps) {
           </div>
         </div>
       </div>
+
+      <Modal isOpen={confirmarSalida} onClose={() => !saliendo && setConfirmarSalida(false)} maxWidth="max-w-sm">
+        <div className="space-y-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <LogOut className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-fg">Cerrar sesión</h3>
+            <p className="mt-1 text-sm text-muted">¿Estás seguro que deseas cerrar sesión?</p>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button onClick={() => setConfirmarSalida(false)} disabled={saliendo} className="btn-secondary">
+              Cancelar
+            </button>
+            <button onClick={() => void cerrarSesion()} disabled={saliendo} className="btn-danger">
+              {saliendo ? "Cerrando…" : "Cerrar sesión"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </header>
   );
 }

@@ -5,8 +5,9 @@ import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { validarId } from '@/lib/api/validar';
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
 import { leerTelefonos } from '@/lib/telefonos-paciente-db';
+import { ruta } from '@/lib/api/ruta';
 
-export async function GET(
+async function manejarGET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -192,3 +193,5 @@ export async function GET(
     personal,
   });
 }
+
+export const GET = ruta('cirugias/[id]#GET', manejarGET);

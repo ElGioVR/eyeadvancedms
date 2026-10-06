@@ -1,8 +1,9 @@
 "use client";
 
+import Aislado from '@/components/ui/Aislado';
 import { useState, useEffect, useRef, useTransition } from "react";
 import useSWR from "swr";
-import { REFRESCO_COMPARTIDO_MS } from "@/hooks/useFetch";
+import { useRefrescoCompartido } from "@/lib/tiempo-real";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -155,11 +156,12 @@ export default function DashboardContent({
     maxHeight: number;
   } | null>(null);
   // Gráficas vía SWR: misma URL que precarga /bienvenida (el fetcher global la consume).
+  const refrescoCompartido = useRefrescoCompartido();
   const {
     data: chartData,
     isLoading: chartsCargando,
     isValidating: chartsValidando,
-  } = useSWR<ChartData>("/api/dashboard/charts", { refreshInterval: REFRESCO_COMPARTIDO_MS });
+  } = useSWR<ChartData>("/api/dashboard/charts", { refreshInterval: refrescoCompartido });
   // «Ver como»: la navegación va en transición → se conserva el dashboard
   // visible (sin volver al skeleton) mientras llega el nuevo render del servidor.
   const [cambiandoVista, iniciarTransicion] = useTransition();
@@ -746,13 +748,15 @@ export default function DashboardContent({
       </div>
 
       {/* Gráficas (recharts, carga diferida) */}
-      <DashboardCharts
-        estatusChartData={estatusChartData}
-        procChartData={procChartData}
-        agendaChartData={agendaChartData}
-        cargando={chartsCargando && !chartData}
-        validando={chartsValidando && !!chartData}
-      />
+      <Aislado nombre="las gráficas" contexto="dashboard.graficas">
+        <DashboardCharts
+          estatusChartData={estatusChartData}
+          procChartData={procChartData}
+          agendaChartData={agendaChartData}
+          cargando={chartsCargando && !chartData}
+          validando={chartsValidando && !!chartData}
+        />
+      </Aislado>
     </div>
   );
 }

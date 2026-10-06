@@ -1,5 +1,6 @@
 'use client';
 
+import Aislado from '@/components/ui/Aislado';
 import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch, useDebounce, useInvalidar } from '@/hooks';
-import { enviarJSON } from '@/lib/fetcher';
+import { ApiError, enviarJSON, fetchJSON, mensajeDeError } from '@/lib/fetcher';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
@@ -254,22 +255,7 @@ export default function InventarioPage() {
 
   async function handleBarcodeSearch() {
     if (!barcodeInput.trim()) return;
-    setScanning(true);
-    setScanError('');
-    setScanResult(null);
-    try {
-      const res = await fetch(`/api/inventario?barcode=${encodeURIComponent(barcodeInput.trim())}`);
-      if (!res.ok) {
-        const data = await res.json();
-        setScanError(data.error || 'No encontrado');
-        return;
-      }
-      setScanResult(await res.json());
-    } catch {
-      setScanError('Error de conexion');
-    } finally {
-      setScanning(false);
-    }
+    await handleBarcodeSearchWithCode(barcodeInput.trim());
   }
 
   async function handleBarcodeSearchWithCode(code: string) {
@@ -277,15 +263,9 @@ export default function InventarioPage() {
     setScanError('');
     setScanResult(null);
     try {
-      const res = await fetch(`/api/inventario?barcode=${encodeURIComponent(code)}`);
-      if (!res.ok) {
-        const data = await res.json();
-        setScanError(data.error || 'No encontrado');
-        return;
-      }
-      setScanResult(await res.json());
-    } catch {
-      setScanError('Error de conexion');
+      setScanResult(await fetchJSON(`/api/inventario?barcode=${encodeURIComponent(code)}`));
+    } catch (err) {
+      setScanError(err instanceof ApiError && err.status === 404 ? err.message || 'No encontrado' : mensajeDeError(err, 'No encontrado'));
     } finally {
       setScanning(false);
     }
@@ -516,16 +496,18 @@ export default function InventarioPage() {
         </div>
 
         {scannerMode === 'camera' ? (
-          <BarcodeScanner
-            onScan={(code) => {
-              setBarcodeInput(code);
-              // Auto-search after scan
-              setTimeout(() => {
-                handleBarcodeSearchWithCode(code);
-              }, 100);
-            }}
-            onClose={() => setShowScanner(false)}
-          />
+          <Aislado nombre="el escáner" contexto="inventario.escaner">
+            <BarcodeScanner
+              onScan={(code) => {
+                setBarcodeInput(code);
+                // Auto-search after scan
+                setTimeout(() => {
+                  handleBarcodeSearchWithCode(code);
+                }, 100);
+              }}
+              onClose={() => setShowScanner(false)}
+            />
+          </Aislado>
         ) : (
           <div className="space-y-3">
             <input

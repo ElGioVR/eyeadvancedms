@@ -8,6 +8,8 @@ import { leerQuery } from '@/lib/api/validar';
 import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
 import { edadDetallada, sexoLegible } from '@/lib/ficha-paciente';
 import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 /**
  * GET /api/reportes/pacientes-atendidos?desde&hasta&doctor_id
@@ -87,9 +89,11 @@ const SELECT_BASE = `
 const CONCEPTOS_CON_INDICADO = `conceptos:consulta_conceptos (tipo_concepto, texto_original, ojo, doctor_id, indicado_por_id, realizado:doctor_id (id, alias), indicado:indicado_por_id (id, alias))`;
 const CONCEPTOS_SIN_INDICADO = `conceptos:consulta_conceptos (tipo_concepto, texto_original, ojo, doctor_id, realizado:doctor_id (id, alias))`;
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('reporte', auth.user.id);
+  if (limite) return limite;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista', 'doctor']);
   if (roleError) return roleError;
 
@@ -191,3 +195,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: mensajeSeguro(err, 'reportes.pacientes-atendidos', 'No se pudo generar el reporte') }, { status: 500 });
   }
 }
+
+export const GET = ruta('reportes/pacientes-atendidos#GET', manejarGET);

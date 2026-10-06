@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers';
 import { SESION_TEMPORAL_COOKIE, VERIFIED_USER_HEADER, opcionesCookieAuth } from './constants';
 import { CODIGO_SESION_REEMPLAZADA, LATIDO_MS, sesionVigente } from '@/lib/sesion-unica';
 import { enSegundoPlano } from '@/lib/segundo-plano';
+import { fetchConTimeout } from './fetch-timeout';
 
 /**
  * Roles de usuario. 'enfermero' es restringido: solo su propia agenda y, si
@@ -20,6 +21,7 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: { fetch: fetchConTimeout },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { validarId } from '@/lib/api/validar';
+import { ruta } from '@/lib/api/ruta';
 
 interface AseguranzaJoin {
   id: string;
   nombre: string;
 }
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -76,3 +77,5 @@ export async function GET(
 
   return NextResponse.json(resumen);
 }
+
+export const GET = ruta('pacientes/[id]/resumen#GET', manejarGET);

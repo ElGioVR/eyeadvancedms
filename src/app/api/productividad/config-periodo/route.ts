@@ -5,6 +5,7 @@ import { getPeriodRange, leerTipoPeriodo } from '@/lib/productividad';
 import { leerJSONTolerante } from '@/lib/productividad/validacion';
 import { hoyTijuana } from '@/lib/rangos';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const putSchema = z
   .object({
@@ -14,7 +15,7 @@ const putSchema = z
   })
   .strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -27,7 +28,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+async function manejarPUT(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -76,3 +77,6 @@ export async function PUT(request: Request) {
 
   return NextResponse.json({ tipo: body.tipo });
 }
+
+export const GET = ruta('productividad/config-periodo#GET', manejarGET);
+export const PUT = ruta('productividad/config-periodo#PUT', manejarPUT);

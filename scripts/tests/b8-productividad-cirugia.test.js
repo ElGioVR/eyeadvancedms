@@ -67,6 +67,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 const vm = require('vm');
 
@@ -1750,7 +1751,7 @@ function checkProductividadEndpointAndRPC() {
   // 1. Exporta GET
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
 

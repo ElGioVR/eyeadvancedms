@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, leerJSON, uuid, validarId } from '@/lib/api/validar';
 import { columnasTelefonos, faltanColumnasTelefonos, leerTelefonos, telefonosSchema } from '@/lib/telefonos-paciente-db';
+import { ruta } from '@/lib/api/ruta';
 
 interface CobroJoin {
   monto: number | null;
@@ -14,7 +15,7 @@ interface CobroJoin {
   pagado: boolean | null;
 }
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -147,7 +148,7 @@ const pacienteUpdateSchema = z
   })
   .strict();
 
-export async function PATCH(
+async function manejarPATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -214,3 +215,6 @@ export async function PATCH(
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('pacientes/[id]#GET', manejarGET);
+export const PATCH = ruta('pacientes/[id]#PATCH', manejarPATCH);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { fechaISO, leerQuery, uuid } from '@/lib/api/validar';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
+import { ruta } from '@/lib/api/ruta';
 
 const querySchema = z.object({
   medico_id: uuid,
@@ -20,7 +21,7 @@ const querySchema = z.object({
  * intervalo de día completo, así la regla es idéntica a la del POST/PATCH.
  * Solo devuelve horarios (sin datos del paciente).
  */
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -60,3 +61,5 @@ export async function GET(request: Request) {
     { headers: { 'Cache-Control': 'private, no-store', 'Server-Timing': `db;dur=${Date.now() - t0}` } }
   );
 }
+
+export const GET = ruta('agenda/disponibilidad#GET', manejarGET);

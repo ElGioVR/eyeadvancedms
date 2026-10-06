@@ -1,249 +1,32 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  ClipboardList,
-  AlertTriangle,
-  Eye,
-  Banknote,
-  User,
-  Printer,
-  Loader2,
-  CheckCircle2,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import useSWR from 'swr';
-import { useFetch, useInvalidar } from '@/hooks/useFetch';
-import { useDebounce } from '@/hooks/useDebounce';
-import { enviarJSON, fetchJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
-import Avatar from '@/components/ui/Avatar';
-import Modal from '@/components/ui/Modal';
-import EmptyState from '@/components/ui/EmptyState';
-import PageHeader from '@/components/ui/PageHeader';
-import { FormInput, FormSelect } from '@/components/ui/FormField';
-import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
-import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
-import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
-import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
-import { DURACION_CITA_MIN, deMinutos } from '@/lib/agenda-slots';
+import { useInvalidar, useFetch } from '@/hooks/useFetch';
+import { PacienteAPI, DoctorAPI, MatrizCosto, CatalogoConsulta, CatalogoEstudio, CatalogoProcedimiento, ServicioPaciente, EstudioSeleccionado, ProcedimientoSeleccionado, AseguranzaAPI, addMinutesToTime, PacienteDetalleAPI, normalizarPacienteDetalle, DRAFT_STORAGE_KEY, timeToMinutes, BusquedaPacienteResult, TIPO_CONSULTA_MAP, TIPO_VISITA_MAP, getInitials, getAvatarColor, validarNuevoPaciente, paymentMethodOptions, PreviewField } from '@/components/consultations/nueva-consulta-comun';
+import { useMemo, useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import { esMedicoTratante, esAnestesiologo } from '@/lib/catalogos/personal';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { type TelefonoPaciente, normalizarTelefonos, telefonoPrincipal } from '@/lib/telefonos-paciente';
+import { deMinutos, DURACION_CITA_MIN } from '@/lib/agenda-slots';
+import { opcionTipoConsulta, TIPOS_CONSULTA_AGENDA } from '@/lib/catalogos/tipos-consulta';
+import { fetchJSON, nuevaClaveIdempotencia, enviarJSON, mensajeDeError, ApiError } from '@/lib/fetcher';
 import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
-import { TIPOS_CONSULTA_AGENDA, opcionTipoConsulta } from '@/lib/catalogos/tipos-consulta';
-import { esAnestesiologo, esMedicoTratante } from '@/lib/catalogos/personal';
+import { CADUCIDAD_BORRADOR_MS } from '@/lib/borradores';
+import { useDebounce } from '@/hooks/useDebounce';
+import useSWR from 'swr';
+import PageHeader from '@/components/ui/PageHeader';
+import { Printer, User, Loader2, ClipboardList, Banknote, AlertTriangle, Eye, CheckCircle2 } from 'lucide-react';
 import Skeleton from '@/components/ui/Skeleton';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
-
-interface PacienteAPI {
-  id: string;
-  nombre: string;
-  nombre_completo?: string;
-  edad: number | null;
-  sexo: string | null;
-  aseguradora: string | null;
-  aseguranza_id: string | null;
-  telefono: string | null;
-  email: string | null;
-  direccion: string | null;
-  numero_expediente?: string | null;
-  /** true = viene de /api/search (sin edad/sexo/aseguranza); se completa al seleccionarlo. */
-  parcial?: boolean;
-  subtitulo?: string;
-}
-
-interface BusquedaPacienteResult {
-  tipo: string;
-  id: string;
-  titulo: string;
-  subtitulo: string;
-}
-
-interface DoctorAPI {
-  id: string;
-  alias?: string | null;
-  nombre: string;
-  especialidad?: string | null;
-  /** Personal unificado (mig. 390) */
-  tipo_personal?: string | null;
-  cobra_honorarios?: boolean;
-  honorario_consulta: number;
-  honorario_estudio: number;
-  honorario_procedimiento: number;
-}
-
-interface MatrizCosto {
-  id: string;
-  tipo_consulta: string;
-  tipo_visita: string;
-  costo: number;
-  descripcion: string | null;
-  activo: boolean;
-}
-
-interface CatalogoEstudio {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
-  costo: number;
-  bilateral: boolean;
-  activo: boolean;
-}
-
-interface CatalogoProcedimiento {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
-  costo: number;
-  por_ojo: boolean;
-  activo: boolean;
-}
-
-interface CatalogoConsulta {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
-  costo: number;
-  activo: boolean;
-}
-
-interface AseguranzaAPI {
-  id: string;
-  nombre: string;
-  porcentaje_cobertura: number | null;
-}
-
-interface EstudioSeleccionado {
-  id: string;
-  mismoDoctor: boolean;
-  doctorId?: string;
-  /** Médico que indica el estudio; vacío = doctor de la consulta. */
-  indicadoPorId?: string;
-}
-
-interface ProcedimientoSeleccionado {
-  id: string;
-  motivo?: string;
-  mismoDoctor: boolean;
-  doctorId?: string;
-  /** Médico que indica el procedimiento; vacío = doctor de la consulta. */
-  indicadoPorId?: string;
-}
-
-const consultTypeOptions = ['Primera Consulta', 'Consulta de Urgencia', 'Revisión Pre-Operatoria', 'Control Post-Operatorio'];
-const visitTypeOptions = ['Primera Vez', 'Visita de Retorno'];
-const paymentMethodOptions = ['Efectivo', 'Tarjeta de Crédito', 'Tarjeta de Débito', 'Transferencia'];
-
-const TIPO_CONSULTA_MAP: Record<string, string> = {
-  // Tipos de la agenda (punto II): Primera / Subsecuente → Consulta; Estudios; Procedimientos
-  'Consulta': 'CONSULTA',
-  'Estudio': 'ESTUDIO',
-  'Procedimiento': 'PROCEDIMIENTO',
-  'Primera Consulta': 'CONSULTA',
-  'Consulta de Urgencia': 'CONSULTA',
-  'Revisión Pre-Operatoria': 'REVISION',
-  'Control Post-Operatorio': 'REVISION',
-};
-
-const TIPO_VISITA_MAP: Record<string, string> = {
-  'Primera Vez': 'PRIMERA_VEZ',
-  'Visita de Retorno': 'SUBSECUENTE',
-};
-
-const DRAFT_STORAGE_KEY = 'draft:nueva-consulta';
-
-type ServicioPaciente = {
-  id: string;
-  tipo: string;
-  nombre: string;
-  costo: number;
-  porcentaje_cobertura?: number | null;
-};
-
-interface PacienteDetalleAPI {
-  id: string;
-  nombre_completo: string;
-  edad?: number | null;
-  sexo?: string | null;
-  aseguradora?: string | null;
-  aseguranza_id?: string | null;
-  telefono?: string | null;
-  email?: string | null;
-  direccion?: string | null;
-}
-
-/** GET /api/pacientes/[id] → forma que usa el selector (sexo H/M). */
-function normalizarPacienteDetalle(p: PacienteDetalleAPI): PacienteAPI {
-  const sexo = p.sexo === 'MASCULINO' ? 'H' : p.sexo === 'FEMENINO' ? 'M' : (p.sexo ?? null);
-  return {
-    id: p.id,
-    nombre: p.nombre_completo,
-    nombre_completo: p.nombre_completo,
-    edad: p.edad ?? null,
-    sexo,
-    aseguradora: p.aseguradora ?? null,
-    aseguranza_id: p.aseguranza_id ?? null,
-    telefono: p.telefono ?? null,
-    email: p.email ?? null,
-    direccion: p.direccion ?? null,
-  };
-}
-
-function validarNuevoPaciente(p: { nombre_completo: string; fecha_nacimiento: string; telefono: string; email: string; direccion: string; numero_expediente?: string }): string | null {
-  const nombre = p.nombre_completo.trim();
-  if (!nombre) return 'El nombre es requerido';
-  if (nombre.length > 255) return 'El nombre admite máximo 255 caracteres';
-  // Opcional: si se captura, debe ser una fecha válida.
-  if (p.fecha_nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(p.fecha_nacimiento)) return 'La fecha de nacimiento no es válida';
-  if (p.telefono.trim().length > 20) return 'El teléfono admite máximo 20 caracteres';
-  const email = p.email.trim();
-  if (email && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Email inválido';
-  if (p.direccion.trim().length > 1000) return 'La dirección admite máximo 1000 caracteres';
-  if ((p.numero_expediente ?? '').trim().length > 50) return 'El número de expediente admite máximo 50 caracteres';
-  return null;
-}
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '??';
-  return name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-}
-
-function getAvatarColor(id: string): string {
-  const colors = ['bg-primary-500', 'bg-purple-500', 'bg-emerald-500', 'bg-rose-500', 'bg-sky-500', 'bg-amber-500'];
-  const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-}
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-function addMinutesToTime(time: string, minutes: number): string {
-  const [hours, mins] = time.split(':').map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(mins)) return time;
-  const total = Math.min((hours * 60) + mins + minutes, (23 * 60) + 59);
-  const nextHours = Math.floor(total / 60);
-  const nextMins = total % 60;
-  return `${String(nextHours).padStart(2, '0')}:${String(nextMins).padStart(2, '0')}`;
-}
-
-function timeToMinutes(time: string): number | null {
-  const [hours, mins] = time.split(':').map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(mins)) return null;
-  return (hours * 60) + mins;
-}
-
-function PreviewField({ label, value, full }: { label: string; value: string; full?: boolean }) {
-  return (
-    <div className={cn('rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-line dark:bg-surface', full && 'col-span-2')}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">{label}</span>
-      <p className={cn('mt-1 text-sm font-medium text-fg', full && 'break-words')}>{value}</p>
-    </div>
-  );
-}
+import Avatar from '@/components/ui/Avatar';
+import { FormInput, FormSelect } from '@/components/ui/FormField';
+import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
+import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import { createPortal } from 'react-dom';
+import { cn } from '@/lib/utils';
+import Modal from '@/components/ui/Modal';
 
 function NuevaConsultaContent() {
   const router = useRouter();
@@ -351,6 +134,10 @@ function NuevaConsultaContent() {
   const [pendingExitAction, setPendingExitAction] = useState<'navigate' | 'reload'>('navigate');
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Misma clave en reintentos del mismo envío → el servidor no duplica la consulta. */
+  const claveEnvioRef = useRef<string | null>(null);
+  /** Tras crear la consulta ya no se autoguarda (evita revivir un borrador ya guardado). */
+  const consultaGuardadaRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const initialDraftSignature = useRef<string | null>(null);
   const initialDraftState = useRef<Record<string, unknown> | null>(null);
@@ -569,7 +356,11 @@ function NuevaConsultaContent() {
           estudiosSeleccionados?: EstudioSeleccionado[];
           procedimientosSeleccionados?: ProcedimientoSeleccionado[];
           procedimientoMotivo?: string;
+          saved_at?: string;
         };
+        // Borradores de más de 12 h se descartan (pueden ser de otro turno/usuario).
+        const edad = draft.saved_at ? Date.now() - Date.parse(draft.saved_at) : 0;
+        if (edad > CADUCIDAD_BORRADOR_MS) throw new Error('borrador caducado');
 
         if (draft.consultationData) {
           setConsultationData(draft.consultationData);
@@ -597,6 +388,28 @@ function NuevaConsultaContent() {
   }, [draftHydrated, draftSignature]);
 
   const hasDraftChanges = draftHydrated && initialDraftSignature.current !== null && draftSignature !== initialDraftSignature.current;
+
+  // Autoguardado del borrador (antes solo se guardaba al salir con el modal): un error,
+  // recarga o sesión vencida ya no pierden la captura. Con retraso para no escribir en cada tecla.
+  useEffect(() => {
+    if (!hasDraftChanges || saving || consultaGuardadaRef.current) return;
+    const t = window.setTimeout(() => {
+      if (consultaGuardadaRef.current) return;
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+          consultationData,
+          pacienteSeleccionado,
+          estudiosSeleccionados,
+          procedimientosSeleccionados,
+          procedimientoMotivo,
+          saved_at: new Date().toISOString(),
+        }));
+      } catch {
+        /* cuota llena o almacenamiento bloqueado */
+      }
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [hasDraftChanges, saving, consultationData, pacienteSeleccionado, estudiosSeleccionados, procedimientosSeleccionados, procedimientoMotivo]);
 
   const draftChangeSummary = useMemo(() => {
     const initial = initialDraftState.current as any;
@@ -1096,10 +909,8 @@ function NuevaConsultaContent() {
         ? (primerProcedimiento.mismoDoctor ? consultationData.doctorId : (primerProcedimiento.doctorId || null))
         : null;
 
-      const res = await fetch('/api/consultas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if (!claveEnvioRef.current) claveEnvioRef.current = nuevaClaveIdempotencia();
+      await enviarJSON('/api/consultas', 'POST', {
           paciente_id: pacienteSeleccionado.id,
           doctor_id: consultationData.doctorId,
           fecha: consultationData.fecha,
@@ -1117,31 +928,27 @@ function NuevaConsultaContent() {
           procedimiento_doctor_id: procDoctorId,
           metodo_pago: consultationData.metodoPago,
           moneda: consultationData.moneda,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          conflictos?: { descripcion?: string; hora_inicio?: string; hora_fin?: string }[];
-        };
-        let msg = err.error || 'Error al crear la consulta';
-        if (res.status === 409 && err.conflictos?.length) {
-          const c = err.conflictos[0];
-          msg = `${c.descripcion || 'El médico ya tiene una cita'} (${(c.hora_inicio || '').slice(0, 5)}–${(c.hora_fin || '').slice(0, 5)}). Elige otro horario.`;
-        }
-        setFormError(msg);
-        toast(msg, 'error');
-        return;
-      }
+      }, { idempotencia: claveEnvioRef.current });
+      claveEnvioRef.current = null;
+      consultaGuardadaRef.current = true;
 
       toast('Consulta creada exitosamente');
       try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
       // Las pantallas afectadas se refrescan en segundo plano (sin recargar ni vaciar).
       void invalidar('/api/consultas', '/api/agenda', '/api/dashboard', '/api/pacientes');
       router.push('/agenda');
-    } catch {
-      setFormError('Error de conexión con el servidor');
+    } catch (err) {
+      // Nada se pierde: el formulario conserva lo capturado y el borrador sigue guardado.
+      let msg = mensajeDeError(err, 'Error al crear la consulta');
+      const conflictos = err instanceof ApiError && err.status === 409
+        ? (err.datos?.conflictos as { descripcion?: string; hora_inicio?: string; hora_fin?: string }[] | undefined)
+        : undefined;
+      if (conflictos?.length) {
+        const c = conflictos[0];
+        msg = `${c.descripcion || 'El médico ya tiene una cita'} (${(c.hora_inicio || '').slice(0, 5)}–${(c.hora_fin || '').slice(0, 5)}). Elige otro horario.`;
+      }
+      setFormError(msg);
+      toast(msg, 'error');
     } finally {
       setSaving(false);
     }

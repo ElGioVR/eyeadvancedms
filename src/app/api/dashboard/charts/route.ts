@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
 import { hoyTijuana } from '@/lib/rangos';
+import { ruta } from '@/lib/api/ruta';
+import { memo } from '@/lib/cache-memoria';
+import { handleSupabaseError } from '@/lib/supabase/handle-error';
 
 // Estatus válidos de consultas (chk_estatus, migración 1800000000220).
 const ESTATUS = [
@@ -22,7 +25,7 @@ function restarDias(fecha: string, dias: number): string {
   return new Date(Date.parse(`${fecha}T00:00:00Z`) - dias * 86_400_000).toISOString().slice(0, 10);
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Rol restringido (solo agenda propia): sin acceso a métricas, montos ni catálogo de precios
@@ -30,10 +33,42 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
 
-  const supabase = getSupabaseAdmin();
-
   // Fechas en la zona de la clínica (antes: UTC → "hoy" cambiaba a las 16-17 h locales)
   const hoy = hoyTijuana();
+  // Mismo resultado para todos los usuarios → se calcula una vez cada 30 s por instancia.
+  const datos = await memo(`dashboard:graficas:${hoy}`, 30_000, () => calcularGraficas(hoy));
+  return NextResponse.json(datos);
+}
+
+interface Graficas {
+  consultasPorEstatus: Record<string, number>;
+  topProcedimientos: { nombre: string; cantidad: number }[];
+  agendaOcupacion: { nombre: string; cantidad: number }[];
+}
+
+/** RPC dashboard_graficas (migración de performance): 1 viaje en vez de 14. */
+let rpcNoDisponibleHasta = 0;
+
+async function calcularGraficas(hoy: string): Promise<Graficas> {
+  if (Date.now() >= rpcNoDisponibleHasta) {
+    const { data, error } = await getSupabaseAdmin().rpc('dashboard_graficas', {
+      p_desde: restarDias(hoy, 30),
+      p_desde_agenda: restarDias(hoy, 7),
+      p_hasta: hoy,
+      p_top: 5,
+    });
+    if (!error && data) return data as Graficas;
+    if (error) {
+      // Sin la función (migración pendiente) → camino anterior; se reintenta en 5 min.
+      rpcNoDisponibleHasta = Date.now() + 5 * 60_000;
+      if (error.code !== 'PGRST202' && error.code !== '42883') handleSupabaseError(error, 'dashboard.graficas.rpc');
+    }
+  }
+  return calcularGraficasLegacy(hoy);
+}
+
+async function calcularGraficasLegacy(hoy: string): Promise<Graficas> {
+  const supabase = getSupabaseAdmin();
   const hace30 = restarDias(hoy, 30);
   const hace7 = restarDias(hoy, 7);
 
@@ -113,9 +148,11 @@ export async function GET() {
     agendaPorDoctor[a.doctor_id].cantidad++;
   }
 
-  return NextResponse.json({
+  return {
     consultasPorEstatus: estatusCount,
     topProcedimientos: topProcs,
     agendaOcupacion: Object.values(agendaPorDoctor).sort((a, b) => b.cantidad - a.cantidad),
-  });
+  };
 }
+
+export const GET = ruta('dashboard/charts#GET', manejarGET);

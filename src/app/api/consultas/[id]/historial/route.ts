@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON, validarId } from '@/lib/api/validar';
 import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
 import { agendaSoloPropia } from '@/lib/permisos-agenda';
+import { ruta } from '@/lib/api/ruta';
 
 /** Tipos admitidos por el CHECK de consulta_historial.tipo_evento (migración 090). */
 const TIPOS_EVENTO = ['CREACION', 'CAMBIO_ESTATUS', 'EDICION', 'CANCELACION', 'REAGENDADO', 'PAGADO', 'FINALIZADO'] as const;
@@ -22,7 +23,7 @@ const eventoSchema = z
   })
   .strict();
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -79,7 +80,7 @@ export async function GET(
   return NextResponse.json({ data: enriched });
 }
 
-export async function POST(
+async function manejarPOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -126,3 +127,6 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const GET = ruta('consultas/[id]/historial#GET', manejarGET);
+export const POST = ruta('consultas/[id]/historial#POST', manejarPOST);

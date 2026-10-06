@@ -7,6 +7,8 @@ import { leerQuery } from '@/lib/api/validar';
 import { CONCURRENCIA_BD, mapConLimite } from '@/lib/productividad/lotes';
 import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 // Un reporte de meses puede requerir decenas de páginas + lotes.
 export const maxDuration = 60;
@@ -216,10 +218,12 @@ async function cargarPacientesPorNombre(
   return mapa;
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('reporte', auth.user.id);
+  if (limite) return limite;
   const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
@@ -283,3 +287,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad/reportes/cirugias#GET', manejarGET);

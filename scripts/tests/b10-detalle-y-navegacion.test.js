@@ -65,6 +65,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -427,7 +428,7 @@ function checkCirugiaDetallePage() {
   );
   assertRegexMatches(
     content,
-    /fetch\(\s*[`'"]\/api\/cirugias\/`?\/?\$\{[^}]+\}\/archivos/,
+    /(?:fetch|enviarJSON)\(\s*[`'"]\/api\/cirugias\/`?\/?\$\{[^}]+\}\/archivos/,
     'la subida se hace a /api/cirugias/[id]/archivos (DET-003)'
   );
   assertRegexMatches(
@@ -479,7 +480,7 @@ function checkCirugiaDetailEndpoint() {
   // 1. GET con params (Next.js App Router).
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
   assertRegexMatches(
@@ -606,7 +607,7 @@ function checkCirugiasListEndpoint() {
   // 1. GET exportado.
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\s*\(/,
+    /export\s+(?:async\s+function\s+GET\s*\(|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
 

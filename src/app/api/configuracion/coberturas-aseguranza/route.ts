@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { fechaISO, leerJSON } from '@/lib/api/validar';
 import { idDeQuery, monto, respuestaErrorDb } from '@/lib/api/configuracion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const CONTEXTO = 'configuracion/coberturas-aseguranza';
 const COLUMNAS =
@@ -33,7 +34,7 @@ function vigenciaInvalida(desde?: string | null, hasta?: string | null): boolean
   return !!desde && !!hasta && desde > hasta;
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -57,7 +58,7 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
   return NextResponse.json(data, { status: 201 });
 }
 
-export async function PUT(request: Request) {
+async function manejarPUT(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -121,7 +122,7 @@ export async function PUT(request: Request) {
   return NextResponse.json(data);
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -140,3 +141,8 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/coberturas-aseguranza#GET', manejarGET);
+export const POST = ruta('configuracion/coberturas-aseguranza#POST', manejarPOST);
+export const PUT = ruta('configuracion/coberturas-aseguranza#PUT', manejarPUT);
+export const DELETE = ruta('configuracion/coberturas-aseguranza#DELETE', manejarDELETE);

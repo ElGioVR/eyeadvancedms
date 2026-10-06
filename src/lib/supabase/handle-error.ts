@@ -1,4 +1,5 @@
 import { errorTranslations } from './errors';
+import { registrarError } from '@/lib/log';
 
 export interface ErrorManejado {
   /** Mensaje seguro para el cliente (traducido o genérico) */
@@ -24,7 +25,9 @@ export function handleSupabaseError(
 ): ErrorManejado {
   const message = error?.message || 'Error desconocido';
   const code = error?.code || '—';
-  console.error(`[${contexto}]`, { message, code, hint: error?.hint, details: error?.details });
+  registrarError(contexto, Object.assign(new Error(message), { name: 'SupabaseError', code }), {
+    hint: error?.hint ? String(error.hint).slice(0, 200) : undefined,
+  });
 
   const traducido = error?.message ? errorTranslations[error.message] : undefined;
   if (traducido) return { mensaje: traducido, traducido: true };
@@ -47,7 +50,7 @@ const PATRON_INTERNO =
 export function mensajeSeguro(err: unknown, contexto: string, generico = 'Error interno del servidor'): string {
   const message =
     err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : '';
-  console.error(`[${contexto}]`, err);
+  registrarError(contexto, err);
   if (!message) return generico;
   const traducido = errorTranslations[message];
   if (traducido) return traducido;

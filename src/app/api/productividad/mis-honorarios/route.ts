@@ -6,6 +6,7 @@ import { leerQuery } from '@/lib/api/validar';
 import { panelDoctorHonorarios } from '@/lib/productividad';
 import { escaparLike, fechaReal, validarRango } from '@/lib/productividad/validacion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 // Solo el doctor autenticado: el doctor_id NUNCA se toma del cliente.
 const querySchema = z.object({
@@ -49,7 +50,7 @@ async function resolverDoctorPropio(
   return { id: porEmail.id, alias: porEmail.alias ?? null };
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const authStart = performance.now();
   const auth = await requireAuth();
@@ -147,3 +148,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad/mis-honorarios#GET', manejarGET);

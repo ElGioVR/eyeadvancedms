@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { z } from "zod";
-import { checkRateLimit, recordFailedAttempt, recordSuccessfulLogin } from "@/lib/rate-limit";
+import { bloqueoCompartido, falloCompartido, reiniciarCompartido } from "@/lib/rate-limit";
 import { SESION_TEMPORAL_COOKIE, opcionesCookieAuth } from "@/lib/supabase/constants";
 import { decidirSesion, etiquetaDispositivo, sessionIdDeToken } from "@/lib/sesion-unica";
 import { leerSesionUsuario, registrarSesion, revocarSesion } from "@/services/sesion-unica";
+import { ruta } from '@/lib/api/ruta';
 
 const loginSchema = z
   .object({
@@ -20,7 +21,7 @@ function getClientIP(request: NextRequest): string {
     || 'unknown';
 }
 
-export async function POST(request: NextRequest) {
+async function manejarPOST(request: NextRequest) {
   let body: unknown;
   try {
     body = await request.json();
@@ -47,11 +48,9 @@ export async function POST(request: NextRequest) {
   // Tercer límite solo por IP (holgado: la clínica comparte IP): frena el
   // «credential stuffing» contra muchos correos desde un mismo origen.
   const ipKey = `ip:${clientIP}`;
-  const rateCheck = checkRateLimit(rateKey);
-  const emailCheck = checkRateLimit(emailKey);
-  const ipCheck = checkRateLimit(ipKey);
-  if (!rateCheck.allowed || !emailCheck.allowed || !ipCheck.allowed) {
-    const retry = Math.max(rateCheck.retryAfter ?? 0, emailCheck.retryAfter ?? 0, ipCheck.retryAfter ?? 0);
+  // Límites compartidos entre instancias (Postgres); sin la migración, en memoria.
+  const retry = await bloqueoCompartido([rateKey, emailKey, ipKey]);
+  if (retry > 0) {
     return NextResponse.json(
       { error: `Demasiados intentos. Intenta de nuevo en ${retry} segundos.` },
       { status: 429 },
@@ -115,9 +114,11 @@ export async function POST(request: NextRequest) {
       code: error.code,
     });
 
-    recordFailedAttempt(emailKey, 15);
-    recordFailedAttempt(ipKey, 60);
-    const result = recordFailedAttempt(rateKey);
+    const [, , result] = await Promise.all([
+      falloCompartido(emailKey, 15),
+      falloCompartido(ipKey, 60),
+      falloCompartido(rateKey, 5),
+    ]);
     if (result.blocked) {
       return NextResponse.json(
         { error: `Cuenta bloqueada temporalmente. Intenta de nuevo en ${result.retryAfter} segundos.` },
@@ -131,8 +132,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  recordSuccessfulLogin(rateKey);
-  recordSuccessfulLogin(emailKey);
+  await Promise.all([reiniciarCompartido(rateKey), reiniciarCompartido(emailKey)]);
 
   if (temporal) {
     // Cookie de sesión (sin maxAge): el middleware y los refrescos la leen.
@@ -181,3 +181,5 @@ export async function POST(request: NextRequest) {
   }
   return response;
 }
+
+export const POST = ruta('auth/login#POST', manejarPOST);

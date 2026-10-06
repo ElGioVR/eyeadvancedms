@@ -4,6 +4,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const configSchema = z.object({
   aseguranza_afecta_honorarios: z.boolean().optional(),
@@ -13,7 +14,7 @@ const configSchema = z.object({
   periodo_pago: z.enum(['SEMANAL', 'QUINCENAL', 'MENSUAL', 'TRIMESTRAL']).optional(),
 }).strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -56,7 +57,7 @@ export async function GET() {
   });
 }
 
-export async function PUT(request: Request) {
+async function manejarPUT(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -107,3 +108,6 @@ export async function PUT(request: Request) {
 
   return NextResponse.json({ valor: mergedValor, updated_at: ahora });
 }
+
+export const GET = ruta('configuracion/honorarios-settings#GET', manejarGET);
+export const PUT = ruta('configuracion/honorarios-settings#PUT', manejarPUT);

@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs/config');
+
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -52,6 +54,8 @@ const nextConfig = {
   experimental: {
     // Tree-shaking de barrels grandes → bundles más pequeños
     optimizePackageImports: ['lucide-react', 'recharts', 'date-fns'],
+    // Next 14: habilita src/instrumentation.ts (Sentry en servidor)
+    instrumentationHook: true,
   },
   headers: async () => [
     {
@@ -84,4 +88,25 @@ const nextConfig = {
   ],
 };
 
-module.exports = nextConfig;
+// Sentry: sin NEXT_PUBLIC_SENTRY_DSN no envía nada. Los source maps solo se
+// generan y suben si hay SENTRY_AUTH_TOKEN (y se borran tras subirlos para no
+// publicarlos). `tunnelRoute` envía los eventos por el mismo dominio (no los
+// bloquean los adblockers y no hay que abrir la CSP a sentry.io).
+module.exports = withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  telemetry: false,
+  tunnelRoute: '/monitoring',
+  widenClientFileUpload: true,
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+    // El middleware corre en cada navegación: sin instrumentar para que siga ligero.
+    autoInstrumentMiddleware: false,
+  },
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+    deleteSourcemapsAfterUpload: true,
+  },
+});

@@ -1,5 +1,6 @@
 'use client';
 
+import Aislado from '@/components/ui/Aislado';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import useSWR from 'swr';
@@ -866,7 +867,9 @@ export default function ProductividadPage() {
             </div>
           ) : metricas ? (
             <div className="valor-suave" data-validando={validandoMetricas}>
-              <MetricasSeccion data={metricas} />
+              <Aislado nombre="las métricas" contexto="productividad.metricas">
+                <MetricasSeccion data={metricas} />
+              </Aislado>
             </div>
           ) : (
             <EmptyState
@@ -882,13 +885,15 @@ export default function ProductividadPage() {
         <div className="relative animate-fadeIn" aria-busy={validandoMetricas}>
           {!doctorSel && <BarraRevalidando activo={validandoMetricas && !!metricas} className="-top-2" />}
           {doctorSel ? (
-            <DoctorDetalle
-              doctorId={doctorSel.id}
-              nombre={doctorSel.nombre}
-              desde={desde}
-              hasta={hasta}
-              onCerrar={() => setDoctorSel(null)}
-            />
+            <Aislado nombre="el detalle del doctor" contexto="productividad.doctor">
+              <DoctorDetalle
+                doctorId={doctorSel.id}
+                nombre={doctorSel.nombre}
+                desde={desde}
+                hasta={hasta}
+                onCerrar={() => setDoctorSel(null)}
+              />
+            </Aislado>
           ) : !metricas && !metricasError ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (

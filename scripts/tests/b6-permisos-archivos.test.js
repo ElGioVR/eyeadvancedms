@@ -50,6 +50,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 const vm = require('vm');
 
@@ -762,12 +763,12 @@ function checkArchivosRoute() {
   // 1. Exporta GET y POST
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\b/,
+    /export\s+(?:async\s+function\s+GET\b|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+POST\b/,
+    /export\s+(?:async\s+function\s+POST\b|const\s+POST\s*=\s*ruta\()/,
     'exporta async function POST'
   );
 
@@ -858,12 +859,12 @@ function checkArchivoDetailRoute() {
   // 1. Exporta GET y DELETE
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+GET\b/,
+    /export\s+(?:async\s+function\s+GET\b|const\s+GET\s*=\s*ruta\()/,
     'exporta async function GET'
   );
   assertRegexMatches(
     content,
-    /export\s+async\s+function\s+DELETE\b/,
+    /export\s+(?:async\s+function\s+DELETE\b|const\s+DELETE\s*=\s*ruta\()/,
     'exporta async function DELETE'
   );
 

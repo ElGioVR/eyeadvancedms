@@ -22,6 +22,8 @@ import {
   type PacienteExistente,
   type ResolucionDoctor,
 } from '@/lib/import-agenda';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
 export const maxDuration = 60;
@@ -373,9 +375,11 @@ interface FilaPreview {
   doctor_nuevo: boolean;
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('importacion', auth.user.id);
+  if (limite) return limite;
   const roleError = await requireRole(auth.user, ROLES_IMPORTAR_AGENDA);
   if (roleError) return roleError;
 
@@ -1023,3 +1027,5 @@ export async function POST(request: Request) {
     duplicadosCsv: csvDuplicados(),
   });
 }
+
+export const POST = ruta('agenda/import#POST', manejarPOST);

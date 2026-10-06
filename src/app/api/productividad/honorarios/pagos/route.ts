@@ -8,6 +8,7 @@ import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/valid
 import { z } from 'zod';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
 import type { PagoHonorarioFila } from '@/types/productividad';
+import { ruta } from '@/lib/api/ruta';
 
 /** Tope del CSV (antes 1000: un historial mayor se truncaba en silencio). */
 const MAX_CSV = 20000;
@@ -84,7 +85,7 @@ async function leerTodoCsv(desde: string, hasta: string, doctorId: string | null
   }
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -187,3 +188,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad/honorarios/pagos#GET', manejarGET);

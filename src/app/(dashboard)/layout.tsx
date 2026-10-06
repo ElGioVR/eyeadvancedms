@@ -9,6 +9,7 @@ import OfflineAndInstall from '@/components/layout/OfflineAndInstall';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
 import PestanaUnica from '@/components/providers/PestanaUnica';
+import TiempoReal from '@/components/providers/TiempoReal';
 
 export default function DashboardLayout({
   children,
@@ -48,6 +49,7 @@ export default function DashboardLayout({
 
           <DoctorBottomNav onMenuOpen={() => setMobileMenuOpen(true)} />
           <OfflineAndInstall />
+          <TiempoReal />
         </div>
       </PestanaUnica>
     </ToastProvider>

@@ -19,17 +19,42 @@ export default function OfflineAndInstall() {
   const [showInstall, setShowInstall] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 
-  useEffect(() => {
-    if (isStandalone()) return;
+  const [reconectado, setReconectado] = useState(false);
 
-    const goOffline = () => setIsOffline(true);
-    const goOnline = () => setIsOffline(false);
+  // Estado de conexión: también en la app instalada (antes el aviso no salía en modo standalone).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const goOffline = () => {
+      setIsOffline(true);
+      setReconectado(false);
+    };
+    const goOnline = () => {
+      setIsOffline(false);
+      setReconectado(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setReconectado(false), 3000);
+    };
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
     setIsOffline(!navigator.onLine);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
 
-    const dismissed = localStorage.getItem('ea-install-dismissed');
+  useEffect(() => {
+    if (isStandalone()) return;
+
+    let dismissed: string | null = null;
+    try {
+      dismissed = localStorage.getItem('ea-install-dismissed');
+    } catch {
+      /* almacenamiento bloqueado */
+    }
     if (dismissed) return;
+
 
     if (isIOS()) {
       const iosDismissed = localStorage.getItem('ea-install-ios-dismissed');
@@ -47,8 +72,6 @@ export default function OfflineAndInstall() {
     window.addEventListener('beforeinstallprompt', handler);
 
     return () => {
-      window.removeEventListener('offline', goOffline);
-      window.removeEventListener('online', goOnline);
       window.removeEventListener('beforeinstallprompt', handler);
     };
   }, []);
@@ -77,9 +100,22 @@ export default function OfflineAndInstall() {
   return (
     <>
       {isOffline && (
-        <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 bg-amber-500/95 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-sm">
-          <WifiOff className="h-3.5 w-3.5" />
-          <span>Sin conexión — datos pueden estar desactualizados</span>
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 bg-amber-500/95 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-sm"
+        >
+          <WifiOff className="h-3.5 w-3.5" aria-hidden />
+          <span>Sin conexión — lo que estás capturando se conserva; guarda cuando vuelva el internet.</span>
+        </div>
+      )}
+      {!isOffline && reconectado && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 bg-emerald-600/95 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur-sm"
+        >
+          <span>Conexión restablecida — actualizando datos…</span>
         </div>
       )}
 

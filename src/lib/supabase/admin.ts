@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { fetchConTimeout } from './fetch-timeout';
 
 let supabaseAdmin: SupabaseClient | null = null;
 
@@ -13,7 +14,10 @@ export function getSupabaseAdmin(): SupabaseClient {
       throw new Error('Supabase admin client no disponible: faltan variables de entorno requeridas');
     }
 
-    supabaseAdmin = createClient(url, serviceKey, { auth: { persistSession: false } });
+    supabaseAdmin = createClient(url, serviceKey, {
+      auth: { persistSession: false },
+      global: { fetch: fetchConTimeout },
+    });
   }
   return supabaseAdmin;
 }

@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { emailOpcional, idDeQuery, respuestaErrorDb, textoCorto, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const proveedorCreateSchema = z.object({
   nombre: z.string().trim().min(1).max(255),
@@ -23,7 +24,7 @@ const proveedorUpdateSchema = z.object({
   activo: z.boolean().optional(),
 }).strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -44,7 +45,7 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   return NextResponse.json(proveedor, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -110,7 +111,7 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -132,3 +133,8 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/proveedores#GET', manejarGET);
+export const POST = ruta('configuracion/proveedores#POST', manejarPOST);
+export const PATCH = ruta('configuracion/proveedores#PATCH', manejarPATCH);
+export const DELETE = ruta('configuracion/proveedores#DELETE', manejarDELETE);

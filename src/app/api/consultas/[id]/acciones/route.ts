@@ -7,6 +7,8 @@ import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/li
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { doctorRequerido, verificarDueno } from '@/lib/consultas-acceso';
 import { MotorDevengoService } from '@/services/productividad';
+import { ruta } from '@/lib/api/ruta';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 const accionesSchema = z.object({
   accion: z.enum(['aplazar', 'reagendar', 'cancelar']),
@@ -22,7 +24,7 @@ function toMin(t: string | null | undefined): number {
   return parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10);
 }
 
-export async function POST(
+async function manejarPOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -139,7 +141,7 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: 'Error al registrar el aplazamiento' }, { status: 500 });
     }
-    await notificarReagendado({ ...notifBase, fecha: existing.fecha, hora: nuevaHora, aplazada: true });
+    enSegundoPlano(notificarReagendado({ ...notifBase, fecha: existing.fecha, hora: nuevaHora, aplazada: true }), 'consultas.aplazar.notificar');
     return NextResponse.json({
       ok: true,
       accion: 'aplazar',
@@ -240,7 +242,7 @@ export async function POST(
     return NextResponse.json({ error: 'Error al registrar el reagendado' }, { status: 500 });
   }
 
-  await notificarReagendado({ ...notifBase, fecha: nuevaFecha, hora: nuevaHora });
+  enSegundoPlano(notificarReagendado({ ...notifBase, fecha: nuevaFecha, hora: nuevaHora }), 'consultas.reagendar.notificar');
 
   return NextResponse.json({
     ok: true,
@@ -250,3 +252,5 @@ export async function POST(
     hora_fin: nuevaHoraFin ?? null,
   });
 }
+
+export const POST = ruta('consultas/[id]/acciones#POST', manejarPOST);

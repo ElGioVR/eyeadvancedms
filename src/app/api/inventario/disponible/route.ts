@@ -4,6 +4,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { requireRoleInventario } from '@/lib/acceso-enfermeria';
 import { hoyTijuana } from '@/lib/rangos';
+import { ruta } from '@/lib/api/ruta';
 
 // Proyecciones tolerantes a esquema: legacy (marca/modelo/lote/fecha_caducidad)
 // y nuevo (manufacturer/model/product_name/sphere/serial_number/expiration_date).
@@ -27,7 +28,7 @@ function esFechaCaducada(item: Record<string, unknown>, hoy: string): boolean {
   return String(cad).slice(0, 10) <= hoy;
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Enfermería: solo con honorarios activos (resto de roles: como antes)
@@ -168,3 +169,5 @@ export async function GET(request: Request) {
 
   return NextResponse.json(result);
 }
+
+export const GET = ruta('inventario/disponible#GET', manejarGET);

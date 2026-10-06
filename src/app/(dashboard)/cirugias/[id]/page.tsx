@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
+import { enviarJSON, fetchJSON, mensajeDeError } from '@/lib/fetcher';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Printer, Calendar, Clock, User, Stethoscope, Eye, FileText,
@@ -275,15 +276,10 @@ export default function CirugiaDetailPage() {
     setPreview({ archivo: a, url: '' });
     setPreviewLoading(true);
     try {
-      const res = await fetch(`/api/cirugias/${id}/archivos/${a.id}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || 'Error al obtener archivo');
-      }
-      const { signedUrl } = await res.json();
+      const { signedUrl } = await fetchJSON<{ signedUrl: string }>(`/api/cirugias/${id}/archivos/${a.id}`);
       setPreview({ archivo: a, url: signedUrl });
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Error al abrir la vista previa', 'error');
+      toast(mensajeDeError(err, 'Error al abrir la vista previa'), 'error');
       setPreview(null);
     } finally {
       setPreviewLoading(false);
@@ -351,10 +347,10 @@ export default function CirugiaDetailPage() {
         const formData = new FormData();
         formData.append('archivo', file);
         formData.append('tipo_documento', tipoDocumento.trim());
-        const res = await fetch(`/api/cirugias/${id}/archivos`, { method: 'POST', body: formData });
-        if (!res.ok) {
-          const err = await res.json().catch(() => null);
-          throw new Error(err?.error || `Error al subir ${file.name}`);
+        try {
+          await enviarJSON(`/api/cirugias/${id}/archivos`, 'POST', formData, { timeoutMs: 120_000 });
+        } catch (err) {
+          throw new Error(`${file.name}: ${mensajeDeError(err, 'no se pudo subir')}`);
         }
       }
       toast('Archivos subidos exitosamente');
@@ -362,7 +358,7 @@ export default function CirugiaDetailPage() {
       setTipoDocumento('');
       setShowUpload(false);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Error al subir archivos', 'error');
+      toast(mensajeDeError(err, 'Error al subir archivos'), 'error');
     } finally {
       // Revalida aunque falle a medias (algunos archivos pudieron subirse)
       void mutate();
@@ -372,15 +368,10 @@ export default function CirugiaDetailPage() {
 
   async function downloadFile(archivoId: string) {
     try {
-      const res = await fetch(`/api/cirugias/${id}/archivos/${archivoId}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error al obtener archivo');
-      }
-      const { signedUrl } = await res.json();
+      const { signedUrl } = await fetchJSON<{ signedUrl: string }>(`/api/cirugias/${id}/archivos/${archivoId}`);
       window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Error al descargar', 'error');
+      toast(mensajeDeError(err, 'Error al descargar'), 'error');
     }
   }
 
@@ -392,11 +383,7 @@ export default function CirugiaDetailPage() {
       // Optimista: el archivo desaparece al instante; se revierte si el servidor falla.
       await mutate(
         async (actual) => {
-          const res = await fetch(`/api/cirugias/${id}/archivos/${archivoId}`, { method: 'DELETE' });
-          if (!res.ok) {
-            const err = await res.json().catch(() => null);
-            throw new Error(err?.error || 'Error al eliminar');
-          }
+          await enviarJSON(`/api/cirugias/${id}/archivos/${archivoId}`, 'DELETE');
           return actual;
         },
         {

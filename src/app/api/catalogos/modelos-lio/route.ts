@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
+import { ruta } from '@/lib/api/ruta';
 
 /**
  * GET /api/catalogos/modelos-lio — modelos de LIO activos (todos los roles).
  * El filtrado por diseño/tórico se hace en el cliente (catálogo pequeño).
  */
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -24,3 +25,5 @@ export async function GET() {
   }
   return NextResponse.json(data || [], { headers: { 'Cache-Control': 'private, max-age=60' } });
 }
+
+export const GET = ruta('catalogos/modelos-lio#GET', manejarGET);

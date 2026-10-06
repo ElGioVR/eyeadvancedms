@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
 import { resolveDoctorId } from '@/lib/auth-helpers';
 import { enfermeroCobraHonorarios } from '@/lib/acceso-enfermeria';
+import { ruta } from '@/lib/api/ruta';
+import { exigirLimite } from '@/lib/api/limites';
 
 interface SearchResult {
   tipo: string;
@@ -40,9 +42,11 @@ function resumirOjo(h: HistorialOjo | undefined): OjoOperado {
   return 'desconocido';
 }
 
-export async function GET(request: NextRequest) {
+async function manejarGET(request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const limite = await exigirLimite('busqueda', auth.user.id);
+  if (limite) return limite;
 
   const params = request.nextUrl.searchParams;
   const q = params.get('q')?.trim() ?? '';
@@ -255,3 +259,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ results });
 }
+
+export const GET = ruta('search#GET', manejarGET);

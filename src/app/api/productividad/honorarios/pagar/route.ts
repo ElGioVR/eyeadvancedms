@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { pagarHonorarios } from '@/lib/productividad';
 import { leerJSONTolerante, MAX_IDS_PAGO } from '@/lib/productividad/validacion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const pagarSchema = z
   .object({
@@ -15,7 +16,7 @@ const pagarSchema = z
   })
   .strict();
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -59,3 +60,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status });
   }
 }
+
+export const POST = ruta('productividad/honorarios/pagar#POST', manejarPOST);

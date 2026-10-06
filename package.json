@@ -36,6 +36,7 @@
     "test:import": "tsx --conditions=react-server --tsconfig scripts/tests/import/tsconfig.json scripts/tests/import/import-agenda.integration.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.76.0",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "@types/react-image-crop": "^8.1.6",

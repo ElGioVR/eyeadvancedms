@@ -1,261 +1,31 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import useSWR from 'swr';
-import { useInvalidar } from '@/hooks/useFetch';
-import { Search, Plus, X, Trash2, FileText, User, Stethoscope, ClipboardList, Users, Eye, Package, Upload, Calendar, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react';
-import { useEspecialidades } from '@/hooks/useEspecialidades';
-import {
-  ETIQUETAS_ROL,
-  ROLES_APOYO,
-  esRolApoyo,
-  equipoPorDefecto,
-  sincronizarHorario,
-  validarEquipo,
-  type MiembroEquipo,
-} from '@/lib/catalogos/equipo-quirurgico';
-import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
-import { URL_ESCRS_IOL, URL_IOLCON, coincideConModelo, type ModeloLio } from '@/lib/catalogos/modelos-lio';
-import SelectorModeloLio from '@/components/cirugia/SelectorModeloLio';
-import { ROL_ANESTESIOLOGO, esAnestesiologo, esEnfermeria, esMedicoTratante, puedeOcuparRol } from '@/lib/catalogos/personal';
-import {
-  ANESTESIAS,
-  OJOS_CIRUGIA,
-  tipoLioDe,
-  esProcedimientoConLio,
-  TIPOS_DOCUMENTO_APOYO,
-  TIPO_DOCUMENTO_OTRO,
-  TIPO_MEDICINA_INTERNA,
-} from '@/lib/catalogos/cirugia';
-import { cn } from '@/lib/utils';
-import PageHeader from '@/components/ui/PageHeader';
-import SearchInput from '@/components/ui/SearchInput';
-import LIOSelector from '@/components/cirugia/LIOSelector';
-import { URL_LIOS_DISPONIBLES, obtenerLIOs, type LIODisponible } from '@/components/cirugia/LIOSelector';
 import { useToast } from '@/components/ui/Toast';
-import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import useSWR from 'swr';
+import { Aseguranza, OPCIONES_CATALOGO, Doctor, Rol, Recurso, comoLista, Paciente, PacienteResumen, FiltroOjo, HistorialOjo, Servicio, ArchivoLocal, EXTENSIONES_PERMITIDAS, Participante, BorradorCirugia, CLAVE_BORRADOR_CIRUGIA, CirugiaFormSkeleton, FILTROS_OJO, etiquetaOjo, OJOS, formatBytes } from '@/components/cirugia/nueva-cirugia-comun';
+import { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback, Suspense } from 'react';
+import { type TelefonoPaciente, normalizarTelefonos, telefonoPrincipal } from '@/lib/telefonos-paciente';
+import { type MiembroEquipo, equipoPorDefecto, sincronizarHorario, ROLES_APOYO, ETIQUETAS_ROL, esRolApoyo, validarEquipo } from '@/lib/catalogos/equipo-quirurgico';
+import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { type ModeloLio, coincideConModelo, URL_ESCRS_IOL, URL_IOLCON } from '@/lib/catalogos/modelos-lio';
+import LIOSelector from '@/components/cirugia/LIOSelector';
+import { type LIODisponible, URL_LIOS_DISPONIBLES, obtenerLIOs } from '@/components/cirugia/LIOSelector';
+import { useInvalidar } from '@/hooks/useFetch';
+import { esProcedimientoConLio, TIPO_DOCUMENTO_OTRO, tipoLioDe, ANESTESIAS, TIPO_MEDICINA_INTERNA, TIPOS_DOCUMENTO_APOYO } from '@/lib/catalogos/cirugia';
+import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
+import { esEnfermeria, esMedicoTratante, esAnestesiologo, ROL_ANESTESIOLOGO, puedeOcuparRol } from '@/lib/catalogos/personal';
+import { enviarJSON, mensajeDeError, nuevaClaveIdempotencia } from '@/lib/fetcher';
+import { useBorrador } from '@/hooks/useBorrador';
+import PageHeader from '@/components/ui/PageHeader';
+import AvisoBorrador from '@/components/ui/AvisoBorrador';
+import { User, Loader2, Plus, ClipboardList, Stethoscope, X, Eye, Users, AlertTriangle, FileText, Upload, Trash2 } from 'lucide-react';
+import SearchInput from '@/components/ui/SearchInput';
 import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
-import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
-
-// Custom Skeleton for Cirugía Form - matches actual form layout
-function CirugiaFormSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      {/* PageHeader skeleton */}
-      <div className="h-5 w-20 bg-surface-2 rounded" />
-      <div className="flex items-center justify-between">
-        <div className="h-6 w-48 bg-surface-2 rounded" />
-        <div className="h-4 w-32 bg-surface-2 rounded" />
-      </div>
-      
-      {/* Section 1: Paciente */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
-        <div className="h-8 w-full bg-surface-2 rounded mb-3" />
-        <div className="h-8 w-full bg-surface-2 rounded mb-3" />
-        <div className="grid grid-cols-2 gap-3">
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-        </div>
-      </div>
-      
-      {/* Section 2: Expediente */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-40 bg-surface-2 rounded mb-4" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-        </div>
-      </div>
-      
-      {/* Section 3: Datos de cirugía */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-36 bg-surface-2 rounded mb-4" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-        </div>
-      </div>
-      
-      {/* Section 4: Equipo */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 h-10 bg-surface-2 rounded px-3" />
-          <div className="flex items-center gap-3 h-10 bg-surface-2 rounded px-3" />
-        </div>
-      </div>
-      
-      {/* Section 5: Recursos / Inventario */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-32 bg-surface-2 rounded mb-4" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-          <div className="h-8 bg-surface-2 rounded" />
-        </div>
-      </div>
-      
-      {/* Section 6: Archivos / Notas */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="h-5 w-24 bg-surface-2 rounded mb-4" />
-        <div className="h-32 bg-surface-2 rounded" />
-        <div className="mt-3 h-8 bg-surface-2 rounded" />
-      </div>
-      
-      {/* Actions skeleton */}
-      <div className="flex items-center justify-end gap-3 pt-4">
-        <div className="h-10 w-24 bg-surface-2 rounded" />
-        <div className="h-10 w-24 bg-surface-2 rounded" />
-      </div>
-    </div>
-  );
-}
-
-interface Paciente {
-  id: string;
-  nombre_completo: string;
-  telefono?: string | null;
-  email?: string | null;
-  aseguranza_id?: string | null;
-  ojo_operado?: OjoOperado;
-  cirugias_previas?: number;
-}
-
-type OjoOperado = 'sin_cirugias' | 'OD' | 'OI' | 'ambos' | 'desconocido';
-
-type FiltroOjo = 'todos' | 'primer' | 'segundo';
-
-interface HistorialOjo {
-  total: number;
-  od: boolean;
-  oi: boolean;
-  desconocido: boolean;
-}
-
-const ETIQUETA_OJO: Record<OjoOperado, { texto: string; clase: string }> = {
-  sin_cirugias: { texto: 'Sin cirugías previas', clase: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-fg-2' },
-  OD: { texto: 'OD ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
-  OI: { texto: 'OI ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
-  ambos: { texto: 'Ambos ojos operados', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
-  desconocido: { texto: 'Ojo sin especificar', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
-};
-
-const FILTROS_OJO: Array<{ id: FiltroOjo; label: string }> = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'primer', label: 'Primer ojo' },
-  { id: 'segundo', label: 'Segundo ojo' },
-];
-
-function etiquetaOjo(p: Paciente): { texto: string; clase: string } | null {
-  if (!p.ojo_operado) return null;
-  if (p.ojo_operado === 'sin_cirugias') {
-    return { texto: 'Primer ojo', clase: ETIQUETA_OJO.sin_cirugias.clase };
-  }
-  if (p.ojo_operado === 'ambos') {
-    return { texto: '⚠ Ambos ojos', clase: ETIQUETA_OJO.ambos.clase };
-  }
-  return { texto: ETIQUETA_OJO[p.ojo_operado].texto, clase: ETIQUETA_OJO[p.ojo_operado].clase };
-}
-
-interface Aseguranza {
-  id: string;
-  nombre: string;
-}
-
-interface Servicio {
-  id: string;
-  nombre: string;
-  tipo: string;
-  costo: number;
-}
-
-interface Doctor {
-  id: string;
-  nombre: string;
-  especialidad?: string | null;
-  /** Personal unificado (mig. 390): MEDICO | ENFERMERO */
-  tipo_personal?: string | null;
-}
-
-interface Rol {
-  id: string;
-  clave: string;
-  nombre: string;
-}
-
-interface Recurso {
-  id: string;
-  nombre: string;
-  ubicacion?: string | null;
-}
-
-interface PacienteResumen {
-  paciente: Paciente & {
-    sexo?: string | null;
-    fecha_nacimiento?: string | null;
-    edad?: number | null;
-    numero_poliza?: string | null;
-    numero_afiliacion?: string | null;
-  };
-  aseguranza: Aseguranza | null;
-  ultima_consulta: { fecha: string; diagnostico: string | null } | null;
-  consultas_previas: number;
-  cirugias_previas: number;
-  expediente_id: string;
-}
-
-/** Payload de un médico del equipo hacia POST /api/cirugias. */
-interface Participante {
-  medico_id: string;
-  rol_id: string;
-  hora_inicio: string;
-  hora_fin: string;
-}
-
-
-interface ArchivoLocal {
-  id: string;
-  file: File;
-  tipo_documento: string;
-  /** true si eligió «Otro» y captura el tipo a mano. */
-  otro?: boolean;
-}
-
-// OD / OS / OU (el valor 'OI' se conserva en BD; ver lib/catalogos/cirugia).
-const OJOS = OJOS_CIRUGIA;
-
-const EXTENSIONES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
-
-/** Catálogos: casi estáticos → sin revalidar en cada foco de ventana. */
-const OPCIONES_CATALOGO = { revalidateOnFocus: false, dedupingInterval: 60_000 } as const;
-
-function comoLista<T>(v: T[] | undefined | null): T[] {
-  return Array.isArray(v) ? v : [];
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-}
+import { cn } from '@/lib/utils';
+import CampoTextoDiferido from '@/components/ui/CampoTextoDiferido';
+import SelectorModeloLio from '@/components/cirugia/SelectorModeloLio';
+import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
 
 function NuevaCirugiaContent() {
   const router = useRouter();
@@ -384,6 +154,10 @@ function NuevaCirugiaContent() {
   }, [resumenPaciente, diagnosticoEditado]);
 
   const [guardando, setGuardando] = useState(false);
+  /** Misma clave en reintentos del mismo envío → el servidor no duplica la cirugía. */
+  const claveEnvioRef = useRef<string | null>(null);
+  /** Tras crear la cirugía se deja de autoguardar (no revivir un borrador ya guardado). */
+  const [cirugiaCreada, setCirugiaCreada] = useState(false);
   const [pasoGuardado, setPasoGuardado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const invalidar = useInvalidar();
@@ -765,13 +539,13 @@ useEffect(() => {
         payload.telefono = telefono;
         payload.telefonos = telefonosAlta;
       }
-      const res = await fetch('/api/pacientes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const creado = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(creado.error || 'No se pudo crear el paciente');
+      const creado = await enviarJSON<{
+        id: string;
+        nombre_completo?: string;
+        telefono?: string | null;
+        email?: string | null;
+        aseguranza_id?: string | null;
+      }>('/api/pacientes', 'POST', payload);
       setAltaPaciente(null);
       void invalidar('/api/pacientes', '/api/search');
       toast('Paciente creado', 'success');
@@ -783,7 +557,7 @@ useEffect(() => {
         aseguranza_id: creado.aseguranza_id ?? null,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'No se pudo crear el paciente';
+      const msg = mensajeDeError(err, 'No se pudo crear el paciente');
       setAltaPaciente((a) => (a ? { ...a, guardando: false, error: msg } : a));
     }
   };
@@ -794,19 +568,13 @@ useEffect(() => {
     setAltaPersonal({ ...altaPersonal, guardando: true });
     try {
       const nombre = altaPersonal.nombre.trim();
-      const res = await fetch('/api/configuracion/doctores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alias: nombre, nombre, especialidad: 'Enfermería', tipo_personal: 'ENFERMERO', cobra_honorarios: false }),
-      });
-      const creado = await res.json();
-      if (!res.ok) throw new Error(creado.error || 'No se pudo registrar');
+      const creado = await enviarJSON<{ id: string }>('/api/configuracion/doctores', 'POST', { alias: nombre, nombre, especialidad: 'Enfermería', tipo_personal: 'ENFERMERO', cobra_honorarios: false });
       await doctoresSWR.mutate();
       actualizarParticipante(altaPersonal.filaId, { personaId: creado.id });
       setAltaPersonal(null);
       toast('Enfermero(a) registrado en Personal médico', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'No se pudo registrar', 'error');
+      toast(mensajeDeError(err, 'No se pudo registrar'), 'error');
       setAltaPersonal((a) => (a ? { ...a, guardando: false } : a));
     }
   };
@@ -922,16 +690,11 @@ useEffect(() => {
         procedimientos_adicionales: procedimientosAdicionales.filter((id) => id !== servicioId),
       };
 
-      const res = await fetch('/api/cirugias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      if (!claveEnvioRef.current) claveEnvioRef.current = nuevaClaveIdempotencia();
+      const data = await enviarJSON<{ cirugia_id?: string; advertencia?: string }>('/api/cirugias', 'POST', body, {
+        idempotencia: claveEnvioRef.current,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Error al crear la cirugía');
-      }
+      claveEnvioRef.current = null;
 
       const cirugiaId = data?.cirugia_id;
       if (data?.advertencia) toast(data.advertencia, 'warning');
@@ -947,8 +710,7 @@ useEffect(() => {
             fd.append('archivo', archivo.file);
             fd.append('tipo_documento', archivo.tipo_documento.trim());
             try {
-              const r = await fetch(`/api/cirugias/${cirugiaId}/archivos`, { method: 'POST', body: fd });
-              if (!r.ok) fallidos++;
+              await enviarJSON(`/api/cirugias/${cirugiaId}/archivos`, 'POST', fd, { timeoutMs: 120_000 });
             } catch {
               fallidos++;
             }
@@ -962,16 +724,70 @@ useEffect(() => {
 
       // La agenda, listas de cirugías y el dashboard se revalidan en segundo plano.
       void invalidar('/api/agenda', '/api/cirugias', '/api/dashboard', '/api/inventario', '/api/pacientes', '/api/search');
+      setCirugiaCreada(true);
+      borrador.limpiar();
       toast('Cirugía creada', 'success');
       router.push(`/cirugias/${cirugiaId}`);
     } catch (err: unknown) {
-      const mensaje = err instanceof Error ? err.message : 'Error desconocido';
+      const mensaje = mensajeDeError(err, 'No se pudo crear la cirugía. Intenta de nuevo.');
       setError(mensaje);
       toast(mensaje, 'error');
     } finally {
       setGuardando(false);
       setPasoGuardado(null);
     }
+  };
+
+  // ── Borrador autoguardado (no se pierde la captura por error, recarga o sesión vencida) ──
+  const conPrecarga = !!(consultaPrecargaId || pacientePrecargaId || procedimientoPrecarga || cirujanoIdPrecarga || fechaPrecarga);
+  const datosBorrador = useMemo<BorradorCirugia | null>(
+    () =>
+      pacienteSeleccionado || servicioId || notas.trim() || diagnosticoEditado
+        ? {
+            paciente: pacienteSeleccionado, origenId, servicioId, ojo, fecha, hora, duracionMin, recursoId,
+            participantes, notas, diagnostico, diagnosticoEditado, anestesia, procedencia, especialidad,
+            especialidadEditada, procedimientosAdicionales, lioTorico, fabricanteLio, modeloLioId, lioManual,
+            lioManualMarca, lioManualModelo, lioManualPotencia,
+          }
+        : null,
+    [pacienteSeleccionado, origenId, servicioId, ojo, fecha, hora, duracionMin, recursoId, participantes, notas,
+      diagnostico, diagnosticoEditado, anestesia, procedencia, especialidad, especialidadEditada,
+      procedimientosAdicionales, lioTorico, fabricanteLio, modeloLioId, lioManual, lioManualMarca, lioManualModelo,
+      lioManualPotencia],
+  );
+  const borrador = useBorrador<BorradorCirugia>(CLAVE_BORRADOR_CIRUGIA, datosBorrador, {
+    activo: !loadingInitial && !conPrecarga && !guardando && !cirugiaCreada,
+  });
+  const recuperarBorrador = async () => {
+    const d = borrador.pendiente?.datos;
+    borrador.aceptar();
+    if (!d) return;
+    // Primero el paciente (carga su resumen e historial de ojos), luego el resto.
+    if (d.paciente) await seleccionarPaciente(d.paciente);
+    setOrigenId(d.origenId);
+    setServicioId(d.servicioId);
+    setOjo(d.ojo);
+    setFecha(d.fecha);
+    setHora(d.hora);
+    setDuracionMin(d.duracionMin);
+    setRecursoId(d.recursoId);
+    if (Array.isArray(d.participantes) && d.participantes.length) setParticipantes(d.participantes);
+    setNotas(d.notas);
+    setDiagnostico(d.diagnostico);
+    setDiagnosticoEditado(d.diagnosticoEditado);
+    setAnestesia(d.anestesia);
+    setProcedencia(d.procedencia);
+    setEspecialidad(d.especialidad);
+    setEspecialidadEditada(d.especialidadEditada);
+    setProcedimientosAdicionales(d.procedimientosAdicionales || []);
+    setLioTorico(d.lioTorico);
+    setFabricanteLio(d.fabricanteLio);
+    setModeloLioId(d.modeloLioId);
+    setLioManual(d.lioManual);
+    setLioManualMarca(d.lioManualMarca);
+    setLioManualModelo(d.lioManualModelo);
+    setLioManualPotencia(d.lioManualPotencia);
+    toast('Borrador recuperado. Revisa los datos y vuelve a adjuntar archivos si había.', 'success');
   };
 
   const labelCls = 'block text-xs font-bold text-muted mb-1';
@@ -999,6 +815,14 @@ useEffect(() => {
       />
 
       <div className="mx-auto w-full max-w-6xl px-0 py-6 space-y-6">
+        {borrador.pendiente && !conPrecarga && (
+          <AvisoBorrador
+            ts={borrador.pendiente.ts}
+            que="una cirugía"
+            onRecuperar={() => void recuperarBorrador()}
+            onDescartar={borrador.descartar}
+          />
+        )}
         {error && (
           <div role="alert" className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 animate-fadeIn dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">{error}</div>
         )}
@@ -1274,10 +1098,10 @@ useEffect(() => {
                   </div>
                   <div>
                     <label className={labelCls}>Procedencia</label>
-                    <input
+                    <CampoTextoDiferido
                       type="text"
                       value={procedencia}
-                      onChange={(e) => setProcedencia(e.target.value)}
+                      onValueChange={setProcedencia}
                       maxLength={255}
                       placeholder="Ej. Ensenada"
                       className={inputCls}
@@ -1831,9 +1655,10 @@ useEffect(() => {
             {/* Notas y acciones */}
             <section className="rounded-2xl border border-line bg-surface p-5">
               <label className={labelCls}>Notas adicionales</label>
-              <textarea
+              <CampoTextoDiferido
+                multilinea
                 value={notas}
-                onChange={(e) => setNotas(e.target.value)}
+                onValueChange={setNotas}
                 rows={3}
                 placeholder="Notas, diagnóstico, indicaciones..."
                 className={cn(inputCls, 'resize-none')}

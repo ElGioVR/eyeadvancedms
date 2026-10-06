@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { enviarJSON, mensajeDeError, nuevaClaveIdempotencia } from '@/lib/fetcher';
 import { Calendar, Clock, Loader2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
@@ -31,6 +32,8 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
   const [loading, setLoading] = useState(false);
+  /** Misma clave en reintentos → no se agenda dos veces el mismo estudio. */
+  const claveRef = useRef<string | null>(null);
   const [minDate, setMinDate] = useState('');
 
   useEffect(() => {
@@ -51,10 +54,8 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
 
     setLoading(true);
     try {
-      const res = await fetch('/api/consultas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if (!claveRef.current) claveRef.current = nuevaClaveIdempotencia();
+      const resData = await enviarJSON<{ id?: string }>('/api/consultas', 'POST', {
           paciente_id: consulta.paciente_id,
           doctor_id: estudio.doctor_id || consulta.doctor_id,
           fecha,
@@ -68,22 +69,12 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
             doctor_id: estudio.doctor_id || null,
           }],
           diagnostico: `Estudio derivado de consulta ${consulta.id.slice(0, 8)}`,
-        }),
-      });
+      }, { idempotencia: claveRef.current });
+      claveRef.current = null;
+      const nuevaConsultaId = resData?.id;
 
-      if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errData.error || 'Error al agendar estudio');
-      }
-
-      const resData = await res.json();
-      const nuevaConsultaId = resData.id;
-
-      // Registrar historial en la consulta original
-      await fetch(`/api/consultas/${consulta.id}/historial`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Registrar historial en la consulta original (best-effort: el estudio ya quedó agendado)
+      await enviarJSON(`/api/consultas/${consulta.id}/historial`, 'POST', {
           tipo_evento: 'EDICION',
           payload: {
             accion: 'estudio_agendado',
@@ -93,8 +84,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
             hora_estudio: hora,
             asignado_a: estudio.doctor_nombre || consulta.doctor,
           },
-        }),
-      });
+      }).catch(() => undefined);
 
       if (nuevaConsultaId) onScheduled?.(nuevaConsultaId);
       toast('Estudio agendado correctamente', 'success');
@@ -102,10 +92,7 @@ export default function AgendarEstudioModal({ isOpen, onClose, onScheduled, estu
       // Solo se revalidan los datos afectados (agenda, listas, resúmenes); sin recargar la ruta.
       void invalidar('/api/consultas', '/api/agenda', '/api/dashboard');
     } catch (error) {
-      toast(
-        error instanceof Error ? error.message : 'Error al agendar estudio',
-        'error'
-      );
+      toast(mensajeDeError(error, 'Error al agendar estudio'), 'error');
     } finally {
       setLoading(false);
     }

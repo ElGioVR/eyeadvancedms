@@ -5,6 +5,7 @@ import { errorTranslations } from '@/lib/supabase/errors';
 import { requireAuth } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const TIPOS_EVENTO = [
   'PAGO_HONORARIOS',
@@ -25,7 +26,7 @@ const updateSchema = z.object({
   }).strict()).min(1).max(TIPOS_EVENTO.length * 3),
 }).strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -44,7 +45,7 @@ export async function GET() {
   return NextResponse.json({ data });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -78,3 +79,6 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const GET = ruta('notificaciones/preferencias#GET', manejarGET);
+export const PATCH = ruta('notificaciones/preferencias#PATCH', manejarPATCH);

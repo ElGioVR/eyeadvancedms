@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar } from '@/hooks/useFetch';
-import { enviarJSON } from '@/lib/fetcher';
+import { enviarJSON, precargarDatos } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -251,6 +251,8 @@ export default function PacientesPage() {
                   <div className="flex w-full sm:w-auto items-center justify-end gap-2 shrink-0">
                     <Link
                       href={`/pacientes/${paciente.id}/historial`}
+                      onMouseEnter={() => precargarDatos(`/api/pacientes/${paciente.id}`)}
+                      onFocus={() => precargarDatos(`/api/pacientes/${paciente.id}`)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors"
                     >
                       <FileText className="h-3.5 w-3.5" />

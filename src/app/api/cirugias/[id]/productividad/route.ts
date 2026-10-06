@@ -3,8 +3,9 @@ import { mensajeSeguro } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { listarProductividadCirugia } from '@/lib/productividad';
 import { validarId } from '@/lib/api/validar';
+import { ruta } from '@/lib/api/ruta';
 
-export async function GET(
+async function manejarGET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -27,3 +28,5 @@ export async function GET(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = ruta('cirugias/[id]/productividad#GET', manejarGET);

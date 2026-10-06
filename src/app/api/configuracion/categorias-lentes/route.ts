@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { idDeQuery, respuestaErrorDb, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const categoriaCreateSchema = z.object({
   nombre: z.string().trim().min(1).max(255),
@@ -16,7 +17,7 @@ const categoriaUpdateSchema = z.object({
   descripcion: textoLargo.optional().nullable(),
 }).strict();
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -36,7 +37,7 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
   return NextResponse.json(categoria, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -95,7 +96,7 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -117,3 +118,8 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/categorias-lentes#GET', manejarGET);
+export const POST = ruta('configuracion/categorias-lentes#POST', manejarPOST);
+export const PATCH = ruta('configuracion/categorias-lentes#PATCH', manejarPATCH);
+export const DELETE = ruta('configuracion/categorias-lentes#DELETE', manejarDELETE);

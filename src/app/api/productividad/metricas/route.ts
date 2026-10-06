@@ -7,6 +7,7 @@ import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/valid
 import { z } from 'zod';
 import { CSV_BOM, formatFechaCsv, rangoPersonalizado } from '@/lib/rangos';
 import { agregarMetricas, listarResumenHonorarios } from '@/lib/productividad';
+import { ruta } from '@/lib/api/ruta';
 
 const querySchema = z.object({
   desde: fechaReal.optional(),
@@ -25,7 +26,7 @@ function csvCell(value: string | number | null | undefined): string {
   return raw;
 }
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
@@ -97,3 +98,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad/metricas#GET', manejarGET);

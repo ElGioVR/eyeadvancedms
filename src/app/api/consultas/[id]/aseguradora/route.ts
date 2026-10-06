@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { validarId } from '@/lib/api/validar';
+import { ruta } from '@/lib/api/ruta';
 
 type Embed<T> = T | T[] | null | undefined;
 function primero<T>(v: Embed<T>): T | null {
   return (Array.isArray(v) ? v[0] : v) ?? null;
 }
 
-export async function GET(
+async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -56,3 +57,5 @@ export async function GET(
     servicios: [],
   });
 }
+
+export const GET = ruta('consultas/[id]/aseguradora#GET', manejarGET);

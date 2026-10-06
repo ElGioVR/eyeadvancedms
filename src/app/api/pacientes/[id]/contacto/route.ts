@@ -4,12 +4,13 @@ import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { errorInterno, validarId } from '@/lib/api/validar';
 import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { leerTelefonos } from '@/lib/telefonos-paciente-db';
+import { ruta } from '@/lib/api/ruta';
 
 /**
  * Contacto del paciente (teléfono y correo) para los botones de WhatsApp/correo
  * de la ventana rápida de la agenda. Mínimo payload: 1 fila, 3 columnas.
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function manejarGET(_request: Request, { params }: { params: { id: string } }) {
   const idError = validarId(params.id, 'ID de paciente');
   if (idError) return idError;
 
@@ -31,3 +32,5 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     { headers: { 'Cache-Control': 'private, max-age=30' } }
   );
 }
+
+export const GET = ruta('pacientes/[id]/contacto#GET', manejarGET);

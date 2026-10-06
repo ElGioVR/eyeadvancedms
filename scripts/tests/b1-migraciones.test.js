@@ -16,6 +16,7 @@
 'use strict';
 
 const fs = require('fs');
+require('./_modulos-divididos');
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');

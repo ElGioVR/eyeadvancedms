@@ -186,6 +186,12 @@ export default function BienvenidaPage() {
       setProgreso(1);
       setSaliendo(true);
       setTimeout(() => router.replace(destino), 280);
+      // Red de seguridad: si la navegación del cliente no termina (en desarrollo la
+      // primera compilación del panel puede tardar o fallar) la pantalla quedaba en
+      // negro sobre /bienvenida. Pasados 6 s se hace una navegación completa.
+      setTimeout(() => {
+        if (window.location.pathname.startsWith('/bienvenida')) window.location.assign(destino);
+      }, 6000);
     },
     [router],
   );

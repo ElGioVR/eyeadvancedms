@@ -7,6 +7,8 @@ import { translateError } from '@/lib/supabase/errors';
 import { registrarMovimiento, siguienteFolioLente } from '@/lib/inventario';
 import { esquemaPaginacion, leerJSON, leerQuery, validarId } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
+import { enSegundoPlano } from '@/lib/segundo-plano';
 
 /** Caracteres permitidos en códigos de barras (evita inyección en filtros PostgREST). */
 const CODIGO_RE = /^[\w\-./+ ()]*$/;
@@ -82,7 +84,7 @@ function mapLente(l: any) {
 
 const SELECT = '*, categorias_lentes:categoria_id (nombre), proveedores:proveedor_id (nombre)';
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -139,7 +141,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ data: data.map(mapLente), total: count || 0, page, pageSize });
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Alta de ítem: también el doctor (solo inventario). PATCH/DELETE siguen
@@ -285,7 +287,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ ...mapLente(lente), fusionado: false, agregado: cantidad }, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
@@ -372,20 +374,23 @@ export async function PATCH(request: Request) {
     (stockAnterior === null || stockAnterior > minimo);
   if (cruzoMinimo) {
     const nombre = [lente.manufacturer, lente.model].filter(Boolean).join(' ') || lente.folio || 'Lente';
-    await notificarRoles(['admin'], {
-      tipo: 'STOCK_BAJO',
-      titulo: lente.stock === 0 ? 'Sin stock' : 'Stock bajo',
-      mensaje: `${nombre} — quedan ${lente.stock} (mínimo ${minimo})`,
-      entidadTipo: 'inventario_item',
-      entidadId: lente.id,
-      actorUserId: auth.user.id,
-    });
+    enSegundoPlano(
+      notificarRoles(['admin'], {
+        tipo: 'STOCK_BAJO',
+        titulo: lente.stock === 0 ? 'Sin stock' : 'Stock bajo',
+        mensaje: `${nombre} — quedan ${lente.stock} (mínimo ${minimo})`,
+        entidadTipo: 'inventario_item',
+        entidadId: lente.id,
+        actorUserId: auth.user.id,
+      }),
+      'inventario.stock_bajo.notificar',
+    );
   }
 
   return NextResponse.json(mapLente(lente));
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
@@ -406,3 +411,8 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('inventario#GET', manejarGET);
+export const POST = ruta('inventario#POST', manejarPOST);
+export const PATCH = ruta('inventario#PATCH', manejarPATCH);
+export const DELETE = ruta('inventario#DELETE', manejarDELETE);

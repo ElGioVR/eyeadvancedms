@@ -1,277 +1,51 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Plus, Upload, Calendar, List, ChevronLeft, ChevronRight,
-  Clock, User, Search, X, AlertTriangle, CheckCircle2,
-  FileSpreadsheet, Eye, Stethoscope, MapPin, StickyNote,
-  Timer, Building2, Columns3, Square, GripVertical,
-  Maximize2, Minimize2, SlidersHorizontal, Download, CalendarPlus,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import useSWR, { preload, useSWRConfig } from 'swr';
-import { REFRESCO_COMPARTIDO_MS, useFetch, useInvalidar, construirUrl } from '@/hooks/useFetch';
-import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
-import EnviarPaciente from '@/components/ui/EnviarPaciente';
-import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
-import FichaPaciente from '@/components/ui/FichaPaciente';
-import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
-import { swrFetcher, fetchJSON, enviarJSON } from '@/lib/fetcher';
-import { useAutosave } from '@/hooks/useAutosave';
-import BarraRevalidando from '@/components/ui/BarraRevalidando';
-import { useToast } from '@/components/ui/Toast';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import Modal from '@/components/ui/Modal';
-import SidebarPanel from '@/components/ui/SidebarPanel';
-import MobileCalendarView from '@/components/agenda/MobileCalendarView';
-import { etiquetaOjo } from '@/lib/catalogos/cirugia';
+import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, TipoStat, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { agendaSoloPropia } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
-import LIOSelector from '@/components/cirugia/LIOSelector';
-import {
-  AccionRapidaModal,
-  AgendarRapidoModal,
-  ETIQUETA_ACCION,
-  accionesDisponibles,
-  type AccionRapida,
-} from '@/components/agenda/AccionesRapidasAgenda';
-import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
+import { type AgendaCirugia, type AgendaCirugiaEstado } from '@/types';
+import { useRouter } from 'next/navigation';
+import { type AccionRapida, accionesDisponibles, AccionRapidaModal, AgendarRapidoModal } from '@/components/agenda/AccionesRapidasAgenda';
+import { useFetch, REFRESCO_COMPARTIDO_MS, useInvalidar } from '@/hooks/useFetch';
+import { useSWRConfig, preload } from 'swr';
+import { useToast } from '@/components/ui/Toast';
+import { swrFetcher, enviarJSON, fetchJSON } from '@/lib/fetcher';
+import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
+import { cn } from '@/lib/utils';
+import PageHeader from '@/components/ui/PageHeader';
+import { Upload, Plus, Calendar, Stethoscope, User, FileSpreadsheet, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
+import BarraRevalidando from '@/components/ui/BarraRevalidando';
+import Aislado from '@/components/ui/Aislado';
+import MobileCalendarView from '@/components/agenda/MobileCalendarView';
+import SidebarPanel from '@/components/ui/SidebarPanel';
+import Modal from '@/components/ui/Modal';
+import CampoBusquedaAgenda from '@/components/agenda/CampoBusquedaAgenda';
+import dynamic from 'next/dynamic';
 
-interface Doctor { id: string; alias: string; usuario_id?: string | null; tipo_personal?: string | null; cobra_honorarios?: boolean | null; }
+// Piezas que solo se usan al interactuar: se cargan bajo demanda (bundle inicial
+// de la agenda más ligero) y se precargan en segundo plano tras el primer render.
+const cargarDetalle = () => import('@/components/agenda/AgendaDetalle');
+const cargarFormulario = () => import('@/components/agenda/CirugiaFormAgenda');
+const cargarImportar = () => import('@/components/agenda/ImportarAgenda');
+const DetailPopoverCard = dynamic(() => cargarDetalle().then((m) => m.DetailPopoverCard), { ssr: false });
+const CirugiaForm = dynamic(() => cargarFormulario().then((m) => m.CirugiaForm), { ssr: false });
+const ImportExcel = dynamic(() => cargarImportar().then((m) => m.ImportExcel), { ssr: false });
+const ImportConsultas = dynamic(() => cargarImportar().then((m) => m.ImportConsultas), { ssr: false });
+
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
-// Rango por defecto de la cuadrícula semana/día. Se amplía automáticamente
-// para mostrar cualquier evento que empiece antes o termine después.
-const DEFAULT_HOUR_START = 9;
-const DEFAULT_HOUR_END = 22;
-const HOUR_HEIGHT = 64;
-
-const tipoConfig: Record<string, { bg: string; text: string }> = {
-  cirugia: { bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300' },
-  consulta: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300' },
-  estudio: { bg: 'bg-sky-50 dark:bg-sky-500/10', text: 'text-sky-700 dark:text-sky-300' },
-};
-
-const estadoConfig: Record<AgendaCirugiaEstado, { border: string; dot: string; solid: string; lightBg: string }> = {
-  agendada: { border: 'border-l-blue-500', dot: 'bg-blue-500', lightBg: 'bg-blue-500/10', solid: 'bg-blue-500' },
-  aplazada: { border: 'border-l-amber-500', dot: 'bg-amber-500', lightBg: 'bg-amber-500/10', solid: 'bg-amber-500' },
-  reagendada: { border: 'border-l-violet-500', dot: 'bg-violet-500', lightBg: 'bg-violet-500/10', solid: 'bg-violet-500' },
-  completada: { border: 'border-l-emerald-500', dot: 'bg-emerald-500', lightBg: 'bg-emerald-500/10', solid: 'bg-emerald-500' },
-  cancelada: { border: 'border-l-red-500', dot: 'bg-red-500', lightBg: 'bg-red-500/10', solid: 'bg-red-500' },
-};
-
-const estadoLabels: Record<AgendaCirugiaEstado, string> = {
-  agendada: 'Agendada', aplazada: 'Aplazada', reagendada: 'Reagendada', completada: 'Completada', cancelada: 'Cancelada',
-};
-
-const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-
-/**
- * URL de «Agendar consulta» desde un evento de la agenda: precarga paciente,
- * médico y especialidad; el tipo queda en Subsecuente (el paciente ya tiene historial).
- */
-function urlAgendarConsulta(ev: Pick<AgendaCirugia, 'paciente_id' | 'doctor_id' | 'especialidad'>): string {
-  const q = new URLSearchParams();
-  if (ev.paciente_id) q.set('paciente_id', ev.paciente_id);
-  if (ev.doctor_id) q.set('doctor_id', ev.doctor_id);
-  if (ev.especialidad) q.set('especialidad', ev.especialidad);
-  q.set('tipo_agenda', 'SUBSECUENTE');
-  return `/consultas/nueva?${q.toString()}`;
-}
-function fmtDate(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
-function fmtDateShort(d: string) { return new Date(d + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); }
-function fmtTime(t: string | null) { return t ? t.slice(0, 5) : ''; }
-function fmtHourAMPM(h: number) { return h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`; }
-function daysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
-function firstDayOfMonth(y: number, m: number) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
-function dateStr(y: number, m: number, d: number) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
-function getMonday(d: Date) { const r = new Date(d); const day = r.getDay(); const diff = r.getDate() - day + (day === 0 ? -6 : 1); r.setDate(diff); return r; }
-function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
-function toDateStr(d: Date) { return dateStr(d.getFullYear(), d.getMonth(), d.getDate()); }
-
-type VistaCalendario = 'month' | 'week' | 'day';
-
-/**
- * Rango de fechas que pide cada vista. Mes: la cuadrícula visible completa
- * (lunes de la primera semana → domingo de la última), para que los días del
- * mes anterior/siguiente que se ven en el calendario también muestren sus
- * eventos. Semana: lun–dom. Día: ese día.
- */
-function rangoVista(vista: VistaCalendario, d: Date): { fechaDesde: string; fechaHasta: string } {
-  if (vista === 'month') {
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const fd = firstDayOfMonth(y, m);
-    const celdas = Math.ceil((fd + daysInMonth(y, m)) / 7) * 7;
-    const inicio = new Date(y, m, 1 - fd, 12);
-    return { fechaDesde: toDateStr(inicio), fechaHasta: toDateStr(addDays(inicio, celdas - 1)) };
-  }
-  if (vista === 'week') {
-    const mon = getMonday(d);
-    return { fechaDesde: toDateStr(mon), fechaHasta: toDateStr(addDays(mon, 6)) };
-  }
-  return { fechaDesde: toDateStr(d), fechaHasta: toDateStr(d) };
-}
-
-function desplazarVista(vista: VistaCalendario, prev: Date, dir: number): Date {
-  const d = new Date(prev);
-  if (vista === 'month') d.setMonth(d.getMonth() + dir);
-  else if (vista === 'week') d.setDate(d.getDate() + dir * 7);
-  else d.setDate(d.getDate() + dir);
-  return d;
-}
-
-/** Misma forma de URL que arma useFetch (orden de parámetros incluido) para que la precarga coincida. */
-function urlAgenda(params: Record<string, string>): string {
-  return construirUrl('/api/agenda', params);
-}
-
-interface RespuestaAgenda { data: AgendaCirugia[]; total: number; page: number; pageSize: number }
-
-/** Aplica `cambios` al evento `id` dentro de la respuesta cacheada (paginada o arreglo). */
-function aplicarCambiosEvento(json: unknown, id: string, cambios: Partial<AgendaCirugia>): unknown {
-  const map = (arr: AgendaCirugia[]) => arr.map((c) => (c.id === id ? { ...c, ...cambios } : c));
-  if (Array.isArray(json)) return map(json as AgendaCirugia[]);
-  if (json && typeof json === 'object' && Array.isArray((json as RespuestaAgenda).data)) {
-    const r = json as RespuestaAgenda;
-    return { ...r, data: map(r.data) };
-  }
-  return json;
-}
-
-function mensajeError(err: unknown, porDefecto = 'No se pudo guardar el cambio'): string {
-  return err instanceof Error && err.message ? err.message : porDefecto;
-}
-function getDoctorInitials(name: string) { return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase(); }
-const docColors = ['bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'];
-function getDocColor(name: string) { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return docColors[Math.abs(h) % docColors.length]; }
-
-function parseTimeToMinutes(t: string | null): number {
-  if (!t) return 0;
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + (m || 0);
-}
-
-interface OverlapItem {
-  id: string;
-  startMin: number;
-  endMin: number;
-}
-
-interface OverlapResult {
-  column: number;
-  totalColumns: number;
-  adjustedTop: number;
-  adjustedHeight: number;
-}
-
-function computeOverlapColumns(items: OverlapItem[], HOUR_HEIGHT: number, HOUR_START: number): Map<string, OverlapResult> {
-  const result = new Map<string, OverlapResult>();
-  if (items.length === 0) return result;
-
-  const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-
-  const groups: OverlapItem[][] = [];
-  let currentGroup: OverlapItem[] = [sorted[0]];
-  let groupEnd = sorted[0].endMin;
-
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i].startMin < groupEnd) {
-      currentGroup.push(sorted[i]);
-      groupEnd = Math.max(groupEnd, sorted[i].endMin);
-    } else {
-      groups.push(currentGroup);
-      currentGroup = [sorted[i]];
-      groupEnd = sorted[i].endMin;
-    }
-  }
-  groups.push(currentGroup);
-
-  for (const group of groups) {
-    const columns: OverlapItem[][] = [];
-    for (const item of group) {
-      let placed = false;
-      for (let col = 0; col < columns.length; col++) {
-        const lastInCol = columns[col][columns[col].length - 1];
-        if (item.startMin >= lastInCol.endMin) {
-          columns[col].push(item);
-          result.set(item.id, { column: col, totalColumns: 0, adjustedTop: 0, adjustedHeight: 0 });
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) {
-        columns.push([item]);
-        result.set(item.id, { column: columns.length - 1, totalColumns: 0, adjustedTop: 0, adjustedHeight: 0 });
-      }
-    }
-    const totalCols = columns.length;
-
-    for (const item of group) {
-      const r = result.get(item.id);
-      if (r) {
-        r.totalColumns = totalCols;
-        // Cada evento se posiciona con su propia hora de inicio/fin; las
-        // columnas solo dividen el ancho cuando hay solapamiento.
-        r.adjustedTop = ((item.startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-        r.adjustedHeight = Math.max(28, ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT - 2);
-      }
-    }
-  }
-
-  return result;
-}
-
-const ESTADOS_ORDEN: AgendaCirugiaEstado[] = ['agendada', 'reagendada', 'aplazada', 'completada', 'cancelada'];
-
-function TipoStat({ label, total, porEstado, icon: Icon, tone }: {
-  label: string;
-  total: number;
-  porEstado: Record<string, number>;
-  icon: typeof Calendar;
-  tone: 'violet' | 'amber' | 'sky' | 'primary';
-}) {
-  const tones = {
-    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
-    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
-    sky: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
-    primary: 'bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-300',
-  } as const;
-  const suma = ESTADOS_ORDEN.reduce((a, e) => a + (porEstado[e] || 0), 0);
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-4 shadow-soft dark:shadow-none">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted">{label}</p>
-          <p className="mt-0.5 text-2xl font-semibold tracking-tight text-fg tabular-nums">{total}</p>
-        </div>
-        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tones[tone])}>
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-      {/* Barra segmentada por estado */}
-      <div className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-        {suma > 0 && ESTADOS_ORDEN.map((e) => (porEstado[e] || 0) > 0 && (
-          <span key={e} className={cn('h-full', estadoConfig[e].solid)} style={{ width: `${((porEstado[e] || 0) / suma) * 100}%` }} title={`${estadoLabels[e]}: ${porEstado[e]}`} />
-        ))}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted">
-        {ESTADOS_ORDEN.filter((e) => (porEstado[e] || 0) > 0).map((e) => (
-          <span key={e} className="inline-flex items-center gap-1">
-            <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[e].dot)} />
-            {porEstado[e]} {estadoLabels[e].toLowerCase()}
-          </span>
-        ))}
-        {suma === 0 && <span>Sin eventos</span>}
-      </div>
-    </div>
-  );
-}
-
 export default function AgendaContent({ userRol, doctores, userId, initialDate }: Props) {
+  // Precarga en reposo de los módulos diferidos (el popover abre sin espera).
+  useEffect(() => {
+    const precargar = () => {
+      void cargarDetalle();
+      void cargarFormulario();
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(precargar);
+    else setTimeout(precargar, 1500);
+  }, []);
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date(`${initialDate}T12:00:00`));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -286,13 +60,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const { especialidades } = useEspecialidades();
   const [filterTipos, setFilterTipos] = useState<Set<string>>(new Set(['cirugia', 'consulta', 'estudio']));
   const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [search, setSearch] = useState('');
-  // Búsqueda con debounce: una petición al dejar de teclear, no una por tecla.
+  // Búsqueda con debounce dentro de CampoBusquedaAgenda: aquí solo llega el texto final
+  // (una petición al dejar de teclear y sin repintar el calendario en cada tecla).
   const [searchQuery, setSearchQuery] = useState('');
-  useEffect(() => {
-    const t = window.setTimeout(() => setSearchQuery(search.trim()), 300);
-    return () => window.clearTimeout(t);
-  }, [search]);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showImportConsultas, setShowImportConsultas] = useState(false);
@@ -894,7 +664,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             aria-label="Filtros"
           >
             <SlidersHorizontal className="h-[18px] w-[18px]" />
-            {(filterDoctor || search || filterEspecialidad || filterTipos.size < 3 || filterEstados.size < 5) && (
+            {(filterDoctor || searchQuery || filterEspecialidad || filterTipos.size < 3 || filterEstados.size < 5) && (
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
             )}
           </button>
@@ -978,11 +748,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
             {/* Filters */}
             <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-                  className="w-full rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30" />
-              </div>
+              <CampoBusquedaAgenda
+                valor={searchQuery}
+                onCambiar={setSearchQuery}
+                placeholder="Buscar..."
+                iconClassName="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"
+                inputClassName="w-full rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              />
               <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
                 className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-medium text-fg-2 focus:outline-none focus:ring-1 focus:ring-primary-500/30">
                 <option value="">Todos los doctores</option>
@@ -1086,23 +858,25 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           {/* Mobile Calendar View (iOS style) */}
           <div className="relative lg:hidden" aria-busy={loading || validating}>
             <BarraRevalidando activo={validating} />
-            <MobileCalendarView
-              cirugiasPorFecha={cirugiasPorFecha}
-              loading={loading}
-              onDateSelect={(date) => { setSelectedDate(date); }}
-              onMonthChange={(y, m) => {
-                // Móvil trabaja por mes: pide el mes visible completo
-                setCalendarView('month');
-                setCurrentDate(new Date(y, m, 1, 12));
-              }}
-              onAdd={!agendaSoloPropia(userRol) ? (_date: string) => { setShowCreateChoice(true); } : undefined}
-              onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
-              getAcciones={(c) => accionesDisponibles(c, userRol)}
-              onAccion={(c, accion) => setAccionRapida({ evento: c, accion })}
-              onAgendarConsulta={userRol !== 'enfermero' ? (c) => router.push(urlAgendarConsulta(c)) : undefined}
-              todayStr={todayStr}
-              openDay={mobileOpenDay}
-            />
+            <Aislado nombre="el calendario" contexto="agenda.movil">
+              <MobileCalendarView
+                cirugiasPorFecha={cirugiasPorFecha}
+                loading={loading}
+                onDateSelect={(date) => { setSelectedDate(date); }}
+                onMonthChange={(y, m) => {
+                  // Móvil trabaja por mes: pide el mes visible completo
+                  setCalendarView('month');
+                  setCurrentDate(new Date(y, m, 1, 12));
+                }}
+                onAdd={!agendaSoloPropia(userRol) ? (_date: string) => { setShowCreateChoice(true); } : undefined}
+                onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
+                getAcciones={(c) => accionesDisponibles(c, userRol)}
+                onAccion={(c, accion) => setAccionRapida({ evento: c, accion })}
+                onAgendarConsulta={userRol !== 'enfermero' ? (c) => router.push(urlAgendarConsulta(c)) : undefined}
+                todayStr={todayStr}
+                openDay={mobileOpenDay}
+              />
+            </Aislado>
           </div>
 
           {/* Desktop View Container with transition */}
@@ -1598,11 +1372,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               </button>
             </div>
             <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente..."
-                  className="w-full rounded-lg border border-line bg-surface-2 pl-10 pr-4 py-2.5 text-sm text-fg placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30" />
-              </div>
+              <CampoBusquedaAgenda
+                valor={searchQuery}
+                onCambiar={setSearchQuery}
+                placeholder="Buscar paciente..."
+                iconClassName="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+                inputClassName="w-full rounded-lg border border-line bg-surface-2 pl-10 pr-4 py-2.5 text-sm text-fg placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+              />
               <div>
                 <label className="block text-xs font-bold text-muted mb-1.5">Doctor</label>
                 <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
@@ -1663,7 +1439,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                   setFilterTipos(new Set(['cirugia', 'consulta', 'estudio']));
                   setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
                   setFilterEspecialidad('');
-                  setSearch('');
+                  setSearchQuery('');
                 }}
                   className="flex-1 rounded-lg border border-line bg-white dark:bg-surface-2 px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-gray-50 dark:hover:bg-surface-3 transition-colors">
                   Limpiar
@@ -1678,778 +1454,5 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         </div>
       )}
     </div>
-  );
-}
-
-/* ───────── Detail Modal ───────── */
-function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { cirugia: AgendaCirugia; userRol: string; onEdit: () => void; onClose: () => void; onRefetch: () => void }) {
-  const [updating, setUpdating] = useState(false);
-  const updateEstado = async (s: AgendaCirugiaEstado) => { setUpdating(true); try { await fetch(`/api/agenda/${cirugia.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: s }) }); onRefetch(); } finally { setUpdating(false); } };
-
-  const items = [
-    cirugia.expediente && { Icon: StickyNote, label: 'Expediente', value: cirugia.expediente },
-    cirugia.fecha && { Icon: Calendar, label: 'Fecha', value: fmtDate(cirugia.fecha) },
-    cirugia.hora && { Icon: Clock, label: 'Hora', value: fmtTime(cirugia.hora) },
-    cirugia.jornada && { Icon: MapPin, label: 'Jornada', value: cirugia.jornada },
-    cirugia.doctor_nombre && { Icon: User, label: 'Cirujano', value: cirugia.doctor_nombre },
-    cirugia.procedimiento && { Icon: Stethoscope, label: 'Procedimiento', value: cirugia.procedimiento },
-    cirugia.diagnostico && { Icon: AlertTriangle, label: 'Diagnóstico', value: cirugia.diagnostico },
-    cirugia.ojo && { Icon: Eye, label: 'Ojo', value: etiquetaOjo(cirugia.ojo) },
-    cirugia.lio && { Icon: () => <div className="h-3 w-3 rounded-full border-2 border-current" />, label: 'LIO', value: cirugia.lio },
-    cirugia.marca_lio && { Icon: () => <div className="h-3 w-3 rounded-full border-2 border-current" />, label: 'Marca LIO', value: cirugia.marca_lio },
-    cirugia.tiempo_estimado && { Icon: Timer, label: 'Tiempo estimado', value: cirugia.tiempo_estimado },
-    cirugia.tiempo_estancia && { Icon: Timer, label: 'Tiempo estancia', value: cirugia.tiempo_estancia },
-    cirugia.procedencia && { Icon: Building2, label: 'Procedencia', value: cirugia.procedencia },
-  ].filter(Boolean) as Array<{ Icon: React.ComponentType<{ className?: string }>; label: string; value: string }>;
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-start gap-4">
-        <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center text-sm font-extrabold', tipoConfig[cirugia.tipo || 'cirugia'].bg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-          {cirugia.hora ? fmtTime(cirugia.hora) : '--:--'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
-          <FichaPaciente
-            variante="linea"
-            className="mt-0.5 text-xs"
-            expediente={cirugia.paciente_expediente ?? cirugia.expediente}
-            sexo={cirugia.paciente_sexo}
-            fechaNacimiento={cirugia.paciente_fecha_nacimiento}
-            edad={cirugia.paciente_edad}
-          />
-          <div className="flex items-center gap-2 mt-1">
-            <span className={cn('inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-              <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
-              {estadoLabels[cirugia.estado]}
-            </span>
-            {cirugia.fecha && <span className="text-xs text-muted">{fmtDateShort(cirugia.fecha)}</span>}
-          </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {items.map(item => (
-          <div key={item.label} className="rounded-lg border border-line/70 p-3 bg-gray-50/50 dark:bg-surface-2/50">
-            <div className="flex items-center gap-1.5 mb-1">
-              <item.Icon className="h-3 w-3 text-muted" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{item.label}</span>
-            </div>
-            <p className="text-sm font-bold text-fg">{item.value}</p>
-          </div>
-        ))}
-      </div>
-      {cirugia.notas && (
-        <div className="rounded-lg bg-surface-2 border border-line/70 p-3">
-          <div className="flex items-center gap-1.5 mb-1"><StickyNote className="h-3 w-3 text-gray-400" /><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Notas</span></div>
-          <p className="text-sm text-fg-2">{cirugia.notas}</p>
-        </div>
-      )}
-      {!agendaSoloPropia(userRol) && (
-        <div className="flex gap-2 pt-2 border-t border-line/70">
-          {cirugia.estado === 'agendada' && (
-            <>
-              <button onClick={() => updateEstado('completada')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
-                <CheckCircle2 className="h-4 w-4" /> Completar
-              </button>
-              <button onClick={() => updateEstado('cancelada')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
-                <X className="h-4 w-4" /> Cancelar
-              </button>
-            </>
-          )}
-          <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">
-            Editar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────── Detail Popover Card (Google Calendar style) ───────── */
-function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEstado, onAccion }: {
-  cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
-  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado) => Promise<void>;
-  onAccion: (accion: AccionRapida) => void;
-}) {
-  const router = useRouter();
-  const [updating, setUpdating] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [adjustedPos, setAdjustedPos] = useState(position);
-  const esCirugia = !cirugia.tipo || cirugia.tipo === 'cirugia';
-  const acciones = accionesDisponibles(cirugia, userRol);
-  // Contacto del paciente para WhatsApp/correo: solo al abrir la ventana (payload mínimo).
-  const { data: contacto } = useSWR<{ telefono: string | null; telefonos?: TelefonoPaciente[]; email: string | null }>(
-    cirugia.paciente_id && puedeGestionarAgenda(userRol) ? `/api/pacientes/${cirugia.paciente_id}/contacto` : null,
-    { revalidateOnFocus: false }
-  );
-
-  useEffect(() => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let x = position.x;
-    let y = position.y;
-    if (x + rect.width > vw - 16) x = vw - rect.width - 16;
-    if (y + rect.height > vh - 16) y = position.y - rect.height - 10;
-    if (x < 16) x = 16;
-    if (y < 16) y = 16;
-    setAdjustedPos({ x, y });
-  }, [position]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const updateEstado = async (s: AgendaCirugiaEstado) => {
-    if (updating) return;
-    setUpdating(true);
-    try {
-      await onEstado(s); // optimista en la agenda; el error se muestra en un toast
-    } finally { setUpdating(false); }
-  };
-
-  return (
-    <div ref={cardRef}
-      className="fixed z-50 w-[340px] rounded-2xl border border-line bg-surface shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-      style={{ left: adjustedPos.x, top: adjustedPos.y }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
-            <h3 className="text-base font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
-          </div>
-          <FichaPaciente
-            variante="linea"
-            className="mt-0.5 pl-6 text-xs"
-            expediente={cirugia.paciente_expediente ?? cirugia.expediente}
-            sexo={cirugia.paciente_sexo}
-            fechaNacimiento={cirugia.paciente_fecha_nacimiento}
-            edad={cirugia.paciente_edad}
-          />
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {acciones.includes('cancelar') && (
-            <button onClick={() => onAccion('cancelar')} disabled={updating}
-              className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors text-gray-400 hover:text-red-500"
-              title="Cancelar cita" aria-label="Cancelar cita">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-            </button>
-          )}
-          <button onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-fg"
-            title="Cerrar">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Subtitle */}
-      <div className="px-4 pb-2">
-        <p className="text-xs text-muted">
-          {cirugia.fecha && fmtDate(cirugia.fecha)}
-        </p>
-      </div>
-
-      {/* Details */}
-      <div className="px-4 pb-3 space-y-2">
-        {!esCirugia && (cirugia.especialidad || cirugia.tipo_consulta_label) && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Stethoscope className="h-4 w-4 text-muted shrink-0" />
-            <span>{[cirugia.especialidad, cirugia.tipo_consulta_label].filter(Boolean).join(' · ')}</span>
-          </div>
-        )}
-        {cirugia.codigo && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <FileSpreadsheet className="h-4 w-4 text-muted shrink-0" />
-            <span className="font-mono text-xs">{cirugia.codigo}</span>
-          </div>
-        )}
-        {cirugia.procedimiento && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Stethoscope className="h-4 w-4 text-muted shrink-0" />
-            <span>{cirugia.procedimiento}</span>
-          </div>
-        )}
-        {cirugia.doctor_nombre && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <User className="h-4 w-4 text-muted shrink-0" />
-            <span>{cirugia.doctor_nombre}</span>
-          </div>
-        )}
-        {cirugia.hora && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Clock className="h-4 w-4 text-muted shrink-0" />
-            <span>{fmtTime(cirugia.hora)}{cirugia.tiempo_estimado ? ` · ${cirugia.tiempo_estimado}` : ''}</span>
-          </div>
-        )}
-        {cirugia.ojo && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Eye className="h-4 w-4 text-muted shrink-0" />
-            <span>{etiquetaOjo(cirugia.ojo)}</span>
-          </div>
-        )}
-        {cirugia.jornada && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <MapPin className="h-4 w-4 text-muted shrink-0" />
-            <span>{cirugia.jornada}</span>
-          </div>
-        )}
-        {cirugia.expediente && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <FileSpreadsheet className="h-4 w-4 text-muted shrink-0" />
-            <span>Exp. {cirugia.expediente}</span>
-          </div>
-        )}
-        {cirugia.procedencia && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Building2 className="h-4 w-4 text-muted shrink-0" />
-            <span>{cirugia.procedencia}</span>
-          </div>
-        )}
-        {cirugia.diagnostico && (
-          <div className="flex items-start gap-2.5 text-sm text-fg-2">
-            <Stethoscope className="h-4 w-4 text-muted shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{cirugia.diagnostico}</span>
-          </div>
-        )}
-        {(cirugia.lio || cirugia.marca_lio) && (
-          <div className="flex items-center gap-2.5 text-sm text-fg-2">
-            <Eye className="h-4 w-4 text-muted shrink-0" />
-            <span>{[cirugia.marca_lio, cirugia.lio].filter(Boolean).join(' — ')}</span>
-          </div>
-        )}
-        {cirugia.notas && (
-          <div className="flex items-start gap-2.5 text-sm text-fg-2">
-            <StickyNote className="h-4 w-4 text-muted shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{cirugia.notas}</span>
-          </div>
-        )}
-        {cirugia.motivo_aplazamiento && (
-          <div className="flex items-start gap-2.5 text-sm text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{cirugia.motivo_aplazamiento}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Status + Actions */}
-      <div className="px-4 pb-4 pt-2 border-t border-line/70 space-y-2">
-        <div className="flex items-center gap-2">
-          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
-            {estadoLabels[cirugia.estado]}
-          </span>
-          <div className="flex-1" />
-          {esCirugia && !agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
-            <button onClick={() => updateEstado('completada')} disabled={updating}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
-              Completar
-            </button>
-          )}
-          {esCirugia && !agendaSoloPropia(userRol) && (
-            <button onClick={onEdit}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-line text-fg-2 hover:bg-surface-2 transition-colors">
-              Editar
-            </button>
-          )}
-        </div>
-        {acciones.length > 0 && (
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${acciones.length}, minmax(0, 1fr))` }} role="group" aria-label="Acciones rápidas">
-            {acciones.map((a) => (
-              <button key={a} onClick={() => onAccion(a)} disabled={updating}
-                className={cn(
-                  'rounded-lg border px-2 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50',
-                  a === 'cancelar'
-                    ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10'
-                    : 'border-line text-fg-2 hover:bg-surface-2'
-                )}>
-                {ETIQUETA_ACCION[a]}
-              </button>
-            ))}
-          </div>
-        )}
-        {cirugia.paciente_id && puedeGestionarAgenda(userRol) && (
-          <EnviarPaciente
-            variante="compacto"
-            cita={{
-              tipo: esCirugia ? 'cirugia' : 'consulta',
-              paciente: cirugia.nombre_paciente,
-              fecha: cirugia.fecha,
-              hora: cirugia.hora,
-              doctor: cirugia.doctor_nombre,
-              detalle: esCirugia ? cirugia.procedimiento : (cirugia.tipo_consulta_label || cirugia.procedimiento),
-            }}
-            telefono={contacto?.telefono}
-            telefonos={contacto?.telefonos}
-            email={contacto?.email}
-          />
-        )}
-        {cirugia.paciente_id && userRol !== 'enfermero' && (
-          <button
-            onClick={() => { onClose(); router.push(urlAgendarConsulta(cirugia)); }}
-            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-bold text-primary-700 hover:bg-primary-50 dark:border-primary-500/30 dark:text-primary-300 dark:hover:bg-primary-500/10 transition-colors">
-            <CalendarPlus className="h-3.5 w-3.5" />
-            Agendar consulta
-          </button>
-        )}
-        <button
-          onClick={() => { onClose(); router.push(esCirugia ? `/cirugias/${cirugia.id}` : `/consultas/${cirugia.id}`); }}
-          className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors">
-          Ver detalle completo
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ───────── Quick Add / Form ───────── */
-function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, onClose, onSaved }: {
-  cirugiaId: string | null; doctores: Doctor[]; userRol: string; initialDate?: string | null; initialHour?: string;
-  onClose: () => void; onSaved: (id: string | null, cambios?: Partial<AgendaCirugia>) => void;
-}) {
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const isEditing = !!cirugiaId;
-  interface CirugiaForm {
-    nombre_paciente: string; expediente: string; fecha: string; hora: string;
-    jornada: string; diagnostico: string; procedimiento: string; ojo: string; lio: string; marca_lio: string;
-    inventario_item_id: string;
-    tiempo_estimado: string; tiempo_estancia: string; doctor_id: string; notas: string; procedencia: string; motivo_aplazamiento: string;
-  }
-
-  const defaultCirugiaForm: CirugiaForm = {
-    nombre_paciente: '', expediente: '', fecha: initialDate || '', hora: initialHour || '',
-    jornada: '', diagnostico: '', procedimiento: '', ojo: '', lio: '', marca_lio: '',
-    inventario_item_id: '',
-    tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '', motivo_aplazamiento: '',
-  };
-
-  const [form, setForm] = useState<CirugiaForm>(() => {
-    // Load draft only for new surgeries
-    if (!cirugiaId) {
-      try {
-        const raw = localStorage.getItem('autosave:nueva-cirugia');
-        if (raw) {
-          const draft = JSON.parse(raw);
-          if (draft && draft.nombre_paciente !== undefined) return draft;
-        }
-      } catch {}
-    }
-    return defaultCirugiaForm;
-  });
-  const [formCargado, setFormCargado] = useState(!cirugiaId);
-
-  const { clearDraft } = useAutosave(isEditing ? '' : 'nueva-cirugia', form, isEditing ? 999999 : 1500);
-
-  // Detalle del evento a editar (caché compartida con el popover de la agenda).
-  const { data: detalle, error: errorDetalle } = useSWR<AgendaCirugia>(
-    cirugiaId ? `/api/agenda/${cirugiaId}` : null,
-    { revalidateOnFocus: false }
-  );
-  useEffect(() => {
-    if (errorDetalle && !formCargado) { setError('Error al cargar la cirugía'); setFormCargado(true); }
-  }, [errorDetalle, formCargado]);
-  useEffect(() => {
-    if (!detalle || formCargado) return;
-    const data = detalle;
-    setForm({
-      nombre_paciente: data.nombre_paciente || '', expediente: data.expediente || '', fecha: data.fecha || '',
-      hora: data.hora?.slice(0, 5) || '', jornada: data.jornada || '', diagnostico: data.diagnostico || '',
-      procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
-      inventario_item_id: data.inventario_item_id || '',
-      tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
-      notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
-    });
-    setFormCargado(true);
-  }, [detalle, formCargado]);
-  const loadingCirugia = !formCargado;
-
-  const handleLIOSelect = (itemId: string | null) => {
-    setForm(f => ({
-      ...f,
-      inventario_item_id: itemId || '',
-      // No se copian marca/modelo/lote a campos de texto; la relación es por FK.
-      lio: '',
-      marca_lio: '',
-    }));
-  };
-
-  const handleSubmit = async () => {
-    if (saving) return;
-    if (!form.nombre_paciente.trim()) { setError('El nombre del paciente es obligatorio'); return; }
-    if (form.nombre_paciente.trim().length > 200) { setError('El nombre del paciente es demasiado largo (máx. 200 caracteres)'); return; }
-    if (form.notas.length > 2000) { setError('Las notas son demasiado largas (máx. 2000 caracteres)'); return; }
-    setSaving(true); setError(null);
-    try {
-      const body: Record<string, unknown> = {
-        nombre_paciente: form.nombre_paciente.trim(), expediente: form.expediente || null, fecha: form.fecha || null,
-        hora: form.hora || null, jornada: form.jornada || null, diagnostico: form.diagnostico || null,
-        procedimiento: form.procedimiento || null, ojo: form.ojo || null, lio: form.lio || null,
-        marca_lio: form.marca_lio || null, inventario_item_id: form.inventario_item_id || null,
-        tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
-        doctor_id: form.doctor_id || null, notas: form.notas || null, procedencia: form.procedencia || null,
-        motivo_aplazamiento: form.motivo_aplazamiento || null,
-      };
-      const url = cirugiaId ? `/api/agenda/${cirugiaId}` : '/api/agenda';
-      await enviarJSON(url, cirugiaId ? 'PATCH' : 'POST', body);
-      clearDraft();
-      const doctor = doctores.find((d) => d.id === form.doctor_id);
-      onSaved(cirugiaId, cirugiaId ? {
-        ...(body as Partial<AgendaCirugia>),
-        ...(!agendaSoloPropia(userRol) ? { doctor_nombre: doctor?.alias ?? null } : {}),
-      } : undefined);
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error desconocido'); } finally { setSaving(false); }
-  };
-
-  if (loadingCirugia) {
-    return (
-      <div className="animate-pulse space-y-4 py-1" aria-busy="true" aria-label="Cargando">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="space-y-1.5">
-            <div className="h-3 w-24 rounded bg-surface-3/70" />
-            <div className="h-10 rounded-lg bg-surface-2" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const inputCls = "w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500";
-  const labelCls = "block text-xs font-bold text-muted mb-1";
-
-  return (
-    <div className="space-y-4">
-      {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
-      <div><label className={labelCls}>Nombre del paciente <span className="text-red-500">*</span></label><input type="text" value={form.nombre_paciente} onChange={e => setForm(f => ({ ...f, nombre_paciente: e.target.value }))} placeholder="Nombre completo" className={inputCls} /></div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className={labelCls}>Expediente</label><input type="text" value={form.expediente} onChange={e => setForm(f => ({ ...f, expediente: e.target.value }))} placeholder="Núm. expediente" className={inputCls} /></div>
-        <div><label className={labelCls}>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className={inputCls} /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className={labelCls}>Hora</label><input type="time" value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} className={inputCls} /></div>
-        <div><label className={labelCls}>Jornada</label><input type="text" value={form.jornada} onChange={e => setForm(f => ({ ...f, jornada: e.target.value }))} placeholder="Ej. TIJUANA" className={inputCls} /></div>
-      </div>
-      {!agendaSoloPropia(userRol) && (
-        <div><label className={labelCls}>Doctor / Cirujano</label>
-          <select value={form.doctor_id} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
-            <option value="">Sin asignar</option>
-            {doctores.filter(d => d.tipo_personal !== 'ENFERMERO' && d.tipo_personal !== 'ANESTESIOLOGO').map(d => <option key={d.id} value={d.id}>{d.alias}</option>)}
-          </select>
-        </div>
-      )}
-      <div><label className={labelCls}>Procedimiento</label><input type="text" value={form.procedimiento} onChange={e => setForm(f => ({ ...f, procedimiento: e.target.value }))} placeholder="Ej. FACO + LIO" className={inputCls} /></div>
-      <div><label className={labelCls}>Diagnóstico</label><input type="text" value={form.diagnostico} onChange={e => setForm(f => ({ ...f, diagnostico: e.target.value }))} placeholder="Diagnóstico" className={inputCls} /></div>
-      <div className="grid grid-cols-3 gap-3">
-        <div><label className={labelCls}>Ojo</label>
-          <select value={form.ojo} onChange={e => setForm(f => ({ ...f, ojo: e.target.value }))} className={cn(inputCls, 'appearance-none')}>
-            <option value="">—</option><option value="OD">OD</option><option value="OI">OS</option><option value="OU">OU</option>
-          </select>
-        </div>
-        <div className="col-span-2"><label className={labelCls}>LIO desde Inventario <span className="font-normal text-muted">(opcional)</span></label>
-          <LIOSelector value={form.inventario_item_id} onChange={handleLIOSelect} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className={labelCls}>Tiempo estimado</label><input type="text" value={form.tiempo_estimado} onChange={e => setForm(f => ({ ...f, tiempo_estimado: e.target.value }))} placeholder="Ej. 1 HR" className={inputCls} /></div>
-        <div><label className={labelCls}>Tiempo estancia</label><input type="text" value={form.tiempo_estancia} onChange={e => setForm(f => ({ ...f, tiempo_estancia: e.target.value }))} placeholder="Ej. 3 HR" className={inputCls} /></div>
-      </div>
-      <div><label className={labelCls}>Notas</label><textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} placeholder="Notas adicionales..." className={cn(inputCls, 'resize-none')} /></div>
-      <div><label className={labelCls}>Procedencia</label><input type="text" value={form.procedencia} onChange={e => setForm(f => ({ ...f, procedencia: e.target.value }))} placeholder="Ej. Derivación externa" className={inputCls} /></div>
-      <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
-      <div className="flex gap-3 pt-3 border-t border-line/70">
-        <button onClick={onClose} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
-        <button onClick={handleSubmit} disabled={saving} aria-busy={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">
-          {saving ? 'Guardando…' : cirugiaId ? 'ACTUALIZAR' : 'GUARDAR'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ───────── Importación masiva (cirugías y consultas) ───────── */
-interface ImportResumen {
-  total: number;
-  aImportar: number;
-  aplazadas?: number;
-  duplicadas: number;
-  conError: number;
-  doctoresNuevos: string[];
-  pacientesNuevos: number;
-}
-interface ImportFilaPreview {
-  fila: number;
-  fecha: string | null;
-  hora: string | null;
-  paciente: string;
-  doctor: string | null;
-  estado?: string;
-  paciente_nuevo: boolean;
-  doctor_nuevo: boolean;
-}
-interface ImportRechazo { fila: number; hoja?: string; motivo: string }
-interface ImportPreviewResp {
-  resumen: ImportResumen;
-  filas: ImportFilaPreview[];
-  rechazos: ImportRechazo[];
-  rechazosCsv: string | null;
-  duplicadosCsv: string | null;
-}
-interface ImportResultado {
-  importadas: number;
-  aplazadasImportadas?: number;
-  omitidasDuplicadas: number;
-  errores: number;
-  doctoresCreados: number;
-  pacientesCreados: number;
-  rechazos: ImportRechazo[];
-  rechazosCsv: string | null;
-  duplicadosCsv: string | null;
-}
-
-/** Descarga un CSV (con BOM para que Excel respete los acentos). */
-function descargarCsv(nombre: string, contenido: string) {
-  const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function BotonesCsv({ tipo, rechazosCsv, duplicadosCsv }: { tipo: 'cirugias' | 'consultas'; rechazosCsv: string | null; duplicadosCsv: string | null }) {
-  if (!rechazosCsv && !duplicadosCsv) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {rechazosCsv && (
-        <button
-          onClick={() => descargarCsv(`${tipo}-no-importadas.csv`, rechazosCsv)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-        >
-          <Download className="h-3.5 w-3.5" /> Descargar CSV de no importadas (con motivo)
-        </button>
-      )}
-      {duplicadosCsv && (
-        <button
-          onClick={() => descargarCsv(`${tipo}-duplicadas-omitidas.csv`, duplicadosCsv)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2"
-        >
-          <Download className="h-3.5 w-3.5" /> Descargar duplicadas omitidas
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ListaRechazos({ rechazos }: { rechazos: ImportRechazo[] }) {
-  if (rechazos.length === 0) return null;
-  return (
-    <div className="max-h-32 overflow-y-auto rounded-lg border border-red-200 divide-y divide-red-100 text-xs dark:border-red-500/30 dark:divide-red-500/20">
-      {rechazos.slice(0, 30).map((r, i) => (
-        <div key={i} className="px-3 py-1.5 text-fg-2">
-          <b>{r.hoja && r.hoja !== 'CIRUGIA' && r.hoja !== 'CONSULTAS' ? `${r.hoja} · ` : ''}Fila {r.fila}:</b> {r.motivo}
-        </div>
-      ))}
-      {rechazos.length > 30 && <p className="px-3 py-1.5 text-muted">… y {rechazos.length - 30} más en el CSV</p>}
-    </div>
-  );
-}
-
-function ImportAgenda({
-  tipo,
-  titulo,
-  descripcion,
-  plantilla,
-  onClose,
-  onImported,
-}: {
-  tipo: 'cirugias' | 'consultas';
-  titulo: string;
-  descripcion: ReactNode;
-  plantilla: { nombre: string; lineas: string[] };
-  onClose: () => void;
-  onImported: () => void;
-}) {
-  const [step, setStep] = useState<'upload' | 'preview'>('upload');
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<ImportPreviewResp | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ImportResultado | null>(null);
-
-  const enviar = async (confirmar: boolean) => {
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('tipo', tipo);
-      if (confirmar) fd.append('confirmar', 'true');
-      const res = await fetch('/api/agenda/import', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Error al importar');
-      if (confirmar) setResult(data as ImportResultado);
-      else { setPreview(data as ImportPreviewResp); setStep('preview'); }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const etiqueta = tipo === 'cirugias' ? 'cirugías' : 'consultas';
-  const r = preview?.resumen;
-
-  return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{titulo}</h3>
-      {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
-
-      {step === 'upload' && !result && (
-        <>
-          <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">{descripcion}</div>
-          <button
-            onClick={() => descargarCsv(plantilla.nombre, plantilla.lineas.join('\n'))}
-            className="text-xs font-bold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1"
-          >
-            ⬇ Descargar plantilla CSV
-          </button>
-          <div className="border-2 border-dashed border-gray-300 dark:border-line rounded-lg p-6 text-center">
-            <FileSpreadsheet className="h-10 w-10 mx-auto text-muted mb-3" />
-            <input type="file" accept=".xlsx,.csv" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Cancelar</button>
-            <button onClick={() => enviar(false)} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Revisando…' : 'Previsualizar'}</button>
-          </div>
-        </>
-      )}
-
-      {step === 'preview' && preview && r && !result && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2 dark:bg-emerald-500/10 dark:border-emerald-500/30"><p className="text-[10px] font-bold text-emerald-700 uppercase dark:text-emerald-300">Se agregarán</p><p className="text-2xl font-extrabold text-emerald-800 dark:text-emerald-200">{r.aImportar}</p>{r.aplazadas ? <p className="text-[10px] text-emerald-700 dark:text-emerald-300">{r.aplazadas} aplazadas</p> : null}</div>
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-2 dark:bg-blue-500/10 dark:border-blue-500/30"><p className="text-[10px] font-bold text-blue-700 uppercase dark:text-blue-300">Ya existen</p><p className="text-2xl font-extrabold text-blue-800 dark:text-blue-200">{r.duplicadas}</p></div>
-            <div className="rounded-lg bg-red-50 border border-red-200 p-2 dark:bg-red-500/10 dark:border-red-500/30"><p className="text-[10px] font-bold text-red-700 uppercase dark:text-red-300">Con error</p><p className="text-2xl font-extrabold text-red-800 dark:text-red-200">{r.conError}</p></div>
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 dark:bg-amber-500/10 dark:border-amber-500/30"><p className="text-[10px] font-bold text-amber-700 uppercase dark:text-amber-300">Pacientes nuevos</p><p className="text-2xl font-extrabold text-amber-800 dark:text-amber-200">{r.pacientesNuevos}</p></div>
-          </div>
-          {r.doctoresNuevos.length > 0 && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 inline mr-1" />
-              Se darán de alta {r.doctoresNuevos.length} doctor(es): <b>{r.doctoresNuevos.join(', ')}</b>. Revisa que no sea otro nombre de un doctor existente.
-            </div>
-          )}
-          {(r.pacientesNuevos > 0 || r.doctoresNuevos.length > 0) && (
-            <p className="text-xs text-muted">Los pacientes y doctores nuevos quedarán marcados con «Completar información» para terminar su ficha.</p>
-          )}
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-line divide-y divide-line/70 text-xs">
-            {preview.filas.map((f) => (
-              <div key={f.fila} className="flex items-center gap-3 px-3 py-2">
-                <span className="text-muted w-14 shrink-0">{f.fecha ? f.fecha.slice(5) : 'Sin fecha'}{f.hora ? ` ${f.hora.slice(0, 5)}` : ''}</span>
-                <span className="font-medium text-fg truncate flex-1">
-                  {f.paciente}
-                  {f.paciente_nuevo && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
-                </span>
-                <span className="text-muted truncate w-32">
-                  {f.doctor || '—'}
-                  {f.doctor_nuevo && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
-                </span>
-                {f.estado && f.estado !== 'agendada' && <span className="text-[10px] font-bold uppercase text-muted w-16">{f.estado}</span>}
-              </div>
-            ))}
-            {r.aImportar > preview.filas.length && <p className="text-center text-muted py-1.5">… y {r.aImportar - preview.filas.length} más</p>}
-            {r.aImportar === 0 && <p className="text-center text-muted py-3">No hay {etiqueta} nuevas para agregar.</p>}
-          </div>
-          <ListaRechazos rechazos={preview.rechazos} />
-          <BotonesCsv tipo={tipo} rechazosCsv={preview.rechazosCsv} duplicadosCsv={preview.duplicadosCsv} />
-          <div className="flex justify-end gap-3">
-            <button onClick={() => { setStep('upload'); setPreview(null); }} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Atrás</button>
-            <button onClick={() => enviar(true)} disabled={loading || r.aImportar === 0} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Importando…' : `Agregar ${r.aImportar} ${etiqueta}`}</button>
-          </div>
-        </>
-      )}
-
-      {result && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-6 w-6 text-green-500" />
-            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Importación terminada</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded bg-emerald-50 p-2 dark:bg-emerald-500/10"><span className="font-bold text-emerald-700 dark:text-emerald-300">{result.importadas}</span> {etiqueta} agregadas</div>
-            {result.aplazadasImportadas !== undefined && <div className="rounded bg-yellow-50 p-2 dark:bg-yellow-500/10"><span className="font-bold text-yellow-700 dark:text-yellow-300">{result.aplazadasImportadas}</span> aplazadas</div>}
-            <div className="rounded bg-blue-50 p-2 dark:bg-blue-500/10"><span className="font-bold text-blue-700 dark:text-blue-300">{result.omitidasDuplicadas}</span> ya existían (omitidas)</div>
-            <div className="rounded bg-red-50 p-2 dark:bg-red-500/10"><span className="font-bold text-red-700 dark:text-red-300">{result.errores}</span> no se pudieron agregar</div>
-            <div className="rounded bg-amber-50 p-2 dark:bg-amber-500/10"><span className="font-bold text-amber-700 dark:text-amber-300">{result.pacientesCreados}</span> pacientes nuevos</div>
-            <div className="rounded bg-amber-50 p-2 dark:bg-amber-500/10"><span className="font-bold text-amber-700 dark:text-amber-300">{result.doctoresCreados}</span> doctores nuevos</div>
-          </div>
-          {(result.pacientesCreados > 0 || result.doctoresCreados > 0) && (
-            <p className="text-xs text-muted">Complétalos en Pacientes y en Configuración → Personal médico (aparecen con «Completar información»).</p>
-          )}
-          <ListaRechazos rechazos={result.rechazos} />
-          <BotonesCsv tipo={tipo} rechazosCsv={result.rechazosCsv} duplicadosCsv={result.duplicadosCsv} />
-          <div className="flex justify-end">
-            <button onClick={onImported} className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-bold text-white hover:bg-primary-700">Cerrar</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ImportExcel({ onClose, onImported }: { doctores?: Doctor[]; onClose: () => void; onImported: () => void }) {
-  return (
-    <ImportAgenda
-      tipo="cirugias"
-      titulo="Importar Cirugías"
-      descripcion={
-        <>
-          <p>Archivo .xlsx (hojas &quot;CIRUGIA&quot; y &quot;APLAZADOS&quot;) o .csv. Sin fecha → <b>aplazada</b>; &quot;SUSPENDIDO&quot; en notas → <b>cancelada</b>.</p>
-          <p>Solo se agregan las que faltan: las que ya existen (mismo paciente, fecha y hora) se omiten. Pacientes y cirujanos que no existan se dan de alta.</p>
-        </>
-      }
-      plantilla={{
-        nombre: 'plantilla-cirugias.csv',
-        lineas: [
-          'FECHA,NOMBRE PX,No. Expediente,HORA CX,JORNADA,FECHA NAC.,SEXO,EDAD,DIAGNOSTICO,PROCEDIMIENTO,OJO,LIO,MARCA,OJO,LIO,MARCA,TIEMPO ESTIMADO CX,TIEMPO DE ESTANCIA,CIRUJANO,NOTAS',
-          '2026-07-22,MARIA LOURDES RUIZ,776,06:00:00,TIJUANA,1969-09-20,F,56,RETINOPATIA DIABETICA,FACO-VITRECTOMIA,OI,23.00 CLAREON,,,,,2 HR,3 HR,BAYARDO/IRINA,',
-          '2026-07-27,MARIA ELENA LOPEZ,799,07:00:00,ENSENADA,1965-08-18,F,60,CATARATA,FACO + LIO,OD,25.5,,,,,1 HR,,FELIX,',
-        ],
-      }}
-      onClose={onClose}
-      onImported={onImported}
-    />
-  );
-}
-
-function ImportConsultas({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
-  return (
-    <ImportAgenda
-      tipo="consultas"
-      titulo="Importar Consultas"
-      descripcion={
-        <>
-          <p>Archivo .csv o .xlsx del registro de entradas y salidas. Las consultas nacen <b>Agendadas</b>.</p>
-          <p>Solo se agregan las que faltan: las que ya existen (mismo paciente, fecha y hora) se omiten. Pacientes y doctores que no existan se dan de alta.</p>
-        </>
-      }
-      plantilla={{
-        nombre: 'plantilla-consultas.csv',
-        lineas: [
-          'FECHA,HORA DE INGRESO,HORA DE EGRESO,NUMERO DE TELEFONO ,DOCTOR,MEDICO IC,NOMBRE  DE PACIENTE ,SEXO ,FECHA DE NACIMIENTO,EDAD ,CONSULTA,DIAGNOSTICO ,TIPO DE CONSULTA,ESTUDIO 1,ESTUDIO2,ESTUDIO3,OPERADOR ,PROCEDIMIENTO ,ASEGURANZA,METODO DE PAGO , COSTO CONSULTA ,TIPO DE MONEDA ,',
-          '"Tuesday, September 1, 2026",10:00AM,10:30AM,6611073755,DRA IRINA ,,Manuel Escobar Martinez,MASCULINO,1958-06-05,68,ESTUDIO,,PRIMERA VEZ ,Tomografia OCT Macular por ojo,,,,,TARJETA,5100,',
-          '"Tuesday, September 1, 2026",11:30AM,12:00PM,6644388498,DRA IRINA ,,Carlos Gomez Jimenez,MASCULINO,1957-02-16,69,CONSULTA,CATARATA,PRIMERA VEZ ,,,,,,ISSSTECALI,EFECTIVO,800,',
-        ],
-      }}
-      onClose={onClose}
-      onImported={onImported}
-    />
   );
 }

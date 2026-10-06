@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig, type KeyedMutator } from 'swr';
+import { useRefrescoCompartido } from '@/lib/tiempo-real';
 
 /**
  * Intervalo de refresco para datos que cambian por la acción de OTROS usuarios
@@ -70,8 +71,13 @@ export function useFetch<T, R = unknown>(
     [url, paramsKey, extraKey, options?.enabled]
   );
 
+  // Datos compartidos: con tiempo real conectado el polling es solo respaldo (2 min).
+  const refrescoCompartido = useRefrescoCompartido();
+  const refreshInterval =
+    options?.refreshInterval === REFRESCO_COMPARTIDO_MS ? refrescoCompartido : options?.refreshInterval;
+
   const { data: json, error, isLoading, isValidating, mutate } = useSWR<R>(key, {
-    refreshInterval: options?.refreshInterval,
+    refreshInterval,
     refreshWhenHidden: false,
   });
 

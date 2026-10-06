@@ -6,6 +6,7 @@ import { leerJSON } from '@/lib/api/validar';
 import { emailOpcional, idDeQuery, monto, respuestaErrorDb, textoCorto } from '@/lib/api/configuracion';
 import { z } from 'zod';
 import { claveTexto, faltantesDoctor, limpiarEspacios } from '@/lib/import-agenda';
+import { ruta } from '@/lib/api/ruta';
 
 // Personal unificado (mig. 390): médicos y enfermería en la misma tabla.
 const tipoPersonal = z.enum(['MEDICO', 'ENFERMERO', 'ANESTESIOLOGO']);
@@ -93,7 +94,7 @@ async function validarVinculo(
   return null;
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -139,7 +140,7 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -191,7 +192,7 @@ export async function POST(request: Request) {
   return NextResponse.json(doctor, { status: 201 });
 }
 
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -258,7 +259,7 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(request: Request) {
+async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
@@ -281,3 +282,8 @@ export async function DELETE(request: Request) {
   invalidarDoctorDeUsuario(); // el vínculo usuario↔doctor pudo cambiar
   return NextResponse.json({ success: true });
 }
+
+export const GET = ruta('configuracion/doctores#GET', manejarGET);
+export const POST = ruta('configuracion/doctores#POST', manejarPOST);
+export const PATCH = ruta('configuracion/doctores#PATCH', manejarPATCH);
+export const DELETE = ruta('configuracion/doctores#DELETE', manejarDELETE);

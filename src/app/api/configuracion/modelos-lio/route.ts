@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { respuestaErrorDb } from '@/lib/api/configuracion';
 import { VALORES_DISENO_LIO, fabricanteCanonico } from '@/lib/catalogos/modelos-lio';
+import { ruta } from '@/lib/api/ruta';
 
 /** Administración del catálogo de modelos de LIO (solo admin). */
 
@@ -57,7 +58,7 @@ async function soloAdmin() {
 }
 
 /** GET — todos los modelos, incluidos inactivos (para administrar). */
-export async function GET() {
+async function manejarGET() {
   const denegado = await soloAdmin();
   if (denegado) return denegado;
   const { data, error } = await getSupabaseAdmin()
@@ -71,7 +72,7 @@ export async function GET() {
 }
 
 /** POST — alta de un modelo, o importación CSV con { filas } (omite duplicados). */
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const denegado = await soloAdmin();
   if (denegado) return denegado;
   const data = await leerJSON(request, crearSchema, { maxBytes: 200_000 });
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
 }
 
 /** PATCH — editar, marcar verificado o activar/desactivar (no se borran: pueden estar en cirugías). */
-export async function PATCH(request: Request) {
+async function manejarPATCH(request: Request) {
   const denegado = await soloAdmin();
   if (denegado) return denegado;
   const data = await leerJSON(request, actualizarSchema);
@@ -168,3 +169,7 @@ export async function PATCH(request: Request) {
   if (error) return respuestaErrorDb(error, 'configuracion.modelos-lio', { duplicado: 'Ese modelo ya está en el catálogo' });
   return NextResponse.json(actualizado);
 }
+
+export const GET = ruta('configuracion/modelos-lio#GET', manejarGET);
+export const POST = ruta('configuracion/modelos-lio#POST', manejarPOST);
+export const PATCH = ruta('configuracion/modelos-lio#PATCH', manejarPATCH);

@@ -9,6 +9,7 @@ import {
   Camera, X, Sun, Moon, Palette,
 } from 'lucide-react';
 import { useUser, clearUserCache } from '@/hooks/useUser';
+import { borrarTodosLosBorradores } from '@/lib/borradores';
 import { enviarJSON } from '@/lib/fetcher';
 import Skeleton from '@/components/ui/Skeleton';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
@@ -308,7 +309,7 @@ export default function MiPerfilPage() {
             <p className="text-sm text-muted mt-2">¿Estás seguro que deseas cerrar sesión?</p>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">Cancelar</button>
-              <form action={logout} onSubmit={() => clearUserCache()} className="flex-1">
+              <form action={logout} onSubmit={() => { clearUserCache(); borrarTodosLosBorradores(); }} className="flex-1">
                 <button type="submit" className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-colors">Cerrar</button>
               </form>
             </div>

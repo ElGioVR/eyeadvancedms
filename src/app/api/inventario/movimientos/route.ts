@@ -6,6 +6,7 @@ import { translateError } from '@/lib/supabase/errors';
 import { registrarMovimiento } from '@/lib/inventario';
 import { esquemaPaginacion, leerJSON, leerQuery } from '@/lib/api/validar';
 import { z } from 'zod';
+import { ruta } from '@/lib/api/ruta';
 
 const movimientoCreateSchema = z.object({
   inventario_item_id: z.string().uuid(),
@@ -26,7 +27,7 @@ const listaQuerySchema = z.object({
   item_id: z.string().uuid('ID no válido').optional(),
 });
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRoleInventario(auth.user, ['admin', 'doctor', 'recepcionista']);
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ data: result, total: count || 0, page, pageSize });
 }
 
-export async function POST(request: Request) {
+async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRoleInventario(auth.user, ['admin', 'recepcionista']);
@@ -125,3 +126,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json(movimiento ?? { stock_resultante: r.stock }, { status: 201 });
 }
+
+export const GET = ruta('inventario/movimientos#GET', manejarGET);
+export const POST = ruta('inventario/movimientos#POST', manejarPOST);

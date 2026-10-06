@@ -19,6 +19,7 @@ import {
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useUser, clearUserCache } from '@/hooks/useUser';
+import { borrarTodosLosBorradores } from '@/lib/borradores';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -268,7 +269,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
             <button onClick={() => setShowLogoutModal(false)} className="btn-secondary">
               Cancelar
             </button>
-            <form action={logout} onSubmit={() => clearUserCache()}>
+            <form action={logout} onSubmit={() => { clearUserCache(); borrarTodosLosBorradores(); }}>
               <button type="submit" className="btn-danger w-full">
                 Cerrar sesión
               </button>

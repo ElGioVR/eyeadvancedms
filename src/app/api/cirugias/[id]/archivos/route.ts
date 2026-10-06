@@ -5,11 +5,12 @@ import { eliminarArchivoDeStorage, MAX_TAMANO_ARCHIVO, subirArchivoACirugia } fr
 import { verificarPermisoArchivo } from '@/lib/permisos-archivo';
 import { validarId } from '@/lib/api/validar';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
+import { ruta } from '@/lib/api/ruta';
 
 /** Margen del multipart (boundary + tipo_documento) sobre el tamaño máximo del archivo. */
 const MARGEN_MULTIPART = 64 * 1024;
 
-export async function GET(
+async function manejarGET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -48,7 +49,7 @@ export async function GET(
   return NextResponse.json({ data: data || [] });
 }
 
-export async function POST(
+async function manejarPOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -161,3 +162,6 @@ export async function POST(
 
   return NextResponse.json(archivoRow, { status: 201 });
 }
+
+export const GET = ruta('cirugias/[id]/archivos#GET', manejarGET);
+export const POST = ruta('cirugias/[id]/archivos#POST', manejarPOST);

@@ -5,6 +5,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { leerJSON } from '@/lib/api/validar';
 import { CLAVE_CONFIG_MENSAJES, type PlantillasMensaje } from '@/lib/mensajes-paciente';
+import { ruta } from '@/lib/api/ruta';
 
 /**
  * Plantillas del mensaje al paciente (WhatsApp / correo) en
@@ -22,7 +23,7 @@ function normalizar(valor: unknown): PlantillasMensaje {
   return { consulta: txt(v.consulta), cirugia: txt(v.cirugia) };
 }
 
-export async function GET() {
+async function manejarGET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -39,7 +40,7 @@ export async function GET() {
   return NextResponse.json({ valor: normalizar(data?.valor), updated_at: data?.updated_at ?? null });
 }
 
-export async function PUT(request: Request) {
+async function manejarPUT(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const roleError = await requireRole(auth.user, ['admin']);
@@ -71,3 +72,6 @@ export async function PUT(request: Request) {
   }
   return NextResponse.json({ valor, updated_at: ahora });
 }
+
+export const GET = ruta('configuracion/mensajes#GET', manejarGET);
+export const PUT = ruta('configuracion/mensajes#PUT', manejarPUT);

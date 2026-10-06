@@ -6,6 +6,7 @@ import { esquemaPaginacion, leerQuery } from '@/lib/api/validar';
 import { rangoPersonalizado } from '@/lib/rangos';
 import { listarHonorariosLiga } from '@/lib/productividad';
 import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/validacion';
+import { ruta } from '@/lib/api/ruta';
 
 /** Filtros en memoria (fuente/estado): solo mayúsculas y guion bajo. */
 const codigo = z.string().regex(/^[A-Z_]{1,30}$/, 'Filtro no válido');
@@ -21,7 +22,7 @@ const querySchema = z.object({
   agrupar_por: z.string().max(20).optional(),
 });
 
-export async function GET(request: Request) {
+async function manejarGET(request: Request) {
   const startedAt = performance.now();
   const authStart = performance.now();
   const auth = await requireAuth();
@@ -83,3 +84,5 @@ export async function GET(request: Request) {
     return response;
   }
 }
+
+export const GET = ruta('productividad/honorarios#GET', manejarGET);

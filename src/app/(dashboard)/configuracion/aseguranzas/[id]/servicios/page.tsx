@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import { useFetch } from '@/hooks/useFetch';
 import { useDebounce } from '@/hooks/useDebounce';
-import { enviarJSON } from '@/lib/fetcher';
+import { enviarJSON, mensajeDeError } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import { SkeletonTabla } from '@/components/ui/Skeleton';
@@ -182,20 +182,11 @@ export default function ServiciosPage() {
       formData.append('file', file);
       formData.append('aseguranza_id', id);
 
-      const res = await fetch('/api/configuracion/aseguranzas/servicios/import', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast(err.error || 'Error al procesar archivo', 'error');
-        return;
-      }
-      const data = await res.json();
+      const data = await enviarJSON<typeof importPreview>('/api/configuracion/aseguranzas/servicios/import', 'POST', formData, { timeoutMs: 90_000 });
       setImportPreview(data);
       setShowImportModal(true);
-    } catch {
-      toast('Error de red', 'error');
+    } catch (err) {
+      toast(mensajeDeError(err, 'Error al procesar archivo'), 'error');
     } finally {
       setImporting(false);
     }
@@ -217,16 +208,9 @@ export default function ServiciosPage() {
       formData.append('confirm', 'true');
       formData.append('modo', importModo);
 
-      const res = await fetch('/api/configuracion/aseguranzas/servicios/import', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast(err.error || 'Error al importar', 'error');
-        return;
-      }
-      const data = await res.json();
+      const data = await enviarJSON<{ insertados?: number; errores?: number; omitidos?: number }>(
+        '/api/configuracion/aseguranzas/servicios/import', 'POST', formData, { timeoutMs: 90_000 },
+      );
       if (importModo === 'reemplazar') {
         toast(`Matriz reemplazada: ${data.insertados ?? 0} servicios cargados${data.errores ? ` · ${data.errores} con error` : ''}`);
       } else {
@@ -237,8 +221,8 @@ export default function ServiciosPage() {
       archivoRef.current = null;
       // Revalida la matriz en segundo plano (la tabla actual se mantiene hasta que llega).
       mutateServicios();
-    } catch {
-      toast('Error de red', 'error');
+    } catch (err) {
+      toast(mensajeDeError(err, 'Error al importar'), 'error');
     } finally {
       setImporting(false);
     }
@@ -453,7 +437,7 @@ export default function ServiciosPage() {
 
           <div className="md:hidden divide-y divide-line/70">
             {filtered.map((s) => (
-              <div key={s.id} className="p-4 space-y-2">
+              <div key={s.id} className="cv-auto p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium text-fg break-words">{s.nombre}</p>
                   <span className={cn('shrink-0 inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold uppercase', tipoBadge[s.tipo])}>
