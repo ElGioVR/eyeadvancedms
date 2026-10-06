@@ -9,7 +9,6 @@ import { leerTelefonos } from '@/lib/telefonos-paciente-db';
 import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 import {
   DIAS_ATRAS_BANDEJA,
-  ESTADOS_ACTIVOS_CIRUGIA,
   ESTATUS_ACTIVOS_CONSULTA,
   ahoraClinica,
   clasificarBandeja,
@@ -89,7 +88,9 @@ async function manejarGET() {
                  doctores:doctor_id (alias), servicio:servicio_id (nombre)${conf}`)
         .gte('fecha', desde)
         .lte('fecha', hasta)
-        .in('estado', [...ESTADOS_ACTIVOS_CIRUGIA])
+        // Filtro en negativo: en producción el enum puede no tener 'reagendada'
+        // (migración 170 sin aplicar) y nombrarlo en un IN rompe la consulta.
+        .not('estado', 'in', '(aplazada,completada,cancelada)')
         .order('fecha')
         .order('hora')
         .limit(LIMITE),
