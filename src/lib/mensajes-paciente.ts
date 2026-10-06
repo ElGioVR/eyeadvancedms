@@ -203,3 +203,15 @@ export function mensajeCitaConPlantilla(c: DatosCita, plantillas?: PlantillasMen
   const plantilla = (c.tipo === 'cirugia' ? plantillas?.cirugia : plantillas?.consulta)?.trim();
   return plantilla ? { asunto: base.asunto, cuerpo: aplicarPlantilla(plantilla, c) } : base;
 }
+
+/** Línea que pide la confirmación (bandeja de la agenda). */
+export const LINEA_CONFIRMACION = 'Por favor confirme su asistencia respondiendo *SÍ*, o *NO* si necesita cambiar la fecha.';
+
+/** Mensaje de la cita + petición de confirmación (SÍ / NO). */
+export function mensajeConfirmacionCita(c: DatosCita, plantillas?: PlantillasMensaje | null): MensajeCita {
+  const base = mensajeCitaConPlantilla(c, plantillas);
+  return {
+    asunto: `Confirme su ${c.tipo === 'cirugia' ? 'cirugía' : 'cita'} · ${CLINICA_NOMBRE}`,
+    cuerpo: `${base.cuerpo}\n\n${LINEA_CONFIRMACION}`,
+  };
+}

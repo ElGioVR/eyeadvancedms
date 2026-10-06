@@ -2,7 +2,7 @@
 
 import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, TipoStat, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { agendaSoloPropia } from '@/lib/permisos-agenda';
+import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { type AgendaCirugia, type AgendaCirugiaEstado } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ import { useSWRConfig, preload } from 'swr';
 import { useToast } from '@/components/ui/Toast';
 import { swrFetcher, enviarJSON, fetchJSON } from '@/lib/fetcher';
 import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
+import BandejaAgenda from '@/components/agenda/BandejaAgenda';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Upload, Plus, Calendar, Stethoscope, User, FileSpreadsheet, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
@@ -497,6 +498,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const reportesDoctores = useMemo(() => doctores.map((d) => ({ id: d.id, nombre: d.alias })), [doctores]);
   // Reportes: pacientes atendidos para admin, recepción y doctor; cirugías y entradas/salidas solo admin.
   const verReportes = userRol === 'admin' || userRol === 'recepcionista' || userRol === 'doctor';
+  // Bandeja de pendientes (confirmar / cerrar citas): quien gestiona la agenda.
+  const verBandeja = puedeGestionarAgenda(userRol);
+  const bandeja = verBandeja ? <BandejaAgenda onCambio={refetch} /> : null;
   const reportes = verReportes ? (
     <ReportesAgendaCsv rol={userRol} desde={reportesRango.desde} hasta={reportesRango.hasta} doctores={reportesDoctores} doctorId={filterDoctor} />
   ) : null;
@@ -512,6 +516,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
           action={
             <div className="flex gap-2">
+              {bandeja}
               {reportes}
               {!agendaSoloPropia(userRol) && (
                 <>
@@ -585,6 +590,12 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
           <div className="h-6 w-px bg-gray-200 dark:bg-surface-3" />
+          {verBandeja && (
+            <BandejaAgenda
+              onCambio={refetch}
+              botonClassName="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors"
+            />
+          )}
           {verReportes && (
             <ReportesAgendaCsv
               rol={userRol}
@@ -668,6 +679,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
             )}
           </button>
+          {verBandeja && (
+            <BandejaAgenda
+              onCambio={refetch}
+              soloIcono
+              botonClassName="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors active:scale-95 dark:shadow-none"
+            />
+          )}
           {verReportes && (
             <ReportesAgendaCsv
               rol={userRol}
@@ -1072,7 +1090,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                 {height > 32 && (
                                   <div className="text-[9px] font-medium opacity-70 truncate">
                                     {c.tipo === 'consulta' && <User className="inline h-2.5 w-2.5 align-text-bottom mr-0.5" />}
-                                    {fmtTime(c.hora)}{c.procedimiento ? ' · ' + c.procedimiento : ''}
+                                    {fmtTime(c.hora)}{(c.detalle || c.procedimiento) ? ' · ' + (c.detalle || c.procedimiento) : ''}
                                   </div>
                                 )}
                                 {height > 48 && c.doctor_nombre && (
@@ -1195,7 +1213,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             {height > 40 && (
                               <div className="flex items-center gap-2 mt-1 text-[10px] opacity-70">
                                 <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{fmtTime(c.hora)}</span>
-                                {c.procedimiento && <span className="flex items-center gap-1"><Stethoscope className="h-2.5 w-2.5" />{c.procedimiento}</span>}
+                                {(c.detalle || c.procedimiento) && <span className="flex min-w-0 items-center gap-1" title={c.detalle || c.procedimiento || ''}><Stethoscope className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{c.detalle || c.procedimiento}</span></span>}
                               </div>
                             )}
                             {height > 60 && c.doctor_nombre && (

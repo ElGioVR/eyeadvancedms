@@ -11,6 +11,7 @@ import { errorInterno, fechaISO, horaHHMM, leerJSON, leerQuery, uuid } from '@/l
 import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
 import { enSegundoPlano } from '@/lib/segundo-plano';
+import { detalleEvento } from '@/lib/bandeja-agenda';
 
 /** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
 const ojoSchema = z
@@ -166,7 +167,7 @@ async function manejarGET(request: Request) {
     .from('agenda_cirugias')
     .select(`
       id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
-      procedimiento, procedencia, tiempo_estimado,
+      procedimiento, procedencia, tiempo_estimado, ojo,
       doctores:doctor_id (alias),
       paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
       origen:origen_id (nombre),
@@ -206,6 +207,10 @@ async function manejarGET(request: Request) {
       tipo_consulta,
       tipo_visita,
       estatus,
+      estudio_1,
+      estudio_2,
+      estudio_3,
+      procedimiento,
       doctores:doctor_id (alias),
       especialidad:especialidad_id (nombre),
       pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente)
@@ -251,6 +256,8 @@ async function manejarGET(request: Request) {
     estado: c.estado,
     // Cirugías homologadas (RPC) no traen texto libre: se usa el catálogo.
     procedimiento: c.procedimiento || (c as any).servicio?.nombre || null,
+    // Lo que se ve en la tarjeta: procedimiento + ojo.
+    detalle: detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento || (c as any).servicio?.nombre, ojo: (c as any).ojo }),
     procedencia: c.procedencia || (c as any).origen?.nombre || null,
     tiempo_estimado: c.tiempo_estimado || null,
     tipo: 'cirugia' as const,
@@ -263,22 +270,35 @@ async function manejarGET(request: Request) {
       if (tipo === 'consulta') return !c.tipo_consulta?.toUpperCase().includes('ESTUDIO');
       return true;
     })
-    .map((c) => ({
+    .map((c) => {
+    const tipoEv = (c.tipo_consulta?.toUpperCase().includes('ESTUDIO') ? 'estudio' : 'consulta') as 'consulta' | 'estudio';
+    // Tarjeta: qué estudio, qué procedimiento o qué tipo de consulta (antes solo «CONSULTA»/«ESTUDIO»).
+    const detalle = detalleEvento({
+      tipo: tipoEv,
+      tipo_consulta: c.tipo_consulta,
+      tipo_consulta_label: etiquetaTipoConsulta(c.tipo_consulta, (c as any).tipo_visita),
+      especialidad: (c as any).especialidad?.nombre,
+      procedimiento: (c as any).procedimiento,
+      estudios: [(c as any).estudio_1, (c as any).estudio_2, (c as any).estudio_3],
+    });
+    return {
     id: c.id,
     paciente_id: c.paciente_id,
     nombre_paciente: (c as any).pacientes?.nombre_completo || '',
     fecha: c.fecha,
     hora: c.hora_inicio,
-    procedimiento: c.tipo_consulta || 'Consulta',
+    procedimiento: detalle || c.tipo_consulta || 'Consulta',
+    detalle,
     // Punto II: especialidad y tipo (Primera / Subsecuente / Estudios / Procedimientos).
     especialidad: (c as any).especialidad?.nombre || null,
     tipo_consulta_label: etiquetaTipoConsulta(c.tipo_consulta, (c as any).tipo_visita),
     doctor_id: c.doctor_id,
     doctor_nombre: (c as any).doctores?.alias || null,
     estado: (ESTADO_CONSULTA_A_AGENDA[c.estatus || ''] || 'agendada') as any,
-    tipo: (c.tipo_consulta?.toUpperCase().includes('ESTUDIO') ? 'estudio' : 'consulta') as 'consulta' | 'estudio',
+    tipo: tipoEv,
     ...fichaPaciente((c as any).pacientes),
-  }));
+  };
+  });
 
   const todos = [...eventosCirugias, ...eventosConsultas].sort((a, b) => {
     const fa = (a.fecha || '').localeCompare(b.fecha || '');

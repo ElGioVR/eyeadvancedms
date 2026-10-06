@@ -251,6 +251,8 @@ export interface AgendaCirugia {
   // Modificaciones agenda (punto II): solo consultas/estudios
   especialidad?: string | null;
   tipo_consulta_label?: string | null;
+  /** Texto de la tarjeta: procedimiento (+ojo), estudios o tipo de consulta. */
+  detalle?: string | null;
 }
 
 export interface AgendaCirugiaImportRow {

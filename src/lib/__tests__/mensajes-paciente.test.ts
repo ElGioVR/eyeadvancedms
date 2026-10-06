@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { correoValido, fechaLarga, horaLegible, mensajeCita, normalizarTelefono, urlCorreo, urlWhatsApp } from '../mensajes-paciente';
+import { correoValido, fechaLarga, horaLegible, LINEA_CONFIRMACION, mensajeCita, mensajeConfirmacionCita, normalizarTelefono, urlCorreo, urlWhatsApp } from '../mensajes-paciente';
 
 describe('lib/mensajes-paciente normalizarTelefono', () => {
   it('10 dígitos MX → 52', () => assert.equal(normalizarTelefono('(664) 123-4567'), '526641234567'));
@@ -67,4 +67,10 @@ describe('lib/mensajes-paciente plantillas', () => {
     assert.deepEqual(mensajeCitaConPlantilla(cita, { consulta: '  ' }), mensajeCita(cita));
     assert.equal(mensajeCitaConPlantilla(cita, { consulta: 'Hola {paciente}' }).cuerpo, 'Hola Ana');
   });
+});
+
+it('mensaje de confirmación pide SÍ / NO', () => {
+  const m = mensajeConfirmacionCita({ tipo: 'consulta', paciente: 'Ana López', fecha: '2026-10-07', hora: '09:30' });
+  assert.ok(m.cuerpo.startsWith('Hola, Ana López.'));
+  assert.ok(m.cuerpo.endsWith(LINEA_CONFIRMACION));
 });

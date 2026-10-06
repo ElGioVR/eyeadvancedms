@@ -393,7 +393,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                         fechaNacimiento={c.paciente_fecha_nacimiento}
                         edad={c.paciente_edad}
                       />
-                      {c.procedimiento && <p className="mt-0.5 truncate text-xs text-muted">{c.procedimiento}</p>}
+                      {(c.detalle || c.procedimiento) && <p className="mt-0.5 truncate text-xs text-muted">{c.detalle || c.procedimiento}</p>}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', estadoChipBg[c.estado] || 'bg-surface-2', 'text-fg-2')}>
                           <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[c.estado] || 'bg-gray-400')} />
