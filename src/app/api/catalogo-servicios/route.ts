@@ -53,7 +53,7 @@ async function manejarGET(request: Request) {
   // Fetch services for patient's insurance + generic (NULL aseguranza_id) as fallback
   let query = supabase
     .from('aseguranza_servicios')
-    .select('id, tipo, nombre, costo, porcentaje_cobertura')
+    .select('id, tipo, nombre, costo, porcentaje_cobertura, requiere_lio')
     .eq('activo', true)
     .order('nombre')
     .limit(MAX_SERVICIOS);

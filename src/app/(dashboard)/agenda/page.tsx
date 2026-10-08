@@ -3,7 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import AgendaContent from './AgendaContent';
 
-export default async function AgendaPage() {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ fecha?: string }> }) {
+  // Vuelta desde el detalle: la agenda abre el mismo día (?fecha=YYYY-MM-DD).
+  const { fecha } = await searchParams;
+  const fechaPedida = fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : null;
   // Sesión ya verificada por el middleware (evita otro viaje a Supabase Auth)
   const userId = await getVerifiedUserId();
   if (!userId) {
@@ -35,7 +38,7 @@ export default async function AgendaPage() {
       userRol={usuario.rol}
       doctores={doctores || []}
       userId={userId}
-      initialDate={new Date().toISOString().slice(0, 10)}
+      initialDate={fechaPedida ?? new Date().toISOString().slice(0, 10)}
     />
   );
 }

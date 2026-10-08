@@ -234,6 +234,7 @@ export interface AgendaCirugia {
   doctor_nombre: string | null;
   estado: AgendaCirugiaEstado;
   procedencia: string | null;
+  anestesia?: string | null;
   motivo_aplazamiento: string | null;
   notas: string | null;
   notificado: boolean;

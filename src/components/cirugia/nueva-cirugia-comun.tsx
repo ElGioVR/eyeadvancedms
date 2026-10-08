@@ -115,7 +115,7 @@ export interface HistorialOjo {
 export const ETIQUETA_OJO: Record<OjoOperado, { texto: string; clase: string }> = {
   sin_cirugias: { texto: 'Sin cirugías previas', clase: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-fg-2' },
   OD: { texto: 'OD ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
-  OI: { texto: 'OI ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  OI: { texto: 'OS ya operado', clase: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
   ambos: { texto: 'Ambos ojos operados', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
   desconocido: { texto: 'Ojo sin especificar', clase: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
 };
@@ -147,6 +147,8 @@ export interface Servicio {
   nombre: string;
   tipo: string;
   costo: number;
+  /** Bandera de catálogo (mig. requiere_lio): activa el bloque de LIO. */
+  requiere_lio?: boolean;
 }
 
 export interface Doctor {

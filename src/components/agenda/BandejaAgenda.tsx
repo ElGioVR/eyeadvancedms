@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { fetchJSON } from '@/lib/fetcher';
 import {
   AlertTriangle, Bell, CalendarClock, CheckCircle2, ChevronDown, ExternalLink, History, Inbox,
   MessageCircle, PauseCircle, RefreshCw, Search, Send, Star, X, XCircle,
@@ -208,6 +209,33 @@ function HistorialCita({ tipo, id }: { tipo: ItemBandeja['tipo']; id: string }) 
   );
 }
 
+/** Pestaña «Por completar»: cirugías importadas con datos faltantes. */
+type CirugiaPorCompletar = {
+  id: string;
+  codigo?: string | null;
+  nombre_paciente?: string | null;
+  fecha?: string | null;
+  hora?: string | null;
+  ojo?: string | null;
+  anestesia?: string | null;
+  procedimiento?: string | null;
+  estado?: string | null;
+  servicio?: { nombre?: string | null } | null;
+};
+const URL_POR_COMPLETAR = '/api/cirugias?pendientes=1';
+/** Estados que ya no requieren completar (cerradas o canceladas). */
+const ESTADOS_CERRADOS = new Set(['CANCELADA', 'CANCELADO', 'COMPLETADA', 'COMPLETADO', 'REAGENDADA', 'REAGENDADO']);
+const obtenerPorCompletar = (url: string) => fetchJSON<{ data: CirugiaPorCompletar[] }>(url);
+const ETIQUETA_COMPLETAR: Record<string, string> = { fecha: 'Fecha', hora: 'Hora', ojo: 'Ojo', procedimiento: 'Procedimiento', anestesia: 'Anestesia' };
+function faltantesCompletar(c: CirugiaPorCompletar): string[] {
+  const f: string[] = [];
+  if (!c.fecha) f.push('fecha');
+  if (!c.hora || c.hora.slice(0, 5) === '00:00') f.push('hora');
+  if (!c.ojo) f.push('ojo');
+  if (!(c.servicio?.nombre || c.procedimiento)) f.push('procedimiento');
+  if (!c.anestesia) f.push('anestesia');
+  return f;
+}
 export default function BandejaAgenda({
   onCambio,
   botonClassName,
@@ -220,7 +248,7 @@ export default function BandejaAgenda({
 }) {
   const { toast } = useToast();
   const [abierto, setAbierto] = useState(false);
-  const [pestana, setPestana] = useState<'confirmar' | 'cerrar'>('confirmar');
+  const [pestana, setPestana] = useState<'confirmar' | 'cerrar' | 'completar'>('confirmar');
   const [accion, setAccion] = useState<{ item: CitaAccion; accion: AccionRapida } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [porCompletar, setPorCompletar] = useState<string | null>(null);
@@ -293,7 +321,13 @@ export default function BandejaAgenda({
   };
 
   const abrirAccion = (item: CitaAccion, a: AccionRapida) => setAccion({ item, accion: a });
-  const lista = pestana === 'confirmar' ? porConfirmar : porCerrar;
+  const lista = pestana === 'confirmar' ? porConfirmar : pestana === 'cerrar' ? porCerrar : [];
+  const pendCompletar = useSWR<{ data: CirugiaPorCompletar[] }>(abierto ? URL_POR_COMPLETAR : null, obtenerPorCompletar, { revalidateOnFocus: false });
+  const listaCompletar = (pendCompletar.data?.data ?? [])
+    .filter((c) => !ESTADOS_CERRADOS.has(c.estado ?? ''))
+    .map((c) => ({ c, faltan: faltantesCompletar(c) }))
+    .filter((x) => x.faltan.length > 0)
+    .sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));
   const urgentes = porCerrar.length;
 
   return (
@@ -334,10 +368,11 @@ export default function BandejaAgenda({
               </button>
             </header>
 
-            <div className="grid grid-cols-2 gap-1 border-b border-line p-2">
+            <div className="grid grid-cols-3 gap-1 border-b border-line p-2">
               {([
                 ['confirmar', 'Por confirmar', porConfirmar.length],
                 ['cerrar', 'Por cerrar', porCerrar.length],
+                ['completar', 'Por completar', listaCompletar.length],
               ] as const).map(([k, label, n]) => (
                 <button
                   key={k}
@@ -459,9 +494,34 @@ export default function BandejaAgenda({
                 </>
               ) : (
                 <>
-                  {error && !data && <ErrorCarga error={error} onRetry={() => void mutate()} />}
-                  {isLoading && !data && <p className="py-8 text-center text-sm text-muted">Cargando…</p>}
-                  {data && lista.length === 0 && (
+                  {pestana === 'completar' && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted">Cirugías importadas con datos faltantes. Entra a cada una y pulsa <strong>Completar datos</strong>.</p>
+                      {pendCompletar.error && <p className="py-6 text-center text-sm text-red-600">No se pudo cargar la lista. Intenta de nuevo.</p>}
+                      {pendCompletar.data && listaCompletar.length === 0 && <p className="py-12 text-center text-sm text-muted">No hay cirugías por completar.</p>}
+                      <ul className="space-y-2">
+                        {listaCompletar.map(({ c, faltan }) => {
+                          const hora = c.hora && c.hora.slice(0, 5) !== '00:00' ? c.hora.slice(0, 5) : 'Sin hora';
+                          return (
+                            <li key={c.id}>
+                              <Link href={`/cirugias/${c.id}`} className="block rounded-xl border border-line bg-surface p-3 transition-colors hover:bg-surface-2">
+                                <p className="text-sm font-bold text-fg">{c.nombre_paciente || 'Paciente sin nombre'}</p>
+                                <p className="text-xs text-muted">{fechaCorta(c.fecha ?? null, true)} · {hora}{c.codigo ? ` · ${c.codigo}` : ''}</p>
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {faltan.map((k) => (
+                                    <span key={k} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">Falta: {ETIQUETA_COMPLETAR[k] ?? k}</span>
+                                  ))}
+                                </div>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  {pestana !== 'completar' && error && !data && <ErrorCarga error={error} onRetry={() => void mutate()} />}
+                  {pestana !== 'completar' && isLoading && !data && <p className="py-8 text-center text-sm text-muted">Cargando…</p>}
+                  {pestana !== 'completar' && data && lista.length === 0 && (
                     <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted">
                       <Inbox className="h-8 w-8 opacity-50" />
                       {pestana === 'confirmar' ? 'No hay citas de hoy o mañana pendientes de confirmar.' : `No hay citas por cerrar en los últimos ${data.diasAtras} días. Usa el buscador para ver citas anteriores.`}

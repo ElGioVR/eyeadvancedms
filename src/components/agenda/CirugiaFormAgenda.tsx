@@ -9,6 +9,7 @@ import { enviarJSON } from '@/lib/fetcher';
 import { agendaSoloPropia } from '@/lib/permisos-agenda';
 import { cn } from '@/lib/utils';
 import LIOSelector from '@/components/cirugia/LIOSelector';
+import { ANESTESIAS } from '@/lib/catalogos/cirugia';
 
 /* ───────── Quick Add / Form ───────── */
 export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initialHour, onClose, onSaved }: {
@@ -23,6 +24,7 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
     jornada: string; diagnostico: string; procedimiento: string; ojo: string; lio: string; marca_lio: string;
     inventario_item_id: string;
     tiempo_estimado: string; tiempo_estancia: string; doctor_id: string; notas: string; procedencia: string; motivo_aplazamiento: string;
+    anestesia: string;
   }
 
   const defaultCirugiaForm: CirugiaForm = {
@@ -30,6 +32,7 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
     jornada: '', diagnostico: '', procedimiento: '', ojo: '', lio: '', marca_lio: '',
     inventario_item_id: '',
     tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '', motivo_aplazamiento: '',
+    anestesia: '',
   };
 
   const [form, setForm] = useState<CirugiaForm>(() => {
@@ -67,10 +70,12 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
       inventario_item_id: data.inventario_item_id || '',
       tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
       notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
+      anestesia: data.anestesia || '',
     });
     setFormCargado(true);
   }, [detalle, formCargado]);
   const loadingCirugia = !formCargado;
+  const { data: procedenciasData } = useSWR<string[]>('/api/catalogos/procedencias', { revalidateOnFocus: false });
 
   const handleLIOSelect = (itemId: string | null) => {
     setForm(f => ({
@@ -97,6 +102,8 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
         tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
         doctor_id: form.doctor_id || null, notas: form.notas || null, procedencia: form.procedencia || null,
         motivo_aplazamiento: form.motivo_aplazamiento || null,
+        // Sin valor = no se toca (la base conserva la anestesia actual).
+        anestesia: form.anestesia || undefined,
       };
       const url = cirugiaId ? `/api/agenda/${cirugiaId}` : '/api/agenda';
       await enviarJSON(url, cirugiaId ? 'PATCH' : 'POST', body);
@@ -162,7 +169,16 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
         <div><label className={labelCls}>Tiempo estancia</label><input type="text" value={form.tiempo_estancia} onChange={e => setForm(f => ({ ...f, tiempo_estancia: e.target.value }))} placeholder="Ej. 3 HR" className={inputCls} /></div>
       </div>
       <div><label className={labelCls}>Notas</label><textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} placeholder="Notas adicionales..." className={cn(inputCls, 'resize-none')} /></div>
-      <div><label className={labelCls}>Procedencia</label><input type="text" value={form.procedencia} onChange={e => setForm(f => ({ ...f, procedencia: e.target.value }))} placeholder="Ej. Derivación externa" className={inputCls} /></div>
+      <div><label className={labelCls}>Procedencia</label><input type="text" list="procedencias-lista-edicion" value={form.procedencia} onChange={e => setForm(f => ({ ...f, procedencia: e.target.value }))} placeholder="Ej. Derivación externa" className={inputCls} /></div>
+      <datalist id="procedencias-lista-edicion">
+        {(procedenciasData ?? []).map((p) => <option key={p} value={p} />)}
+      </datalist>
+      <div><label className={labelCls}>Anestesia</label>
+        <select value={form.anestesia} onChange={e => setForm(f => ({ ...f, anestesia: e.target.value }))} className={inputCls}>
+          <option value="">Sin cambio</option>
+          {ANESTESIAS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+        </select>
+      </div>
       <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
       <div className="flex gap-3 pt-3 border-t border-line/70">
         <button onClick={onClose} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>

@@ -130,6 +130,26 @@ export const docColors = ['bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-
 
 export function getDocColor(name: string) { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return docColors[Math.abs(h) % docColors.length]; }
 
+/**
+ * Duración de una cirugía en minutos. Prioriza `duracion_min` (número); si no,
+ * interpreta el texto libre de `tiempo_estimado` ("34 min", "2 HR", "1:30", "45").
+ * Sin dato: 60 min.
+ */
+export function duracionEventoMin(c: { duracion_min?: number | null; tiempo_estimado?: string | null }): number {
+  if (typeof c.duracion_min === 'number' && c.duracion_min > 0) return c.duracion_min;
+  const txt = (c.tiempo_estimado || '').trim().toLowerCase();
+  if (!txt) return 60;
+  const hm = txt.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) return parseInt(hm[1], 10) * 60 + parseInt(hm[2], 10) || 60;
+  const m = txt.match(/(\d+(?:[.,]\d+)?)\s*(h|hr|hrs|hora|horas|min|mins|minutos|m)?/);
+  if (!m) return 60;
+  const valor = parseFloat(m[1].replace(',', '.'));
+  if (!Number.isFinite(valor) || valor <= 0) return 60;
+  const unidad = m[2] || '';
+  const enHoras = unidad.startsWith('h') || (!unidad && valor <= 4);
+  return Math.round(enHoras ? valor * 60 : valor) || 60;
+}
+
 export function parseTimeToMinutes(t: string | null): number {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);

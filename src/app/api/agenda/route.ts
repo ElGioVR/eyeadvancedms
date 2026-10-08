@@ -6,7 +6,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { ROLES_GESTION_AGENDA, ROLES_VER_AGENDA, agendaSoloPropia } from '@/lib/permisos-agenda';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
-import { consumirLIO } from '@/lib/inventario';
+import { reservarLente } from '@/lib/cirugia-lentes';
 import { errorInterno, fechaISO, horaHHMM, leerJSON, leerQuery, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
@@ -389,10 +389,16 @@ async function manejarPOST(request: Request) {
   }
 
   if (data.inventario_item_id) {
-    const consume = await consumirLIO(data.inventario_item_id, cirugia.id, auth.user.id);
-    if (!consume.success) {
+    // Comentarios clinica (oct 2026): programar RESERVA el lente; el stock baja al completar.
+    const reserva = await reservarLente({
+      cirugiaId: cirugia.id,
+      orden: 'PRIMERO',
+      origen: 'INVENTARIO',
+      inventarioItemId: data.inventario_item_id,
+    });
+    if (!reserva.ok) {
       await supabase.from('agenda_cirugias').delete().eq('id', cirugia.id);
-      return NextResponse.json({ error: consume.error || 'No se pudo descontar el LIO' }, { status: 400 });
+      return NextResponse.json({ error: reserva.error }, { status: 400 });
     }
   }
 

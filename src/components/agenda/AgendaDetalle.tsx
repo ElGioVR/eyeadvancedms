@@ -15,10 +15,13 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { type TelefonoPaciente } from '@/lib/telefonos-paciente';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
+import CompletarCirugiaLentes from '@/components/agenda/CompletarCirugiaLentes';
+import { type OrdenLente } from '@/lib/cirugia-lentes-puro';
 
 /* ───────── Detail Modal ───────── */
 export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { cirugia: AgendaCirugia; userRol: string; onEdit: () => void; onClose: () => void; onRefetch: () => void }) {
   const [updating, setUpdating] = useState(false);
+  const [completando, setCompletando] = useState(false);
   const { toast } = useToast();
   const updateEstado = async (s: AgendaCirugiaEstado) => {
     setUpdating(true);
@@ -39,7 +42,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
     cirugia.hora && { Icon: Clock, label: 'Hora', value: fmtTime(cirugia.hora) },
     cirugia.jornada && { Icon: MapPin, label: 'Jornada', value: cirugia.jornada },
     cirugia.doctor_nombre && { Icon: User, label: 'Cirujano', value: cirugia.doctor_nombre },
-    cirugia.procedimiento && { Icon: Stethoscope, label: 'Procedimiento', value: cirugia.procedimiento },
+    cirugia.procedimiento && { Icon: Stethoscope, label: 'Procedimiento quirúrgico', value: cirugia.procedimiento },
     cirugia.diagnostico && { Icon: AlertTriangle, label: 'Diagnóstico', value: cirugia.diagnostico },
     cirugia.ojo && { Icon: Eye, label: 'Ojo', value: etiquetaOjo(cirugia.ojo) },
     cirugia.lio && { Icon: () => <div className="h-3 w-3 rounded-full border-2 border-current" />, label: 'LIO', value: cirugia.lio },
@@ -51,6 +54,17 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
 
   return (
     <div className="space-y-5">
+      {completando && (
+        <CompletarCirugiaLentes
+          cirugiaId={cirugia.id}
+          onCancel={() => setCompletando(false)}
+          onConfirm={async (requeridos: OrdenLente[]) => {
+            await enviarJSON(`/api/agenda/${cirugia.id}`, 'PATCH', { estado: 'completada', lentes_requeridos: requeridos });
+            setCompletando(false);
+            onRefetch();
+          }}
+        />
+      )}
       <div className="flex items-start gap-4">
         <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center text-sm font-extrabold', tipoConfig[cirugia.tipo || 'cirugia'].bg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
           {cirugia.hora ? fmtTime(cirugia.hora) : '--:--'}
@@ -95,7 +109,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
         <div className="flex gap-2 pt-2 border-t border-line/70">
           {cirugia.estado === 'agendada' && (
             <>
-              <button onClick={() => updateEstado('completada')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
+              <button onClick={() => setCompletando(true)} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
                 <CheckCircle2 className="h-4 w-4" /> Completar
               </button>
               <button onClick={() => updateEstado('cancelada')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
@@ -115,11 +129,12 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
 /* ───────── Detail Popover Card (Google Calendar style) ───────── */
 export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEstado, onAccion }: {
   cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
-  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado) => Promise<void>;
+  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado, extra?: { lentes_requeridos?: OrdenLente[] }) => Promise<void>;
   onAccion: (accion: AccionRapida) => void;
 }) {
   const router = useRouter();
   const [updating, setUpdating] = useState(false);
+  const [completando, setCompletando] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState(position);
   const esCirugia = !cirugia.tipo || cirugia.tipo === 'cirugia';
@@ -161,6 +176,17 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
   };
 
   return (
+    <>
+    {completando && (
+      <CompletarCirugiaLentes
+        cirugiaId={cirugia.id}
+        onCancel={() => setCompletando(false)}
+        onConfirm={async (requeridos: OrdenLente[]) => {
+          await onEstado('completada', { lentes_requeridos: requeridos });
+          setCompletando(false);
+        }}
+      />
+    )}
     <div ref={cardRef}
       className="fixed z-50 w-[340px] rounded-2xl border border-line bg-surface shadow-2xl animate-in fade-in zoom-in-95 duration-150"
       style={{ left: adjustedPos.x, top: adjustedPos.y }}>
@@ -294,7 +320,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
           </span>
           <div className="flex-1" />
           {esCirugia && !agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
-            <button onClick={() => updateEstado('completada')} disabled={updating}
+            <button onClick={() => setCompletando(true)} disabled={updating}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
               Completar
             </button>
@@ -352,5 +378,6 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
         </button>
       </div>
     </div>
+    </>
   );
 }

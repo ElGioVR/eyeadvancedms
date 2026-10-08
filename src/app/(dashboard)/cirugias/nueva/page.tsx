@@ -15,7 +15,7 @@ import { useInvalidar } from '@/hooks/useFetch';
 import { esProcedimientoConLio, TIPO_DOCUMENTO_OTRO, tipoLioDe, ANESTESIAS, TIPO_MEDICINA_INTERNA, TIPOS_DOCUMENTO_APOYO } from '@/lib/catalogos/cirugia';
 import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
 import { esEnfermeria, esMedicoTratante, esAnestesiologo, ROL_ANESTESIOLOGO, puedeOcuparRol } from '@/lib/catalogos/personal';
-import { enviarJSON, mensajeDeError, nuevaClaveIdempotencia } from '@/lib/fetcher';
+import { ApiError, enviarJSON, mensajeDeError, nuevaClaveIdempotencia } from '@/lib/fetcher';
 import { useBorrador } from '@/hooks/useBorrador';
 import PageHeader from '@/components/ui/PageHeader';
 import AvisoBorrador from '@/components/ui/AvisoBorrador';
@@ -100,7 +100,7 @@ function NuevaCirugiaContent() {
     let n = 0;
     return equipoPorDefecto('', '', () => `def-${n++}`);
   });
-  const [altaPersonal, setAltaPersonal] = useState<{ filaId: string; nombre: string; guardando: boolean } | null>(null);
+  const [altaPersonal, setAltaPersonal] = useState<{ filaId: string; nombre: string; guardando: boolean; tipo?: 'MEDICO' | 'ENFERMERO' | 'ANESTESIOLOGO' } | null>(null);
   const [inventarioItemId, setInventarioItemId] = useState<string | null>(null);
   const [lioManual, setLioManual] = useState(false);
   const [lioManualMarca, setLioManualMarca] = useState('');
@@ -114,11 +114,18 @@ function NuevaCirugiaContent() {
   const [anestesia, setAnestesia] = useState('');
   // Punto I.1: datos generales de la cirugía
   const [procedencia, setProcedencia] = useState('');
+  const [tiempoCx, setTiempoCx] = useState('');
+  const [tiempoEstancia, setTiempoEstancia] = useState('');
+  const [motivoConsulta, setMotivoConsulta] = useState('');
   const [especialidad, setEspecialidad] = useState('');
   const [especialidadEditada, setEspecialidadEditada] = useState(false);
   const { especialidades } = useEspecialidades();
   // Punto I.2: procedimientos adicionales, tipo de LIO y personal de apoyo no médico
   const [procedimientosAdicionales, setProcedimientosAdicionales] = useState<string[]>([]);
+  // C13: ojo de cada procedimiento adicional (por defecto, el ojo de la cirugía).
+  const [ojosAdicionales, setOjosAdicionales] = useState<Record<string, 'OD' | 'OI' | 'OU'>>({});
+  // Comentarios clínica (oct 2026): lentes adicionales (segundo y respaldo) de la cirugía.
+  const [lentesExtra, setLentesExtra] = useState<Array<{ orden: 'SEGUNDO' | 'RESPALDO'; origen: 'INVENTARIO' | 'HOSPITAL'; itemId: string; fabricante: string; poder: string }>>([]);
   // LIO (solo Faco + LIO): bandera tórico → fabricante → modelo → pieza del inventario (o manual).
   const [lioTorico, setLioTorico] = useState(false);
   const [fabricanteLio, setFabricanteLio] = useState('');
@@ -128,6 +135,12 @@ function NuevaCirugiaContent() {
   const liosSWR = useSWR<LIODisponible[]>(URL_LIOS_DISPONIBLES, obtenerLIOs, { revalidateOnFocus: false });
   const modelosLio = useMemo(() => (Array.isArray(modelosLioSWR.data) ? modelosLioSWR.data : []), [modelosLioSWR.data]);
   const modeloLioSel = modelosLio.find((m) => m.id === modeloLioId) || null;
+  const procedenciasSWR = useSWR<string[]>('/api/catalogos/procedencias', OPCIONES_CATALOGO);
+  const procedenciasSugeridas = useMemo(() => (Array.isArray(procedenciasSWR.data) ? procedenciasSWR.data : []), [procedenciasSWR.data]);
+  const marcasLioSugeridas = useMemo(
+    () => [...new Set(modelosLio.map((m) => m.fabricante.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [modelosLio]
+  );
   const piezasDelModelo = useMemo(
     () => (modeloLioSel && Array.isArray(liosSWR.data) ? liosSWR.data.filter((i) => coincideConModelo(i, modeloLioSel)) : []),
     [liosSWR.data, modeloLioSel],
@@ -154,6 +167,11 @@ function NuevaCirugiaContent() {
   }, [resumenPaciente, diagnosticoEditado]);
 
   const [guardando, setGuardando] = useState(false);
+  // Comentarios clínica (oct 2026): misma persona, fecha y ojo → reagenda o reintervención.
+  const decisionDuplicadoRef = useRef<{ tipo_caso?: 'REAGENDA' | 'REINTERVENCION'; reagenda_de_id?: string } | null>(null);
+  const [duplicadoPendiente, setDuplicadoPendiente] = useState<{
+    candidatas: Array<{ id: string; fecha: string; hora: string | null; ojo: string; estado: string }>;
+  } | null>(null);
   /** Misma clave en reintentos del mismo envío → el servidor no duplica la cirugía. */
   const claveEnvioRef = useRef<string | null>(null);
   /** Tras crear la cirugía se deja de autoguardar (no revivir un borrador ya guardado). */
@@ -447,7 +465,10 @@ useEffect(() => {
 
   // ¿Algún procedimiento implica LIO (Faco + LIO)? → se ofrece el tipo de LIO.
   const esCirugiaConLio = useMemo(
-    () => [servicioId, ...procedimientosAdicionales].some((id) => esProcedimientoConLio(servicios.find((s) => s.id === id)?.nombre)),
+    () => [servicioId, ...procedimientosAdicionales].some((id) => {
+      const s = servicios.find((x) => x.id === id);
+      return !!s && (s.requiere_lio === true || esProcedimientoConLio(s.nombre));
+    }),
     [servicioId, procedimientosAdicionales, servicios],
   );
 
@@ -568,7 +589,13 @@ useEffect(() => {
     setAltaPersonal({ ...altaPersonal, guardando: true });
     try {
       const nombre = altaPersonal.nombre.trim();
-      const creado = await enviarJSON<{ id: string }>('/api/configuracion/doctores', 'POST', { alias: nombre, nombre, especialidad: 'Enfermería', tipo_personal: 'ENFERMERO', cobra_honorarios: false });
+      const tipo = altaPersonal.tipo ?? 'MEDICO';
+      const creado = await enviarJSON<{ id: string }>('/api/configuracion/doctores', 'POST', {
+        alias: nombre, nombre,
+        ...(tipo === 'ENFERMERO' ? { especialidad: 'Enfermería' } : {}),
+        tipo_personal: tipo,
+        cobra_honorarios: tipo !== 'ENFERMERO',
+      });
       await doctoresSWR.mutate();
       actualizarParticipante(altaPersonal.filaId, { personaId: creado.id });
       setAltaPersonal(null);
@@ -682,12 +709,28 @@ useEffect(() => {
         diagnostico: diagnostico.trim() || null,
         anestesia,
         procedencia: procedencia.trim() || null,
+        tiempo_estimado: tiempoCx.trim() || null,
+        tiempo_estancia: tiempoEstancia.trim() || null,
+        motivo_consulta: motivoConsulta.trim() || null,
         especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
         // Tipo de LIO derivado del modelo (diseño × tórico); sin modelo, solo la bandera tórico.
         tipo_lio: esCirugiaConLio && modeloLioSel ? tipoLioDe(modeloLioSel.diseno, modeloLioSel.torico)?.value ?? null : null,
         lio_torico: esCirugiaConLio ? lioTorico : null,
         modelo_lio_id: esCirugiaConLio ? modeloLioId || null : null,
         procedimientos_adicionales: procedimientosAdicionales.filter((id) => id !== servicioId),
+        ojos_procedimientos: Object.fromEntries(
+          procedimientosAdicionales.filter((id) => id !== servicioId).map((id) => [id, ojosAdicionales[id] ?? ((ojo as 'OD' | 'OI' | 'OU') || 'OD')]),
+        ),
+        lentes_extra: esCirugiaConLio
+          ? lentesExtra.map((l) => ({
+              orden: l.orden,
+              origen: l.origen,
+              inventario_item_id: l.origen === 'INVENTARIO' ? l.itemId || null : null,
+              fabricante: l.origen === 'HOSPITAL' ? l.fabricante.trim() || null : null,
+              poder_d: l.poder.trim() ? Number(l.poder.replace(',', '.')) : null,
+            }))
+          : [],
+        ...(decisionDuplicadoRef.current ?? {}),
       };
 
       if (!claveEnvioRef.current) claveEnvioRef.current = nuevaClaveIdempotencia();
@@ -729,6 +772,15 @@ useEffect(() => {
       toast('Cirugía creada', 'success');
       router.push(`/cirugias/${cirugiaId}`);
     } catch (err: unknown) {
+      const candidatas = err instanceof ApiError && err.status === 409
+        ? (err.datos?.candidatas as Array<{ id: string; fecha: string; hora: string | null; ojo: string; estado: string }> | undefined)
+        : undefined;
+      if (candidatas && candidatas.length > 0) {
+        // Nueva clave de idempotencia para reintentar con la decisión elegida.
+        claveEnvioRef.current = null;
+        setDuplicadoPendiente({ candidatas });
+        return;
+      }
       const mensaje = mensajeDeError(err, 'No se pudo crear la cirugía. Intenta de nuevo.');
       setError(mensaje);
       toast(mensaje, 'error');
@@ -797,6 +849,36 @@ useEffect(() => {
 
   return (
     <div className="w-full bg-transparent pb-20">
+      {duplicadoPendiente && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="duplicado-titulo">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+            <h3 id="duplicado-titulo" className="text-base font-bold text-fg">Ya hay una cirugía de este ojo en esa fecha</h3>
+            <p className="mt-1 text-sm text-fg-2">¿Qué es esta cirugía?</p>
+            <div className="mt-4 space-y-2">
+              {duplicadoPendiente.candidatas.map((c) => (
+                <button key={c.id} type="button"
+                  onClick={() => { decisionDuplicadoRef.current = { tipo_caso: 'REAGENDA', reagenda_de_id: c.id }; setDuplicadoPendiente(null); void handleSubmit(); }}
+                  className="w-full rounded-lg border border-line p-3 text-left text-sm hover:bg-surface-2">
+                  <span className="block font-semibold text-fg">Reagenda de la cirugía del {c.fecha}{c.hora ? ` ${c.hora.slice(0, 5)}` : ''}</span>
+                  <span className="block text-fg-2">Reemplaza la anterior: sus lentes se liberan.</span>
+                </button>
+              ))}
+              <button type="button"
+                onClick={() => { decisionDuplicadoRef.current = { tipo_caso: 'REINTERVENCION' }; setDuplicadoPendiente(null); void handleSubmit(); }}
+                className="w-full rounded-lg border border-line p-3 text-left text-sm hover:bg-surface-2">
+                <span className="block font-semibold text-fg">Reintervención</span>
+                <span className="block text-fg-2">Cirugía adicional del mismo ojo; ambas quedan activas.</span>
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => { decisionDuplicadoRef.current = null; setDuplicadoPendiente(null); }}
+                className="rounded-lg border border-line px-4 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <PageHeader
         title="Nueva cirugía"
         subtitle="Cree una cirugía homologada en 5 pasos"
@@ -1105,7 +1187,25 @@ useEffect(() => {
                       maxLength={255}
                       placeholder="Ej. Ensenada"
                       className={inputCls}
+                      list="procedencias-lista"
                     />
+                    <datalist id="procedencias-lista">
+                      {procedenciasSugeridas.map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Tiempo de cirugía</label>
+                    <input type="text" value={tiempoCx} onChange={(e) => setTiempoCx(e.target.value)} maxLength={50} placeholder="Ej. 30 min" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Tiempo de estancia</label>
+                    <input type="text" value={tiempoEstancia} onChange={(e) => setTiempoEstancia(e.target.value)} maxLength={50} placeholder="Ej. 2 hrs" className={inputCls} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Motivo de consulta</label>
+                    <input type="text" value={motivoConsulta} onChange={(e) => setMotivoConsulta(e.target.value)} maxLength={500} placeholder="Ej. Disminución de agudeza visual" className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>Especialidad</label>
@@ -1131,7 +1231,25 @@ useEffect(() => {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Procedimiento</label>
+                  <label htmlFor="cirugia-diagnostico" className={labelCls}>Diagnóstico</label>
+                  <BuscadorDiagnosticoCIE10
+                    id="cirugia-diagnostico"
+                    value={diagnostico}
+                    onChange={(v) => { setDiagnostico(v); setDiagnosticoEditado(true); }}
+                    placeholder="Diagnóstico que motiva la cirugía: código (H25.1) o término (catarata)…"
+                  />
+                  {resumenPaciente?.ultima_consulta?.diagnostico && !diagnostico && (
+                    <button
+                      type="button"
+                      onClick={() => { setDiagnostico(resumenPaciente.ultima_consulta!.diagnostico || ''); setDiagnosticoEditado(true); }}
+                      className="mt-1 text-xs font-bold text-primary-600 hover:underline"
+                    >
+                      Usar diagnóstico de la última consulta
+                    </button>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Procedimiento quirúrgico</label>
                   <div className="relative">
                     <select
                       value={servicioId}
@@ -1159,7 +1277,17 @@ useEffect(() => {
                         <div className="flex flex-wrap gap-1.5">
                           {procedimientosAdicionales.map((id) => (
                             <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
-                              + {servicios.find((s) => s.id === id)?.nombre || 'Procedimiento'}
+                              + {servicios.find((s) => s.id === id)?.nombre || 'Procedimiento quirúrgico'}
+                              <select
+                                value={ojosAdicionales[id] ?? (ojo as 'OD' | 'OI' | 'OU') ?? 'OD'}
+                                onChange={(e) => setOjosAdicionales((prev) => ({ ...prev, [id]: e.target.value as 'OD' | 'OI' | 'OU' }))}
+                                aria-label="Ojo del procedimiento adicional"
+                                className="rounded bg-transparent text-xs font-bold text-primary-700 focus:outline-none dark:text-primary-300"
+                              >
+                                <option value="OD">OD</option>
+                                <option value="OI">OI</option>
+                                <option value="OU">OU</option>
+                              </select>
                               <button
                                 type="button"
                                 onClick={() => setProcedimientosAdicionales((prev) => prev.filter((x) => x !== id))}
@@ -1282,7 +1410,13 @@ useEffect(() => {
                             onChange={(e) => setLioManualMarca(e.target.value)}
                             placeholder="Ej. Alcon"
                             className={inputCls}
+                            list="marcas-lio-lista"
                           />
+                          <datalist id="marcas-lio-lista">
+                            {marcasLioSugeridas.map((m) => (
+                              <option key={m} value={m} />
+                            ))}
+                          </datalist>
                         </div>
                         <div>
                           <label className={labelCls}>Modelo / Descripción</label>
@@ -1337,6 +1471,57 @@ useEffect(() => {
                   </div>
                   </div>
                 )}
+                {esCirugiaConLio && (
+                  <div className="sm:col-span-2 space-y-3 rounded-xl border border-line p-4">
+                    <p className="text-xs font-bold text-fg">Lentes adicionales (máximo 3 en total: primero, segundo y respaldo)</p>
+                    {lentesExtra.map((l, idx) => (
+                      <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-12 items-start">
+                        <span className="sm:col-span-2 text-sm font-semibold text-fg-2 pt-2">{l.orden === 'SEGUNDO' ? 'Segundo' : 'Respaldo'}</span>
+                        <select
+                          value={l.origen}
+                          onChange={(e) => setLentesExtra((prev) => prev.map((x, n) => (n === idx ? { ...x, origen: e.target.value as 'INVENTARIO' | 'HOSPITAL', itemId: '' } : x)))}
+                          className={cn(inputCls, 'sm:col-span-3')}
+                          aria-label="Origen del lente"
+                        >
+                          <option value="INVENTARIO">De inventario</option>
+                          <option value="HOSPITAL">Lente del hospital</option>
+                        </select>
+                        {l.origen === 'INVENTARIO' ? (
+                          <div className="sm:col-span-6">
+                            <LIOSelector value={l.itemId || null} onChange={(v) => setLentesExtra((prev) => prev.map((x, n) => (n === idx ? { ...x, itemId: v ?? '' } : x)))} />
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              value={l.fabricante}
+                              onChange={(e) => setLentesExtra((prev) => prev.map((x, n) => (n === idx ? { ...x, fabricante: e.target.value } : x)))}
+                              placeholder="Marca y modelo"
+                              className={cn(inputCls, 'sm:col-span-4')}
+                              aria-label="Marca y modelo del lente del hospital"
+                            />
+                            <input
+                              value={l.poder}
+                              onChange={(e) => setLentesExtra((prev) => prev.map((x, n) => (n === idx ? { ...x, poder: e.target.value } : x)))}
+                              placeholder="Poder (D)"
+                              inputMode="decimal"
+                              className={cn(inputCls, 'sm:col-span-2')}
+                              aria-label="Poder del lente en dioptrías"
+                            />
+                          </>
+                        )}
+                        <button type="button" onClick={() => setLentesExtra((prev) => prev.filter((_, n) => n !== idx))}
+                          className="sm:col-span-1 text-xs font-bold text-red-600 hover:underline pt-2">Quitar</button>
+                      </div>
+                    ))}
+                    {lentesExtra.length < 2 && (
+                      <button type="button"
+                        onClick={() => setLentesExtra((prev) => [...prev, { orden: prev.some((x) => x.orden === 'SEGUNDO') ? 'RESPALDO' : 'SEGUNDO', origen: 'INVENTARIO', itemId: '', fabricante: '', poder: '' }])}
+                        className="text-xs font-bold text-primary-600 hover:underline">
+                        + Agregar {lentesExtra.some((x) => x.orden === 'SEGUNDO') ? 'respaldo' : 'segundo lente'}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>Ojo</label>
                   <select value={ojo} onChange={(e) => setOjo(e.target.value)} className={cn(inputCls, 'appearance-none')}>
@@ -1381,24 +1566,7 @@ useEffect(() => {
                     ))}
                   </div>
                 </div>
-                <div className="sm:col-span-2">
-                  <label htmlFor="cirugia-diagnostico" className={labelCls}>Diagnóstico</label>
-                  <BuscadorDiagnosticoCIE10
-                    id="cirugia-diagnostico"
-                    value={diagnostico}
-                    onChange={(v) => { setDiagnostico(v); setDiagnosticoEditado(true); }}
-                    placeholder="Diagnóstico que motiva la cirugía: código (H25.1) o término (catarata)…"
-                  />
-                  {resumenPaciente?.ultima_consulta?.diagnostico && !diagnostico && (
-                    <button
-                      type="button"
-                      onClick={() => { setDiagnostico(resumenPaciente.ultima_consulta!.diagnostico || ''); setDiagnosticoEditado(true); }}
-                      className="mt-1 text-xs font-bold text-primary-600 hover:underline"
-                    >
-                      Usar diagnóstico de la última consulta
-                    </button>
-                  )}
-                </div>
+
                 <div>
                   <label className={labelCls}>Fecha</label>
                   <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
@@ -1502,7 +1670,7 @@ useEffect(() => {
                           <select
                             value={m.personaId}
                             onChange={(e) => {
-                              if (e.target.value === '__nuevo__') setAltaPersonal({ filaId: m.id, nombre: '', guardando: false });
+                              if (e.target.value === '__nuevo__') setAltaPersonal({ filaId: m.id, nombre: '', guardando: false, tipo: esRolAnestesia ? 'ANESTESIOLOGO' : apoyo ? 'ENFERMERO' : 'MEDICO' });
                               else actualizarParticipante(m.id, { personaId: e.target.value });
                             }}
                             disabled={!m.rol}
@@ -1521,7 +1689,7 @@ useEffect(() => {
                                 {d.nombre}{apoyo && d.tipo_personal !== 'ENFERMERO' ? ' · médico' : ''}
                               </option>
                             ))}
-                            {apoyo && <option value="__nuevo__">+ Registrar persona nueva…</option>}
+                            <option value="__nuevo__">+ Registrar persona nueva…</option>
                           </select>
                         )}
                       </div>

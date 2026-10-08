@@ -43,6 +43,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "exceljs": "^4.4.0",
+    "docx": "^9.5.1",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",

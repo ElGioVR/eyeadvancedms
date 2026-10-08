@@ -5,7 +5,9 @@ import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
-import { consumirLIO, liberarLIO } from '@/lib/inventario';
+import { liberarLIO } from '@/lib/inventario';
+import { VALORES_ANESTESIA } from '@/lib/catalogos/cirugia';
+import { completarLentesCirugia, liberarLentes, reservarLente, type OrdenLente } from '@/lib/cirugia-lentes';
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
@@ -36,11 +38,14 @@ const cirugiaUpdateSchema = z.object({
   doctor_id: z.string().uuid().optional().nullable(),
   estado: z.enum(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']).optional(),
   procedencia: z.string().max(255).optional().nullable(),
+  anestesia: z.enum(VALORES_ANESTESIA).optional().nullable(),
+  motivo_consulta: z.string().max(500).optional().nullable(),
   motivo_aplazamiento: z.string().max(500).optional().nullable(),
   motivo: z.string().min(1).max(500).optional().nullable(),
   notas: z.string().max(5000).optional().nullable(),
   notificado: z.boolean().optional(),
   inventario_item_id: z.string().uuid().optional().nullable(),
+  lentes_requeridos: z.array(z.enum(['PRIMERO', 'SEGUNDO', 'RESPALDO'])).max(3).optional(),
 }).strict();
 
 async function manejarGET(
@@ -200,6 +205,8 @@ async function manejarPATCH(
     doctor_id: 'doctor_id',
     estado: 'estado',
     procedencia: 'procedencia',
+    anestesia: 'anestesia',
+    motivo_consulta: 'motivo_consulta',
     motivo_aplazamiento: 'motivo_aplazamiento',
     notas: 'notas',
     notificado: 'notificado',
@@ -250,32 +257,36 @@ async function manejarPATCH(
     const newId = payloadItem || null;
 
     if (newId && newId !== prevItem && nuevoEstado !== 'cancelada') {
-      const consume = await consumirLIO(newId, id, auth.user.id);
-      if (!consume.success) {
+      // Comentarios clinica (oct 2026): programar RESERVA el lente; el stock baja al completar.
+      const reserva = await reservarLente({ cirugiaId: id, orden: 'PRIMERO', origen: 'INVENTARIO', inventarioItemId: newId });
+      if (!reserva.ok) {
         await supabase
           .from('agenda_cirugias')
           .update({ inventario_item_id: prevItem, updated_at: new Date().toISOString() })
           .eq('id', id);
-        return NextResponse.json({ error: consume.error || 'No se pudo descontar el LIO' }, { status: 400 });
+        return NextResponse.json({ error: reserva.error }, { status: 400 });
       }
     }
 
     if (prevItem && prevItem !== newId) {
-      await liberarLIO(prevItem, id, auth.user.id);
+      await liberarLentes(id, 'PRIMERO');
+      await liberarLIO(prevItem, id, auth.user.id); // legado: cirugías que descontaron al programar
     }
 
     itemId = newId;
   }
 
   if (itemId && nuevoEstado === 'completada' && estadoAnterior !== 'completada') {
-    const result = await consumirLIO(itemId, id, auth.user.id);
-    if (!result.success) {
+    const requeridos: OrdenLente[] = data.lentes_requeridos ?? ['PRIMERO'];
+    const result = await completarLentesCirugia(id, requeridos, auth.user.id);
+    if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
   }
 
   if (itemId && nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
-    await liberarLIO(itemId, id, auth.user.id);
+    await liberarLentes(id);
+    await liberarLIO(itemId, id, auth.user.id); // legado
   }
 
   // Devengo y notificaciones (best-effort) corren juntos; se esperan antes de responder.

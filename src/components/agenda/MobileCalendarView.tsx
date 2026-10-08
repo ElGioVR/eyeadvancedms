@@ -482,6 +482,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6 space-y-4">
+              <EstudiosDeLaCita pacienteId={selectedCirugia.paciente_id ?? null} fecha={selectedCirugia.fecha ?? null} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-surface-2">
                   <Clock className="h-4 w-4 text-primary-500 shrink-0" />
@@ -617,6 +618,49 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+type ItemCita = { id: string; tipo: string; etiqueta: string };
+
+/**
+ * Estudios y procedimientos del paciente el día de la cita (consultas tipo ESTUDIO / PROCEDIMIENTO).
+ * Se muestran completos en el detalle móvil, para que enfermería vea todo lo que se realizará.
+ */
+function EstudiosDeLaCita({ pacienteId, fecha }: { pacienteId: string | null; fecha: string | null }) {
+  const [items, setItems] = useState<ItemCita[] | null>(null);
+  useEffect(() => {
+    if (!pacienteId || !fecha) { setItems([]); return; }
+    const ctrl = new AbortController();
+    setItems(null);
+    const qs = new URLSearchParams({ paciente_id: pacienteId, fecha });
+    fetch(`/api/agenda/estudios-dia?${qs.toString()}`, { signal: ctrl.signal, credentials: 'same-origin', cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error('estudios-dia');
+        return (await r.json()) as { data?: ItemCita[] };
+      })
+      .then((d) => {
+        setItems(Array.isArray(d.data) ? d.data : []);
+      })
+      .catch(() => { if (!ctrl.signal.aborted) setItems([]); });
+    return () => ctrl.abort();
+  }, [pacienteId, fecha]);
+
+  return (
+    <div className="rounded-xl border border-line p-3">
+      <p className="text-[10px] font-bold uppercase text-muted">Estudios y procedimientos de la cita</p>
+      {items === null && <p className="mt-1 text-sm text-fg-2">Cargando…</p>}
+      {items !== null && items.length === 0 && <p className="mt-1 text-sm text-fg-2">Sin estudios ni procedimientos registrados para este día.</p>}
+      {items !== null && items.length > 0 && (
+        <ul className="mt-1 space-y-1">
+          {items.map((i) => (
+            <li key={i.id} className="text-sm text-fg">
+              <span className="font-semibold">{i.tipo === 'ESTUDIO' ? 'Estudio' : 'Procedimiento'}:</span> {i.etiqueta}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

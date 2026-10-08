@@ -9,12 +9,13 @@ import { horarioCirugia, seTraslapan } from '@/lib/catalogos/equipo-quirurgico';
 import { aMinutos } from '@/lib/agenda-slots';
 import { calcularProductividadCirugia } from '@/lib/productividad';
 import { ROL_ANESTESIOLOGO, esAnestesiologo } from '@/lib/catalogos/personal';
-import { consumirLIO } from '@/lib/inventario';
 import { enSegundoPlano } from '@/lib/segundo-plano';
 import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
 import { ruta } from '@/lib/api/ruta';
+import { liberarLentes, reservarLente } from '@/lib/cirugia-lentes';
+import { liberarLIO } from '@/lib/inventario';
 import { idempotente } from '@/lib/api/idempotencia';
 
 /** Tope del listado (se usa filtrado por paciente o consulta). */
@@ -43,10 +44,14 @@ async function manejarGET(request: Request) {
   const supabase = getSupabaseAdmin();
   let query = supabase
     .from('agenda_cirugias')
-    .select('id, codigo, paciente_id, nombre_paciente, fecha, hora, estado, ojo, servicio:servicio_id(nombre), origen:origen_id(nombre), consulta_id')
+    .select('id, codigo, paciente_id, nombre_paciente, fecha, hora, estado, ojo, anestesia, procedimiento, servicio:servicio_id(nombre), origen:origen_id(nombre), consulta_id')
     .order('fecha', { ascending: false })
     .limit(MAX_LISTADO);
 
+  // Pendientes de completar (importadas sin hora, ojo, procedimiento o anestesia).
+  if (searchParams.get('pendientes') === '1') {
+    query = query.or('hora.is.null,ojo.is.null,anestesia.is.null,servicio_id.is.null');
+  }
   if (consultaId) {
     query = query.eq('consulta_id', consultaId);
   }
@@ -93,6 +98,17 @@ const cirugiaCreateSchema = z.object({
   lio: z.string().min(1).max(255).optional().nullable(),
   marca_lio: z.string().min(1).max(255).optional().nullable(),
   consulta_id: z.string().uuid().optional().nullable(),
+  // Comentarios clínica (oct 2026): mismo paciente, fecha y ojo → reagenda o reintervención.
+  tipo_caso: z.enum(['PRIMERA', 'REAGENDA', 'REINTERVENCION']).optional(),
+  reagenda_de_id: z.string().uuid().optional().nullable(),
+  // Lentes adicionales (segundo y respaldo); el primero va en inventario_item_id / lio manual.
+  lentes_extra: z.array(z.object({
+    orden: z.enum(['SEGUNDO', 'RESPALDO']),
+    origen: z.enum(['INVENTARIO', 'HOSPITAL']),
+    inventario_item_id: z.string().uuid().optional().nullable(),
+    fabricante: z.string().trim().max(255).optional().nullable(),
+    poder_d: z.number().min(0).max(40).optional().nullable(),
+  }).refine((l) => l.origen === 'HOSPITAL' || !!l.inventario_item_id, { message: 'Falta el lente de inventario' })).max(2).optional(),
   participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante').max(20, 'Demasiados participantes'),
   notas: z.string().max(2000).optional().nullable(),
   // Punto I (Modificaciones agenda): diagnóstico propio y anestesia obligatoria.
@@ -101,6 +117,8 @@ const cirugiaCreateSchema = z.object({
   // I.1 Datos generales
   procedencia: z.string().trim().max(255).optional().nullable(),
   motivo_consulta: z.string().trim().max(500).optional().nullable(),
+  tiempo_estimado: z.string().trim().max(50).optional().nullable(),
+  tiempo_estancia: z.string().trim().max(50).optional().nullable(),
   especialidad_id: z.string().uuid().optional().nullable(),
   // I.2 Tipo de LIO (monofocal/trifocal × tórico/no tórico)
   tipo_lio: z.enum(TIPOS_LIO.map((t) => t.value) as [string, ...string[]]).optional().nullable(),
@@ -110,6 +128,8 @@ const cirugiaCreateSchema = z.object({
   lio_torico: z.boolean().optional().nullable(),
   // I.2 Procedimientos adicionales (ids de aseguranza_servicios; el principal es servicio_id)
   procedimientos_adicionales: z.array(z.string().uuid()).max(10, 'Demasiados procedimientos').optional().nullable(),
+  // C13: ojo por procedimiento adicional (clave = id del servicio).
+  ojos_procedimientos: z.record(z.string().uuid(), z.enum(['OD', 'OI', 'OU'])).optional().nullable(),
   // I.2 Personal de apoyo (personal_clinico) con horario; varias personas por rol
   personal: z.array(personalSchema).max(20, 'Demasiado personal de apoyo').optional().nullable(),
 })
@@ -224,6 +244,34 @@ async function manejarPOST(request: Request) {
     );
   }
 
+  // Misma persona, fecha y ojo (sin cancelar ni reagendar) → hay que decidir si es
+  // reagenda o reintervención. Otro ojo u otro día no bloquea.
+  const { data: mismoDia, error: errMismoDia } = await supabase
+    .from('agenda_cirugias')
+    .select('id, fecha, hora, ojo, estado')
+    .eq('paciente_id', data.paciente_id)
+    .eq('fecha', data.fecha)
+    .eq('ojo', data.ojo)
+    .not('estado', 'in', '(cancelada,reagendada)');
+  if (errMismoDia) {
+    return NextResponse.json({ error: 'No se pudo verificar las cirugías del mismo día' }, { status: 500 });
+  }
+  const candidatas = mismoDia ?? [];
+  if (candidatas.length > 0 && !data.tipo_caso) {
+    return NextResponse.json(
+      {
+        error: 'Ya hay una cirugía de este ojo en esta fecha. Indica si es reagenda o reintervención.',
+        code: 'DUPLICADO_REQUIERE_DECISION',
+        codigo: 'DUPLICADO_REQUIERE_DECISION',
+        candidatas,
+      },
+      { status: 409 }
+    );
+  }
+  if (data.tipo_caso === 'REAGENDA' && !candidatas.some((c) => c.id === data.reagenda_de_id)) {
+    return NextResponse.json({ error: 'Selecciona la cirugía que se reagenda.' }, { status: 400 });
+  }
+
   const { data: result, error } = await supabase.rpc('crear_cirugia', {
     p_paciente_id: data.paciente_id,
     p_origen_id: data.origen_id,
@@ -252,6 +300,31 @@ async function manejarPOST(request: Request) {
   }
 
   const cirugiaId = (result as any)?.cirugia_id;
+  if (cirugiaId && data.tipo_caso) {
+    await supabase
+      .from('agenda_cirugias')
+      .update({
+        tipo_caso: data.tipo_caso,
+        reagenda_de_id: data.tipo_caso === 'REAGENDA' ? data.reagenda_de_id ?? null : null,
+      })
+      .eq('id', cirugiaId);
+    if (data.tipo_caso === 'REAGENDA' && data.reagenda_de_id) {
+      // La anterior queda REAGENDADA: libera sus lentes (reservas y, si es legado, devolución).
+      const { data: anterior } = await supabase
+        .from('agenda_cirugias')
+        .select('inventario_item_id')
+        .eq('id', data.reagenda_de_id)
+        .maybeSingle();
+      await supabase
+        .from('agenda_cirugias')
+        .update({ estado: 'reagendada', updated_at: new Date().toISOString() })
+        .eq('id', data.reagenda_de_id);
+      await liberarLentes(data.reagenda_de_id);
+      if (anterior?.inventario_item_id) {
+        await liberarLIO(anterior.inventario_item_id, data.reagenda_de_id, auth.user.id);
+      }
+    }
+  }
   let advertencia: string | null = null;
   if (cirugiaId) {
     // Diagnóstico y anestesia van fuera del RPC crear_cirugia (no se altera su firma):
@@ -284,6 +357,8 @@ async function manejarPOST(request: Request) {
           diagnostico: data.diagnostico || null,
           procedencia: data.procedencia || null,
           motivo_consulta: data.motivo_consulta || null,
+          tiempo_estimado: data.tiempo_estimado || null,
+          tiempo_estancia: data.tiempo_estancia || null,
           especialidad_id: data.especialidad_id || null,
           lio_diseno: lioDiseno,
           lio_torico: lioTorico,
@@ -299,6 +374,7 @@ async function manejarPOST(request: Request) {
               servicio_id: id,
               nombre: adicionales.find((a) => a.id === id)!.nombre,
               orden: i + 1,
+              ...(data.ojos_procedimientos?.[id] ? { ojo: data.ojos_procedimientos[id] } : {}),
             })))
             .then(({ error: e }) => { if (e) avisar(e, 'cirugias.procedimientos-adicionales'); })
         : null,
@@ -344,8 +420,29 @@ async function manejarPOST(request: Request) {
     );
     await Promise.allSettled([
       camposClinicosP,
-      data.inventario_item_id ? consumirLIO(data.inventario_item_id, cirugiaId, auth.user.id) : Promise.resolve(null),
     ]);
+  }
+
+  if (cirugiaId && data.lentes_extra?.length) {
+    for (const l of data.lentes_extra) {
+      const r = await reservarLente({
+        cirugiaId,
+        orden: l.orden,
+        origen: l.origen,
+        inventarioItemId: l.inventario_item_id ?? null,
+        fabricante: l.fabricante ?? null,
+        poderD: l.poder_d ?? null,
+      });
+      if (!r.ok) {
+        // Sin el lente solicitado no se deja la cirugía activa: se libera todo y se cancela.
+        await liberarLentes(cirugiaId);
+        await supabase.from('agenda_cirugias').update({ estado: 'cancelada', updated_at: new Date().toISOString() }).eq('id', cirugiaId);
+        return NextResponse.json(
+          { error: `Lente ${l.orden === 'SEGUNDO' ? 'segundo' : 'respaldo'}: ${r.error}` },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   if (advertencia && result && typeof result === 'object') {

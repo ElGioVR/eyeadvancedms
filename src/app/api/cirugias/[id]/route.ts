@@ -17,7 +17,9 @@ async function manejarGET(
 
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const rolP = requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  // Enfermería puede leer el detalle (sin productividad ni honorarios); no edita.
+  const rolP = requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
+  const soloEnfermeria = (await requireRole(auth.user, ['enfermero'])) === null;
 
   const supabase = getSupabaseAdmin();
 
@@ -81,7 +83,7 @@ async function manejarGET(
         .maybeSingle(),
       supabase
         .from('cirugia_procedimientos')
-        .select('id, servicio_id, nombre, orden')
+        .select('id, servicio_id, nombre, orden, ojo')
         .eq('cirugia_id', id)
         .order('orden'),
       supabase
@@ -187,7 +189,7 @@ async function manejarGET(
     cirugia,
     participantes: participantes.data || [],
     archivos: archivos.data || [],
-    productividad: productividad.data || [],
+    productividad: soloEnfermeria ? [] : (productividad.data || []),
     historial: historial.data || [],
     procedimientos_adicionales,
     personal,

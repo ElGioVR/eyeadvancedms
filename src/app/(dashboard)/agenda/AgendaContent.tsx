@@ -1,6 +1,6 @@
 'use client';
 
-import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, TipoStat, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
+import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, TipoStat, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
@@ -15,11 +15,12 @@ import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
 import BandejaAgenda from '@/components/agenda/BandejaAgenda';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
+import BotonesExportar from '@/components/ui/BotonesExportar';
+import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { Upload, Plus, Calendar, Stethoscope, User, FileSpreadsheet, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import Aislado from '@/components/ui/Aislado';
 import MobileCalendarView from '@/components/agenda/MobileCalendarView';
-import SidebarPanel from '@/components/ui/SidebarPanel';
 import Modal from '@/components/ui/Modal';
 import CampoBusquedaAgenda from '@/components/agenda/CampoBusquedaAgenda';
 import dynamic from 'next/dynamic';
@@ -27,12 +28,19 @@ import dynamic from 'next/dynamic';
 // Piezas que solo se usan al interactuar: se cargan bajo demanda (bundle inicial
 // de la agenda más ligero) y se precargan en segundo plano tras el primer render.
 const cargarDetalle = () => import('@/components/agenda/AgendaDetalle');
-const cargarFormulario = () => import('@/components/agenda/CirugiaFormAgenda');
 const cargarImportar = () => import('@/components/agenda/ImportarAgenda');
 const DetailPopoverCard = dynamic(() => cargarDetalle().then((m) => m.DetailPopoverCard), { ssr: false });
-const CirugiaForm = dynamic(() => cargarFormulario().then((m) => m.CirugiaForm), { ssr: false });
 const ImportExcel = dynamic(() => cargarImportar().then((m) => m.ImportExcel), { ssr: false });
 const ImportConsultas = dynamic(() => cargarImportar().then((m) => m.ImportConsultas), { ssr: false });
+
+const CLAVE_VISTA_AGENDA = 'agenda_ultima_vista';
+/** Guarda parte del estado de la agenda para restaurarlo al regresar desde el detalle. */
+function guardarVistaAgenda(patch: Record<string, unknown>) {
+  try {
+    const previa = JSON.parse(sessionStorage.getItem(CLAVE_VISTA_AGENDA) || '{}');
+    sessionStorage.setItem(CLAVE_VISTA_AGENDA, JSON.stringify({ ...previa, ...patch }));
+  } catch { /* sin almacenamiento: no pasa nada */ }
+}
 
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
@@ -41,7 +49,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   useEffect(() => {
     const precargar = () => {
       void cargarDetalle();
-      void cargarFormulario();
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     if (w.requestIdleCallback) w.requestIdleCallback(precargar);
@@ -64,12 +71,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   // Búsqueda con debounce dentro de CampoBusquedaAgenda: aquí solo llega el texto final
   // (una petición al dejar de teclear y sin repintar el calendario en cada tecla).
   const [searchQuery, setSearchQuery] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showImportConsultas, setShowImportConsultas] = useState(false);
   const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [showImportChoice, setShowImportChoice] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [detailCirugia, setDetailCirugia] = useState<AgendaCirugia | null>(null);
   const detailCacheRef = useRef(new Map<string, AgendaCirugia>());
   const router = useRouter();
@@ -93,6 +98,39 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       if (myDoctor) setFilterDoctor(myDoctor.id);
     }
   }, [userRol, doctores, userId]);
+
+  // Volver a la agenda: recuerda la vista (día/semana/mes) y la fecha, y las restaura al regresar.
+  const restauradaRef = useRef(false);
+  const scrollPendienteRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (restauradaRef.current) return;
+    restauradaRef.current = true;
+    try {
+      const guardada = sessionStorage.getItem(CLAVE_VISTA_AGENDA);
+      if (!guardada) return;
+      const { vista, fecha, scroll, windowScroll } = JSON.parse(guardada) as { vista?: string; fecha?: string; scroll?: number; windowScroll?: number };
+      if (typeof scroll === 'number') scrollPendienteRef.current = scroll;
+      if (typeof windowScroll === 'number' && windowScroll > 0) requestAnimationFrame(() => window.scrollTo(0, windowScroll));
+      if (vista === 'month' || vista === 'week' || vista === 'day') setCalendarView(vista);
+      const fechaUrl = new URLSearchParams(window.location.search).get('fecha');
+      if (!fechaUrl && fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        setCurrentDate(new Date(`${fecha}T12:00:00`));
+        setSelectedDate(fecha);
+      }
+    } catch { /* sin almacenamiento: se queda en la vista por defecto */ }
+  }, []);
+  useEffect(() => {
+    guardarVistaAgenda({ vista: calendarView, fecha: toDateStr(currentDate) });
+  }, [calendarView, currentDate]);
+  // Guarda la posición del scroll (grilla de horas y página) mientras se navega.
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      if (timeGridRef.current && e.target === timeGridRef.current) guardarVistaAgenda({ scroll: timeGridRef.current.scrollTop });
+      else if (e.target === document) guardarVistaAgenda({ windowScroll: window.scrollY });
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  }, []);
 
   // Persist tipo/estado filters to localStorage
   useEffect(() => {
@@ -157,7 +195,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   // todayStr sólo tiene valor después del mount (evita hidración SSR/CSR):
   // este efecto se re-ejecuta cuando todayStr deja de estar vacío.
   useEffect(() => {
-    if (!selectedDate && todayStr) setSelectedDate(todayStr);
+    if (!selectedDate && todayStr) setSelectedDate(initialDate || todayStr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, todayStr]);
 
@@ -455,7 +493,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       for (const c of cirugiasPorFecha[ds] || []) {
         if (!c.hora) continue;
         const st = parseTimeToMinutes(c.hora);
-        const dur = c.tiempo_estimado ? parseInt(c.tiempo_estimado) || 60 : 60;
+        const dur = duracionEventoMin(c);
         if (st < minStart) minStart = st;
         if (st + dur > maxEnd) maxEnd = st + dur;
       }
@@ -471,6 +509,11 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   // eventos y es el día de hoy, a la hora actual.
   useEffect(() => {
     if ((calendarView === 'week' || calendarView === 'day') && timeGridRef.current) {
+      if (scrollPendienteRef.current !== null) {
+        timeGridRef.current.scrollTop = scrollPendienteRef.current;
+        scrollPendienteRef.current = null;
+        return;
+      }
       let px: number | null = null;
       if (firstEventMin !== null) {
         px = Math.max(0, ((firstEventMin - HOUR_START * 60) / 60) * HOUR_HEIGHT - 8);
@@ -516,6 +559,27 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
           action={
             <div className="flex gap-2">
+              <BotonesExportar
+                crear={() => {
+                  const dia = selectedDate || todayStr;
+                  const items = cirugiasPorFecha[dia] ?? [];
+                  return {
+                    titulo: `Agenda del ${dia}`,
+                    subtitulo: `${items.length} evento${items.length === 1 ? '' : 's'}`,
+                    nombreArchivo: `agenda-${dia}`,
+                    filas: items.flatMap((c) => {
+                      const seccion = `${(c.hora || 'Sin hora').slice(0, 5)} · ${c.tipo || 'cirugia'}`;
+                      return [
+                        { seccion, campo: 'Paciente', valor: c.nombre_paciente || '' },
+                        { seccion, campo: 'Procedimiento', valor: c.procedimiento || '' },
+                        { seccion, campo: 'Ojo', valor: etiquetaOjo(c.ojo) },
+                        { seccion, campo: 'Estado', valor: c.estado || '' },
+                        { seccion, campo: 'Doctor', valor: c.doctor_nombre || '' },
+                      ];
+                    }),
+                  };
+                }}
+              />
               {bandeja}
               {reportes}
               {!agendaSoloPropia(userRol) && (
@@ -1056,7 +1120,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             });
                             const overlapItems: OverlapItem[] = weekEvents.map(c => {
                               const startMin = parseTimeToMinutes(c.hora);
-                              const dur = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
+                              const dur = duracionEventoMin(c);
                               return { id: c.id, startMin, endMin: startMin + dur };
                             });
                         const overlapMap = computeOverlapColumns(overlapItems, HOUR_HEIGHT, HOUR_START);
@@ -1071,7 +1135,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             const leftPct = col * colWidth;
                             const rightPct = 100 - (col + 1) * colWidth;
                             const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-                            const durationMin = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
+                            const durationMin = duracionEventoMin(c);
                             const height = Math.max(28, (durationMin / 60) * HOUR_HEIGHT - 2);
 
                             return (
@@ -1170,7 +1234,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         });
                         const overlapItems: OverlapItem[] = dayEvents.map(c => {
                           const startMin = parseTimeToMinutes(c.hora);
-                          const dur = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
+                          const dur = duracionEventoMin(c);
                           return { id: c.id, startMin, endMin: startMin + dur };
                         });
                         const overlapMap = computeOverlapColumns(overlapItems, HOUR_HEIGHT, HOUR_START);
@@ -1185,8 +1249,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         const leftPct = col * colWidth;
                         const rightPct = 100 - (col + 1) * colWidth;
                         const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-                        const durationMin = c.tiempo_estimado ? parseInt(c.tiempo_estimado) : 60;
-                        const height = Math.max(36, (durationMin / 60) * HOUR_HEIGHT - 2);
+                        const durationMin = duracionEventoMin(c);
+                        const height = Math.max(52, (durationMin / 60) * HOUR_HEIGHT - 2);
 
                         return (
                           <div key={c.id}
@@ -1308,13 +1372,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           cirugia={detailCirugia}
           position={detailPosition}
           userRol={userRol}
-          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); setEditingId(detailCirugia.id); setShowForm(true); }}
+          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); router.push(`/cirugias/${detailCirugia.id}/editar`); }}
           onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
-          onEstado={async (s) => {
+          onEstado={async (s, extra) => {
             const id = detailCirugia.id;
             setDetailCirugia(null); setDetailPosition(null);
             // La API de cirugías exige motivo en todo cambio de estado.
-            await actualizarEvento(id, { estado: s, motivo: 'Actualizado desde la agenda' } as Partial<AgendaCirugia>);
+            await actualizarEvento(id, { estado: s, motivo: 'Actualizado desde la agenda', ...(extra ?? {}) } as Partial<AgendaCirugia>);
           }}
           onAccion={(accion) => {
             const evento = detailCirugia;
@@ -1358,18 +1422,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           }}
         />
       )}
-
-      {/* Sidebar Form */}
-      {/* Solo edición: el alta de cirugías vive en /cirugias/nueva (asistente completo). */}
-      <SidebarPanel isOpen={showForm && !!editingId} onClose={() => { setShowForm(false); setEditingId(null); }} title="Editar Cirugía">
-        {editingId && <CirugiaForm key={editingId} cirugiaId={editingId} doctores={doctores} userRol={userRol} initialDate={null} initialHour="" onClose={() => { setShowForm(false); setEditingId(null); }} onSaved={(id, cambios) => {
-          setShowForm(false); setEditingId(null);
-          // Edición: el evento se ve actualizado al instante; la revalidación confirma.
-          if (id && cambios) void mutateAgenda((actual: unknown) => aplicarCambiosEvento(actual, id, cambios), { revalidate: false });
-          refetch();
-          toast('Evento actualizado', 'success');
-        }} />}
-      </SidebarPanel>
 
       {/* Import Modal */}
       <Modal isOpen={showImport} onClose={() => setShowImport(false)}>

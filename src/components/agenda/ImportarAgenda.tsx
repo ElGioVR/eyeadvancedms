@@ -29,9 +29,22 @@ export interface ImportFilaPreview {
 
 export interface ImportRechazo { fila: number; hoja?: string; motivo: string }
 
+export type DecisionImport = 'REAGENDA' | 'REINTERVENCION' | 'AGREGAR' | 'OMITIR';
+
+export interface PendienteDecision {
+  fila: number;
+  paciente: string | null;
+  fecha: string | null;
+  hora: string | null;
+  ojo: string | null;
+  procedimiento: string | null;
+  tipo: 'MISMO_PROCEDIMIENTO' | 'OTRO_PROCEDIMIENTO';
+}
+
 export interface ImportPreviewResp {
   resumen: ImportResumen;
   filas: ImportFilaPreview[];
+  pendientesDecision?: PendienteDecision[];
   rechazos: ImportRechazo[];
   avisos?: string[];
   rechazosCsv: string | null;
@@ -129,6 +142,9 @@ export function ImportAgenda({
   const [preview, setPreview] = useState<ImportPreviewResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [incluirDuplicados, setIncluirDuplicados] = useState(false);
+  const [completarExistentes, setCompletarExistentes] = useState(false);
+  const [decisiones, setDecisiones] = useState<Record<number, DecisionImport>>({});
   const [result, setResult] = useState<ImportResultado | null>(null);
 
   const enviar = async (confirmar: boolean) => {
@@ -140,6 +156,9 @@ export function ImportAgenda({
       fd.append('file', file);
       fd.append('tipo', tipo);
       if (confirmar) fd.append('confirmar', 'true');
+      if (incluirDuplicados) fd.append('incluir_duplicados', 'true');
+      if (completarExistentes) fd.append('completar_existentes', 'true');
+      if (confirmar) fd.append('decisiones', JSON.stringify(decisiones));
       const data = await enviarJSON<ImportResultado | ImportPreviewResp>('/api/agenda/import', 'POST', fd, { timeoutMs: 90_000 });
       if (confirmar) setResult(data as ImportResultado);
       else { setPreview(data as ImportPreviewResp); setStep('preview'); }
@@ -173,7 +192,9 @@ export function ImportAgenda({
           </div>
           <div className="flex justify-end gap-3">
             <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Cancelar</button>
-            <button onClick={() => enviar(false)} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Revisando…' : 'Previsualizar'}</button>
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-fg-2"><input type="checkbox" className="h-4 w-4" checked={incluirDuplicados} onChange={(e) => setIncluirDuplicados(e.target.checked)} />Importar también las filas duplicadas (mismo paciente, fecha, ojo y procedimiento)</label>
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-fg-2"><input type="checkbox" className="h-4 w-4" checked={completarExistentes} onChange={(e) => setCompletarExistentes(e.target.checked)} />Completar cirugías ya guardadas con la hora y anestesia del archivo (solo donde estén vacías)</label>
+          <button onClick={() => enviar(false)} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Revisando…' : 'Previsualizar'}</button>
           </div>
         </>
       )}
@@ -213,6 +234,34 @@ export function ImportAgenda({
             {r.aImportar > preview.filas.length && <p className="text-center text-muted py-1.5">… y {r.aImportar - preview.filas.length} más</p>}
             {r.aImportar === 0 && <p className="text-center text-muted py-3">No hay {etiqueta} nuevas para agregar.</p>}
           </div>
+          {(preview.pendientesDecision?.length ?? 0) > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-500/40 dark:bg-amber-500/10">
+              <p className="mb-2 font-bold text-amber-800 dark:text-amber-200">
+                {preview.pendientesDecision!.length} fila{preview.pendientesDecision!.length === 1 ? '' : 's'} ya existe{preview.pendientesDecision!.length === 1 ? '' : 'n'} con mismo paciente, fecha y ojo. Elige qué es cada una; si no eliges, no se importa.
+              </p>
+              <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                {preview.pendientesDecision!.map((d) => (
+                  <div key={d.fila} className="flex flex-wrap items-center gap-2 rounded bg-surface p-2">
+                    <span className="min-w-0 flex-1 truncate font-medium text-fg">
+                      {d.paciente || 'Sin nombre'} · {d.fecha ? d.fecha.slice(5) : 'sin fecha'}{d.hora ? ` ${d.hora.slice(0, 5)}` : ''} · {d.ojo || '—'} · {d.procedimiento || 'sin procedimiento'}
+                    </span>
+                    <select
+                      value={decisiones[d.fila] ?? ''}
+                      onChange={(e) => setDecisiones((prev) => ({ ...prev, [d.fila]: e.target.value as DecisionImport }))}
+                      aria-label={`Decisión para la fila ${d.fila}`}
+                      className="rounded border border-line bg-surface px-2 py-1 text-xs text-fg"
+                    >
+                      <option value="">Elegir…</option>
+                      {d.tipo === 'MISMO_PROCEDIMIENTO' && <option value="REAGENDA">Es reagenda (la anterior pasa a reagendada)</option>}
+                      <option value="REINTERVENCION">Es reintervención (otra cirugía del mismo ojo)</option>
+                      <option value="AGREGAR">Agregar tal cual</option>
+                      <option value="OMITIR">Omitir</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <ListaAvisos avisos={preview.avisos} />
           <ListaRechazos rechazos={preview.rechazos} />
           <BotonesCsv tipo={tipo} rechazosCsv={preview.rechazosCsv} duplicadosCsv={preview.duplicadosCsv} />

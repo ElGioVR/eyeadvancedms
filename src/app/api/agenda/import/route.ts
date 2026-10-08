@@ -25,6 +25,9 @@ import {
   type ResolucionDoctor,
 } from '@/lib/import-agenda';
 import { ruta } from '@/lib/api/ruta';
+import { reservarLente, completarLentesCirugia, liberarLentes } from '@/lib/cirugia-lentes';
+import { parsearLio, claveLente } from '@/lib/import-lentes-puro';
+import type { OrdenLente } from '@/lib/cirugia-lentes-puro';
 import { exigirLimite } from '@/lib/api/limites';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
@@ -406,6 +409,20 @@ async function manejarPOST(request: Request) {
 
   const fileRaw = formData.get('file');
   const confirmar = formData.get('confirmar') === 'true';
+  // Comentarios clínica (oct 2026): importar también las filas que parecen duplicadas.
+  const incluirDuplicados = formData.get('incluir_duplicados') === 'true';
+  // Completar existentes: en cirugías ya guardadas con el mismo paciente/fecha/ojo/procedimiento,
+  // llena SOLO hora (si está vacía o 00:00) y anestesia (si está vacía). Nunca sobrescribe.
+  const completarExistentes = formData.get('completar_existentes') === 'true';
+  // C1: decisión por fila para conflictos con lo ya guardado: { "<fila>": REAGENDA | REINTERVENCION | AGREGAR | OMITIR }
+  let decisiones: Record<string, string> = {};
+  const decisionesTxt = formData.get('decisiones');
+  if (typeof decisionesTxt === 'string' && decisionesTxt) {
+    try {
+      const parsed = JSON.parse(decisionesTxt) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) decisiones = parsed as Record<string, string>;
+    } catch { /* decisiones mal formadas: se tratan como pendientes */ }
+  }
   const tipoRaw = formData.get('tipo');
   if (tipoRaw !== null && tipoRaw !== 'consultas' && tipoRaw !== 'cirugias') {
     return NextResponse.json({ error: 'Tipo de importación no válido' }, { status: 400 });
@@ -812,6 +829,7 @@ async function manejarPOST(request: Request) {
     doctorTexto: string | null;
     doctorNuevo: boolean;
     dedupe: string;
+    ojoDia: string;
     data: Record<string, unknown>;
   }
   const validasCx: PendCx[] = [];
@@ -822,6 +840,7 @@ async function manejarPOST(request: Request) {
   if (invertidasCx > 0) avisos.push(`La columna FECHA mezcla fechas escritas como texto mes/día («7/22/2026») con celdas de fecha que Excel guardó día/mes. Se leyeron ${invertidasCx} celdas como mes/día (01/08/2026 → 1 de agosto). Revisa las fechas antes de confirmar.`);
   const ordenFnacCx = detectarOrdenFechas(todasFilas.map((f) => f.obj['FECHA NAC.']));
 
+  let filasPorCompletar = 0;
   for (const hoja of hojas) {
     const esAplazados = hoja.nombre === 'APLAZADOS';
     for (const fila of hoja.filas) {
@@ -831,6 +850,7 @@ async function manejarPOST(request: Request) {
 
       let fecha: string | null = null;
       let hora: string | null = null;
+      let horaPendiente: string | null = null;
       if (!esAplazados) {
         const fechaTxt = o['FECHA'] ?? '';
         fecha = parseFechaImport(fechaTxt, ordenFechaCx, invertidasCx > 0);
@@ -840,7 +860,8 @@ async function manejarPOST(request: Request) {
         }
         const horaTxt = o['HORA CX'] ?? '';
         hora = parseHoraImport(horaTxt);
-        if (String(horaTxt).trim() !== '' && !hora) { rechazar(hoja, fila, `Hora no válida («${texto(horaTxt)}»)`); continue; }
+        // Error menor: la fila entra sin hora y queda marcada para completar.
+        if (String(horaTxt).trim() !== '' && !hora) horaPendiente = texto(horaTxt);
       }
 
       const ojoTxt = val(o, 'OJO');
@@ -864,22 +885,28 @@ async function manejarPOST(request: Request) {
         edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
       });
 
-      const procedimiento = val(o, 'PROCEDIMIENTO') || null;
+      const procedimiento = val(o, 'PROCEDIMIENTO') || val(o, 'CIRUGÍA') || val(o, 'CIRUGIA') || null;
       const notasBase = val(o, 'NOTAS') || null;
       const suspendida = !esAplazados && !!notasBase && notasBase.toUpperCase().includes('SUSPENDIDO');
       const ojo2 = normalizeOjo(ojo2Txt);
       let notas = notasBase;
       if (suspendida) notas = null;
       else if (ojo2 && ojo && ojo2 !== ojo) notas = notas ? `${notas} (2º ojo: ${ojo2})` : `(2º ojo: ${ojo2})`;
+      if (horaPendiente && !suspendida) {
+        notas = [notas, `Por completar: hora no válida («${horaPendiente}»)`].filter(Boolean).join(' · ');
+        filasPorCompletar += 1;
+      }
 
       const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? 'agendada' : 'aplazada';
+      const ojoClave = ojo || '';
       const dedupe = fecha
-        ? `F|${nombreV.clave}|${fecha}|${(hora || '').slice(0, 5)}`
+        ? `F|${nombreV.clave}|${fecha}|${ojoClave}|${claveTexto(procedimiento || '')}`
         : `A|${nombreV.clave}|${claveTexto(procedimiento || '')}`;
+      const ojoDia = fecha ? `O|${nombreV.clave}|${fecha}|${ojoClave}` : '';
 
       validasCx.push({
         hoja, fila, clave: nombreV.clave, nombre: nombreV.nombre,
-        paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, dedupe,
+        paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, dedupe, ojoDia,
         data: {
           nombre_paciente: nombreV.nombre,
           expediente: val(o, 'No. Expediente') || null,
@@ -891,8 +918,9 @@ async function manejarPOST(request: Request) {
           ojo,
           lio: val(o, 'LIO') || val(o, 'LIO_2') || null,
           marca_lio: esAplazados ? null : val(o, 'MARCA') || val(o, 'MARCA_2') || null,
-          tiempo_estimado: esAplazados ? null : val(o, 'TIEMPO ESTIMADO CX') || null,
-          tiempo_estancia: esAplazados ? null : val(o, 'TIEMPO DE ESTANCIA') || null,
+          tiempo_estimado: esAplazados ? null : val(o, 'TIEMPO ESTIMADO CX') || val(o, 'TIEMPO CX') || null,
+          tiempo_estancia: esAplazados ? null : val(o, 'TIEMPO DE ESTANCIA') || val(o, 'TIEMPO ESTANCIA') || null,
+          anestesia: esAplazados ? null : valorAnestesia(val(o, 'ANESTESIA')),
           estado,
           notas: esAplazados ? null : notas,
           ...(estado === 'aplazada'
@@ -903,10 +931,12 @@ async function manejarPOST(request: Request) {
     }
   }
 
+  if (filasPorCompletar > 0) avisos.push(`${filasPorCompletar} fila${filasPorCompletar === 1 ? '' : 's'} se importaron sin hora porque la hora no es válida. Quedaron marcadas «Por completar» en notas; corrige la hora en la agenda.`);
+
   // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.
   const fechasArchivo = Array.from(new Set(validasCx.map((f) => f.data.fecha as string | null).filter((f): f is string => !!f)));
   const haySinFecha = validasCx.some((f) => !f.data.fecha);
-  type Existente = { nombre_paciente: string | null; fecha: string | null; hora: string | null; procedimiento: string | null };
+  type Existente = { id: string; nombre_paciente: string | null; fecha: string | null; hora: string | null; procedimiento: string | null; ojo: string | null; anestesia: string | null };
   let existentesCx: Existente[];
   try {
     const [porFecha, sinFecha] = await Promise.all([
@@ -915,7 +945,7 @@ async function manejarPOST(request: Request) {
           leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('nombre_paciente, fecha, hora, procedimiento')
+              .select('id, nombre_paciente, fecha, hora, procedimiento, ojo, anestesia')
               .in('fecha', grupo)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
@@ -926,7 +956,7 @@ async function manejarPOST(request: Request) {
         ? leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('nombre_paciente, fecha, hora, procedimiento')
+              .select('id, nombre_paciente, fecha, hora, procedimiento, ojo, anestesia')
               .is('fecha', null)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
@@ -937,22 +967,73 @@ async function manejarPOST(request: Request) {
   } catch (err) {
     return errorInterno(err, 'agenda.import.duplicados');
   }
-  const enBdCx = new Set(
-    existentesCx.map((e) =>
-      e.fecha
-        ? `F|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${(e.hora || '').slice(0, 5)}`
-        : `A|${claveTexto(e.nombre_paciente || '')}|${claveTexto(e.procedimiento || '')}`
-    )
+  const claveExistente = (e: Existente) =>
+    e.fecha
+      ? `F|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${e.ojo || ''}|${claveTexto(e.procedimiento || '')}`
+      : `A|${claveTexto(e.nombre_paciente || '')}|${claveTexto(e.procedimiento || '')}`;
+  const enBdCx = new Set(existentesCx.map(claveExistente));
+  const existentePorClave = new Map<string, Existente>();
+  for (const e of existentesCx) if (!existentePorClave.has(claveExistente(e))) existentePorClave.set(claveExistente(e), e);
+  const actualizarCx: Array<{ id: string; cambios: { hora?: string; anestesia?: string }; fila: Hoja['filas'][number]; hoja: Hoja }> = [];
+  // Mismo paciente, fecha y ojo (cualquier procedimiento): posible reagenda o reintervención.
+  const enBdOjoDia = new Set(
+    existentesCx.filter((e) => e.fecha).map((e) => `O|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${e.ojo || ''}`)
   );
+  const enArchivoOjoDia = new Set<string>();
   const enArchivoCx = new Map<string, string>();
   const porInsertarCx: PendCx[] = [];
+  // C1: conflicto con lo ya guardado (mismo paciente + fecha + ojo) → la clínica decide por fila.
+  const pendientesDecision: Array<{ p: PendCx; existenteId: string | null; tipo: 'MISMO_PROCEDIMIENTO' | 'OTRO_PROCEDIMIENTO' }> = [];
+  const reagendaDe = new Map<PendCx, string>(); // fila nueva → cirugía anterior que pasa a REAGENDADA
+  const existenteOjoDia = new Map<string, string>();
+  for (const e of existentesCx) {
+    if (!e.fecha) continue;
+    const k = `O|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${e.ojo || ''}`;
+    if (!existenteOjoDia.has(k)) existenteOjoDia.set(k, e.id);
+  }
   for (const p of validasCx) {
-    if (enBdCx.has(p.dedupe)) {
-      omitirDuplicado(p.hoja, p.fila, p.data.fecha ? 'Ya existe en el sistema (mismo paciente, fecha y hora)' : 'Ya existe como aplazada (mismo paciente y procedimiento)');
+    if (completarExistentes && enBdCx.has(p.dedupe)) {
+      const ex = existentePorClave.get(p.dedupe);
+      const cambios: { hora?: string; anestesia?: string } = {};
+      if (ex && p.data.hora && (!ex.hora || ex.hora.slice(0, 5) === '00:00')) cambios.hora = p.data.hora as string;
+      if (ex && p.data.anestesia && !ex.anestesia) cambios.anestesia = p.data.anestesia as string;
+      if (ex && Object.keys(cambios).length > 0) {
+        actualizarCx.push({ id: ex.id, cambios, fila: p.fila, hoja: p.hoja });
+      } else {
+        omitirDuplicado(p.hoja, p.fila, 'Ya existe en el sistema y no hay datos nuevos que completar');
+      }
       continue;
     }
     const previa = enArchivoCx.get(p.dedupe);
-    if (previa) { omitirDuplicado(p.hoja, p.fila, `Duplicada dentro del archivo (igual a ${previa})`); continue; }
+    if (previa && !incluirDuplicados) { omitirDuplicado(p.hoja, p.fila, `Duplicada dentro del archivo (igual a ${previa})`); continue; }
+
+    const idMismo = existentePorClave.get(p.dedupe)?.id ?? null;
+    const idOjoDia = p.data.fecha ? (existenteOjoDia.get(p.ojoDia) ?? null) : null;
+    const enBd = enBdCx.has(p.dedupe) || (!!p.data.fecha && enBdOjoDia.has(p.ojoDia));
+    const decision = decisiones[String(p.fila.numero)];
+    if (enBd && !incluirDuplicados) {
+      if (!decision) {
+        pendientesDecision.push({ p, existenteId: idMismo ?? idOjoDia, tipo: idMismo ? 'MISMO_PROCEDIMIENTO' : 'OTRO_PROCEDIMIENTO' });
+        if (!confirmar) continue;
+        omitirDuplicado(p.hoja, p.fila, 'Pendiente de decisión: no se importó (elige reagenda, reintervención, agregar u omitir en la vista previa)');
+        continue;
+      }
+      if (decision === 'OMITIR') { omitirDuplicado(p.hoja, p.fila, 'Omitida por decisión de la clínica'); continue; }
+      if (decision === 'REAGENDA' && (idMismo ?? idOjoDia)) {
+        reagendaDe.set(p, (idMismo ?? idOjoDia) as string);
+        (p.data as Record<string, unknown>).tipo_caso = 'REAGENDA';
+      } else if (decision === 'REINTERVENCION') {
+        (p.data as Record<string, unknown>).tipo_caso = 'REINTERVENCION';
+      }
+      // AGREGAR (o REAGENDA sin cirugía previa): se importa tal cual.
+    } else if (enBd) {
+      avisos.push(`Fila ${p.fila.numero}: importada como duplicado a petición de la clínica (mismo paciente, fecha, ojo y procedimiento).`);
+    }
+    if (!decision && p.data.fecha && enArchivoOjoDia.has(p.ojoDia)) {
+      (p.data as Record<string, unknown>).tipo_caso = 'REINTERVENCION';
+      avisos.push(`Fila ${p.fila.numero}: ya hay otra cirugía del mismo ojo ese día con distinto procedimiento en el archivo; se importó como reintervención.`);
+    }
+    enArchivoOjoDia.add(p.ojoDia);
     enArchivoCx.set(p.dedupe, hojas.length > 1 ? `${p.hoja.nombre} fila ${p.fila.numero}` : `la fila ${p.fila.numero}`);
     porInsertarCx.push(p);
   }
@@ -966,6 +1047,8 @@ async function manejarPOST(request: Request) {
     aImportar: porInsertarCx.length,
     aplazadas: porInsertarCx.filter((p) => p.data.estado === 'aplazada').length,
     duplicadas: duplicados.length,
+    completables: actualizarCx.length,
+    pendientesDecision: pendientesDecision.length,
     conError: rechazos.length,
     doctoresNuevos: Array.from(doctoresNuevos.values()),
     pacientesNuevos: pacientesNuevos.size,
@@ -985,6 +1068,15 @@ async function manejarPOST(request: Request) {
         estado: p.data.estado as string,
         paciente_nuevo: p.pacienteNuevo,
         doctor_nuevo: p.doctorNuevo,
+      })),
+      pendientesDecision: pendientesDecision.map((x) => ({
+        fila: x.p.fila.numero,
+        paciente: x.p.nombre,
+        fecha: (x.p.data.fecha as string | null) ?? null,
+        hora: (x.p.data.hora as string | null) ?? null,
+        ojo: (x.p.data.ojo as string | null) ?? null,
+        procedimiento: (x.p.data.procedimiento as string | null) ?? null,
+        tipo: x.tipo,
       })),
       rechazos: listaRechazos(),
       avisos,
@@ -1006,16 +1098,21 @@ async function manejarPOST(request: Request) {
       rechazar(p.hoja, p.fila, (p.doctor && 'nuevo' in p.doctor && docs.fallos.get(p.doctor.nuevo)) || 'No se pudo crear el doctor');
       continue;
     }
-    filasCx.push({ p, row: { ...p.data, paciente_id: pacienteId, doctor_id: doctorId } });
+    const anterior = reagendaDe.get(p);
+    filasCx.push({ p, row: { ...p.data, paciente_id: pacienteId, doctor_id: doctorId, ...(anterior ? { reagenda_de_id: anterior } : {}) } });
   }
 
   let importadas = 0;
   let aplazadasImportadas = 0;
+  let completadas = 0;
+  const reagendadas: string[] = [];
   const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', filasCx.map((x) => x.row), 'id, doctor_id');
   const doctorRows: Array<Record<string, unknown>> = [];
   resultados.forEach((r, i) => {
     const { p } = filasCx[i];
     if (r.ok) {
+      const anterior = reagendaDe.get(p);
+      if (anterior) reagendadas.push(anterior);
       if (p.data.estado === 'aplazada') aplazadasImportadas++;
       else importadas++;
       if (r.row.doctor_id) {
@@ -1025,6 +1122,39 @@ async function manejarPOST(request: Request) {
       rechazar(p.hoja, p.fila, mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'));
     }
   });
+  // C1: la cirugía anterior de una reagenda pasa a REAGENDADA y libera sus lentes.
+  for (const anterior of reagendadas) {
+    await liberarLentes(anterior);
+    await supabase.from('agenda_cirugias').update({ estado: 'REAGENDADA' }).eq('id', anterior);
+  }
+  for (const u of actualizarCx) {
+    const { error: errUpd } = await supabase.from('agenda_cirugias').update(u.cambios as never).eq('id', u.id);
+    if (errUpd) rechazar(u.hoja, u.fila, mensajeSeguro(errUpd, 'agenda.import', 'No se pudo completar la cirugía existente'));
+    else completadas++;
+  }
+  if (completadas > 0) avisos.push(`${completadas} cirugía${completadas === 1 ? '' : 's'} ya existente${completadas === 1 ? '' : 's'} se completó${completadas === 1 ? '' : 'ron'} con hora y/o anestesia del archivo (solo campos vacíos).`);
+  // Comentarios clínica (oct 2026): LIO del Excel → reserva de inventario o lente del hospital.
+  // Agendadas: reservan. Completadas (históricas): consumen lo que se indicó como usado.
+  const mapaLios = await cargarLiosInventario(supabase);
+  for (let i = 0; i < resultados.length; i++) {
+    const r = resultados[i];
+    if (!r.ok) continue;
+    const { p } = filasCx[i];
+    const estadoFila = p.data.estado as string;
+    if (estadoFila !== 'agendada' && estadoFila !== 'completada') continue;
+    const lentes = parsearLio(p.data.lio as string | null, p.data.marca_lio as string | null);
+    if (lentes.length === 0) continue;
+    await vincularLentesImportados(
+      supabase,
+      (r.row as { id: string }).id,
+      lentes,
+      estadoFila === 'completada',
+      mapaLios,
+      auth.user.id,
+      avisos,
+      p.fila.numero
+    );
+  }
   for (const lote of trozos(doctorRows, LOTE_INSERT)) {
     const { error } = await supabase.from('agenda_cirugia_doctores').insert(lote);
     if (error) handleSupabaseError(error, 'agenda.import.doctores');
@@ -1044,6 +1174,7 @@ async function manejarPOST(request: Request) {
     tipo: 'cirugias',
     importadas,
     aplazadasImportadas,
+    completadas,
     omitidasDuplicadas: duplicados.length,
     errores: rechazos.length,
     doctoresCreados: docs.ids.size,
@@ -1056,3 +1187,69 @@ async function manejarPOST(request: Request) {
 }
 
 export const POST = ruta('agenda/import#POST', manejarPOST);
+
+/** Texto de la columna ANESTESIA del Excel → valor de agenda_cirugias.anestesia. */
+function valorAnestesia(texto: string): string | null {
+  const t = texto.toUpperCase();
+  if (!t) return null;
+  if (t.includes('SEDAC')) return 'LOCAL_SEDACION';
+  if (t.includes('GENERAL')) return 'GENERAL';
+  if (t.includes('LOCAL')) return 'LOCAL';
+  return null;
+}
+
+type ItemLioInv = { id: string; marca: string | null; potencia_dioptrias: number | null; stock: number };
+
+/** Piezas de LIO con stock, indexadas por marca+poder (varias piezas posibles por clave). */
+async function cargarLiosInventario(supabase: Admin): Promise<Map<string, string[]>> {
+  const { data } = await supabase
+    .from('inventario_items')
+    .select('id, marca, potencia_dioptrias, stock')
+    .gt('stock', 0)
+    .not('potencia_dioptrias', 'is', null);
+  const mapa = new Map<string, string[]>();
+  for (const it of (data ?? []) as ItemLioInv[]) {
+    const k = claveLente(it.marca ?? '', it.potencia_dioptrias);
+    mapa.set(k, [...(mapa.get(k) ?? []), it.id]);
+  }
+  return mapa;
+}
+
+async function vincularLentesImportados(
+  supabase: Admin,
+  cirugiaId: string,
+  lentes: ReturnType<typeof parsearLio>,
+  completada: boolean,
+  mapa: Map<string, string[]>,
+  usuarioId: string,
+  avisos: string[],
+  filaNumero: number
+): Promise<void> {
+  for (const l of lentes) {
+    const ids = l.poder != null ? mapa.get(claveLente(l.marca, l.poder)) ?? [] : [];
+    let reservado = false;
+    for (const itemId of ids) {
+      const r = await reservarLente({
+        cirugiaId, orden: l.orden, origen: 'INVENTARIO', inventarioItemId: itemId, fabricante: l.marca, poderD: l.poder,
+      });
+      if (r.ok) {
+        reservado = true;
+        if (l.orden === 'PRIMERO') {
+          await supabase.from('agenda_cirugias').update({ inventario_item_id: itemId }).eq('id', cirugiaId);
+        }
+        break;
+      }
+      if (r.codigo !== 'LENTE_SIN_DISPONIBLE') break;
+    }
+    if (!reservado) {
+      const r = await reservarLente({ cirugiaId, orden: l.orden, origen: 'HOSPITAL', fabricante: l.marca, poderD: l.poder });
+      if (!r.ok) avisos.push(`Fila ${filaNumero}: no se pudo registrar el lente ${l.orden} (${r.error}).`);
+      else if (ids.length > 0) avisos.push(`Fila ${filaNumero}: lente ${l.orden} (${l.marca} ${l.poder ?? ''}) sin piezas disponibles; se registró como lente del hospital.`);
+    }
+  }
+  if (completada) {
+    const requeridos: OrdenLente[] = ['PRIMERO'];
+    const res = await completarLentesCirugia(cirugiaId, requeridos, usuarioId);
+    if (!res.ok) avisos.push(`Fila ${filaNumero}: lente no descontado del inventario (${res.error}).`);
+  }
+}

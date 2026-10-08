@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ClientDate from '@/components/ui/ClientDate';
+import BotonesExportar from '@/components/ui/BotonesExportar';
 import Skeleton from '@/components/ui/Skeleton';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import BadgeCompletar from '@/components/ui/BadgeCompletar';
@@ -209,7 +210,7 @@ export default function HistorialMedicoPage() {
           fecha: c.fecha,
           estudio: est,
           doctor: c.doctor,
-          ojo: 'OD / OI',
+          ojo: 'OD / OS',
           resultado: c.diagnostico,
         }))
       ),
@@ -309,6 +310,33 @@ export default function HistorialMedicoPage() {
         </div>
       </div>
 
+      <div className="mb-4 flex justify-end">
+        <BotonesExportar
+          crear={() => ({
+            titulo: `Historial médico — ${paciente.nombre_completo}`,
+            subtitulo: `${paciente.total_consultas} consulta${paciente.total_consultas !== 1 ? 's' : ''}`,
+            nombreArchivo: `historial-${paciente.id.slice(0, 8)}`,
+            filas: [
+              { seccion: 'Paciente', campo: 'Nombre', valor: paciente.nombre_completo },
+              { seccion: 'Paciente', campo: 'Expediente', valor: paciente.numero_expediente ?? '' },
+              { seccion: 'Paciente', campo: 'Sexo', valor: paciente.sexo ?? '' },
+              { seccion: 'Paciente', campo: 'Edad', valor: paciente.edad != null ? String(paciente.edad) : '' },
+              { seccion: 'Paciente', campo: 'Teléfono', valor: paciente.telefono ?? '' },
+              { seccion: 'Paciente', campo: 'Email', valor: paciente.email ?? '' },
+              { seccion: 'Paciente', campo: 'Dirección', valor: paciente.direccion ?? '' },
+              ...paciente.consultas.flatMap((c) => [
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Doctor', valor: c.doctor ?? '' },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Especialidad', valor: c.especialidad ?? '' },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Tipo', valor: c.tipo_consulta ?? '' },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Diagnóstico', valor: c.diagnostico ?? '' },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Estudios', valor: (c.estudios ?? []).join(', ') },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Procedimiento', valor: c.procedimiento ?? '' },
+                { seccion: `Consulta ${c.fecha}${c.folio ? ` · ${c.folio}` : ''}`, campo: 'Notas', valor: c.notas ?? '' },
+              ]),
+            ],
+          })}
+        />
+      </div>
       {/* Patient info card */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-line dark:bg-surface">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 py-4 sm:px-6 sm:py-5">

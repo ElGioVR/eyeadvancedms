@@ -12,7 +12,9 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import { etiquetaModeloLio } from '@/lib/catalogos/modelos-lio';
-import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe } from '@/lib/catalogos/cirugia';
+import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe, ANESTESIAS, OJOS_CIRUGIA } from '@/lib/catalogos/cirugia';
+import EditarLentesCirugia from '@/components/agenda/EditarLentesCirugia';
+import EditarEquipoCirugia from '@/components/cirugia/EditarEquipoCirugia';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -21,7 +23,9 @@ import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import OtrasCirugiasPaciente from '@/components/cirugia/OtrasCirugiasPaciente';
 import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
+import { exportarDocumento, type FormatoExport, type FilaExport } from '@/lib/exportar-documento';
 
 interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null; telefonos?: TelefonoPaciente[]; }
 interface Origen { nombre?: string; }
@@ -77,6 +81,9 @@ interface CirugiaData {
   anestesia?: string | null;
   procedencia?: string | null;
   motivo_consulta?: string | null;
+  tiempo_estimado?: string | null;
+  tiempo_estancia?: string | null;
+  procedimiento?: string | null;
   lio_diseno?: string | null;
   lio_torico?: boolean | null;
   especialidad?: { nombre: string } | null;
@@ -100,7 +107,7 @@ interface CirugiaDetalleResponse {
   archivos: Archivo[];
   productividad: ProductividadItem[];
   historial: HistorialItem[];
-  procedimientos_adicionales?: { id: string; nombre: string }[];
+  procedimientos_adicionales?: { id: string; servicio_id?: string | null; nombre: string; ojo?: string | null }[];
   personal?: { id: string; rol: string; nombre: string; hora_inicio?: string | null; hora_fin?: string | null }[];
 }
 
@@ -227,6 +234,8 @@ export default function CirugiaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useUser();
+  // Enfermería: solo lectura del detalle (sin productividad, sin edición).
+  const esEnfermeria = user?.rol === 'enfermero';
   const { toast } = useToast();
   // Detalle vía SWR: al volver a la pantalla se muestra al instante y tras subir o
   // eliminar archivos solo se revalidan los datos (sin volver al skeleton).
@@ -245,6 +254,90 @@ export default function CirugiaDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ archivo: Archivo; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Edición en la misma página (como en consulta): se alterna la vista y se guarda con PATCH.
+  const [editando, setEditando] = useState(false);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
+  const [borrador, setBorrador] = useState({
+    fecha: '', hora: '', ojo: '', anestesia: '', procedencia: '', motivo_consulta: '',
+    diagnostico: '', tiempo_estimado: '', tiempo_estancia: '', notas: '', procedimiento: '', fecha_hora_ok: '',
+  });
+  const { data: procedencias } = useSWR<string[]>('/api/catalogos/procedencias', { revalidateOnFocus: false });
+  const [adicionalesEdit, setAdicionalesEdit] = useState<Array<{ servicio_id: string; nombre: string; ojo: string }>>([]);
+  const { data: catalogoProcedimientos } = useSWR<{ servicios?: Array<{ id: string; nombre: string }> }>(
+    data?.cirugia?.paciente_id ? `/api/catalogo-servicios?paciente_id=${data.cirugia.paciente_id}&tipo=PROCEDIMIENTO` : null,
+    { revalidateOnFocus: false }
+  );
+
+  // Datos que la agenda necesita para mostrar la cirugía (las importaciones masivas a veces no los traen).
+  const faltantesAgenda = (() => {
+    const c = data?.cirugia;
+    if (!c) return [] as string[];
+    const f: string[] = [];
+    if (!c.fecha) f.push('fecha');
+    if (!c.hora || c.hora.slice(0, 5) === '00:00') f.push('hora');
+    if (!c.ojo) f.push('ojo');
+    if (!(c.servicio?.nombre || c.procedimiento)) f.push('procedimiento');
+    if (!c.anestesia) f.push('anestesia');
+    return f;
+  })();
+
+  const iniciarEdicion = () => {
+    const c = data?.cirugia;
+    if (!c) return;
+    setBorrador({
+      fecha: c.fecha ?? '', hora: c.hora?.slice(0, 5) ?? '', ojo: c.ojo ?? '', anestesia: c.anestesia ?? '',
+      procedencia: c.procedencia ?? '', motivo_consulta: c.motivo_consulta ?? '', diagnostico: c.diagnostico ?? '',
+      tiempo_estimado: c.tiempo_estimado ?? '', tiempo_estancia: c.tiempo_estancia ?? '', notas: c.notas ?? '',
+      procedimiento: c.servicio?.nombre || c.procedimiento || '', fecha_hora_ok: '',
+    });
+    setAdicionalesEdit((data.procedimientos_adicionales ?? []).filter((p) => p.servicio_id).map((p) => ({ servicio_id: p.servicio_id as string, nombre: p.nombre, ojo: p.ojo || c.ojo || 'OD' })));
+    setErrorEdicion(null);
+    setEditando(true);
+  };
+
+  const guardarEdicion = async () => {
+    const c = data?.cirugia;
+    if (!c || guardandoEdicion) return;
+    const cambios: Record<string, unknown> = {};
+    const vacioANull = (v: string) => v.trim() || null;
+    if ((c.fecha ?? '') !== borrador.fecha) cambios.fecha = borrador.fecha || null;
+    if ((c.hora?.slice(0, 5) ?? '') !== borrador.hora) cambios.hora = borrador.hora || null;
+    if ((c.ojo ?? '') !== borrador.ojo) cambios.ojo = borrador.ojo || null;
+    if ((c.anestesia ?? '') !== borrador.anestesia) cambios.anestesia = borrador.anestesia || null;
+    if ((c.procedencia ?? '') !== borrador.procedencia.trim()) cambios.procedencia = vacioANull(borrador.procedencia);
+    if ((c.motivo_consulta ?? '') !== borrador.motivo_consulta.trim()) cambios.motivo_consulta = vacioANull(borrador.motivo_consulta);
+    if ((c.diagnostico ?? '') !== borrador.diagnostico.trim()) cambios.diagnostico = vacioANull(borrador.diagnostico);
+    if ((c.tiempo_estimado ?? '') !== borrador.tiempo_estimado.trim()) cambios.tiempo_estimado = vacioANull(borrador.tiempo_estimado);
+    if ((c.tiempo_estancia ?? '') !== borrador.tiempo_estancia.trim()) cambios.tiempo_estancia = vacioANull(borrador.tiempo_estancia);
+    if ((c.notas ?? '') !== borrador.notas.trim()) cambios.notas = vacioANull(borrador.notas);
+    const procActual = c.servicio?.nombre || c.procedimiento || '';
+    if (procActual !== borrador.procedimiento.trim()) cambios.procedimiento = vacioANull(borrador.procedimiento);
+    const adicionalesOriginales = (data?.procedimientos_adicionales ?? []).map((p) => `${p.servicio_id}:${p.ojo ?? ''}`).sort().join('|');
+    const adicionalesNuevos = adicionalesEdit.map((p) => `${p.servicio_id}:${p.ojo}`).sort().join('|');
+    const hayAdicionales = adicionalesOriginales !== adicionalesNuevos;
+    if (Object.keys(cambios).length === 0 && !hayAdicionales) {
+      setEditando(false);
+      return;
+    }
+    setGuardandoEdicion(true);
+    setErrorEdicion(null);
+    try {
+      if (Object.keys(cambios).length > 0) await enviarJSON(`/api/agenda/${c.id}`, 'PATCH', cambios);
+      if (hayAdicionales) {
+        await enviarJSON(`/api/cirugias/${c.id}/procedimientos`, 'PUT', {
+          procedimientos: adicionalesEdit.map((p) => ({ servicio_id: p.servicio_id, ojo: p.ojo })),
+        });
+      }
+      await mutate();
+      setEditando(false);
+      toast('Cambios guardados', 'success');
+    } catch (err) {
+      setErrorEdicion(mensajeDeError(err, 'No se pudieron guardar los cambios'));
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
 
   // Vista previa de archivos: bloquea scroll de fondo, cierra con Escape y con
   // el botón «atrás» del celular (se agrega una entrada al historial al abrir).
@@ -419,7 +512,7 @@ export default function CirugiaDetailPage() {
   const procedimientosAdicionales = data.procedimientos_adicionales ?? [];
   const personalApoyo = data.personal ?? [];
   const nombrePaciente = cirugia.pacientes?.nombre_completo || cirugia.nombre_paciente || '—';
-  const procedimiento = cirugia.servicio?.nombre || '—';
+  const procedimiento = cirugia.servicio?.nombre || cirugia.procedimiento || '—';
   const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${etiquetaOjo(cirugia.ojo)}` : procedimiento;
   const cirujano =
     participantes.find((p) => /CIRUJANO/i.test(p.roles?.clave || p.roles?.nombre || ''))?.doctores?.alias || null;
@@ -433,6 +526,44 @@ export default function CirugiaDetailPage() {
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1">
+              {(['pdf', 'xlsx', 'docx'] as FormatoExport[]).map((f) => (
+                <button key={f} type="button"
+                  onClick={() => void exportarDocumento({
+                    titulo: `Cirugía ${cirugia.codigo || ''}`.trim(),
+                    subtitulo: `${nombrePaciente} · ${cirugia.fecha || 'Sin fecha'} ${cirugia.hora || ''}`.trim(),
+                    nombreArchivo: `cirugia-${cirugia.codigo || cirugia.id.slice(0, 8)}`,
+                    filas: [
+                      { seccion: 'Paciente', campo: 'Nombre', valor: nombrePaciente },
+                      { seccion: 'Paciente', campo: 'Expediente', valor: cirugia.pacientes?.numero_expediente ?? '' },
+                      { seccion: 'Cirugía', campo: 'Fecha', valor: cirugia.fecha ?? '' },
+                      { seccion: 'Cirugía', campo: 'Hora', valor: cirugia.hora ?? '' },
+                      { seccion: 'Cirugía', campo: 'Estado', valor: cirugia.estado },
+                      { seccion: 'Cirugía', campo: 'Ojo', valor: etiquetaOjo(cirugia.ojo) },
+                      { seccion: 'Cirugía', campo: 'Procedimiento quirúrgico', valor: cirugia.servicio?.nombre ?? '' },
+                      { seccion: 'Cirugía', campo: 'Procedimientos adicionales', valor: procedimientosAdicionales.map((p) => `${p.nombre}${p.ojo ? ` (${p.ojo})` : ''}`).join(', ') },
+                      { seccion: 'Cirugía', campo: 'Anestesia', valor: cirugia.anestesia ?? '' },
+                      { seccion: 'Cirugía', campo: 'Diagnóstico', valor: cirugia.diagnostico ?? '' },
+                      { seccion: 'Cirugía', campo: 'Motivo de consulta', valor: cirugia.motivo_consulta ?? '' },
+                      { seccion: 'Cirugía', campo: 'Procedencia', valor: cirugia.procedencia ?? '' },
+                      { seccion: 'Cirugía', campo: 'Notas', valor: cirugia.notas ?? '' },
+                    ] as FilaExport[],
+                  }, f)}
+                  className="rounded-lg border border-line px-2.5 py-2 text-xs font-bold uppercase text-fg-2 hover:bg-surface-2">
+                  {f === 'xlsx' ? 'Excel' : f === 'docx' ? 'Word' : 'PDF'}
+                </button>
+              ))}
+            </div>
+            {!editando ? (
+              !esEnfermeria && <button type="button" onClick={iniciarEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">Editar cirugía</button>
+            ) : (
+              <>
+                <button type="button" onClick={() => { setEditando(false); setErrorEdicion(null); }} disabled={guardandoEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2 disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={guardarEdicion} disabled={guardandoEdicion} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+                  {guardandoEdicion && <Loader2 className="h-4 w-4 animate-spin" />}{guardandoEdicion ? 'Guardando…' : 'Guardar'}
+                </button>
+              </>
+            )}
             <EnviarPaciente
               cita={{
                 tipo: 'cirugia',
@@ -482,12 +613,133 @@ export default function CirugiaDetailPage() {
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <FileText className="h-4 w-4 text-primary-600" /> Información de la cirugía
             </h3>
+            {faltantesAgenda.length > 0 && !editando && !esEnfermeria && (
+            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-500/40 dark:bg-amber-500/10 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-amber-800 dark:text-amber-200">
+                Esta cirugía se importó incompleta y no se muestra bien en la agenda. Faltan: <strong>{faltantesAgenda.join(', ')}</strong>.
+              </p>
+              <button type="button" onClick={iniciarEdicion} className="shrink-0 rounded-lg bg-primary-600 px-3 py-2 text-sm font-bold text-white hover:bg-primary-700">Completar datos</button>
+            </div>
+          )}
+            {editando ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Fecha</label>
+                    <input type="date" value={borrador.fecha} onChange={(e) => setBorrador((b) => ({ ...b, fecha: e.target.value }))} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Hora</label>
+                    <input type="time" value={borrador.hora} onChange={(e) => setBorrador((b) => ({ ...b, hora: e.target.value }))} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Ojo</label>
+                    <select value={borrador.ojo} onChange={(e) => setBorrador((b) => ({ ...b, ojo: e.target.value }))} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg">
+                      <option value="">Sin dato</option>
+                      {OJOS_CIRUGIA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Anestesia</label>
+                    <select value={borrador.anestesia} onChange={(e) => setBorrador((b) => ({ ...b, anestesia: e.target.value }))} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg">
+                      <option value="">Sin dato</option>
+                      {ANESTESIAS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Procedencia</label>
+                    <input type="text" list="procedencias-lista-detalle" value={borrador.procedencia} onChange={(e) => setBorrador((b) => ({ ...b, procedencia: e.target.value }))} maxLength={255} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                    <datalist id="procedencias-lista-detalle">
+                      {(procedencias ?? []).map((p) => <option key={p} value={p} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Tiempo de cirugía</label>
+                    <input type="text" value={borrador.tiempo_estimado} onChange={(e) => setBorrador((b) => ({ ...b, tiempo_estimado: e.target.value }))} maxLength={50} placeholder="Ej. 30 min" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Tiempo de estancia</label>
+                    <input type="text" value={borrador.tiempo_estancia} onChange={(e) => setBorrador((b) => ({ ...b, tiempo_estancia: e.target.value }))} maxLength={50} placeholder="Ej. 2 hrs" className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Procedimiento quirúrgico</label>
+                    <input type="text" list="procedimientos-lista-detalle" value={borrador.procedimiento} onChange={(e) => setBorrador((b) => ({ ...b, procedimiento: e.target.value }))} maxLength={255} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                    <datalist id="procedimientos-lista-detalle">
+                      {(catalogoProcedimientos?.servicios ?? []).map((sv) => <option key={sv.nombre} value={sv.nombre} />)}
+                    </datalist>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Motivo de consulta</label>
+                    <input type="text" value={borrador.motivo_consulta} onChange={(e) => setBorrador((b) => ({ ...b, motivo_consulta: e.target.value }))} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Diagnóstico</label>
+                    <input type="text" value={borrador.diagnostico} onChange={(e) => setBorrador((b) => ({ ...b, diagnostico: e.target.value }))} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Notas</label>
+                    <textarea value={borrador.notas} onChange={(e) => setBorrador((b) => ({ ...b, notas: e.target.value }))} maxLength={2000} rows={3} className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" />
+                  </div>
+                </div>
+                {errorEdicion && <p role="alert" className="mt-3 text-sm text-red-600">{errorEdicion}</p>}
+                <p className="mt-3 text-xs text-muted">El procedimiento y el equipo médico se cambian desde la agenda.</p>
+                <div className="mt-6 border-t border-line pt-6">
+                  <h4 className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-muted">Lentes</h4>
+                  <div className="sm:col-span-2 rounded-lg border border-line p-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Procedimientos adicionales</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {adicionalesEdit.map((a) => (
+                        <span key={a.servicio_id} className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                          + {a.nombre}
+                          <select
+                            value={a.ojo}
+                            onChange={(e) => setAdicionalesEdit((prev) => prev.map((x) => (x.servicio_id === a.servicio_id ? { ...x, ojo: e.target.value } : x)))}
+                            aria-label={`Ojo de ${a.nombre}`}
+                            className="rounded bg-transparent text-xs font-bold focus:outline-none"
+                          >
+                            {OJOS_CIRUGIA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                          <button type="button" onClick={() => setAdicionalesEdit((prev) => prev.filter((x) => x.servicio_id !== a.servicio_id))} aria-label="Quitar procedimiento" className="hover:text-red-600">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      {adicionalesEdit.length === 0 && <span className="text-xs text-muted">Sin procedimientos adicionales</span>}
+                    </div>
+                    {(catalogoProcedimientos?.servicios ?? []).some((sv) => !adicionalesEdit.some((x) => x.servicio_id === sv.id)) && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const sv = (catalogoProcedimientos?.servicios ?? []).find((x) => x.id === e.target.value);
+                          if (sv) setAdicionalesEdit((prev) => [...prev, { servicio_id: sv.id, nombre: sv.nombre, ojo: borrador.ojo || 'OD' }]);
+                        }}
+                        aria-label="Agregar procedimiento adicional"
+                        className="mt-2 w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-fg"
+                      >
+                        <option value="">+ Agregar otro procedimiento…</option>
+                        {(catalogoProcedimientos?.servicios ?? []).filter((sv) => !adicionalesEdit.some((x) => x.servicio_id === sv.id)).map((sv) => (
+                          <option key={sv.id} value={sv.id}>{sv.nombre}</option>
+                        ))}
+                      </select>
+                    )}
+                    <p className="mt-2 text-[11px] text-muted">El procedimiento principal se cambia arriba, en Procedimiento.</p>
+                  </div>
+                  <EditarEquipoCirugia
+                    cirugiaId={cirugia.id}
+                    participantes={participantes}
+                    personal={personalApoyo}
+                    onGuardado={() => void mutate()}
+                  />
+                  <EditarLentesCirugia cirugiaId={cirugia.id} />
+                </div>
+              </>
+            ) : (
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Código" value={cirugia.codigo} />
               <Field label="Paciente" value={nombrePaciente} />
-              <Field label="Procedimiento" value={cirugia.servicio?.nombre} />
+              <Field label="Procedimiento quirúrgico" value={cirugia.servicio?.nombre} />
               {procedimientosAdicionales.length > 0 && (
-                <Field label="Procedimientos adicionales" value={procedimientosAdicionales.map((p) => p.nombre).join(', ')} full />
+                <Field label="Procedimientos adicionales" value={procedimientosAdicionales.map((p) => `${p.nombre}${p.ojo ? ` (${p.ojo})` : ''}`).join(', ')} full />
               )}
               <Field label="Especialidad" value={cirugia.especialidad?.nombre} />
               <Field label="Procedencia" value={cirugia.procedencia ?? undefined} />
@@ -511,7 +763,8 @@ export default function CirugiaDetailPage() {
                 </div>
               )}
               <Field label="Notas" value={cirugia.notas} full />
-            </div>
+              </div>
+            )}
           </div>
 
           {/* 2. Equipo médico */}
@@ -658,6 +911,7 @@ export default function CirugiaDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {!esEnfermeria && (<>
           {/* 5. Productividad */}
           <div className="bg-surface border border-line rounded-xl p-6">
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
@@ -682,6 +936,10 @@ export default function CirugiaDetailPage() {
               </div>
             )}
           </div>
+
+          </>)}
+          {/* 5b. Otras cirugías del mismo paciente (C1) */}
+          <OtrasCirugiasPaciente pacienteId={cirugia.paciente_id ?? null} cirugiaActualId={cirugia.id} />
 
           {/* 6. Historial */}
           <div className="bg-surface border border-line rounded-xl p-6">

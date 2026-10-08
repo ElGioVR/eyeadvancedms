@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import BotonesExportar from '@/components/ui/BotonesExportar';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -437,6 +438,40 @@ export default function ConsultaDetailPage() {
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
+            <BotonesExportar
+              crear={() => {
+                const c = consulta;
+                const est = (n: 1 | 2 | 3) => {
+                  const nombre = n === 1 ? c.estudio_1 : n === 2 ? c.estudio_2 : c.estudio_3;
+                  const doc = n === 1 ? c.est1_doctor : n === 2 ? c.est2_doctor : c.est3_doctor;
+                  return nombre ? `${nombre}${doc ? ` (${doc})` : ''}` : '';
+                };
+                return {
+                  titulo: `Consulta ${c.folio || c.id.slice(0, 8)}`,
+                  subtitulo: `${c.paciente || 'Sin paciente'} — ${c.fecha}`,
+                  nombreArchivo: `consulta-${c.folio || c.id.slice(0, 8)}`,
+                  filas: [
+                    { seccion: 'Paciente', campo: 'Nombre', valor: c.paciente || '' },
+                    { seccion: 'Paciente', campo: 'Expediente', valor: c.paciente_expediente ?? '' },
+                    { seccion: 'Consulta', campo: 'Fecha', valor: c.fecha ?? '' },
+                    { seccion: 'Consulta', campo: 'Hora', valor: [c.hora_inicio, c.hora_fin].filter(Boolean).join(' - ') },
+                    { seccion: 'Consulta', campo: 'Doctor', valor: c.doctor ?? '' },
+                    { seccion: 'Consulta', campo: 'Especialidad', valor: c.especialidad ?? '' },
+                    { seccion: 'Consulta', campo: 'Tipo', valor: c.tipo_consulta ?? '' },
+                    { seccion: 'Consulta', campo: 'Diagnóstico', valor: c.diagnostico ?? '' },
+                    { seccion: 'Estudios', campo: 'Estudio 1', valor: est(1) },
+                    { seccion: 'Estudios', campo: 'Estudio 2', valor: est(2) },
+                    { seccion: 'Estudios', campo: 'Estudio 3', valor: est(3) },
+                    { seccion: 'Procedimiento', campo: 'Procedimiento', valor: c.procedimiento ? `${c.procedimiento}${c.proc_doctor ? ` (${c.proc_doctor})` : ''}` : '' },
+                    { seccion: 'Pago', campo: 'Estatus', valor: c.estatus ?? '' },
+                    { seccion: 'Pago', campo: 'Costo total', valor: c.costo_total != null ? String(c.costo_total) : '' },
+                    { seccion: 'Pago', campo: 'Pagado', valor: c.monto_pagado != null ? String(c.monto_pagado) : '' },
+                    { seccion: 'Pago', campo: 'Método de pago', valor: c.metodo_pago ?? '' },
+                    { seccion: 'Notas', campo: 'Notas', valor: c.notas ?? '' },
+                  ],
+                };
+              }}
+            />
             <EnviarPaciente
               cita={{
                 tipo: 'consulta',
