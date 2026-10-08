@@ -385,7 +385,7 @@ export default function ConsultaDetailPage() {
     if (tipoAgendaDesdeBd(consulta.tipo_consulta, consulta.tipo_visita) !== editTipo) {
       Object.assign(body, valoresBdTipoConsulta(editTipo));
     }
-    if (consulta.estatus_pago !== 'PAGADO') {
+    if (!esEnfermera && consulta.estatus_pago !== 'PAGADO') {
       const costo = Number(editCosto);
       if (!Number.isFinite(costo) || costo < 0) {
         setEditError('Costo total inválido');
@@ -433,6 +433,8 @@ export default function ConsultaDetailPage() {
   }
 
   const consultaCerrada = consulta.estatus === 'COMPLETADA' || consulta.estatus === 'CANCELADA';
+  // Enfermería no ve ni edita montos: el servidor los quita de la respuesta.
+  const esEnfermera = user?.rol === 'enfermero';
   // Admin, doctor y recepción editan; al concluir la consulta (COMPLETADA) todavía
   // se agregan estudios, procedimientos, diagnóstico y nota. Cancelada: solo lectura.
   const puedeEditar = (user?.rol === 'admin' || user?.rol === 'doctor' || user?.rol === 'recepcionista' || user?.rol === 'enfermero') && consulta.estatus !== 'CANCELADA' && !(user?.rol === 'enfermero' && consultaCerrada);
@@ -576,7 +578,7 @@ export default function ConsultaDetailPage() {
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge status={consulta.estatus} config={estatusConfig} />
-          <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />
+          {!esEnfermera && <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />}
         </div>
       </div>
 
@@ -890,6 +892,7 @@ export default function ConsultaDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Payment info */}
+          {!esEnfermera && (
           <div className="bg-surface border border-line rounded-xl p-6">
             <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
               <CreditCard className="h-4 w-4 text-emerald-600" /> Pago
@@ -936,6 +939,7 @@ export default function ConsultaDetailPage() {
               )}
             </div>
           </div>
+          )}
 
           {/* Aseguradora */}
           {aseguradoraData?.aseguradora && (
