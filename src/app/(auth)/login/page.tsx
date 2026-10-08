@@ -51,7 +51,34 @@ const loginSlides = [
   },
 ];
 
+type ResumenPublico = {
+  consultasHoy: number | null;
+  consultasAyer: number | null;
+  pacientesRegistrados: number | null;
+  personalActivo: number | null;
+  personalPorTipo: { medicos: number; enfermeros: number; anestesiologos: number } | null;
+};
+
+const formatoCifra = (n: number | null | undefined) =>
+  n == null ? '—' : n.toLocaleString('es-MX');
+
 export default function LoginPage() {
+  const [resumen, setResumen] = useState<ResumenPublico | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch('/api/publico/resumen-clinica', { cache: 'no-store' })
+      .then((r) => (r.ok ? (r.json() as Promise<ResumenPublico>) : null))
+      .then((d) => { if (vivo && d) setResumen(d); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  const variacion =
+    resumen?.consultasHoy != null && resumen.consultasAyer
+      ? Math.round(((resumen.consultasHoy - resumen.consultasAyer) / resumen.consultasAyer) * 100)
+      : null;
+
   const router = useRouter();
   const [activeSlide, setActiveSlide] = useState(0);
   const [email, setEmail] = useState('');
@@ -563,27 +590,47 @@ export default function LoginPage() {
                   <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Consultas Hoy</span>
                   <FileText className="w-4 h-4 text-accent" />
                 </div>
-                <div className="text-3xl font-black text-white">24</div>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                  +12% vs ayer
+                <div className="text-3xl font-black text-white">{formatoCifra(resumen?.consultasHoy)}</div>
+                <div
+                  className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${
+                    variacion == null
+                      ? 'text-white/40'
+                      : variacion >= 0 ? 'text-emerald-400' : 'text-red-400'
+                  }`}
+                >
+                  {variacion == null ? (
+                    'Consultas programadas hoy'
+                  ) : (
+                    <>
+                      <svg
+                        className={`w-3 h-3 ${variacion < 0 ? 'rotate-180' : ''}`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      ><path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                      {variacion >= 0 ? '+' : ''}{variacion}% vs ayer
+                    </>
+                  )}
                 </div>
               </div>
               <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 shadow-2xl mb-3 transform translate-x-8 rotate-[1deg] hover:rotate-0 transition-transform duration-300">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Pacientes Activos</span>
+                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Pacientes Registrados</span>
                   <Users className="w-4 h-4 text-accent-light" />
                 </div>
-                <div className="text-3xl font-black text-white">1,248</div>
-                <div className="mt-2 text-xs text-white/40 font-medium">Registro continuo</div>
+                <div className="text-3xl font-black text-white">{formatoCifra(resumen?.pacientesRegistrados)}</div>
+                <div className="mt-2 text-xs text-white/40 font-medium">Expedientes en el sistema</div>
               </div>
               <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 shadow-2xl transform -translate-x-4 rotate-[-1deg] hover:rotate-0 transition-transform duration-300">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Inventario</span>
-                  <Activity className="w-4 h-4 text-accent" />
+                  <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Personal Clínico</span>
+                  <Users className="w-4 h-4 text-accent" />
                 </div>
-                <div className="text-3xl font-black text-white">856</div>
-                <div className="mt-2 text-xs text-white/40 font-medium">Lentes en stock</div>
+                <div className="text-3xl font-black text-white">{formatoCifra(resumen?.personalActivo)}</div>
+                <div className="mt-2 text-xs text-white/40 font-medium">
+                  {resumen?.personalPorTipo
+                    ? `${resumen.personalPorTipo.medicos} médicos · ${resumen.personalPorTipo.enfermeros} enfermeros · ${resumen.personalPorTipo.anestesiologos} anestesiólogos`
+                    : 'Activos en la clínica'}
+                </div>
               </div>
             </div>
           </div>

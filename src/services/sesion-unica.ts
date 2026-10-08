@@ -47,7 +47,9 @@ export async function registrarSesion(userId: string, sessionId: string, disposi
 export async function liberarSesion(userId: string, sessionId: string): Promise<void> {
   const { error } = await getSupabaseAdmin()
     .from('usuarios')
-    .update({ sesion_activa_id: null, sesion_vista_at: null })
+    // sesion_vista_at se conserva: es la «última conexión» que muestra el dashboard.
+    // Sin sesion_activa_id la sesión ya queda libre (decidirSesion).
+    .update({ sesion_activa_id: null })
     .eq('id', userId)
     .eq('sesion_activa_id', sessionId);
   invalidarPerfil(userId);

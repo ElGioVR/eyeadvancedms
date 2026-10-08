@@ -957,7 +957,7 @@ function NuevaConsultaContent() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       <PageHeader
-        title="NUEVA CONSULTA"
+        title="Nueva consulta"
         subtitle="Complete la información de la consulta oftalmológica."
         backLink={{
           href: '/agenda',

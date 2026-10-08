@@ -111,7 +111,7 @@ export default function PacientesPage() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       <PageHeader
-        title="PACIENTES"
+        title="Pacientes"
         subtitle="Listado general y altas del sistema."
         action={soloLectura ? undefined : (
           <div className="flex items-center gap-2">

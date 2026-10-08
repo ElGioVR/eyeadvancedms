@@ -41,8 +41,15 @@ export interface DashboardData {
   doctores: DoctorDashboard[];
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+/**
+ * Datos del dashboard. Con `doctorId` las citas de hoy y los contadores de
+ * consultas se limitan a ese doctor; pacientes y bajo stock siguen siendo de la clínica.
+ */
+export async function getDashboardData(
+  opts: { doctorId?: string | null } = {},
+): Promise<DashboardData> {
   const supabase = getSupabaseAdmin();
+  const filtroDoctor: Record<string, string> = opts.doctorId ? { doctor_id: opts.doctorId } : {};
 
   // "Hoy" y la semana (lunes–domingo) en la zona de la clínica (America/Tijuana),
   // con aritmética de fechas en UTC para no depender de la zona del servidor.
@@ -73,7 +80,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         doctor:doctor_id (alias)`,
         { count: 'exact' },
       )
-      .eq('fecha', today)
+      .match({ fecha: today, ...filtroDoctor })
       .order('hora_inicio')
       .limit(300),
 
@@ -81,7 +88,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       .from('consultas')
       .select('id', { count: 'exact', head: true })
       .gte('fecha', weekStart)
-      .lte('fecha', weekEnd),
+      .lte('fecha', weekEnd)
+      .match(filtroDoctor),
 
     // Bajo stock: sólo LIOs (tipo = 'LENTE_INTRAOCULAR'). Cascada de esquemas:
     // legacy (marca/modelo) → nuevo (manufacturer/model) → nuevo sin filtro tipo.

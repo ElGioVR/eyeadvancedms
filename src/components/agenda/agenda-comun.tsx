@@ -271,3 +271,61 @@ export function TipoStat({ label, total, porEstado, icon: Icon, tone }: {
     </div>
   );
 }
+
+const PUNTO_TONO: Record<'violet' | 'amber' | 'sky' | 'primary', string> = {
+  violet: 'bg-violet-500',
+  amber: 'bg-amber-500',
+  sky: 'bg-sky-500',
+  primary: 'bg-primary-500',
+};
+
+/** Panel único de resumen de la agenda: cifras por tipo, con barra y leyenda por estado. */
+export function ResumenAgenda({ items }: {
+  items: Array<{
+    label: string;
+    total: number;
+    porEstado: Record<string, number>;
+    tone: 'violet' | 'amber' | 'sky' | 'primary';
+  }>;
+}) {
+  return (
+    <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft dark:shadow-none xl:grid-cols-4">
+      {items.map((it, i) => {
+        const suma = ESTADOS_ORDEN.reduce((a, e) => a + (it.porEstado[e] || 0), 0);
+        return (
+          <div
+            key={it.label}
+            className={cn(
+              'min-w-0 p-5',
+              // Separadores finos entre celdas (2×2 en tablet, fila en escritorio)
+              i % 2 === 0 && 'border-r border-line/70',
+              i < 2 && 'border-b border-line/70',
+              'xl:border-b-0',
+              i < 3 ? 'xl:border-r xl:border-line/70' : 'xl:border-r-0',
+            )}
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-muted">
+              <span className={cn('h-2 w-2 rounded-full', PUNTO_TONO[it.tone])} />
+              {it.label}
+            </div>
+            <p className="mt-1.5 text-3xl font-semibold tracking-tight text-fg tabular-nums">{it.total}</p>
+            <div className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+              {suma > 0 && ESTADOS_ORDEN.map((e) => (it.porEstado[e] || 0) > 0 && (
+                <span key={e} className={cn('h-full', estadoConfig[e].solid)} style={{ width: `${((it.porEstado[e] || 0) / suma) * 100}%` }} title={`${estadoLabels[e]}: ${it.porEstado[e]}`} />
+              ))}
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+              {suma === 0 && <span>Sin eventos</span>}
+              {ESTADOS_ORDEN.filter((e) => (it.porEstado[e] || 0) > 0).map((e) => (
+                <span key={e} className="inline-flex items-center gap-1 tabular-nums">
+                  <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[e].dot)} />
+                  {it.porEstado[e]} {estadoLabels[e].toLowerCase()}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

@@ -11,8 +11,8 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Calendar,
   TrendingUp,
 } from 'lucide-react';
@@ -23,6 +23,33 @@ import { borrarTodosLosBorradores } from '@/lib/borradores';
 import Avatar from '@/components/ui/Avatar';
 import Modal from '@/components/ui/Modal';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+
+function CollapseToggle({
+  collapsed,
+  onToggle,
+  className,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const label = collapsed ? 'Expandir navegación' : 'Colapsar navegación';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={label}
+      aria-label={label}
+      className={cn(
+        'h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg',
+        className
+      )}
+    >
+      <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
+    </button>
+  );
+}
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', section: 'Principal' },
@@ -103,7 +130,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
         )}
       >
         {/* Logo */}
-        <div className={cn('flex h-16 shrink-0 items-center', showLabels ? 'px-5' : 'justify-center')}>
+        <div className={cn('flex h-16 shrink-0 items-center', showLabels ? 'justify-between pl-5 pr-3' : 'justify-center')}>
           {showLabels ? (
             <Link href="/dashboard" className="flex items-center transition-opacity hover:opacity-80" onClick={() => { if (window.innerWidth < 1024) onClose(); }}>
               <Image
@@ -131,16 +158,21 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
               <Image src="/images/logo-eye.png" alt="EyeAdvanced" width={24} height={24} priority className="h-6 w-6 object-contain" />
             </Link>
           )}
+          {showLabels && (
+            <CollapseToggle
+              collapsed={collapsed}
+              onToggle={onToggle}
+              className="hidden xl:flex"
+            />
+          )}
         </div>
 
-        {/* Botón colapsar – solo xl+ */}
-        <button
-          onClick={onToggle}
-          className="absolute -right-3 top-[52px] hidden h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-soft transition-all hover:scale-110 hover:text-fg xl:flex"
-          aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
-        >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-        </button>
+        {/* Colapsado (xl+): toggle debajo del logo */}
+        {collapsed && (
+          <div className="hidden justify-center pb-1 xl:flex">
+            <CollapseToggle collapsed={collapsed} onToggle={onToggle} className="flex" />
+          </div>
+        )}
 
         {/* Menú */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-2">

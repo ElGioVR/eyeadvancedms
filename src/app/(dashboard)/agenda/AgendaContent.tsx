@@ -1,6 +1,6 @@
 'use client';
 
-import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, TipoStat, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
+import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, ResumenAgenda, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import BotonesExportar from '@/components/ui/BotonesExportar';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
-import { Upload, Plus, Calendar, Stethoscope, User, FileSpreadsheet, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
+import { Upload, Plus, Calendar, Stethoscope, User, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import Aislado from '@/components/ui/Aislado';
 import MobileCalendarView from '@/components/agenda/MobileCalendarView';
@@ -556,10 +556,19 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       <div className="hidden lg:block">
         <PageHeader
           title="Agenda"
-          subtitle={loading ? 'Cargando eventos…' : `${stats.total} evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
+          acento
+          subtitle={loading ? 'Cargando eventos…' : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-bold tabular-nums text-primary-700 dark:bg-primary-400/10 dark:text-primary-300">
+                {stats.total}
+              </span>
+              {`evento${stats.total === 1 ? '' : 's'} en ${calendarView === 'month' ? 'el mes' : calendarView === 'week' ? 'la semana' : 'el día'}`}
+            </span>
+          )}
           action={
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <BotonesExportar
+                segmentado
                 crear={() => {
                   const dia = selectedDate || todayStr;
                   const items = cirugiasPorFecha[dia] ?? [];
@@ -580,6 +589,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                   };
                 }}
               />
+              <span className="mx-1 hidden h-6 w-px bg-line xl:block" />
               {bandeja}
               {reportes}
               {!agendaSoloPropia(userRol) && (
@@ -633,17 +643,23 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           }
         />
 
-        {/* Stats Row */}
-        <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <TipoStat label="Total de eventos" total={stats.total} tone="primary" icon={Calendar}
-            porEstado={ESTADOS_ORDEN.reduce<Record<string, number>>((acc, e) => {
-              acc[e] = (stats.cirugiasByEstado[e] || 0) + (stats.consultasByEstado[e] || 0) + (stats.estudiosByEstado[e] || 0);
-              return acc;
-            }, {})} />
-          <TipoStat label="Cirugías" total={stats.cirugias} tone="violet" icon={Stethoscope} porEstado={stats.cirugiasByEstado} />
-          <TipoStat label="Consultas" total={stats.consultas} tone="amber" icon={User} porEstado={stats.consultasByEstado} />
-          <TipoStat label="Estudios" total={stats.estudios} tone="sky" icon={FileSpreadsheet} porEstado={stats.estudiosByEstado} />
-        </div>
+        {/* Resumen de eventos */}
+        <ResumenAgenda
+          items={[
+            {
+              label: 'Total de eventos',
+              total: stats.total,
+              tone: 'primary',
+              porEstado: ESTADOS_ORDEN.reduce<Record<string, number>>((acc, e) => {
+                acc[e] = (stats.cirugiasByEstado[e] || 0) + (stats.consultasByEstado[e] || 0) + (stats.estudiosByEstado[e] || 0);
+                return acc;
+              }, {}),
+            },
+            { label: 'Cirugías', total: stats.cirugias, tone: 'violet', porEstado: stats.cirugiasByEstado },
+            { label: 'Consultas', total: stats.consultas, tone: 'amber', porEstado: stats.consultasByEstado },
+            { label: 'Estudios', total: stats.estudios, tone: 'sky', porEstado: stats.estudiosByEstado },
+          ]}
+        />
       </div>
       )}
 
@@ -727,9 +743,18 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       {/* ─── Mobile Header ─── */}
       <div className="flex shrink-0 items-center justify-between gap-3 pb-3 lg:hidden">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">Agenda</h1>
-          <p className="text-xs text-muted">
-            {loading ? 'Cargando…' : `${cirugiasFiltradas.length} evento${cirugiasFiltradas.length === 1 ? '' : 's'} este mes`}
+          <h1 className="relative pl-3.5 text-2xl font-semibold tracking-tight text-fg before:absolute before:left-0 before:top-1/2 before:h-[1.5rem] before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-gradient-to-b before:from-primary-400 before:to-primary-700 before:content-['']">
+            Agenda
+          </h1>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2 pl-3.5 text-xs text-muted">
+            {loading ? 'Cargando…' : (
+              <>
+                <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-bold tabular-nums text-primary-700 dark:bg-primary-400/10 dark:text-primary-300">
+                  {cirugiasFiltradas.length}
+                </span>
+                {`evento${cirugiasFiltradas.length === 1 ? '' : 's'} este mes`}
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">

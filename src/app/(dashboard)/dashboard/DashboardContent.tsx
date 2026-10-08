@@ -12,7 +12,6 @@ import {
   Users,
   Calendar,
   Package,
-  AlertTriangle,
   ArrowRight,
   ChevronDown,
   CalendarDays,
@@ -26,6 +25,7 @@ import Avatar from "@/components/ui/Avatar";
 import { useUser } from "@/hooks/useUser";
 import { enviarJSON } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/dashboard-data";
+import type { PersonalPresencia } from "@/lib/personal-presencia";
 import {
   obtenerFestivo,
   obtenerFestivoProximo,
@@ -72,6 +72,7 @@ interface DashboardContentProps {
   userIniciales: string;
   userAvatarUrl: string | null;
   userRol: string;
+  personalInicial: PersonalPresencia[] | null;
 }
 
 // Matriz de colores de estatus (misma que la agenda)
@@ -120,8 +121,25 @@ const TOOLTIP_STYLE = {
   fontWeight: 600,
 } as const;
 
+const ETIQUETA_TIPO: Record<string, string> = {
+  MEDICO: "Médico",
+  ENFERMERO: "Enfermero",
+  ANESTESIOLOGO: "Anestesiólogo",
+};
+
+function formatoDuracion(ms: number): string {
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 1) return "menos de 1 min";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h < 24) return m ? `${h} h ${m} min` : `${h} h`;
+  return `${Math.floor(h / 24)} d ${h % 24} h`;
+}
+
 export default function DashboardContent({
   data,
+  personalInicial,
   userNombre,
   userIniciales,
   userAvatarUrl,
@@ -162,6 +180,17 @@ export default function DashboardContent({
     isLoading: chartsCargando,
     isValidating: chartsValidando,
   } = useSWR<ChartData>("/api/dashboard/charts", { refreshInterval: refrescoCompartido });
+  const { data: personal } = useSWR<PersonalPresencia[] | null>("/api/dashboard/personal", {
+    fallbackData: personalInicial,
+    refreshInterval: 60_000,
+  });
+  const [ahora, setAhora] = useState<number | null>(null);
+  useEffect(() => {
+    setAhora(Date.now());
+    const t = setInterval(() => setAhora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const enLineaCount = personal?.filter((p) => p.estado === "en_linea").length ?? 0;
   // «Ver como»: la navegación va en transición → se conserva el dashboard
   // visible (sin volver al skeleton) mientras llega el nuevo render del servidor.
   const [cambiandoVista, iniciarTransicion] = useTransition();
@@ -699,50 +728,64 @@ export default function DashboardContent({
         <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none">
           <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold tracking-tight text-fg">
-                LIOs Bajo Stock
-              </h2>
-              <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-amber-100 dark:bg-amber-500/15 px-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                {data.lentesBajoStock.length}
+              <h2 className="text-base font-semibold tracking-tight text-fg">Personal activo</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {enLineaCount} en línea
               </span>
             </div>
-            <Link
-              href="/inventario"
-              className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-500 transition-colors hover:text-primary-700"
-            >
-              Ver inventario
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {personal && <span className="text-xs text-muted">{personal.length} registrados</span>}
           </div>
-          <div className="space-y-2.5 p-4 max-h-[320px] overflow-y-auto">
-            {data.lentesBajoStock.length === 0 && (
-              <div className="px-4 py-10 text-center text-sm text-muted">
-                Todo en orden — sin stock bajo
-              </div>
+          <div className="max-h-[320px] overflow-auto">
+            {personal == null ? (
+              <div className="px-4 py-10 text-center text-sm text-muted">No se pudo cargar el personal</div>
+            ) : personal.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted">Sin personal activo</div>
+            ) : (
+              <ul className="divide-y divide-line/70">
+                {personal.map((p) => {
+                  const vista = p.ultimaActividad ? Date.parse(p.ultimaActividad) : null;
+                  const desde = p.conectadoDesde ? Date.parse(p.conectadoDesde) : null;
+                  return (
+                    <li key={p.id} className="flex items-center gap-3 px-5 py-3">
+                      <Avatar initials={p.iniciales} className="h-8 w-8 shrink-0 text-[10px] bg-sky-500" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-fg">{p.nombre}</div>
+                        <div className="truncate text-xs text-muted">
+                          {ETIQUETA_TIPO[p.tipoPersonal] ?? p.tipoPersonal}
+                          {p.especialidad ? ` · ${p.especialidad}` : ""}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right whitespace-nowrap">
+                        {p.estado === "en_linea" ? (
+                          <>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              En línea
+                            </span>
+                            <div className="mt-1 text-[11px] text-muted">
+                              {ahora && desde ? formatoDuracion(ahora - desde) : ""}
+                            </div>
+                          </>
+                        ) : p.estado === "desconectado" ? (
+                          <>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
+                              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                              Desconectado
+                            </span>
+                            <div className="mt-1 text-[11px] text-muted">
+                              {vista ? (ahora ? `hace ${formatoDuracion(ahora - vista)}` : "") : "Sin registro"}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted">Sin cuenta</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-            {data.lentesBajoStock.map((item) => (
-              <div
-                key={item.id}
-                className="group rounded-xl border border-amber-100 dark:border-amber-800/40 bg-gradient-to-r from-amber-50/80 to-orange-50/40 dark:from-amber-900/20 dark:to-orange-900/10 p-3 transition-all hover:shadow-sm hover:border-amber-200 dark:hover:border-amber-700"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/15 ring-1 ring-amber-200 dark:ring-amber-500/30">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-fg leading-snug">
-                      {item.nombre}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5">
-                      {item.detalle}
-                    </div>
-                  </div>
-                  <span className="whitespace-nowrap rounded-lg bg-white dark:bg-surface-2 px-2.5 py-1.5 text-xs font-extrabold text-amber-600 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-500/30 shadow-sm">
-                    {item.stock} pzas
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
       </div>

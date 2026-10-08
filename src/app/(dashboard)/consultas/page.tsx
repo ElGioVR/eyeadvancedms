@@ -227,7 +227,7 @@ export default function ConsultasPage() {
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
       <PageHeader
-        title="CONSULTAS MEDICAS"
+        title="Consultas médicas"
         subtitle="Registro y seguimiento de consultas oftalmológicas."
         action={
           <Link
