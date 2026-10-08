@@ -1,3 +1,4 @@
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -42,7 +43,6 @@ const esquemaEquipo = z.object({
     .max(20, 'Demasiado personal de apoyo'),
 });
 
-const ESTADOS_CERRADOS = new Set(['CANCELADA', 'CANCELADO', 'COMPLETADA', 'COMPLETADO', 'REAGENDADA', 'REAGENDADO']);
 
 async function manejarPUT(request: Request, { params }: { params: { id: string } }) {
   const { id } = params;
@@ -65,7 +65,7 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
     .maybeSingle();
   if (errC) return errorInterno(errC, 'cirugias.equipo.leer');
   if (!cirugia) return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
-  if (ESTADOS_CERRADOS.has(String(cirugia.estado ?? ''))) {
+  if (estadoCerrado(cirugia.estado)) {
     return NextResponse.json({ error: 'La cirugía ya está cerrada; no se puede cambiar el equipo' }, { status: 409 });
   }
 

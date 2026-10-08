@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { quitarMontos } from '@/lib/permisos-edicion';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
@@ -127,7 +128,7 @@ function defaultHoraFin(horaInicio: string): string {
 async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const filtros = leerQuery(request, listadoQuerySchema);
@@ -232,7 +233,9 @@ async function manejarGET(request: Request) {
     };
   });
 
-  return NextResponse.json({ data: result, total: count || 0, page, pageSize });
+  const cuerpo = { data: result, total: count || 0, page, pageSize };
+  const soloEnfermeria = (await requireRole(auth.user, ['enfermero'])) === null;
+  return NextResponse.json(soloEnfermeria ? quitarMontos(cuerpo) : cuerpo);
 }
 
 async function manejarPOST(request: Request) {

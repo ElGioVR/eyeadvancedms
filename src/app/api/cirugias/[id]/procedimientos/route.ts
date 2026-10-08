@@ -1,3 +1,4 @@
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -13,7 +14,6 @@ const esquemaProcedimientos = z.object({
 });
 
 /** Estados en los que la cirugía ya no se puede modificar. */
-const ESTADOS_CERRADOS = new Set(['CANCELADA', 'CANCELADO', 'COMPLETADA', 'COMPLETADO', 'REAGENDADA', 'REAGENDADO']);
 
 async function manejarPUT(request: Request, { params }: { params: { id: string } }) {
   const { id } = params;
@@ -36,7 +36,7 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
     .maybeSingle();
   if (errCirugia) return errorInterno(errCirugia, 'cirugias.procedimientos.leer');
   if (!cirugia) return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
-  if (ESTADOS_CERRADOS.has(String(cirugia.estado ?? ''))) {
+  if (estadoCerrado(cirugia.estado)) {
     return NextResponse.json({ error: 'La cirugía ya está cerrada; no se pueden cambiar sus procedimientos' }, { status: 409 });
   }
 

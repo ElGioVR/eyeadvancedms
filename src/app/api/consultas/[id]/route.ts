@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { leerTelefonos } from '@/lib/telefonos-paciente-db';
 import { ruta } from '@/lib/api/ruta';
 import { enSegundoPlano } from '@/lib/segundo-plano';
+import { estadoCerrado, quitarMontos } from '@/lib/permisos-edicion';
 
 const consultaUpdateSchema = z.object({
   estatus: z.enum(['BORRADOR', 'AGENDADA', 'PROCESADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA', 'APLAZADA', 'REAGENDADA', 'COMPLETADA', 'CANCELADA']).optional(),
@@ -45,7 +46,7 @@ async function manejarGET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const { id } = await params;
@@ -191,7 +192,7 @@ async function manejarGET(
     procedimientosEditables = [{ id: null, nombre: c.procedimiento, doctor_id: cc.procedimiento_doctor_id ?? null, indicado_por_id: null }];
   }
 
-  return NextResponse.json({
+  const cuerpo = {
     consulta: {
       ...consulta,
       paciente: pacienteData?.nombre_completo || null,
@@ -224,7 +225,9 @@ async function manejarGET(
     conceptos: conceptosResult.data ?? [],
     aseguranza: aseguranzaResult.data ?? null,
     cobertura: coberturaResult.data ?? null,
-  });
+  };
+  const soloEnfermeria = (await requireRole(auth.user, ['enfermero'])) === null;
+  return NextResponse.json(soloEnfermeria ? quitarMontos(cuerpo) : cuerpo);
 }
 
 async function manejarPATCH(
@@ -233,7 +236,7 @@ async function manejarPATCH(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const { id } = await params;
@@ -261,6 +264,17 @@ async function manejarPATCH(
   // RBAC: igual que en GET
   const denegado = verificarDueno(requerido, existing.doctor_id);
   if (denegado) return denegado;
+
+  // Enfermería: edita casi todo, pero no montos/pagos ni consultas completadas o canceladas.
+  if ((await requireRole(auth.user, ['enfermero'])) === null) {
+    const CAMPOS_MONTO = ['costo_total', 'monto_pagado', 'fecha_pago', 'estatus_pago', 'metodo_pago'];
+    if (CAMPOS_MONTO.some((k) => k in data)) {
+      return NextResponse.json({ error: 'Enfermería no puede modificar montos ni pagos' }, { status: 403 });
+    }
+    if (estadoCerrado(existing.estatus) || (data.estatus && estadoCerrado(data.estatus))) {
+      return NextResponse.json({ error: 'Una consulta completada o cancelada no se puede editar' }, { status: 409 });
+    }
+  }
 
   // AGE-001: detectar conflictos de agenda si cambian fecha/hora/doctor
   const cambiaFecha = data.fecha !== undefined && data.fecha !== existing.fecha;

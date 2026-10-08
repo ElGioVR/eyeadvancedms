@@ -1,5 +1,6 @@
 'use client';
 
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import Link from 'next/link';
 import useSWR from 'swr';
 import PageHeader from '@/components/ui/PageHeader';
@@ -49,7 +50,7 @@ const obtenerPendientes = (url: string) => fetchJSON<{ data: CirugiaPendiente[] 
 export default function CirugiasPendientesPage() {
   const { data, error, isLoading } = useSWR<{ data: CirugiaPendiente[] }>('/api/cirugias?pendientes=1', obtenerPendientes);
   const lista = (data?.data ?? [])
-    .filter((c) => !['CANCELADA', 'CANCELADO', 'COMPLETADA', 'COMPLETADO', 'REAGENDADA', 'REAGENDADO'].includes(c.estado ?? ''))
+    .filter((c) => !estadoCerrado(c.estado))
     .map((c) => ({ c, faltan: faltantesDe(c) }))
     .filter((x) => x.faltan.length > 0)
     .sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));

@@ -3,6 +3,7 @@ import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
 import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { liberarLIO } from '@/lib/inventario';
@@ -104,7 +105,7 @@ async function manejarPATCH(
 
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const rolP = requireRole(auth.user, ROLES_GESTION_AGENDA);
+  const rolP = requireRole(auth.user, [...ROLES_GESTION_AGENDA, 'enfermero']);
   const supabase = getSupabaseAdmin();
 
   // Lectura del estado actual (solo lectura) en paralelo con la verificación de
@@ -163,6 +164,19 @@ async function manejarPATCH(
           { status: 409 }
         );
       }
+    }
+  }
+
+  // Enfermería: edita datos de la cirugía, pero no cambia estado, lentes ni inventario, y no edita cerradas.
+  if ((await requireRole(auth.user, ['enfermero'])) === null) {
+    if (data.estado !== undefined) {
+      return NextResponse.json({ error: 'Enfermería no puede cambiar el estado de la cirugía' }, { status: 403 });
+    }
+    if (data.lentes_requeridos !== undefined || data.inventario_item_id !== undefined) {
+      return NextResponse.json({ error: 'Enfermería no puede modificar lentes ni inventario' }, { status: 403 });
+    }
+    if (estadoCerrado(prev.estado)) {
+      return NextResponse.json({ error: 'Una cirugía completada o cancelada no se puede editar' }, { status: 409 });
     }
   }
 

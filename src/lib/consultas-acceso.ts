@@ -38,8 +38,9 @@ export async function doctorDelListado(userId: string, perfil: PerfilSesion | nu
 
 /** Para detalle/mutaciones: doctor_id que debe coincidir, o `undefined` si no aplica. */
 export async function doctorRequerido(userId: string, perfil: PerfilSesion | null): Promise<string | null | undefined> {
-  // Solo enfermería gestiona únicamente lo propio (su ficha en `doctores`).
-  return agendaSoloPropia(perfil?.rol) ? resolveDoctorId(userId) : undefined;
+  // Enfermería ve y edita cualquier consulta (salvo completadas/canceladas y montos).
+  void userId; void perfil; void agendaSoloPropia; void resolveDoctorId;
+  return undefined;
 }
 
 /** 403 si el usuario (rol de agenda propia) no es el responsable de la consulta. */

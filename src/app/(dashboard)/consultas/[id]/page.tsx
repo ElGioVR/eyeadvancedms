@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
@@ -349,6 +349,20 @@ export default function ConsultaDetailPage() {
     setEditing(true);
   }
 
+  // Enlace "Editar" desde la agenda: abre directo en modo edición (?editar=1).
+  const autoEditRef = useRef(false);
+  useEffect(() => {
+    if (autoEditRef.current || !consulta) return;
+    if (new URLSearchParams(window.location.search).get('editar') !== '1') return;
+    const rol = user?.rol;
+    const puede = (rol === 'admin' || rol === 'doctor' || rol === 'recepcionista' || rol === 'enfermero')
+      && consulta.estatus !== 'CANCELADA' && !(rol === 'enfermero' && consulta.estatus === 'COMPLETADA');
+    if (!puede) return;
+    autoEditRef.current = true;
+    startEditing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consulta, user?.rol]);
+
   async function handleComplete() {
     if (completing) return;
     setCompleting(true);
@@ -421,7 +435,7 @@ export default function ConsultaDetailPage() {
   const consultaCerrada = consulta.estatus === 'COMPLETADA' || consulta.estatus === 'CANCELADA';
   // Admin, doctor y recepción editan; al concluir la consulta (COMPLETADA) todavía
   // se agregan estudios, procedimientos, diagnóstico y nota. Cancelada: solo lectura.
-  const puedeEditar = (user?.rol === 'admin' || user?.rol === 'doctor' || user?.rol === 'recepcionista') && consulta.estatus !== 'CANCELADA';
+  const puedeEditar = (user?.rol === 'admin' || user?.rol === 'doctor' || user?.rol === 'recepcionista' || user?.rol === 'enfermero') && consulta.estatus !== 'CANCELADA' && !(user?.rol === 'enfermero' && consultaCerrada);
 
   return (
     <div className="print-page relative" aria-busy={validandoDetalle}>
@@ -704,7 +718,7 @@ export default function ConsultaDetailPage() {
               <h3 className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
                 <Activity className="h-4 w-4 text-sky-600" /> Detalles Clínicos
               </h3>
-              {puedeEditar && (
+              {puedeEditar && user?.rol !== 'enfermero' && (
                 <button
                   type="button"
                   onClick={() => setEditandoServicios(true)}

@@ -30,7 +30,7 @@ async function manejarGET(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   // Perfil ya memorizado por requireAuth: sin viaje extra.
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const { searchParams } = new URL(request.url);

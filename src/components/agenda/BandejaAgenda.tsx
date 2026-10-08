@@ -10,6 +10,7 @@
  * Todo lo que depende de la hora lo calcula el servidor (sin Date en el render inicial).
  */
 
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -224,7 +225,6 @@ type CirugiaPorCompletar = {
 };
 const URL_POR_COMPLETAR = '/api/cirugias?pendientes=1';
 /** Estados que ya no requieren completar (cerradas o canceladas). */
-const ESTADOS_CERRADOS = new Set(['CANCELADA', 'CANCELADO', 'COMPLETADA', 'COMPLETADO', 'REAGENDADA', 'REAGENDADO']);
 const obtenerPorCompletar = (url: string) => fetchJSON<{ data: CirugiaPorCompletar[] }>(url);
 const ETIQUETA_COMPLETAR: Record<string, string> = { fecha: 'Fecha', hora: 'Hora', ojo: 'Ojo', procedimiento: 'Procedimiento', anestesia: 'Anestesia' };
 function faltantesCompletar(c: CirugiaPorCompletar): string[] {
@@ -324,7 +324,7 @@ export default function BandejaAgenda({
   const lista = pestana === 'confirmar' ? porConfirmar : pestana === 'cerrar' ? porCerrar : [];
   const pendCompletar = useSWR<{ data: CirugiaPorCompletar[] }>(abierto ? URL_POR_COMPLETAR : null, obtenerPorCompletar, { revalidateOnFocus: false });
   const listaCompletar = (pendCompletar.data?.data ?? [])
-    .filter((c) => !ESTADOS_CERRADOS.has(c.estado ?? ''))
+    .filter((c) => !estadoCerrado(c.estado))
     .map((c) => ({ c, faltan: faltantesCompletar(c) }))
     .filter((x) => x.faltan.length > 0)
     .sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));

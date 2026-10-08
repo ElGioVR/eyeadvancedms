@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { enviarJSON, fetchJSON, mensajeDeError } from '@/lib/fetcher';
 import { useParams, useRouter } from 'next/navigation';
@@ -15,6 +15,7 @@ import { etiquetaModeloLio } from '@/lib/catalogos/modelos-lio';
 import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe, ANESTESIAS, OJOS_CIRUGIA } from '@/lib/catalogos/cirugia';
 import EditarLentesCirugia from '@/components/agenda/EditarLentesCirugia';
 import EditarEquipoCirugia from '@/components/cirugia/EditarEquipoCirugia';
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -296,6 +297,17 @@ export default function CirugiaDetailPage() {
     setEditando(true);
   };
 
+  // Enlace "Editar" desde la agenda: abre directo en modo edición (?editar=1).
+  const autoEditRef = useRef(false);
+  useEffect(() => {
+    if (autoEditRef.current || !data?.cirugia) return;
+    if (new URLSearchParams(window.location.search).get('editar') !== '1') return;
+    if (esEnfermeria && estadoCerrado(data.cirugia.estado)) return;
+    autoEditRef.current = true;
+    iniciarEdicion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, esEnfermeria]);
+
   const guardarEdicion = async () => {
     const c = data?.cirugia;
     if (!c || guardandoEdicion) return;
@@ -555,7 +567,7 @@ export default function CirugiaDetailPage() {
               ))}
             </div>
             {!editando ? (
-              !esEnfermeria && <button type="button" onClick={iniciarEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">Editar cirugía</button>
+              (!esEnfermeria || !estadoCerrado(data?.cirugia?.estado)) && <button type="button" onClick={iniciarEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">Editar cirugía</button>
             ) : (
               <>
                 <button type="button" onClick={() => { setEditando(false); setErrorEdicion(null); }} disabled={guardandoEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2 disabled:opacity-50">Cancelar</button>
@@ -683,6 +695,7 @@ export default function CirugiaDetailPage() {
                 </div>
                 {errorEdicion && <p role="alert" className="mt-3 text-sm text-red-600">{errorEdicion}</p>}
                 <p className="mt-3 text-xs text-muted">El procedimiento y el equipo médico se cambian desde la agenda.</p>
+                {!esEnfermeria && (
                 <div className="mt-6 border-t border-line pt-6">
                   <h4 className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-muted">Lentes</h4>
                   <div className="sm:col-span-2 rounded-lg border border-line p-3">
@@ -732,6 +745,7 @@ export default function CirugiaDetailPage() {
                   />
                   <EditarLentesCirugia cirugiaId={cirugia.id} />
                 </div>
+                )}
               </>
             ) : (
             <div className="grid grid-cols-2 gap-4 text-sm">

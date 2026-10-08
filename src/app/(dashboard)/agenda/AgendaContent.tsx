@@ -1372,7 +1372,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           cirugia={detailCirugia}
           position={detailPosition}
           userRol={userRol}
-          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); router.push(`/cirugias/${detailCirugia.id}/editar`); }}
+          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); router.push(detailCirugia.tipo && detailCirugia.tipo !== 'cirugia' ? `/consultas/${detailCirugia.id}?editar=1` : `/cirugias/${detailCirugia.id}?editar=1`); }}
           onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
           onEstado={async (s, extra) => {
             const id = detailCirugia.id;

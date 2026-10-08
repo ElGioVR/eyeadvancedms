@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { quitarMontos } from '@/lib/permisos-edicion';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
@@ -29,7 +30,7 @@ async function manejarGET(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista']);
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
   if (roleError) return roleError;
 
   const { id } = await params;
@@ -77,7 +78,8 @@ async function manejarGET(
     }));
   }
 
-  return NextResponse.json({ data: enriched });
+  const soloEnfermeria = (await requireRole(auth.user, ['enfermero'])) === null;
+  return NextResponse.json({ data: soloEnfermeria ? quitarMontos(enriched) : enriched });
 }
 
 async function manejarPOST(

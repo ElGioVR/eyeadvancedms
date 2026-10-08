@@ -10,6 +10,7 @@ import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { cn } from '@/lib/utils';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
+import { estadoCerrado } from '@/lib/permisos-edicion';
 import { type AccionRapida, accionesDisponibles, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
@@ -105,9 +106,9 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
           <p className="text-sm text-fg-2">{cirugia.notas}</p>
         </div>
       )}
-      {!agendaSoloPropia(userRol) && (
+      {(!agendaSoloPropia(userRol) || !estadoCerrado(cirugia.estado)) && (
         <div className="flex gap-2 pt-2 border-t border-line/70">
-          {cirugia.estado === 'agendada' && (
+          {!agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
             <>
               <button onClick={() => setCompletando(true)} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
                 <CheckCircle2 className="h-4 w-4" /> Completar
@@ -325,7 +326,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
               Completar
             </button>
           )}
-          {esCirugia && !agendaSoloPropia(userRol) && (
+          {(esCirugia ? (!agendaSoloPropia(userRol) || !estadoCerrado(cirugia.estado)) : !estadoCerrado(cirugia.estado)) && (
             <button onClick={onEdit}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-line text-fg-2 hover:bg-surface-2 transition-colors">
               Editar
