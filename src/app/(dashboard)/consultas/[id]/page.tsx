@@ -562,23 +562,38 @@ export default function ConsultaDetailPage() {
         }
       />
 
-      {/* Header with patient info */}
-      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
-        <Avatar initials={consulta.iniciales} className="bg-primary-500" size="lg" />
+      {/* Cabecera del paciente: compacta en móvil, detallada en escritorio */}
+      <div className="bg-surface border border-line rounded-xl p-3.5 sm:p-6 mb-4 sm:mb-6 flex items-start gap-3 sm:gap-4">
+        <Avatar initials={consulta.iniciales} className="bg-primary-500 shrink-0" size="md" />
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-extrabold text-fg truncate">{consulta.paciente}</h2>
-          <FichaPaciente
-            variante="linea"
-            expediente={consulta.paciente_expediente}
-            sexo={consulta.paciente_sexo}
-            fechaNacimiento={consulta.paciente_fecha_nacimiento}
-            edad={consulta.paciente_edad}
-          />
-          <p className="text-sm text-muted">Dr. {consulta.doctor} — {consulta.fecha} {consulta.hora_inicio}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <StatusBadge status={consulta.estatus} config={estatusConfig} />
-          {!esEnfermera && <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />}
+          <h2 className="text-base sm:text-lg font-extrabold leading-tight text-fg break-words">{consulta.paciente}</h2>
+          <div className="mt-0.5 sm:hidden">
+            <FichaPaciente
+              variante="compacta"
+              expediente={consulta.paciente_expediente}
+              sexo={consulta.paciente_sexo}
+              fechaNacimiento={consulta.paciente_fecha_nacimiento}
+              edad={consulta.paciente_edad}
+            />
+          </div>
+          <div className="hidden sm:block">
+            <FichaPaciente
+              variante="linea"
+              expediente={consulta.paciente_expediente}
+              sexo={consulta.paciente_sexo}
+              fechaNacimiento={consulta.paciente_fecha_nacimiento}
+              edad={consulta.paciente_edad}
+            />
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-muted">
+            Dr. {consulta.doctor}
+            {consulta.fecha ? ` · ${consulta.fecha}` : ''}
+            {consulta.hora_inicio ? ` · ${consulta.hora_inicio.slice(0, 5)}` : ''}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={consulta.estatus} config={estatusConfig} />
+            {!esEnfermera && <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />}
+          </div>
         </div>
       </div>
 
