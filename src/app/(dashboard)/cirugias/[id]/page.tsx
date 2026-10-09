@@ -597,25 +597,33 @@ export default function CirugiaDetailPage() {
         }
       />
 
-      {/* Header */}
-      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6 flex items-center gap-4">
-        <Avatar initials={nombrePaciente.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500" size="lg" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-extrabold text-fg truncate">{nombrePaciente}</h2>
-          {cirugia.pacientes && (
-            <FichaPaciente
-              variante="linea"
-              expediente={cirugia.pacientes.numero_expediente}
-              sexo={cirugia.pacientes.sexo}
-              fechaNacimiento={cirugia.pacientes.fecha_nacimiento}
-              edad={cirugia.pacientes.edad}
-            />
-          )}
-          <p className="text-sm text-muted">
-            {procedimientoOjo} — {cirugia.origen?.nombre || 'Sin origen'} — {cirugia.fecha || 'Sin fecha'} {cirugia.hora || ''}
-          </p>
+      {/* Header: en móvil apila nombre, ficha y estado; en escritorio conserva la misma estructura */}
+      <div className="bg-surface border border-line rounded-xl p-4 sm:p-6 mb-6">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <Avatar initials={nombrePaciente.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()} className="bg-primary-500 shrink-0" size="lg" />
+          <div className="min-w-0 flex-1">
+            <h2 className="break-words text-lg font-extrabold leading-tight text-fg">{nombrePaciente}</h2>
+            {cirugia.pacientes && (
+              <FichaPaciente
+                variante="completa"
+                conNombre={false}
+                className="mt-1.5 text-xs sm:text-sm"
+                expediente={cirugia.pacientes.numero_expediente}
+                sexo={cirugia.pacientes.sexo}
+                fechaNacimiento={cirugia.pacientes.fecha_nacimiento}
+                edad={cirugia.pacientes.edad}
+              />
+            )}
+          </div>
         </div>
-        <StatusBadge status={cirugia.estado} config={estadoConfig} />
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-line/70 pt-4 text-xs text-muted sm:text-sm">
+          <StatusBadge status={cirugia.estado} config={estadoConfig} />
+          <span className="font-semibold text-fg-2">{procedimientoOjo}</span>
+          <span aria-hidden="true">·</span>
+          <span>{cirugia.origen?.nombre || 'Sin origen'}</span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">{cirugia.fecha || 'Sin fecha'}{cirugia.hora ? ` ${cirugia.hora}` : ''}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
