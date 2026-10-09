@@ -157,10 +157,6 @@ async function manejarGET(request: Request) {
   const filtrarPorDoctor = propia || (userRole === 'admin' && focus && sessionDoctorId);
   const doctorFiltro = filtrarPorDoctor ? sessionDoctorId : doctorId;
 
-  // Enfermería sin vínculo a `doctores` no debe ver la agenda de todos.
-  if (propia && !sessionDoctorId) {
-    return NextResponse.json({ data: [], total: 0, page, pageSize });
-  }
 
   // ── Cirugías ──
   let queryCirugias = supabase
@@ -176,7 +172,9 @@ async function manejarGET(request: Request) {
 
   if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
   if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
-  if (doctorFiltro) {
+  // Enfermería ve todas las cirugías (solo se marcan las suyas); el filtro de doctor aplica a los demás.
+  const doctorFiltroCirugias = propia ? null : doctorFiltro;
+  if (doctorFiltroCirugias) {
     // Ocupación completa de la persona: cirugías como cirujano principal o como
     // participante del equipo (anestesiólogo, instrumentista, enfermero, circulante…).
     let qPart = supabase
@@ -228,7 +226,8 @@ async function manejarGET(request: Request) {
   if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
 
   const shouldQueryCirugias = !tipo || tipo === 'cirugia';
-  const shouldQueryConsultas = !tipo || tipo === 'consulta' || tipo === 'estudio';
+  // Consultas: enfermería solo ve las suyas (sin vínculo a `doctores`, ninguna).
+  const shouldQueryConsultas = (!tipo || tipo === 'consulta' || tipo === 'estudio') && !(propia && !sessionDoctorId);
 
   const [{ data: cirugias, error: errorCirugias }, { data: consultas, error: errorConsultas }] = await Promise.all([
     shouldQueryCirugias
@@ -240,6 +239,20 @@ async function manejarGET(request: Request) {
   ]);
 
   const dbDur = performance.now() - startedAt - authDur;
+
+  // Cirugías en las que participa la persona (cirujano o equipo), para resaltarlas.
+  const mias = new Set<string>();
+  if (sessionDoctorId) {
+    let qMias = supabase
+      .from('cirugia_participantes')
+      .select('cirugia_id, agenda_cirugias!inner(fecha)')
+      .eq('medico_id', sessionDoctorId)
+      .limit(MAX_FILAS_FUENTE);
+    if (fechaDesde) qMias = qMias.gte('agenda_cirugias.fecha', fechaDesde);
+    if (fechaHasta) qMias = qMias.lte('agenda_cirugias.fecha', fechaHasta);
+    const { data: partMias } = await qMias;
+    for (const p of partMias || []) mias.add((p as { cirugia_id: string }).cirugia_id);
+  }
 
   if (errorCirugias || errorConsultas) {
     return errorInterno(errorCirugias || errorConsultas, 'agenda.listar');
@@ -260,6 +273,7 @@ async function manejarGET(request: Request) {
     detalle: detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento || (c as any).servicio?.nombre, ojo: (c as any).ojo }),
     procedencia: c.procedencia || (c as any).origen?.nombre || null,
     tiempo_estimado: c.tiempo_estimado || null,
+    mi_participacion: !!sessionDoctorId && (mias.has(c.id) || c.doctor_id === sessionDoctorId),
     tipo: 'cirugia' as const,
     ...fichaPaciente((c as any).paciente, (c as any).expediente),
   }));

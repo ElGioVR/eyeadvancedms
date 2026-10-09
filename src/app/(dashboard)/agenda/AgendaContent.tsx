@@ -1066,6 +1066,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                 draggingId === c.id && 'opacity-40 scale-95',
                                 tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
                                 'border-l-2', estadoConfig[c.estado].border,
+                                c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                               )}>
                               <GripVertical className="h-2.5 w-2.5 shrink-0 opacity-30 hidden group-hover:block" />
                               {c.tipo === 'consulta' && <User className="h-2.5 w-2.5 shrink-0" />}
@@ -1174,6 +1175,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                   draggingId === c.id && 'opacity-40',
                                   tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
                                   'border-l-[3px]', estadoConfig[c.estado].border,
+                                  c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                                 )} style={{ top, height, left: `calc(${leftPct}% + 2px)`, right: `calc(${rightPct}% + 2px)` }}>
                                 <div className="text-[10px] font-extrabold leading-tight truncate">{c.nombre_paciente.split(' ').slice(0, 2).join(' ')}</div>
                                 {height > 32 && (
@@ -1288,6 +1290,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                               draggingId === c.id && 'opacity-40',
                               tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
                               'border-l-[4px]', estadoConfig[c.estado].border,
+                              c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                               'shadow-sm',
                             )} style={{ top, height, left: `calc(${leftPct}% + 4px)`, right: `calc(${rightPct}% + 4px)` }}>
                             <div className="flex items-center justify-between">

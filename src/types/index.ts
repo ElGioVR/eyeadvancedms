@@ -232,6 +232,8 @@ export interface AgendaCirugia {
   tiempo_estancia: string | null;
   doctor_id: string | null;
   doctor_nombre: string | null;
+  /** Enfermería ve todas las cirugías: true si la persona participa (se resalta). */
+  mi_participacion?: boolean;
   estado: AgendaCirugiaEstado;
   procedencia: string | null;
   anestesia?: string | null;
