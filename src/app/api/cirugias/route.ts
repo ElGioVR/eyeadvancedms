@@ -57,7 +57,7 @@ async function manejarGET(request: Request) {
   if (pendientes) {
     query = query
       .or('hora.is.null,ojo.is.null,anestesia.is.null,servicio_id.is.null,fecha.is.null,procedimiento.ilike.*faco*,procedimiento.ilike.*lio*,procedimiento.ilike.*catarata*')
-      .not('estado', 'in', '(completada,cancelada,reagendada,COMPLETADA,CANCELADA,REAGENDADA)');
+      .not('estado', 'in', '(completada,cancelada,reagendada)');
   }
   if (consultaId) {
     query = query.eq('consulta_id', consultaId);
