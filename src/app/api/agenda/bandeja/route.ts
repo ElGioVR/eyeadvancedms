@@ -1,3 +1,4 @@
+import { MEDIOS_CONFIRMACION } from '@/lib/confirmacion-cita';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -206,6 +207,8 @@ const patchSchema = z.object({
   tipo: z.enum(['cirugia', 'consulta', 'estudio']),
   id: uuid,
   confirmacion: z.enum(['enviada', 'confirmada']).nullable(),
+  /** Obligatorio al confirmar: por dónde confirmó el paciente. */
+  medio: z.enum(MEDIOS_CONFIRMACION).optional(),
 }).strict();
 
 async function manejarPATCH(request: Request) {
@@ -217,12 +220,18 @@ async function manejarPATCH(request: Request) {
   const data = await leerJSON(request, patchSchema, { maxBytes: 2_000 });
   if (data instanceof NextResponse) return data;
 
+  if (data.confirmacion === 'confirmada' && !data.medio) {
+    return NextResponse.json({ error: 'Indica el medio por el que se confirmó la cita' }, { status: 400 });
+  }
+
   const tabla = data.tipo === 'cirugia' ? 'agenda_cirugias' : 'consultas';
   const supabase = getSupabaseAdmin();
   let q = supabase
     .from(tabla)
     .update({
       confirmacion: data.confirmacion,
+      // «Enviada» (WhatsApp mandado) y quitar la confirmación no llevan medio.
+      confirmacion_medio: data.confirmacion === 'confirmada' ? data.medio : null,
       confirmacion_at: data.confirmacion ? new Date().toISOString() : null,
       confirmacion_por: data.confirmacion ? auth.user.id : null,
     })
@@ -232,7 +241,7 @@ async function manejarPATCH(request: Request) {
   const { error } = await q;
   if (faltaColumna(error)) {
     return NextResponse.json(
-      { error: 'Falta aplicar sql/patch-confirmacion-citas-supabase.sql para guardar la confirmación' },
+      { error: 'Falta aplicar sql/patch-confirmacion-citas-supabase.sql y sql/patch-confirmacion-medio-supabase.sql para guardar la confirmación' },
       { status: 409 },
     );
   }

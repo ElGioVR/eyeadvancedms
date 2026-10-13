@@ -14,6 +14,8 @@ import { estadoCerrado } from '@/lib/permisos-edicion';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { faltantesCirugia, ETIQUETA_FALTANTE, ETIQUETA_INFO, type CirugiaParaCompletar } from '@/lib/por-completar';
+import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 import { fetchJSON } from '@/lib/fetcher';
 import {
   AlertTriangle, Bell, CalendarClock, CheckCircle2, ChevronDown, ExternalLink, History, Inbox,
@@ -205,32 +207,26 @@ function HistorialCita({ tipo, id }: { tipo: ItemBandeja['tipo']; id: string }) 
   );
 }
 
-/** Pestaña «Por completar»: cirugías importadas con datos faltantes. */
-type CirugiaPorCompletar = {
+/** Pestaña «Por completar»: cirugías y consultas importadas con datos faltantes. */
+type CirugiaPorCompletar = CirugiaParaCompletar & {
   id: string;
   codigo?: string | null;
   nombre_paciente?: string | null;
-  fecha?: string | null;
+};
+type ConsultaPorCompletar = {
+  id: string;
+  folio?: string | null;
+  fecha: string;
   hora?: string | null;
-  ojo?: string | null;
-  anestesia?: string | null;
-  procedimiento?: string | null;
-  estado?: string | null;
-  servicio?: { nombre?: string | null } | null;
+  tipo_consulta?: string | null;
+  tipo_visita?: string | null;
+  paciente?: string | null;
+  faltan: string[];
 };
 const URL_POR_COMPLETAR = '/api/cirugias?pendientes=1';
-/** Estados que ya no requieren completar (cerradas o canceladas). */
+const URL_CONSULTAS_POR_COMPLETAR = '/api/agenda/consultas-por-completar';
 const obtenerPorCompletar = (url: string) => fetchJSON<{ data: CirugiaPorCompletar[] }>(url);
-const ETIQUETA_COMPLETAR: Record<string, string> = { fecha: 'Fecha', hora: 'Hora', ojo: 'Ojo', procedimiento: 'Procedimiento', anestesia: 'Anestesia' };
-function faltantesCompletar(c: CirugiaPorCompletar): string[] {
-  const f: string[] = [];
-  if (!c.fecha) f.push('fecha');
-  if (!c.hora || c.hora.slice(0, 5) === '00:00') f.push('hora');
-  if (!c.ojo) f.push('ojo');
-  if (!(c.servicio?.nombre || c.procedimiento)) f.push('procedimiento');
-  if (!c.anestesia) f.push('anestesia');
-  return f;
-}
+const obtenerConsultasPorCompletar = (url: string) => fetchJSON<{ data: ConsultaPorCompletar[] }>(url);
 export default function BandejaAgenda({
   onCambio,
   botonClassName,
@@ -318,11 +314,13 @@ export default function BandejaAgenda({
   const abrirAccion = (item: CitaAccion, a: AccionRapida) => setAccion({ item, accion: a });
   const lista = pestana === 'confirmar' ? porConfirmar : pestana === 'cerrar' ? porCerrar : [];
   const pendCompletar = useSWR<{ data: CirugiaPorCompletar[] }>(abierto ? URL_POR_COMPLETAR : null, obtenerPorCompletar, { revalidateOnFocus: false });
+  const pendConsultas = useSWR<{ data: ConsultaPorCompletar[] }>(abierto ? URL_CONSULTAS_POR_COMPLETAR : null, obtenerConsultasPorCompletar, { revalidateOnFocus: false });
   const listaCompletar = (pendCompletar.data?.data ?? [])
     .filter((c) => !estadoCerrado(c.estado))
-    .map((c) => ({ c, faltan: faltantesCompletar(c) }))
-    .filter((x) => x.faltan.length > 0)
-    .sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));
+    .map((c) => ({ c, ...faltantesCirugia(c) }))
+    .filter((x) => x.faltan.length > 0 || x.info.length > 0)
+    .sort((a, b) => (a.c.fecha || '9999').localeCompare(b.c.fecha || '9999'));
+  const listaConsultas = (pendConsultas.data?.data ?? []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
   const urgentes = porCerrar.length;
 
   return (
@@ -367,7 +365,7 @@ export default function BandejaAgenda({
               {([
                 ['confirmar', 'Por confirmar', porConfirmar.length],
                 ['cerrar', 'Por cerrar', porCerrar.length],
-                ['completar', 'Por completar', listaCompletar.length],
+                ['completar', 'Por completar', listaCompletar.length + listaConsultas.length],
               ] as const).map(([k, label, n]) => (
                 <button
                   key={k}
@@ -490,27 +488,57 @@ export default function BandejaAgenda({
               ) : (
                 <>
                   {pestana === 'completar' && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted">Cirugías importadas con datos faltantes. Entra a cada una y pulsa <strong>Completar datos</strong>.</p>
-                      {pendCompletar.error && <p className="py-6 text-center text-sm text-red-600">No se pudo cargar la lista. Intenta de nuevo.</p>}
-                      {pendCompletar.data && listaCompletar.length === 0 && <p className="py-12 text-center text-sm text-muted">No hay cirugías por completar.</p>}
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted">Cirugías y consultas con datos faltantes (hora, ojo, anestesia, lente…) y lentes por solicitar o comprar. Entra a cada una para completarla.</p>
+                      {(pendCompletar.error || pendConsultas.error) && <p className="py-3 text-center text-sm text-red-600">No se pudo cargar parte de la lista. Intenta de nuevo.</p>}
+                      {pendCompletar.data && pendConsultas.data && listaCompletar.length === 0 && listaConsultas.length === 0 && <p className="py-12 text-center text-sm text-muted">No hay cirugías ni consultas por completar.</p>}
+                      {listaCompletar.length > 0 && <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Cirugías ({listaCompletar.length})</p>}
                       <ul className="space-y-2">
-                        {listaCompletar.map(({ c, faltan }) => {
+                        {listaCompletar.map(({ c, faltan, info, detalleLente }) => {
                           const hora = c.hora && c.hora.slice(0, 5) !== '00:00' ? c.hora.slice(0, 5) : 'Sin hora';
+                          const aplazada = String(c.estado ?? '').toLowerCase() === 'aplazada';
                           return (
                             <li key={c.id}>
                               <Link href={`/cirugias/${c.id}`} className="block rounded-xl border border-line bg-surface p-3 transition-colors hover:bg-surface-2">
                                 <p className="text-sm font-bold text-fg">{c.nombre_paciente || 'Paciente sin nombre'}</p>
-                                <p className="text-xs text-muted">{fechaCorta(c.fecha ?? null, true)} · {hora}{c.codigo ? ` · ${c.codigo}` : ''}</p>
+                                <p className="text-xs text-muted">
+                                  {aplazada ? 'Por programar' : `${fechaCorta(c.fecha ?? null, true)} · ${hora}`}
+                                  {c.ojo ? ` · ${c.ojo}` : ''}{c.codigo ? ` · ${c.codigo}` : ''}
+                                  {c.procedimiento ? ` · ${c.procedimiento}` : ''}
+                                </p>
                                 <div className="mt-1.5 flex flex-wrap gap-1">
                                   {faltan.map((k) => (
-                                    <span key={k} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">Falta: {ETIQUETA_COMPLETAR[k] ?? k}</span>
+                                    <span key={k} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">
+                                      Falta: {ETIQUETA_FALTANTE[k] ?? k}{k === 'lente' && detalleLente[0] ? ` — ${detalleLente[0]}` : ''}
+                                    </span>
+                                  ))}
+                                  {info.map((k) => (
+                                    <span key={k} className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-500/15 dark:text-sky-200">{ETIQUETA_INFO[k] ?? k}</span>
                                   ))}
                                 </div>
                               </Link>
                             </li>
                           );
                         })}
+                      </ul>
+                      {listaConsultas.length > 0 && <p className="pt-1 text-[11px] font-bold uppercase tracking-wide text-muted">Consultas, estudios y procedimientos ({listaConsultas.length})</p>}
+                      <ul className="space-y-2">
+                        {listaConsultas.map((c) => (
+                          <li key={c.id}>
+                            <Link href={`/consultas/${c.id}/editar`} className="block rounded-xl border border-line bg-surface p-3 transition-colors hover:bg-surface-2">
+                              <p className="text-sm font-bold text-fg">{c.paciente || 'Paciente sin nombre'}</p>
+                              <p className="text-xs text-muted">
+                                {fechaCorta(c.fecha, true)} · {c.hora && c.hora.slice(0, 5) !== '00:00' ? c.hora.slice(0, 5) : 'Sin hora'}
+                                {' · '}{etiquetaTipoConsulta(c.tipo_consulta, c.tipo_visita)}{c.folio ? ` · ${c.folio}` : ''}
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {c.faltan.map((k) => (
+                                  <span key={k} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">Falta: {ETIQUETA_FALTANTE[k] ?? k}</span>
+                                ))}
+                              </div>
+                            </Link>
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   )}
@@ -580,8 +608,8 @@ export default function BandejaAgenda({
                                   <MessageCircle className="h-3.5 w-3.5" /> Sin teléfono
                                 </span>
                               )}
-                              <button type="button" disabled={enUso} onClick={() => marcar(i, 'confirmada')} className={cn(BTN, 'border-primary-300 text-primary-700 hover:bg-primary-50 dark:border-primary-500/40 dark:text-primary-300 dark:hover:bg-primary-500/10')}>
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Confirmó
+                              <button type="button" disabled={enUso} onClick={() => abrirAccion(i, 'confirmar')} className={cn(BTN, 'border-primary-300 text-primary-700 hover:bg-primary-50 dark:border-primary-500/40 dark:text-primary-300 dark:hover:bg-primary-500/10')}>
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Confirmó…
                               </button>
                               {i.confirmacion === 'enviada' && (
                                 <button type="button" disabled={enUso} onClick={() => marcar(i, null)} className={BTN} title="Quitar «Mensaje enviado»">

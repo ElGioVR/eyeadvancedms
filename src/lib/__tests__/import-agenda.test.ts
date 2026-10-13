@@ -181,3 +181,39 @@ test('xlsx mezclado: texto mes/día + celdas de fecha invertidas por Excel es-MX
   assert.equal(fechasInvertidasPorExcel(['2026-01-08', '15/09/2026']), 0);
   assert.equal(fechasInvertidasPorExcel(['2026-01-08', '2026-02-09']), 0);
 });
+
+import { normalizarTelefonoImport, corregirHoraFin, anestesiaImport, fechaNacimientoCoherente, tipoConsultaImport } from '../import-agenda';
+
+test('teléfono: solo dígitos, sin lada de país', () => {
+  assert.equal(normalizarTelefonoImport('6611 0737 55'), '6611073755');
+  assert.equal(normalizarTelefonoImport('+52 (664) 123-4567'), '6641234567');
+  assert.equal(normalizarTelefonoImport('521 664 123 4567'), '6641234567');
+  assert.equal(normalizarTelefonoImport('123'), null);
+});
+
+test('hora de egreso: corrige AM/PM y descarta lo incoherente', () => {
+  assert.deepEqual(corregirHoraFin('13:30:00', '02:00:00'), { hora: '14:00:00', corregida: true, descartada: false });
+  assert.deepEqual(corregirHoraFin('10:00:00', '10:30:00'), { hora: '10:30:00', corregida: false, descartada: false });
+  assert.deepEqual(corregirHoraFin('10:00:00', '09:00:00'), { hora: null, corregida: false, descartada: true });
+  assert.deepEqual(corregirHoraFin(null, null), { hora: null, corregida: false, descartada: false });
+});
+
+test('anestesia: valores válidos y texto que no es anestesia', () => {
+  assert.equal(anestesiaImport('Local + sedación').valor, 'LOCAL_SEDACION');
+  assert.equal(anestesiaImport('general').valor, 'GENERAL');
+  assert.deepEqual(anestesiaImport('CRYSTAL'), { valor: null, sobrante: 'CRYSTAL' });
+  assert.deepEqual(anestesiaImport(''), { valor: null, sobrante: null });
+});
+
+test('fecha de nacimiento: se descarta si es futura o no cuadra con la edad', () => {
+  assert.equal(fechaNacimientoCoherente('2026-06-12', 75, '2026-10-12').descartada, true);
+  assert.equal(fechaNacimientoCoherente('1951-02-08', 75, '2026-10-12').fecha, '1951-02-08');
+  assert.equal(fechaNacimientoCoherente('1951-02-08', null, '2026-10-12').fecha, '1951-02-08');
+  assert.equal(fechaNacimientoCoherente('1990-01-01', 75, '2026-10-12').descartada, true);
+});
+
+test('tipo de consulta: REVISION → subsecuente; vacío se infiere', () => {
+  assert.deepEqual(tipoConsultaImport('REVISION', 'SUBSECUENTE', false, false), { tipo_consulta: 'CONSULTA', tipo_visita: 'SUBSECUENTE' });
+  assert.deepEqual(tipoConsultaImport('ESTUDIO', 'PRIMERA VEZ ', false, true), { tipo_consulta: 'ESTUDIO', tipo_visita: 'PRIMERA_VEZ' });
+  assert.deepEqual(tipoConsultaImport('', '', true, false), { tipo_consulta: 'PROCEDIMIENTO', tipo_visita: 'PRIMERA_VEZ' });
+});

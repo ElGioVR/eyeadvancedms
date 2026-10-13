@@ -13,7 +13,7 @@ export const DEFAULT_HOUR_START = 9;
 
 export const DEFAULT_HOUR_END = 22;
 
-export const HOUR_HEIGHT = 64;
+export const HOUR_HEIGHT = 60;
 
 export const tipoConfig: Record<string, { bg: string; text: string }> = {
   cirugia: { bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300' },
@@ -32,6 +32,15 @@ export const estadoConfig: Record<AgendaCirugiaEstado, { border: string; dot: st
 export const estadoLabels: Record<AgendaCirugiaEstado, string> = {
   agendada: 'Agendada', aplazada: 'Aplazada', reagendada: 'Reagendada', completada: 'Completada', cancelada: 'Cancelada',
 };
+
+/** Estatus visual «Confirmada»: una cita agendada/reagendada cuya asistencia ya se confirmó. */
+export const estadoConfirmadaConfig = { border: 'border-l-pink-400', dot: 'bg-pink-400', lightBg: 'bg-pink-400/10', solid: 'bg-pink-400', label: 'Confirmada' };
+
+/** Color y etiqueta con que se pinta una cita: su estado, o «Confirmada» si ya se confirmó. */
+export function estadoVisual(c: Pick<AgendaCirugia, 'estado' | 'confirmacion'>) {
+  if (c.confirmacion === 'confirmada' && (c.estado === 'agendada' || c.estado === 'reagendada')) return estadoConfirmadaConfig;
+  return { ...estadoConfig[c.estado], label: estadoLabels[c.estado] };
+}
 
 export const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -279,7 +288,7 @@ const PUNTO_TONO: Record<'violet' | 'amber' | 'sky' | 'primary', string> = {
   primary: 'bg-primary-500',
 };
 
-/** Panel único de resumen de la agenda: cifras por tipo, con barra y leyenda por estado. */
+/** Resumen compacto de la agenda: una franja baja con cifra por tipo y desglose por estado (barra + leyenda). */
 export function ResumenAgenda({ items }: {
   items: Array<{
     label: string;
@@ -289,38 +298,40 @@ export function ResumenAgenda({ items }: {
   }>;
 }) {
   return (
-    <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft dark:shadow-none xl:grid-cols-4">
+    <div className="mb-3 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-surface shadow-soft dark:shadow-none xl:grid-cols-4">
       {items.map((it, i) => {
         const suma = ESTADOS_ORDEN.reduce((a, e) => a + (it.porEstado[e] || 0), 0);
+        const detalle = ESTADOS_ORDEN.filter((e) => (it.porEstado[e] || 0) > 0).map((e) => `${it.porEstado[e]} ${estadoLabels[e].toLowerCase()}`).join(' · ');
         return (
           <div
             key={it.label}
             className={cn(
-              'min-w-0 p-5',
-              // Separadores finos entre celdas (2×2 en tablet, fila en escritorio)
+              'relative min-w-0 px-3.5 pb-2.5 pt-2',
               i % 2 === 0 && 'border-r border-line/70',
               i < 2 && 'border-b border-line/70',
               'xl:border-b-0',
               i < 3 ? 'xl:border-r xl:border-line/70' : 'xl:border-r-0',
             )}
           >
-            <div className="flex items-center gap-2 text-xs font-medium text-muted">
-              <span className={cn('h-2 w-2 rounded-full', PUNTO_TONO[it.tone])} />
-              {it.label}
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', PUNTO_TONO[it.tone])} />
+                <span className="truncate">{it.label}</span>
+              </span>
+              <span className="text-xl font-semibold leading-none tracking-tight text-fg tabular-nums">{it.total}</span>
             </div>
-            <p className="mt-1.5 text-3xl font-semibold tracking-tight text-fg tabular-nums">{it.total}</p>
-            <div className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-              {suma > 0 && ESTADOS_ORDEN.map((e) => (it.porEstado[e] || 0) > 0 && (
-                <span key={e} className={cn('h-full', estadoConfig[e].solid)} style={{ width: `${((it.porEstado[e] || 0) / suma) * 100}%` }} title={`${estadoLabels[e]}: ${it.porEstado[e]}`} />
-              ))}
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+            <div className="mt-1.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10.5px] leading-4 text-muted" title={detalle || 'Sin eventos'}>
               {suma === 0 && <span>Sin eventos</span>}
               {ESTADOS_ORDEN.filter((e) => (it.porEstado[e] || 0) > 0).map((e) => (
                 <span key={e} className="inline-flex items-center gap-1 tabular-nums">
                   <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[e].dot)} />
                   {it.porEstado[e]} {estadoLabels[e].toLowerCase()}
                 </span>
+              ))}
+            </div>
+            <div className="absolute inset-x-0 bottom-0 flex h-[3px] overflow-hidden bg-surface-2">
+              {suma > 0 && ESTADOS_ORDEN.map((e) => (it.porEstado[e] || 0) > 0 && (
+                <span key={e} className={cn('h-full', estadoConfig[e].solid)} style={{ width: `${((it.porEstado[e] || 0) / suma) * 100}%` }} title={`${estadoLabels[e]}: ${it.porEstado[e]}`} />
               ))}
             </div>
           </div>

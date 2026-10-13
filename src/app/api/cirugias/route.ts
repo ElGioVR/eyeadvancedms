@@ -43,15 +43,21 @@ async function manejarGET(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
+  const pendientes = searchParams.get('pendientes') === '1';
+  const SELECT_BASE = 'id, codigo, paciente_id, nombre_paciente, fecha, hora, estado, ojo, anestesia, procedimiento, servicio:servicio_id(nombre), origen:origen_id(nombre), consulta_id';
   let query = supabase
     .from('agenda_cirugias')
-    .select('id, codigo, paciente_id, nombre_paciente, fecha, hora, estado, ojo, anestesia, procedimiento, servicio:servicio_id(nombre), origen:origen_id(nombre), consulta_id')
+    // «Pendientes por completar» además necesita el LIO original y las notas (lectura de lentes).
+    .select(pendientes ? `${SELECT_BASE}, lio, marca_lio, notas` : SELECT_BASE)
     .order('fecha', { ascending: false })
     .limit(MAX_LISTADO);
 
-  // Pendientes de completar (importadas sin hora, ojo, procedimiento o anestesia).
-  if (searchParams.get('pendientes') === '1') {
-    query = query.or('hora.is.null,ojo.is.null,anestesia.is.null,servicio_id.is.null');
+  // Pendientes de completar: importadas sin hora, ojo, procedimiento o anestesia, aplazadas por programar
+  // y cirugías con lente (la lectura de qué falta del lente se hace con las reglas de por-completar).
+  if (pendientes) {
+    query = query
+      .or('hora.is.null,ojo.is.null,anestesia.is.null,servicio_id.is.null,fecha.is.null,procedimiento.ilike.*faco*,procedimiento.ilike.*lio*,procedimiento.ilike.*catarata*')
+      .not('estado', 'in', '(completada,cancelada,reagendada,COMPLETADA,CANCELADA,REAGENDADA)');
   }
   if (consultaId) {
     query = query.eq('consulta_id', consultaId);
@@ -63,6 +69,26 @@ async function manejarGET(request: Request) {
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: handleSupabaseError(error, 'cirugias.listar').mensaje }, { status: 500 });
+  }
+
+  if (pendientes && data?.length) {
+    // Plan de lentes de cada cirugía (si la tabla/columnas no existen, se omite la revisión del lente).
+    const filas = data as unknown as Array<Record<string, unknown> & { id: string }>;
+    const porCirugia = new Map<string, unknown[]>();
+    let lentesOk = true;
+    for (let i = 0; i < filas.length && lentesOk; i += 150) {
+      const ids = filas.slice(i, i + 150).map((f) => f.id);
+      const { data: lentes, error: errLentes } = await supabase
+        .from('cirugia_lentes')
+        .select('cirugia_id, orden, modo, estado_logistica, fabricante, modelo, poder_d, torico, cilindro')
+        .in('cirugia_id', ids)
+        .neq('estado', 'LIBERADO');
+      if (errLentes) { lentesOk = false; break; }
+      for (const l of (lentes ?? []) as unknown as Array<{ cirugia_id: string }>) {
+        porCirugia.set(l.cirugia_id, [...(porCirugia.get(l.cirugia_id) ?? []), l]);
+      }
+    }
+    if (lentesOk) return NextResponse.json({ data: filas.map((f) => ({ ...f, lentes: porCirugia.get(f.id) ?? [] })) });
   }
 
   return NextResponse.json({ data: data || [] });

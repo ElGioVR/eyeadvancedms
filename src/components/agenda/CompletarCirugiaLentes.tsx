@@ -68,6 +68,10 @@ export default function CompletarCirugiaLentes({
   const [ingresar, setIngresar] = useState<Set<OrdenLente>>(new Set());
   const [dxDefinitivo, setDxDefinitivo] = useState('');
   const [realizada, setRealizada] = useState('');
+  const [dxInicial, setDxInicial] = useState('');
+  const [procInicial, setProcInicial] = useState('');
+  const [usarDx, setUsarDx] = useState(false);
+  const [usarProc, setUsarProc] = useState(false);
   const [complicaciones, setComplicaciones] = useState('');
   const [sinComplicaciones, setSinComplicaciones] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
@@ -84,8 +88,8 @@ export default function CompletarCirugiaLentes({
       if (inicial) {
         // Por defecto, el primero (si hay pieza física), como el comportamiento anterior.
         setMarcados(new Set(d.lentes.filter((l) => l.orden === 'PRIMERO' && !sinPieza(l)).map((l) => l.orden)));
-        setDxDefinitivo(d.cirugia?.diagnostico ?? '');
-        setRealizada(d.cirugia?.procedimiento ?? '');
+        setDxInicial(d.cirugia?.diagnostico ?? '');
+        setProcInicial(d.cirugia?.procedimiento ?? '');
       }
     } catch {
       if (!signal?.aborted) setError('No se pudieron cargar los lentes asignados.');
@@ -209,12 +213,34 @@ export default function CompletarCirugiaLentes({
 
         <section className="mt-5 space-y-3">
           <p className="text-sm font-bold text-fg">2. Cierre de la cirugía</p>
-          <label className="block text-xs font-bold text-muted">Diagnóstico definitivo
-            <textarea rows={2} value={dxDefinitivo} onChange={(e) => setDxDefinitivo(e.target.value)} disabled={enviando} className={campo} />
-          </label>
-          <label className="block text-xs font-bold text-muted">Cirugía realizada
-            <textarea rows={2} value={realizada} onChange={(e) => setRealizada(e.target.value)} disabled={enviando} className={campo} />
-          </label>
+          <div>
+            {dxInicial && (
+              <div className="mb-1 flex items-start justify-between gap-3 rounded-md bg-surface-2 px-2 py-1.5 text-xs text-fg-2">
+                <span><span className="font-bold">Diagnóstico inicial (informativo):</span> {dxInicial}</span>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 font-bold">
+                  <input type="checkbox" role="switch" checked={usarDx} disabled={enviando} onChange={(e) => { setUsarDx(e.target.checked); setDxDefinitivo(e.target.checked ? dxInicial : ''); }} />
+                  Usar
+                </label>
+              </div>
+            )}
+            <label className="block text-xs font-bold text-muted">Diagnóstico definitivo
+              <textarea rows={2} value={dxDefinitivo} onChange={(e) => { setDxDefinitivo(e.target.value); if (e.target.value !== dxInicial) setUsarDx(false); }} disabled={enviando} className={campo} />
+            </label>
+          </div>
+          <div>
+            {procInicial && (
+              <div className="mb-1 flex items-start justify-between gap-3 rounded-md bg-surface-2 px-2 py-1.5 text-xs text-fg-2">
+                <span><span className="font-bold">Cirugía programada (informativo):</span> {procInicial}</span>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 font-bold">
+                  <input type="checkbox" role="switch" checked={usarProc} disabled={enviando} onChange={(e) => { setUsarProc(e.target.checked); setRealizada(e.target.checked ? procInicial : ''); }} />
+                  Usar
+                </label>
+              </div>
+            )}
+            <label className="block text-xs font-bold text-muted">Cirugía realizada
+              <textarea rows={2} value={realizada} onChange={(e) => { setRealizada(e.target.value); if (e.target.value !== procInicial) setUsarProc(false); }} disabled={enviando} className={campo} />
+            </label>
+          </div>
           <div>
             <label className="block text-xs font-bold text-muted">Complicaciones
               <textarea rows={2} value={sinComplicaciones ? '' : complicaciones} onChange={(e) => setComplicaciones(e.target.value)} disabled={enviando || sinComplicaciones} placeholder={sinComplicaciones ? 'Sin complicaciones' : ''} className={campo} />

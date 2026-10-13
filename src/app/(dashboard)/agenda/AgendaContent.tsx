@@ -1,12 +1,12 @@
 'use client';
 
-import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, ResumenAgenda, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
+import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, ResumenAgenda, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, estadoVisual, estadoConfirmadaConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { agendaSoloPropia, puedeFiltrarSoloMio, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { type AgendaCirugia, type AgendaCirugiaEstado } from '@/types';
 import { useRouter } from 'next/navigation';
-import { type AccionRapida, accionesDisponibles, AccionRapidaModal, AgendarRapidoModal } from '@/components/agenda/AccionesRapidasAgenda';
+import { type AccionRapida, accionesConConfirmar, AccionRapidaModal, AgendarRapidoModal } from '@/components/agenda/AccionesRapidasAgenda';
 import { useFetch, REFRESCO_COMPARTIDO_MS, useInvalidar } from '@/hooks/useFetch';
 import { useSWRConfig, preload } from 'swr';
 import { useToast } from '@/components/ui/Toast';
@@ -44,7 +44,7 @@ function guardarVistaAgenda(patch: Record<string, unknown>) {
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
 // Vista de día: cada hora es más alta para que la tarjeta muestre bien al paciente y a qué viene.
-const DAY_HOUR_HEIGHT = 112;
+const DAY_HOUR_HEIGHT = 96;
 // Alto mínimo de una tarjeta (citas cortas); el cálculo de columnas lo respeta para que no se encimen.
 const DAY_CARD_MIN_H = 76;
 
@@ -72,7 +72,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     setFilterDoctor(activo ? miFicha.id : '');
     try { localStorage.setItem(claveSoloMio, activo ? '1' : '0'); } catch { /* sin almacenamiento */ }
   };
-  const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada']));
+  const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'confirmada']));
   // Punto II: filtro por especialidad ('' = todas). Solo aplica a consultas/estudios.
   const [filterEspecialidad, setFilterEspecialidad] = useState('');
   const { especialidades } = useEspecialidades();
@@ -158,7 +158,15 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     const savedTipos = localStorage.getItem('agenda_filter_tipos');
     if (savedTipos) try { setFilterTipos(new Set(JSON.parse(savedTipos))); } catch { /* ignore */ }
     const savedEstados = localStorage.getItem('agenda_filter_estados');
-    if (savedEstados) try { setFilterEstados(new Set(JSON.parse(savedEstados))); } catch { /* ignore */ }
+    if (savedEstados) try {
+      const guardados = new Set<string>(JSON.parse(savedEstados));
+      // Filtros guardados antes de existir «Confirmada»: heredan el estado de «Agendada».
+      if (!localStorage.getItem('agenda_filter_confirmada_v')) {
+        if (guardados.has('agendada')) guardados.add('confirmada');
+        localStorage.setItem('agenda_filter_confirmada_v', '1');
+      }
+      setFilterEstados(guardados);
+    } catch { /* ignore */ }
     setFiltersLoaded(true);
   }, []);
 
@@ -311,7 +319,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     return cirugias.filter(c =>
       c.estado !== 'cancelada' &&
       filterTipos.has(c.tipo || 'cirugia') &&
-      filterEstados.has(c.estado || 'agendada') &&
+      filterEstados.has(estadoVisual(c) === estadoConfirmadaConfig ? 'confirmada' : (c.estado || 'agendada')) &&
       (!filterEspecialidad || c.especialidad === filterEspecialidad)
     );
   }, [cirugias, filterTipos, filterEstados, filterEspecialidad]);
@@ -563,7 +571,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const dayViewDateObj = new Date(dayViewDate + 'T00:00:00');
 
   return (
-    <div className={cn('w-full h-full flex flex-col', isFullscreen && 'fixed inset-0 z-50 bg-white dark:bg-canvas')}>
+    <div className={cn('w-full h-full flex flex-col', !isFullscreen && 'lg:h-[calc(100dvh-7rem)] lg:min-h-[540px]', isFullscreen && 'fixed inset-0 z-50 bg-white p-3 sm:p-4 dark:bg-canvas')}>
       {/* ─── Desktop Header ─── */}
       {!isFullscreen && (
       <div className="hidden lg:block">
@@ -580,6 +588,24 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           )}
           action={
             <div className="flex flex-wrap items-center gap-2">
+              <CampoBusquedaAgenda
+                valor={searchQuery}
+                onCambiar={setSearchQuery}
+                placeholder="Buscar..."
+                iconClassName="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"
+                inputClassName="w-40 rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              />
+              <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)} aria-label="Doctor"
+                className="max-w-[10rem] rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-xs font-medium text-fg-2 focus:outline-none focus:ring-1 focus:ring-primary-500/30">
+                <option value="">Todos los doctores</option>
+                {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}{d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}</option>)}
+              </select>
+              {miFicha && (
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-xs font-bold text-fg-2">
+                  <input type="checkbox" checked={soloMio} onChange={(e) => alternarSoloMio(e.target.checked)} className="h-3.5 w-3.5 rounded border-line text-primary-600 focus:ring-primary-500" />
+                  Solo lo mío
+                </label>
+              )}
               <span className="mx-1 hidden h-6 w-px bg-line xl:block" />
               {bandeja}
               {reportes}
@@ -656,7 +682,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
       {/* ─── Fullscreen Floating Toolbar ─── */}
       {isFullscreen && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-surface rounded-xl shadow-lg border border-line px-4 py-2">
+        <div className="mx-auto mb-3 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 shadow-soft dark:shadow-none">
           <button onClick={() => setShowFilters(true)} className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold text-fg-2 hover:bg-gray-200 dark:hover:bg-surface-3 transition-colors">
             <SlidersHorizontal className="h-4 w-4" /> Filtros
           </button>
@@ -823,8 +849,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       <div className="flex gap-5 flex-1 min-h-0">
         {/* Mini Calendar Sidebar */}
         {!isFullscreen && (
-        <div className="hidden xl:block w-[220px] shrink-0">
-          <div className="sticky top-24 space-y-4">
+        <div className="hidden xl:block w-[220px] shrink-0 min-h-0 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin]">
+          <div className="space-y-3">
             <div className="rounded-2xl border border-line bg-surface p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-extrabold text-fg">
@@ -844,7 +870,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     key={i}
                     onClick={() => { setCurrentDate(new Date(cell.date + 'T00:00:00')); setSelectedDate(cell.date); setCalendarView('day'); }}
                     className={cn(
-                      'h-7 w-full flex items-center justify-center text-[11px] rounded-full transition-colors',
+                      'h-6 w-full flex items-center justify-center text-[11px] rounded-full transition-colors',
                       !cell.isCurrentMonth && 'text-gray-300 dark:text-muted',
                       cell.isCurrentMonth && !cell.isToday && 'text-fg-2 hover:bg-surface-2',
                       cell.isToday && 'bg-primary-600 text-white font-bold',
@@ -855,28 +881,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* Filters */}
-            <div className="rounded-2xl border border-line bg-surface p-3 space-y-3">
-              <CampoBusquedaAgenda
-                valor={searchQuery}
-                onCambiar={setSearchQuery}
-                placeholder="Buscar..."
-                iconClassName="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"
-                inputClassName="w-full rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
-              />
-              {miFicha && (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-bold text-fg-2">
-                  <input type="checkbox" checked={soloMio} onChange={(e) => alternarSoloMio(e.target.checked)} className="h-4 w-4 rounded border-line text-primary-600 focus:ring-primary-500" />
-                  Solo lo mío
-                </label>
-              )}
-              <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-medium text-fg-2 focus:outline-none focus:ring-1 focus:ring-primary-500/30">
-                <option value="">Todos los doctores</option>
-                {doctores.map(d => <option key={d.id} value={d.id}>{d.alias}{d.tipo_personal === 'ENFERMERO' ? ' · enfermería' : ''}</option>)}
-              </select>
             </div>
 
             {/* Legend with toggles */}
@@ -916,6 +920,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     <span className="text-[11px] text-fg-2">{v}</span>
                   </button>
                 ))}
+                <button title="Agendada con asistencia confirmada" onClick={() => {
+                  setFilterEstados(prev => { const n = new Set(prev); if (n.has('confirmada')) n.delete('confirmada'); else n.add('confirmada'); return n; });
+                }} className={cn('flex items-center gap-2 w-full rounded-md px-1.5 py-1 transition-colors',
+                  filterEstados.has('confirmada') ? 'bg-surface-2' : 'opacity-40')}>
+                  <span className="h-2.5 w-2.5 rounded-full bg-pink-400" />
+                  <span className="text-[11px] text-fg-2">Confirmada</span>
+                </button>
               </div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2 mt-3">Especialidad</p>
               <select
@@ -935,7 +946,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
         {/* Main Calendar Area */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {/* Desktop Toolbar */}
-          <div className="mb-3 hidden shrink-0 items-center justify-between gap-3 lg:flex">
+          <div className="mb-2.5 hidden shrink-0 items-center justify-between gap-3 lg:flex">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex items-center rounded-xl border border-line bg-surface p-0.5 shadow-soft dark:shadow-none">
                 <button onClick={() => navigate(-1)} aria-label="Anterior" className="rounded-lg p-1.5 text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg">
@@ -956,6 +967,12 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               {loading && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-primary-500" aria-label="Cargando" />}
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => setShowFilters(true)} className="relative inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-fg-2 shadow-soft transition-colors hover:bg-surface-2 hover:text-fg dark:shadow-none xl:hidden">
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+                {(filterDoctor || searchQuery || filterEspecialidad || filterTipos.size < 3 || filterEstados.size < 5) && (
+                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface" />
+                )}
+              </button>
               <button onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors hover:bg-surface-2 hover:text-fg dark:shadow-none">
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -987,7 +1004,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 }}
                 onAdd={!agendaSoloPropia(userRol) ? (_date: string) => { setShowCreateChoice(true); } : undefined}
                 onSelect={(c) => { router.push(c.tipo === 'cirugia' ? `/cirugias/${c.id}` : `/consultas/${c.id}`); }}
-                getAcciones={(c) => accionesDisponibles(c, userRol)}
+                getAcciones={(c) => accionesConConfirmar(c, userRol)}
                 onAccion={(c, accion) => setAccionRapida({ evento: c, accion })}
                 onAgendarConsulta={userRol !== 'enfermero' ? (c) => router.push(urlAgendarConsulta(c)) : undefined}
                 todayStr={todayStr}
@@ -997,7 +1014,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           </div>
 
           {/* Desktop View Container with transition */}
-          <div className="hidden lg:block relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none flex-1 min-h-0 h-[calc(100dvh-280px)] flex flex-col" aria-busy={loading || validating}>
+          <div className="hidden lg:flex relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card dark:shadow-none flex-1 min-h-0 flex-col" aria-busy={loading || validating}>
             <BarraRevalidando activo={validating} />
 
             {/* MONTH VIEW */}
@@ -1075,7 +1092,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                 'hover:brightness-95 hover:shadow-sm dark:hover:brightness-125',
                                 draggingId === c.id && 'opacity-40 scale-95',
                                 tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
-                                'border-l-2', estadoConfig[c.estado].border,
+                                'border-l-2', estadoVisual(c).border,
                                 c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                               )}>
                               <GripVertical className="h-2.5 w-2.5 shrink-0 opacity-30 hidden group-hover:block" />
@@ -1184,7 +1201,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                   'hover:brightness-95 hover:shadow-md hover:scale-[1.01]',
                                   draggingId === c.id && 'opacity-40',
                                   tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
-                                  'border-l-[3px]', estadoConfig[c.estado].border,
+                                  'border-l-[3px]', estadoVisual(c).border,
                                   c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                                 )} style={{ top, height, left: `calc(${leftPct}% + 2px)`, right: `calc(${rightPct}% + 2px)` }}>
                                 <div className="text-[10px] font-extrabold leading-tight truncate">{c.nombre_paciente.split(' ').slice(0, 2).join(' ')}</div>
@@ -1300,7 +1317,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                               'hover:brightness-95 hover:shadow-lg hover:scale-[1.005]',
                               draggingId === c.id && 'opacity-40',
                               tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
-                              'border-l-[4px]', estadoConfig[c.estado].border,
+                              'border-l-[4px]', estadoVisual(c).border,
                               c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                               'shadow-sm',
                             )} style={{ top, height, left: `calc(${leftPct}% + 4px)`, right: `calc(${rightPct}% + 4px)` }}>
@@ -1309,8 +1326,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                                 {c.tipo === 'consulta' && <User className="mt-0.5 h-3 w-3 shrink-0" />}
                                 <span className={amplio ? 'line-clamp-2' : 'truncate'} title={c.nombre_paciente}>{c.nombre_paciente}</span>
                               </span>
-                              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold', estadoConfig[c.estado].lightBg, tipoConfig[c.tipo || 'cirugia'].text)}>
-                                {estadoLabels[c.estado]}
+                              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold', estadoVisual(c).lightBg, tipoConfig[c.tipo || 'cirugia'].text)}>
+                                {estadoVisual(c).label}
                               </span>
                             </div>
                             <div className="mt-1 flex items-start gap-2 text-[11px] leading-snug opacity-90">
@@ -1428,9 +1445,15 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
           onEstado={async (s, extra) => {
             const id = detailCirugia.id;
-            setDetailCirugia(null); setDetailPosition(null);
+            const cierre = s === 'completada';
+            if (!cierre) { setDetailCirugia(null); setDetailPosition(null); }
             // La API de cirugías exige motivo en todo cambio de estado.
-            await actualizarEvento(id, { estado: s, motivo: 'Actualizado desde la agenda', ...(extra ?? {}) } as Partial<AgendaCirugia>);
+            const ok = await actualizarEvento(id, { estado: s, motivo: cierre ? 'Cirugía completada' : 'Actualizado desde la agenda', ...(extra ?? {}) } as Partial<AgendaCirugia>);
+            // Al completar, el modal de lentes/inventario sigue abierto si falla (el toast ya explica el motivo).
+            if (cierre) {
+              if (!ok) throw new Error('No se pudo completar la cirugía. Revisa los datos e intenta de nuevo.');
+              setDetailCirugia(null); setDetailPosition(null);
+            }
           }}
           onAccion={(accion) => {
             const evento = detailCirugia;
@@ -1547,6 +1570,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                       <span className={cn('h-2 w-2 rounded-full', estadoConfig[k as AgendaCirugiaEstado].dot)} />{v}
                     </button>
                   ))}
+                  <button title="Agendada con asistencia confirmada" onClick={() => {
+                    setFilterEstados(prev => { const n = new Set(prev); if (n.has('confirmada')) n.delete('confirmada'); else n.add('confirmada'); return n; });
+                  }} className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                    filterEstados.has('confirmada')
+                      ? 'border-gray-300 dark:border-line-strong bg-surface-2 text-fg'
+                      : 'border-line bg-surface text-muted')}>
+                    <span className="h-2 w-2 rounded-full bg-pink-400" />Confirmada
+                  </button>
                 </div>
               </div>
               <div>
@@ -1565,7 +1596,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 <button onClick={() => {
                   setFilterDoctor('');
                   setFilterTipos(new Set(['cirugia', 'consulta', 'estudio']));
-                  setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada']));
+                  setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'confirmada']));
                   setFilterEspecialidad('');
                   setSearchQuery('');
                 }}

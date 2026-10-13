@@ -17,6 +17,7 @@ import {
 import Link from 'next/link';
 import useSWR from 'swr';
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   ChevronRight,
@@ -988,6 +989,94 @@ const Carpeta = memo(function Carpeta(p: PropsCarpeta) {
 // Página
 // ---------------------------------------------------------------------------
 
+interface DestinoCopia {
+  id: string;
+  nombre: string;
+  nuevos: { origen: Origen; concepto: Concepto }[];
+  existentes: string[];
+}
+type PlanCopia = DestinoCopia[];
+
+function ModalResultadoCopia({
+  plan,
+  soloInformar,
+  onCerrar,
+  onConfirmar,
+}: {
+  plan: PlanCopia;
+  soloInformar: boolean;
+  onCerrar: () => void;
+  onConfirmar: () => void;
+}) {
+  const totalNuevos = plan.reduce((n, d) => n + d.nuevos.length, 0);
+  const totalExistentes = plan.reduce((n, d) => n + d.existentes.length, 0);
+  const relevantes = plan.filter((d) => d.nuevos.length > 0 || d.existentes.length > 0);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onCerrar} role="dialog" aria-modal="true" aria-label="Resultado de la copia">
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-line bg-surface shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 border-b border-line p-5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+            <AlertTriangle className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-base font-extrabold text-fg">
+              {soloInformar ? 'Estos conceptos ya existen' : 'Algunos conceptos ya existen'}
+            </h3>
+            <p className="mt-1 text-sm text-fg-2">
+              {soloInformar
+                ? 'Todos los conceptos seleccionados ya están en las aseguradoras elegidas; no hay nada que agregar.'
+                : `Se pueden agregar ${totalNuevos} ${plural(totalNuevos, 'concepto', 'conceptos')}; ${totalExistentes} ya ${plural(totalExistentes, 'está', 'están')} y se omitirán.`}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-4 overflow-y-auto p-5">
+          {relevantes.map((d) => (
+            <section key={d.id}>
+              <h4 className="text-sm font-extrabold text-fg">{d.nombre}</h4>
+              {d.nuevos.length > 0 && (
+                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Se agregarán ({d.nuevos.length})</p>
+                  <ul className="mt-1 space-y-0.5 text-sm text-fg">
+                    {d.nuevos.map((n) => (
+                      <li key={`${n.origen}:${n.concepto.id}`} className="flex items-start gap-1.5">
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                        <span className="min-w-0 break-words">{n.concepto.nombre}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {d.existentes.length > 0 && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-400">Ya existen ({d.existentes.length})</p>
+                  <ul className="mt-1 space-y-0.5 text-sm text-fg">
+                    {d.existentes.map((n, i) => (
+                      <li key={`${n}:${i}`} className="flex items-start gap-1.5">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+                        <span className="min-w-0 break-words">{n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line p-4">
+          <button type="button" onClick={onCerrar} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2">
+            {soloInformar ? 'Entendido' : 'Cancelar'}
+          </button>
+          {!soloInformar && (
+            <button type="button" onClick={onConfirmar} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700">
+              Agregar {totalNuevos} {plural(totalNuevos, 'nuevo', 'nuevos')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Ultimo {
   catalogos: Record<Origen, Concepto[]>;
   quirurgico: ItemQuirurgico[];
@@ -1035,6 +1124,7 @@ export default function ConceptosPage() {
   const [sobre, setSobre] = useState<string | null>(null);
   const [copiandoIds, setCopiandoIds] = useState<string[]>([]);
   const copiandoRef = useRef(false);
+  const [planCopia, setPlanCopia] = useState<{ plan: PlanCopia; soloInformar: boolean } | null>(null);
   const temporizadorApertura = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Las búsquedas se difieren para que escribir no bloquee la interfaz.
@@ -1171,35 +1261,22 @@ export default function ConceptosPage() {
   );
 
   // ---------- Copiar conceptos genéricos a aseguradoras ----------
-  const copiar = useCallback(
-    async (destinos: string[], lote: DatoArrastrado[]) => {
-      if (destinos.length === 0 || lote.length === 0 || copiandoRef.current) return;
+  const ejecutarCopia = useCallback(
+    async (plan: PlanCopia) => {
+      if (copiandoRef.current) return;
+      const destinos = plan.filter((d) => d.nuevos.length > 0);
+      if (destinos.length === 0) return;
       copiandoRef.current = true;
-      setCopiandoIds(destinos);
-      const { catalogos: cat, clavesPorAseguradora: claves, aseguradoras: aseg } = ultimo.current;
+      setCopiandoIds(destinos.map((d) => d.id));
       let copiados = 0;
-      let omitidos = 0;
+      let omitidos = plan.reduce((n, d) => n + d.existentes.length, 0);
       let fallidos = 0;
       try {
         for (const destino of destinos) {
-          const existentes = claves.get(destino) ?? new Set<string>();
-          const vistos = new Set<string>();
-          const nuevos: { origen: Origen; concepto: Concepto }[] = [];
-          for (const d of lote) {
-            const concepto = cat[d.origen].find((c) => c.id === d.id);
-            if (!concepto) continue;
-            const clave = claveConcepto(d.origen, concepto.nombre);
-            if (existentes.has(clave) || vistos.has(clave)) {
-              omitidos += 1;
-              continue;
-            }
-            vistos.add(clave);
-            nuevos.push({ origen: d.origen, concepto });
-          }
           const resultados = await ejecutarEnLotes(
-            nuevos.map(({ origen, concepto }) => () =>
+            destino.nuevos.map(({ origen, concepto }) => () =>
               enviarJSON(URL_SERVICIOS, 'POST', {
-                aseguranza_id: destino,
+                aseguranza_id: destino.id,
                 tipo: origen,
                 nombre: concepto.nombre,
                 costo: Number(concepto.costo) || 0,
@@ -1207,24 +1284,20 @@ export default function ConceptosPage() {
               }),
             ),
           );
-          const buenos = resultados.filter((r) => r.status === 'fulfilled').length;
-          copiados += buenos;
-          fallidos += nuevos.length - buenos;
+          for (const r of resultados) {
+            if (r.status === 'fulfilled') copiados += 1;
+            // 409: alguien lo agregó entre tanto → cuenta como "ya estaba", no como fallo.
+            else if ((r.reason as { status?: number } | undefined)?.status === 409) omitidos += 1;
+            else fallidos += 1;
+          }
         }
         // El alta no devuelve los ids: una sola recarga al terminar todo el lote.
-        if (copiados > 0) await mutServicios();
-        if (destinos.length === 1) setAbiertas((prev) => ({ ...prev, [destinos[0]]: true }));
+        await mutServicios();
+        if (destinos.length === 1) setAbiertas((prev) => ({ ...prev, [destinos[0].id]: true }));
 
-        const nombreDestino =
-          destinos.length === 1 ? aseg.find((a) => a.id === destinos[0])?.nombre ?? 'la aseguradora' : `${destinos.length} aseguradoras`;
-        if (copiados > 0) {
-          avisar(
-            `${copiados} ${plural(copiados, 'concepto copiado', 'conceptos copiados')} a ${nombreDestino}` +
-              (omitidos > 0 ? ` (${omitidos} ya ${plural(omitidos, 'estaba', 'estaban')})` : ''),
-          );
-        } else if (omitidos > 0 && fallidos === 0) {
-          avisar(`Ya ${plural(omitidos, 'estaba', 'estaban')} en ${nombreDestino}`);
-        }
+        const nombreDestino = destinos.length === 1 ? destinos[0].nombre : `${destinos.length} aseguradoras`;
+        if (copiados > 0) avisar(`${copiados} ${plural(copiados, 'concepto copiado', 'conceptos copiados')} a ${nombreDestino}`);
+        if (omitidos > 0) avisar(`${omitidos} ${plural(omitidos, 'concepto ya existía', 'conceptos ya existían')} y se omitió`, 'warning');
         if (fallidos > 0) avisar(`No se pudieron copiar ${fallidos} ${plural(fallidos, 'concepto', 'conceptos')}`, 'error');
       } catch (err) {
         avisar(mensajeDeError(err, 'No se pudo copiar'), 'error');
@@ -1234,6 +1307,51 @@ export default function ConceptosPage() {
       }
     },
     [avisar, mutServicios],
+  );
+
+  const copiar = useCallback(
+    async (destinos: string[], lote: DatoArrastrado[]) => {
+      if (destinos.length === 0 || lote.length === 0 || copiandoRef.current) return;
+      const { catalogos: cat, clavesPorAseguradora: claves, aseguradoras: aseg } = ultimo.current;
+      const plan: PlanCopia = destinos.map((id) => {
+        const existentesClaves = claves.get(id) ?? new Set<string>();
+        const vistos = new Set<string>();
+        const nuevos: { origen: Origen; concepto: Concepto }[] = [];
+        const existentes: string[] = [];
+        for (const d of lote) {
+          const concepto = cat[d.origen].find((c) => c.id === d.id);
+          if (!concepto) continue;
+          const clave = claveConcepto(d.origen, concepto.nombre);
+          if (existentesClaves.has(clave)) {
+            existentes.push(concepto.nombre);
+            continue;
+          }
+          if (vistos.has(clave)) continue;
+          vistos.add(clave);
+          nuevos.push({ origen: d.origen, concepto });
+        }
+        return { id, nombre: aseg.find((a) => a.id === id)?.nombre ?? 'la aseguradora', nuevos, existentes };
+      });
+      const totalNuevos = plan.reduce((n, d) => n + d.nuevos.length, 0);
+      const totalExistentes = plan.reduce((n, d) => n + d.existentes.length, 0);
+
+      if (totalExistentes === 0) {
+        await ejecutarCopia(plan);
+        return;
+      }
+      // Un solo concepto hacia una sola aseguradora: alerta amarilla directa.
+      if (lote.length === 1 && destinos.length === 1) {
+        avisar(`Este concepto ya existe en ${plan[0].nombre}`, 'warning');
+        return;
+      }
+      // Varios: ventana con lo que se puede agregar y lo que ya está.
+      if (totalNuevos === 0) {
+        setPlanCopia({ plan, soloInformar: true });
+        return;
+      }
+      setPlanCopia({ plan, soloInformar: false });
+    },
+    [avisar, ejecutarCopia],
   );
 
   // ---------- Arrastre ----------
@@ -1942,6 +2060,18 @@ export default function ConceptosPage() {
             ))}
           </section>
         </div>
+      )}
+      {planCopia && (
+        <ModalResultadoCopia
+          plan={planCopia.plan}
+          soloInformar={planCopia.soloInformar}
+          onCerrar={() => setPlanCopia(null)}
+          onConfirmar={() => {
+            const plan = planCopia.plan;
+            setPlanCopia(null);
+            void ejecutarCopia(plan);
+          }}
+        />
       )}
     </div>
   );

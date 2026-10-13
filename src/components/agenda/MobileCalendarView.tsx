@@ -7,6 +7,7 @@ import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { ETIQUETA_ACCION, type AccionRapida } from '@/lib/agenda-acciones';
 import FichaPaciente from '@/components/ui/FichaPaciente';
+import { estaConfirmada as esConfirmada } from '@/lib/confirmacion-cita';
 
 const DIAS_LARGOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -395,9 +396,9 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                       />
                       {(c.detalle || c.procedimiento) && <p className="mt-0.5 truncate text-xs text-muted">{c.detalle || c.procedimiento}</p>}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', estadoChipBg[c.estado] || 'bg-surface-2', 'text-fg-2')}>
-                          <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[c.estado] || 'bg-gray-400')} />
-                          {estadoLabels[c.estado] || c.estado}
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', (esConfirmada(c) ? 'bg-pink-400/10' : estadoChipBg[c.estado]) || 'bg-surface-2', 'text-fg-2')}>
+                          <span className={cn('h-1.5 w-1.5 rounded-full', (esConfirmada(c) ? 'bg-pink-400' : estadoDotColors[c.estado]) || 'bg-gray-400')} />
+                          {esConfirmada(c) ? 'Confirmada' : estadoLabels[c.estado] || c.estado}
                         </span>
                         {c.doctor_nombre && (
                           <span className="truncate rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-fg-2">{c.doctor_nombre}</span>
@@ -441,7 +442,8 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                     'flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white shrink-0',
                     selectedCirugia.estado === 'completada' ? 'bg-emerald-500' :
                     selectedCirugia.estado === 'cancelada' ? 'bg-red-500' :
-                    selectedCirugia.estado === 'aplazada' ? 'bg-amber-500' : 'bg-primary-600'
+                    selectedCirugia.estado === 'aplazada' ? 'bg-amber-500' :
+                    esConfirmada(selectedCirugia) ? 'bg-pink-400' : 'bg-primary-600'
                   )}>
                     {selectedCirugia.nombre_paciente.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
                   </div>
@@ -457,11 +459,11 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                     />
                     <span className={cn(
                       'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
-                      estadoChipBg[selectedCirugia.estado] || 'bg-gray-500/10',
+                      (esConfirmada(selectedCirugia) ? 'bg-pink-400/10' : estadoChipBg[selectedCirugia.estado]) || 'bg-gray-500/10',
                       tipoStyles[selectedCirugia.tipo || 'cirugia']?.text || 'text-fg-2',
                     )}>
-                      <span className={cn('h-1.5 w-1.5 rounded-full', estadoDotColors[selectedCirugia.estado])} />
-                      {estadoLabels[selectedCirugia.estado] || selectedCirugia.estado}
+                      <span className={cn('h-1.5 w-1.5 rounded-full', esConfirmada(selectedCirugia) ? 'bg-pink-400' : estadoDotColors[selectedCirugia.estado])} />
+                      {esConfirmada(selectedCirugia) ? 'Confirmada' : estadoLabels[selectedCirugia.estado] || selectedCirugia.estado}
                     </span>
                   </div>
                 </div>
@@ -596,7 +598,9 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                         'rounded-xl border py-2.5 text-sm font-bold transition-colors',
                         a === 'cancelar'
                           ? 'border-red-200 text-red-700 active:bg-red-50 dark:border-red-500/30 dark:text-red-300'
-                          : 'border-line text-fg-2 active:bg-surface-2'
+                          : a === 'confirmar'
+                            ? 'border-pink-300 bg-pink-400/10 text-pink-700 active:bg-pink-400/20 dark:border-pink-400/40 dark:text-pink-300'
+                            : 'border-line text-fg-2 active:bg-surface-2'
                       )}
                     >
                       {ETIQUETA_ACCION[a]}

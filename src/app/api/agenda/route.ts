@@ -13,6 +13,35 @@ import { ruta } from '@/lib/api/ruta';
 import { enSegundoPlano } from '@/lib/segundo-plano';
 import { detalleEvento } from '@/lib/bandeja-agenda';
 
+interface DatosConfirmacion { confirmacion: string | null; confirmacion_medio: string | null; confirmacion_at: string | null }
+const SIN_CONFIRMACION: DatosConfirmacion = { confirmacion: null, confirmacion_medio: null, confirmacion_at: null };
+
+/** Lee la confirmación de las citas por id; si faltan columnas, degrada sin romper la agenda. */
+async function leerConfirmaciones(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  tabla: 'agenda_cirugias' | 'consultas',
+  ids: string[],
+): Promise<Map<string, DatosConfirmacion>> {
+  const mapa = new Map<string, DatosConfirmacion>();
+  if (ids.length === 0) return mapa;
+  for (const columnas of ['id, confirmacion, confirmacion_medio, confirmacion_at', 'id, confirmacion, confirmacion_at']) {
+    let ok = true;
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await supabase.from(tabla).select(columnas).in('id', ids.slice(i, i + 200));
+      if (error) { ok = false; mapa.clear(); break; }
+      for (const f of (data || []) as unknown as Array<Record<string, string | null>>) {
+        mapa.set(f.id as string, {
+          confirmacion: f.confirmacion ?? null,
+          confirmacion_medio: f.confirmacion_medio ?? null,
+          confirmacion_at: f.confirmacion_at ?? null,
+        });
+      }
+    }
+    if (ok) break;
+  }
+  return mapa;
+}
+
 /** Ojo: '' (sin dato) u OD/OI/OU; la tabla tiene CHECK sobre esos valores (antes: 500 en BD). */
 const ojoSchema = z
   .string()
@@ -258,7 +287,14 @@ async function manejarGET(request: Request) {
     return errorInterno(errorCirugias || errorConsultas, 'agenda.listar');
   }
 
+  // Confirmación de la cita (best-effort: si falta el SQL de confirmación o del medio, la agenda sigue igual).
+  const [confCirugias, confConsultas] = await Promise.all([
+    leerConfirmaciones(supabase, 'agenda_cirugias', (cirugias || []).map((c) => c.id as string)),
+    leerConfirmaciones(supabase, 'consultas', (consultas || []).map((c) => c.id as string)),
+  ]);
+
   const eventosCirugias = (cirugias || []).map((c) => ({
+    ...(confCirugias.get(c.id as string) ?? SIN_CONFIRMACION),
     id: c.id,
     paciente_id: c.paciente_id,
     nombre_paciente: c.nombre_paciente,
@@ -298,6 +334,7 @@ async function manejarGET(request: Request) {
       estudios: [(c as any).estudio_1, (c as any).estudio_2, (c as any).estudio_3],
     });
     return {
+    ...(confConsultas.get(c.id as string) ?? SIN_CONFIRMACION),
     id: c.id,
     paciente_id: c.paciente_id,
     nombre_paciente: (c as any).pacientes?.nombre_completo || '',

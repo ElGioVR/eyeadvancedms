@@ -41,7 +41,7 @@ export default function DashboardLayout({
             )}
           >
             <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
-            <main className="flex-1 overflow-auto print:!overflow-visible print:!p-0 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8">
+            <main className="flex-1 overflow-auto print:!overflow-visible print:!p-0 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-5 lg:px-6 lg:pb-6 lg:pt-5 2xl:px-8">
               {/* Entrada suave al cambiar de módulo (solo opacidad: sin transform, no rompe elementos fixed) */}
               <div key={pathname} className="animate-fadeIn">
                 {children}

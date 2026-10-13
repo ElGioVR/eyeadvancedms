@@ -82,6 +82,36 @@ async function manejarPOST(request: Request) {
   if (data instanceof NextResponse) return data;
 
   const supabase = getSupabaseAdmin();
+
+  // UNIQUE (aseguranza_id, tipo, nombre_norm) también cuenta las filas
+  // inactivas: si existe una dada de baja se reactiva; si está activa, 409.
+  const nombreNorm = normalize(data.nombre);
+  const { data: previo, error: errPrevio } = await supabase
+    .from('aseguranza_servicios')
+    .select('id, activo')
+    .eq('aseguranza_id', data.aseguranza_id)
+    .eq('tipo', data.tipo)
+    .eq('nombre_norm', nombreNorm)
+    .maybeSingle();
+  if (errPrevio) return respuestaErrorDb(errPrevio, 'configuracion.aseguranzas.servicios.crear');
+  if (previo) {
+    if (previo.activo !== false) {
+      return NextResponse.json({ error: 'Este servicio ya existe para esta aseguradora', code: 'DUPLICADO' }, { status: 409 });
+    }
+    const { error: errReact } = await supabase
+      .from('aseguranza_servicios')
+      .update({
+        activo: true,
+        nombre: data.nombre.trim(),
+        costo: data.costo,
+        porcentaje_cobertura: data.porcentaje_cobertura,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', previo.id);
+    if (errReact) return respuestaErrorDb(errReact, 'configuracion.aseguranzas.servicios.reactivar');
+    return NextResponse.json({ ok: true, reactivado: true }, { status: 201 });
+  }
+
   const { error } = await supabase.from('aseguranza_servicios').insert({
     aseguranza_id: data.aseguranza_id,
     tipo: data.tipo,

@@ -17,6 +17,11 @@ import {
   detectarOrdenFechas,
   fechasInvertidasPorExcel,
   parseHoraImport,
+  normalizarTelefonoImport,
+  corregirHoraFin,
+  anestesiaImport,
+  fechaNacimientoCoherente,
+  tipoConsultaImport,
   validarNombrePaciente,
   valorCelda,
   type DoctorExistente,
@@ -25,9 +30,16 @@ import {
   type ResolucionDoctor,
 } from '@/lib/import-agenda';
 import { ruta } from '@/lib/api/ruta';
-import { reservarLente, completarLentesCirugia, liberarLentes } from '@/lib/cirugia-lentes';
-import { parsearLio, claveLente } from '@/lib/import-lentes-puro';
-import type { OrdenLente } from '@/lib/cirugia-lentes-puro';
+import { liberarLentes, guardarPlanLentes } from '@/lib/cirugia-lentes';
+import {
+  interpretarLio,
+  planificarLentes,
+  etiquetaModoLente,
+  type InterpretacionLio,
+  type LentePlanImport,
+  type PiezaInventario,
+} from '@/lib/import-lentes-puro';
+import { requiereLente } from '@/lib/por-completar';
 import { exigirLimite } from '@/lib/api/limites';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
@@ -131,11 +143,26 @@ function parseCosto(val: unknown): number {
 
 const texto = (v: unknown) => limpiarEspacios(String(v ?? ''));
 
+const METODO_PAGO_MAP: Record<string, string> = {
+  efectivo: 'EFECTIVO', tarjeta: 'TARJETA', 'tarjeta de credito': 'TARJETA',
+  'tarjeta de debito': 'TARJETA', transferencia: 'TRANSFERENCIA',
+};
+/** Valores que significan «sin método de pago» (no es un dato desconocido). */
+const SIN_METODO = new Set(['no aplica', 'n/a', 'na', 'sin pago', 'pendiente', '-', '']);
+
+/** «Fila 5, fila 9 y 3 más» para listas de avisos. */
+function listaFilas(filas: number[], max = 6): string {
+  const uno = filas.slice(0, max).map((n) => `fila ${n}`).join(', ');
+  return filas.length > max ? `${uno} y ${filas.length - max} más` : uno;
+}
+
 /** Una hoja leída: encabezados originales + filas (valores crudos y por encabezado). */
 interface Hoja {
   nombre: string;
   encabezados: string[];
   filas: Array<{ numero: number; valores: Array<string | number>; obj: Record<string, string | number> }>;
+  /** Filas con datos solo en columnas SIN encabezado (tablas auxiliares al lado): se ignoran. */
+  ignoradas: number;
 }
 
 function hojaDesdeMatriz(nombre: string, matriz: Array<Array<string | number>>): Hoja {
@@ -143,13 +170,16 @@ function hojaDesdeMatriz(nombre: string, matriz: Array<Array<string | number>>):
   // Claves en MAYÚSCULAS: «Fecha» y «FECHA» son la misma columna.
   const claves = dedupeHeaders(encabezados.map((h) => h.toUpperCase()));
   const filas: Hoja['filas'] = [];
+  let ignoradas = 0;
   matriz.slice(1).forEach((valores, i) => {
     if (valores.every((v) => String(v ?? '').trim() === '')) return; // fila vacía
+    // Solo cuentan las columnas con encabezado: catálogos o notas al costado no son filas de datos.
+    if (encabezados.every((h, j) => !h || String(valores[j] ?? '').trim() === '')) { ignoradas++; return; }
     const obj: Record<string, string | number> = {};
     claves.forEach((h, j) => { if (h) obj[h] = valores[j] ?? ''; });
     filas.push({ numero: i + 2, valores, obj });
   });
-  return { nombre, encabezados, filas };
+  return { nombre, encabezados, filas, ignoradas };
 }
 
 /* ─────────── Utilidades de lotes ─────────── */
@@ -348,6 +378,100 @@ function idDe(ref: Ref, creados: Map<string, string>): string | null | undefined
   return creados.get(ref.nuevo); // undefined = no se pudo crear
 }
 
+/* ─────────── Servicios de las consultas (consulta_conceptos) ─────────── */
+
+type TipoConcepto = 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO';
+interface ServicioCat { id: string; nombre: string; costo: number }
+interface CatalogosServicios {
+  /** «aseguranza|tipo|nombre normalizado» → servicio propio de la aseguradora. */
+  propios: Map<string, ServicioCat>;
+  /** «tipo|nombre normalizado» → servicio del catálogo general. */
+  generico: Map<string, ServicioCat>;
+}
+
+async function cargarCatalogosServicios(supabase: Admin): Promise<CatalogosServicios> {
+  const propios = new Map<string, ServicioCat>();
+  const generico = new Map<string, ServicioCat>();
+  try {
+    const filas = await leerPaginado<{ id: string; aseguranza_id: string; nombre: string; costo: number | string | null; tipo: string }>((d, h) =>
+      supabase.from('aseguranza_servicios').select('id, aseguranza_id, nombre, costo, tipo').eq('activo', true).order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: { id: string; aseguranza_id: string; nombre: string; costo: number | string | null; tipo: string }[] | null; error: unknown }>
+    );
+    for (const f of filas) propios.set(`${f.aseguranza_id}|${f.tipo}|${claveTexto(f.nombre)}`, { id: f.id, nombre: f.nombre, costo: Number(f.costo) || 0 });
+  } catch { /* sin catálogo de aseguradoras: se usa el general */ }
+  const tablas: Array<[TipoConcepto, string]> = [['CONSULTA', 'catalogo_consultas'], ['ESTUDIO', 'catalogo_estudios'], ['PROCEDIMIENTO', 'catalogo_procedimientos']];
+  await Promise.all(tablas.map(async ([tipo, tabla]) => {
+    try {
+      const filas = await leerPaginado<{ id: string; nombre: string; costo: number | string | null }>((d, h) =>
+        supabase.from(tabla).select('id, nombre, costo').eq('activo', true).order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: { id: string; nombre: string; costo: number | string | null }[] | null; error: unknown }>
+      );
+      for (const f of filas) generico.set(`${tipo}|${claveTexto(f.nombre)}`, { id: f.id, nombre: f.nombre, costo: Number(f.costo) || 0 });
+    } catch { /* catálogo general aún no creado */ }
+  }));
+  return { propios, generico };
+}
+
+function buscarServicio(cat: CatalogosServicios, aseguranzaId: string | null, tipo: TipoConcepto, nombres: string[]): ServicioCat | null {
+  for (const n of nombres) {
+    const k = claveTexto(n);
+    const s = (aseguranzaId ? cat.propios.get(`${aseguranzaId}|${tipo}|${k}`) : undefined) ?? cat.generico.get(`${tipo}|${k}`);
+    if (s) return s;
+  }
+  return null;
+}
+
+const NOMBRES_CONSULTA: Record<'PRIMERA_VEZ' | 'SUBSECUENTE', string[]> = {
+  PRIMERA_VEZ: ['Primera consulta', 'Consulta primera vez', 'Consulta', 'Primera vez'],
+  SUBSECUENTE: ['Consulta subsecuente', 'Subsecuente', 'Consulta de seguimiento', 'Revisión'],
+};
+
+/** Conceptos clínicos de una consulta importada (mismo formato que el alta normal). */
+function construirConceptos(
+  cat: CatalogosServicios,
+  d: {
+    consultaId: string;
+    aseguranzaId: string | null;
+    doctorId: string | null;
+    indicadoPorId: string | null;
+    tipo: { tipo_consulta: TipoConcepto; tipo_visita: 'PRIMERA_VEZ' | 'SUBSECUENTE' };
+    estudios: string[];
+    procedimiento: string | null;
+    cantidad: number;
+    costo: number;
+  },
+): { filas: Array<Record<string, unknown>>; noEncontrados: string[] } {
+  const noEncontrados: string[] = [];
+  const filas: Array<Record<string, unknown>> = [];
+  const agregar = (tipo: TipoConcepto, texto: string, nombres: string[], cantidad: number) => {
+    const sv = buscarServicio(cat, d.aseguranzaId, tipo, nombres);
+    if (!sv) noEncontrados.push(texto);
+    filas.push({
+      consulta_id: d.consultaId,
+      doctor_id: d.doctorId,
+      indicado_por_id: d.indicadoPorId ?? d.doctorId,
+      tipo_concepto: tipo,
+      concepto_id: sv?.id ?? null,
+      texto_original: sv?.nombre ?? texto,
+      precio_aplicado: sv?.costo ?? 0,
+      cantidad,
+      ojo: null,
+    });
+  };
+  if (d.tipo.tipo_consulta === 'CONSULTA') {
+    const etiqueta = d.tipo.tipo_visita === 'SUBSECUENTE' ? 'Consulta subsecuente' : 'Primera consulta';
+    agregar('CONSULTA', etiqueta, NOMBRES_CONSULTA[d.tipo.tipo_visita], 1);
+  }
+  for (const e of d.estudios) agregar('ESTUDIO', e, [e], 1);
+  if (d.procedimiento) agregar('PROCEDIMIENTO', d.procedimiento, [d.procedimiento], d.cantidad);
+  // Un solo servicio sin precio en catálogo: el costo del archivo es el de ese servicio.
+  if (filas.length === 1 && Number(filas[0].precio_aplicado) === 0 && d.costo > 0) {
+    filas[0].precio_aplicado = Math.round((d.costo / Number(filas[0].cantidad)) * 100) / 100;
+  }
+  return { filas, noEncontrados };
+}
+
+const etiquetaTipoImport = (t: { tipo_consulta: string; tipo_visita: string }) =>
+  t.tipo_consulta === 'ESTUDIO' ? 'Estudios' : t.tipo_consulta === 'PROCEDIMIENTO' ? 'Procedimiento' : t.tipo_visita === 'SUBSECUENTE' ? 'Subsecuente' : 'Primera consulta';
+
 /* ─────────── Endpoint ─────────── */
 
 const MAX_SIZE_IMPORT = 5 * 1024 * 1024; // 5MB
@@ -379,6 +503,12 @@ interface FilaPreview {
   estado?: string;
   paciente_nuevo: boolean;
   doctor_nuevo: boolean;
+  /** Tipo de consulta u ojo/procedimiento de la cirugía. */
+  detalle?: string;
+  /** Lo que quedará en «Por completar»: hora, doctor, aseguradora, ojo, anestesia, lente… */
+  faltantes?: string[];
+  /** Cirugías: plan de lentes que se guardará («1º Isert 21 → Asignar · Resp. CT Lucia 22.5 → Solicitar»). */
+  lentes?: string;
 }
 
 async function manejarPOST(request: Request) {
@@ -492,9 +622,12 @@ async function manejarPOST(request: Request) {
         const h = leerHoja(workbook.worksheets[0], 'CONSULTAS');
         hojas = h ? [h] : [];
       } else {
-        const principal = leerHoja(workbook.getWorksheet('CIRUGIA') || workbook.worksheets[0], 'CIRUGIA');
-        const aplazados = leerHoja(workbook.getWorksheet('APLAZADOS'), 'APLAZADOS');
-        hojas = [principal, aplazados].filter((h): h is Hoja => !!h);
+        // Nombres de hoja sin distinguir mayúsculas ni espacios sobrantes («CONSULTADOS »).
+        const porNombre = (n: string) => workbook.worksheets.find((w) => w.name.trim().toUpperCase() === n);
+        const principal = leerHoja(porNombre('CIRUGIA') || porNombre('CIRUGÍA') || workbook.worksheets[0], 'CIRUGIA');
+        const aplazados = leerHoja(porNombre('APLAZADOS'), 'APLAZADOS');
+        const consultados = leerHoja(porNombre('CONSULTADOS'), 'CONSULTADOS');
+        hojas = [principal, aplazados, consultados].filter((h): h is Hoja => !!h);
       }
     }
   } catch (err) {
@@ -524,6 +657,9 @@ async function manejarPOST(request: Request) {
   const duplicados: FilaRechazada[] = [];
   const doctoresNuevos = new Map<string, string>(); // clave → alias MAYÚSCULAS
   const avisos: string[] = [];
+  for (const h of hojas) {
+    if (h.ignoradas > 0) avisos.push(`${h.nombre}: ${h.ignoradas} fila${h.ignoradas === 1 ? '' : 's'} con datos solo en columnas sin encabezado (tablas o catálogos al costado) se ignoraron.`);
+  }
   const pacientesNuevos = new Map<string, PacienteNuevo>(); // clave → datos
   const valoresTexto = (valores: Array<string | number>) => valores.map((v) => String(v ?? ''));
   const rechazar = (hoja: Hoja, fila: Hoja['filas'][number], motivo: string) =>
@@ -566,7 +702,11 @@ async function manejarPOST(request: Request) {
   if (tipo === 'consultas') {
     const hoja = hojas[0];
     const headers = hoja.encabezados.map((h) => normalizeText(h));
-    const col = (...nombres: string[]) => headers.findIndex((h) => nombres.some((n) => h === n || h.startsWith(n)));
+    // Coincidencia exacta primero («consulta») y luego por prefijo («costo consulta» no cuenta).
+    const col = (...nombres: string[]) => {
+      const exacto = headers.findIndex((h) => nombres.some((n) => h === n));
+      return exacto >= 0 ? exacto : headers.findIndex((h) => nombres.some((n) => h.startsWith(n)));
+    };
     const idx = {
       fecha: col('fecha'),
       ingreso: col('hora de ingreso'),
@@ -583,6 +723,8 @@ async function manejarPOST(request: Request) {
       est1: col('estudio 1', 'estudio1'),
       est2: col('estudio2', 'estudio 2'),
       est3: col('estudio3', 'estudio 3'),
+      medicoIc: col('medico ic'),
+      operador: col('operador'),
       procedimiento: col('procedimiento'),
       aseguradora: col('aseguranza'),
       metodoPago: col('metodo de pago'),
@@ -610,8 +752,16 @@ async function manejarPOST(request: Request) {
       doctorTexto: string | null;
       doctorNuevo: boolean;
       v: Array<string | number>;
+      tipo: ReturnType<typeof tipoConsultaImport>;
+      /** Médico que indicó el servicio (solo si ya existe en el sistema). */
+      indicadoPorId: string | null;
+      cantidad: number;
+      correcciones: string[];
+      descartes: string[];
     }
     const validas: Pend[] = [];
+    let filasVacias = 0;
+    const hoyIso = new Date().toISOString().slice(0, 10);
     // Orden día/mes o mes/día por columna (Excel en inglés exporta 9/15/2026).
     const ordenFecha = detectarOrdenFechas(hoja.filas.map((f) => crudo(f.valores, idx.fecha)));
     const invertidas = ext === 'xlsx' ? fechasInvertidasPorExcel(hoja.filas.map((f) => crudo(f.valores, idx.fecha))) : 0;
@@ -623,6 +773,8 @@ async function manejarPOST(request: Request) {
 
     for (const fila of hoja.filas) {
       const v = fila.valores;
+      // Fila con solo la fecha (separador del día): no es una cita ni un error.
+      if (!get(v, idx.nombre) && hoja.encabezados.every((h, j) => !h || j === idx.fecha || String(v[j] ?? '').trim() === '')) { filasVacias++; continue; }
       const nombreV = validarNombrePaciente(get(v, idx.nombre));
       if (!nombreV.ok) { rechazar(hoja, fila, nombreV.motivo); continue; }
       const fechaTxt = crudo(v, idx.fecha);
@@ -633,24 +785,43 @@ async function manejarPOST(request: Request) {
       const horaInicio = parseHoraImport(ingresoTxt);
       if (String(ingresoTxt).trim() !== '' && !horaInicio) { rechazar(hoja, fila, `Hora de ingreso no válida («${texto(ingresoTxt)}»)`); continue; }
       const egresoTxt = crudo(v, idx.egreso);
-      const horaFin = parseHoraImport(egresoTxt);
-      if (String(egresoTxt).trim() !== '' && !horaFin) { rechazar(hoja, fila, `Hora de egreso no válida («${texto(egresoTxt)}»)`); continue; }
+      const horaFinLeida = parseHoraImport(egresoTxt);
+      if (String(egresoTxt).trim() !== '' && !horaFinLeida) { rechazar(hoja, fila, `Hora de egreso no válida («${texto(egresoTxt)}»)`); continue; }
+      const correcciones: string[] = [];
+      const descartes: string[] = [];
+      // Egreso antes del ingreso: se corrige un error de AM/PM o se descarta (antes se perdía en silencio).
+      const fin = corregirHoraFin(horaInicio, horaFinLeida);
+      if (fin.corregida) correcciones.push(`egreso «${texto(egresoTxt)}» → ${fin.hora!.slice(0, 5)}`);
+      if (fin.descartada) descartes.push(horaInicio ? `egreso «${texto(egresoTxt)}» (termina antes de iniciar)` : 'egreso sin hora de ingreso');
+      const horaFin = fin.hora;
 
       const doctorTexto = get(v, idx.doctor) || null;
       const doc = refDoctor(resolverDoctor(doctorTexto), doctoresNuevos);
       if (doc.motivo) { rechazar(hoja, fila, doc.motivo); continue; }
 
       const edadNum = parseInt(get(v, idx.edad), 10);
+      const edad = Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null;
+      const fnac = fechaNacimientoCoherente(parseFechaImport(crudo(v, idx.fnac), ordenFnac), edad, hoyIso);
+      if (fnac.descartada) descartes.push(`fecha de nacimiento «${texto(crudo(v, idx.fnac))}» (no cuadra con la edad)`);
+      const telefono = normalizarTelefonoImport(get(v, idx.telefono));
+      if (get(v, idx.telefono) && !telefono) descartes.push(`teléfono «${get(v, idx.telefono)}»`);
       const pac = refPaciente(nombreV.clave, {
         nombre_completo: nombreV.nombre,
-        telefono: get(v, idx.telefono).slice(0, 20) || null,
+        telefono,
         sexo: normalizarSexo(get(v, idx.sexo)),
-        fecha_nacimiento: parseFechaImport(crudo(v, idx.fnac), ordenFnac),
-        edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
+        fecha_nacimiento: fnac.fecha,
+        edad,
       });
+      // «MEDICO IC» (quien indicó el estudio): solo si ya es un doctor del sistema; nunca se crea.
+      const ic = resolverDoctor(get(v, idx.medicoIc) || null);
+      const operador = parseInt(get(v, idx.operador), 10);
       validas.push({
         fila, fecha, hora_inicio: horaInicio, hora_fin: horaFin, nombre: nombreV.nombre, clave: nombreV.clave,
         paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, v,
+        tipo: tipoConsultaImport(get(v, idx.consulta), get(v, idx.tipoVisita), !!get(v, idx.procedimiento), !!get(v, idx.est1)),
+        indicadoPorId: ic && ic.tipo === 'existente' ? ic.id : null,
+        cantidad: Number.isFinite(operador) && operador >= 1 && operador <= 6 ? operador : 1,
+        correcciones, descartes,
       });
     }
 
@@ -697,6 +868,33 @@ async function manejarPOST(request: Request) {
     pacientesNuevos.forEach((_, k) => { if (!usadosPac.has(k)) pacientesNuevos.delete(k); });
     doctoresNuevos.forEach((_, k) => { if (!usadosDoc.has(k)) doctoresNuevos.delete(k); });
 
+    // Avisos de calidad de las filas que sí se importan (para revisar antes de confirmar).
+    const corregidas = porInsertar.filter((p) => p.correcciones.length);
+    if (corregidas.length) avisos.push(`Horas corregidas por error de AM/PM: ${corregidas.slice(0, 6).map((p) => `fila ${p.fila.numero} (${p.correcciones.join(', ')})`).join('; ')}${corregidas.length > 6 ? ` y ${corregidas.length - 6} más` : ''}.`);
+    const descartadas = porInsertar.filter((p) => p.descartes.length);
+    if (descartadas.length) avisos.push(`Datos descartados por no ser válidos (la cita sí se importa): ${descartadas.slice(0, 6).map((p) => `fila ${p.fila.numero} → ${p.descartes.join(', ')}`).join('; ')}${descartadas.length > 6 ? ` y ${descartadas.length - 6} más` : ''}.`);
+    if (filasVacias > 0) avisos.push(`${filasVacias} fila${filasVacias === 1 ? '' : 's'} con solo la fecha y sin paciente se ignoraron.`);
+    const sinHora = porInsertar.filter((p) => !p.hora_inicio);
+    if (sinHora.length) avisos.push(`${sinHora.length} consulta${sinHora.length === 1 ? '' : 's'} sin hora de ingreso (${listaFilas(sinHora.map((p) => p.fila.numero))}): quedan en «Por completar».`);
+    const asegDesconocidas = new Set<string>();
+    const metodosDesconocidos = new Set<string>();
+    for (const p of porInsertar) {
+      const a = get(p.v, idx.aseguradora);
+      if (a && !asegNorm.has(normalizeText(a))) asegDesconocidas.add(a);
+      const m = get(p.v, idx.metodoPago);
+      if (m && !SIN_METODO.has(normalizeText(m)) && !METODO_PAGO_MAP[normalizeText(m)]) metodosDesconocidos.add(m);
+    }
+    if (asegDesconocidas.size) avisos.push(`Aseguradoras que no existen en el sistema (esas consultas quedan sin aseguradora y en «Por completar»): ${Array.from(asegDesconocidas).join(', ')}. Créalas en Configuración o corrige el archivo.`);
+    if (metodosDesconocidos.size) avisos.push(`Métodos de pago no reconocidos (se guardan sin método): ${Array.from(metodosDesconocidos).join(', ')}.`);
+
+    const faltantesDe = (p: Pend): string[] => {
+      const f: string[] = [];
+      if (!p.hora_inicio) f.push('hora');
+      if (!p.doctor) f.push('doctor');
+      const a = get(p.v, idx.aseguradora);
+      if (!a || !asegNorm.has(normalizeText(a))) f.push('aseguradora');
+      return f;
+    };
     const resumen = {
       total: totalFilas,
       aImportar: porInsertar.length,
@@ -704,6 +902,11 @@ async function manejarPOST(request: Request) {
       conError: rechazos.length,
       doctoresNuevos: Array.from(doctoresNuevos.values()),
       pacientesNuevos: pacientesNuevos.size,
+      porCompletar: porInsertar.filter((p) => faltantesDe(p).length > 0).length,
+      faltantes: porInsertar.reduce<Record<string, number>>((acc, p) => {
+        for (const k of faltantesDe(p)) acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {}),
     };
 
     if (!confirmar) {
@@ -719,6 +922,8 @@ async function manejarPOST(request: Request) {
           doctor: p.doctorTexto,
           paciente_nuevo: p.pacienteNuevo,
           doctor_nuevo: p.doctorNuevo,
+          detalle: etiquetaTipoImport(p.tipo),
+          faltantes: faltantesDe(p),
         })),
         rechazos: listaRechazos(),
         avisos,
@@ -736,10 +941,6 @@ async function manejarPOST(request: Request) {
     if (conteo.error) return errorInterno(conteo.error, 'agenda.import.folios');
     let seq = conteo.count || 0;
     const year = new Date().getFullYear().toString().slice(-2);
-    const METODO_PAGO_MAP: Record<string, string> = {
-      efectivo: 'EFECTIVO', tarjeta: 'TARJETA', 'tarjeta de credito': 'TARJETA',
-      'tarjeta de debito': 'TARJETA', transferencia: 'TRANSFERENCIA',
-    };
 
     const filasConsulta: Array<{ p: Pend; row: Record<string, unknown> }> = [];
     for (const p of porInsertar) {
@@ -767,8 +968,8 @@ async function manejarPOST(request: Request) {
           fecha: p.fecha,
           hora_inicio: p.hora_inicio,
           hora_fin: p.hora_fin && p.hora_inicio && p.hora_fin > p.hora_inicio ? p.hora_fin : null,
-          tipo_consulta: (get(v, idx.consulta) || 'CONSULTA').toUpperCase(),
-          tipo_visita: get(v, idx.tipoVisita).toUpperCase().includes('PRIMERA') ? 'PRIMERA_VEZ' : 'SUBSECUENTE',
+          tipo_consulta: p.tipo.tipo_consulta,
+          tipo_visita: p.tipo.tipo_visita,
           diagnostico: get(v, idx.diagnostico) || null,
           estudio_1: get(v, idx.est1) || null,
           estudio_2: get(v, idx.est2) || null,
@@ -787,10 +988,37 @@ async function manejarPOST(request: Request) {
 
     let importadas = 0;
     const resultados = await insertarEnLotes(supabase, 'consultas', filasConsulta.map((x) => x.row), 'id');
+    const conceptosRows: Array<Record<string, unknown>> = [];
+    const noEncontrados = new Set<string>();
+    const catalogos = await cargarCatalogosServicios(supabase);
     resultados.forEach((r, i) => {
-      if (r.ok) importadas++;
-      else rechazar(hoja, filasConsulta[i].p.fila, mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'));
+      if (!r.ok) {
+        rechazar(hoja, filasConsulta[i].p.fila, mensajeSeguro(r.error, 'agenda.import', 'No se pudo guardar'));
+        return;
+      }
+      importadas++;
+      const { p, row } = filasConsulta[i];
+      const cons = construirConceptos(catalogos, {
+        consultaId: r.row.id as string,
+        aseguranzaId: (row.aseguranza_id as string | null) ?? null,
+        doctorId: row.doctor_id as string | null,
+        indicadoPorId: p.indicadoPorId,
+        tipo: p.tipo,
+        estudios: [get(p.v, idx.est1), get(p.v, idx.est2), get(p.v, idx.est3)].filter(Boolean),
+        procedimiento: get(p.v, idx.procedimiento) || null,
+        cantidad: p.cantidad,
+        costo: Number(row.costo_total) || 0,
+      });
+      conceptosRows.push(...cons.filas);
+      cons.noEncontrados.forEach((n) => noEncontrados.add(n));
     });
+    if (conceptosRows.length) {
+      // Los conceptos (servicios) alimentan costos y honorarios; si fallan, la consulta queda y se avisa.
+      const rc = await insertarEnLotes(supabase, 'consulta_conceptos', conceptosRows, 'id', ['indicado_por_id']);
+      const fallidos = rc.filter((x) => !x.ok).length;
+      if (fallidos) avisos.push(`${fallidos} servicio${fallidos === 1 ? '' : 's'} de las consultas no se pudo registrar; revisa esas consultas.`);
+    }
+    if (noEncontrados.size) avisos.push(`Servicios que no están en el catálogo (se guardaron con el texto del archivo y precio 0): ${Array.from(noEncontrados).slice(0, 8).join('; ')}${noEncontrados.size > 8 ? ` y ${noEncontrados.size - 8} más` : ''}.`);
 
     await supabase.from('agenda_import_log').insert({
       usuario_id: auth.user.id,
@@ -805,6 +1033,7 @@ async function manejarPOST(request: Request) {
       preview: false,
       tipo: 'consultas',
       importadas,
+      porCompletar: resumen.porCompletar,
       omitidasDuplicadas: duplicados.length,
       errores: rechazos.length,
       doctoresCreados: docs.ids.size,
@@ -831,21 +1060,95 @@ async function manejarPOST(request: Request) {
     dedupe: string;
     ojoDia: string;
     data: Record<string, unknown>;
+    /** Lectura estricta de la celda LIO (+ MARCA y NOTAS). */
+    interp: InterpretacionLio;
+    plan: LentePlanImport[];
+    sinGuardar: string[];
+    faltantes: string[];
   }
   const validasCx: PendCx[] = [];
-  const val = (o: Record<string, string | number>, k: string) => texto(o[k]);
+  const val = (o: Record<string, string | number>, ...claves: string[]) => {
+    for (const k of claves) { const t = texto(o[k]); if (t) return t; }
+    return '';
+  };
   const todasFilas = hojas.flatMap((h) => h.filas);
   const ordenFechaCx = detectarOrdenFechas(todasFilas.map((f) => f.obj['FECHA']));
   const invertidasCx = ext === 'xlsx' ? fechasInvertidasPorExcel(todasFilas.map((f) => f.obj['FECHA'])) : 0;
   if (invertidasCx > 0) avisos.push(`La columna FECHA mezcla fechas escritas como texto mes/día («7/22/2026») con celdas de fecha que Excel guardó día/mes. Se leyeron ${invertidasCx} celdas como mes/día (01/08/2026 → 1 de agosto). Revisa las fechas antes de confirmar.`);
   const ordenFnacCx = detectarOrdenFechas(todasFilas.map((f) => f.obj['FECHA NAC.']));
+  const hoyIsoCx = new Date().toISOString().slice(0, 10);
+  const CAMPO_SUSPENDIDA = /SUSPENDID[OA]|CANCELAD[OA]/i;
 
-  let filasPorCompletar = 0;
+  // Pacientes con cirugía ya agendada en la hoja CIRUGIA: sus filas de CONSULTADOS no son «por programar».
+  const agendadosEnArchivo = new Set<string>();
+  for (const h of hojas) {
+    if (h.nombre !== 'CIRUGIA') continue;
+    for (const f of h.filas) {
+      const n = validarNombrePaciente(val(f.obj, 'NOMBRE PX'));
+      if (!n.ok || CAMPO_SUSPENDIDA.test(val(f.obj, 'NOTAS')) || !val(f.obj, 'FECHA')) continue;
+      agendadosEnArchivo.add(`${n.clave}|${normalizeOjo(val(f.obj, 'OJO')) || ''}`);
+      agendadosEnArchivo.add(`${n.clave}|*`);
+    }
+  }
+  const sinProcedimientoConsultados: number[] = [];
+  let filasVaciasCx = 0;
+  const notasArchivo: string[] = [];
+  const fechasNacDescartadas: number[] = [];
+
+  /** Una cirugía/aplazada lista para validar (una por ojo en CONSULTADOS). */
+  interface EntradaCx {
+    hoja: Hoja;
+    fila: Hoja['filas'][number];
+    o: Record<string, string | number>;
+    esAplazada: boolean;
+    esConsultados: boolean;
+    ojoTxt: string;
+    ojo2Txt: string;
+    lioTxt: string;
+    marcaTxt: string;
+  }
+  const entradas: EntradaCx[] = [];
   for (const hoja of hojas) {
     const esAplazados = hoja.nombre === 'APLAZADOS';
+    const esConsultados = hoja.nombre === 'CONSULTADOS';
     for (const fila of hoja.filas) {
       const o = fila.obj;
+      // Filas sin paciente: solo la fecha (horario libre) o solo un texto suelto (nota del archivo) no son errores.
+      const otrosDatos = hoja.encabezados.some((h, j) => h && !['FECHA', 'FECHA CONSULTA', 'NOMBRE PX'].includes(h.toUpperCase()) && String(fila.valores[j] ?? '').trim() !== '');
+      if (!otrosDatos) {
+        const nombreSuelto = val(o, 'NOMBRE PX');
+        if (!nombreSuelto) { filasVaciasCx++; continue; }
+        if (!validarNombrePaciente(nombreSuelto).ok) { notasArchivo.push(`${hoja.nombre} fila ${fila.numero}: «${nombreSuelto}»`); continue; }
+      }
+      if (esConsultados) {
+        // Una entrada por ojo: «1ER OJO» + LIO y «2DO OJO» + LIO_2 (cada uno es una cirugía por programar).
+        const ojos = [
+          { ojo: val(o, '1ER OJO'), lio: val(o, 'LIO') },
+          { ojo: val(o, '2DO OJO'), lio: val(o, 'LIO_2') },
+        ].filter((x) => x.ojo || x.lio);
+        for (const x of ojos.length ? ojos : [{ ojo: '', lio: '' }]) {
+          entradas.push({ hoja, fila, o, esAplazada: true, esConsultados: true, ojoTxt: x.ojo, ojo2Txt: '', lioTxt: x.lio, marcaTxt: '' });
+        }
+      } else {
+        entradas.push({
+          hoja, fila, o, esAplazada: esAplazados, esConsultados: false,
+          ojoTxt: val(o, 'OJO'), ojo2Txt: val(o, 'OJO_2'),
+          lioTxt: val(o, 'LIO', 'LIO_2'),
+          marcaTxt: esAplazados ? '' : val(o, 'MARCA', 'MARCA_2'),
+        });
+      }
+    }
+  }
+
+  let filasPorCompletar = 0;
+  const horaAnestesiaSobrante: number[] = [];
+  for (const { hoja, fila, o, esAplazada: esAplazados, esConsultados, ojoTxt, ojo2Txt, lioTxt, marcaTxt } of entradas) {
       const nombreV = validarNombrePaciente(val(o, 'NOMBRE PX'));
+      if (esConsultados && !val(o, 'PROCEDIMIENTO')) {
+        // Paciente consultado sin procedimiento definido (estudios pendientes): aún no hay cirugía que programar.
+        if (nombreV.ok && !sinProcedimientoConsultados.includes(fila.numero)) sinProcedimientoConsultados.push(fila.numero);
+        continue;
+      }
       if (!nombreV.ok) { rechazar(hoja, fila, nombreV.motivo); continue; }
 
       let fecha: string | null = null;
@@ -864,10 +1167,9 @@ async function manejarPOST(request: Request) {
         if (String(horaTxt).trim() !== '' && !hora) horaPendiente = texto(horaTxt);
       }
 
-      const ojoTxt = val(o, 'OJO');
-      const ojo2Txt = val(o, 'OJO_2');
       const ojo = normalizeOjo(ojoTxt) || normalizeOjo(ojo2Txt);
-      if ((ojoTxt && !normalizeOjo(ojoTxt)) || (ojo2Txt && !normalizeOjo(ojo2Txt))) {
+      // Celda de ojo con espacios o signos sueltos (« ») = vacía; un texto real no reconocido sí se rechaza.
+      if ((/\p{L}/u.test(ojoTxt) && !normalizeOjo(ojoTxt)) || (/\p{L}/u.test(ojo2Txt) && !normalizeOjo(ojo2Txt))) {
         rechazar(hoja, fila, `Ojo no válido («${ojoTxt || ojo2Txt}»). Usa OD, OI/OS u OU`);
         continue;
       }
@@ -877,60 +1179,91 @@ async function manejarPOST(request: Request) {
       if (doc.motivo) { rechazar(hoja, fila, doc.motivo); continue; }
 
       const edadNum = parseInt(val(o, 'EDAD'), 10);
+      const edad = Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null;
+      const fnac = fechaNacimientoCoherente(parseFechaImport(o['FECHA NAC.'] ?? '', ordenFnacCx), edad, hoyIsoCx);
+      if (fnac.descartada && !fechasNacDescartadas.includes(fila.numero)) fechasNacDescartadas.push(fila.numero);
       const pac = refPaciente(nombreV.clave, {
         nombre_completo: nombreV.nombre,
-        telefono: (val(o, 'TELEFONO') || val(o, 'TELÉFONO')).slice(0, 20) || null,
+        telefono: normalizarTelefonoImport(val(o, 'TELEFONO', 'TELÉFONO')),
         sexo: normalizarSexo(val(o, 'SEXO')),
-        fecha_nacimiento: parseFechaImport(o['FECHA NAC.'] ?? '', ordenFnacCx),
-        edad: Number.isFinite(edadNum) && edadNum >= 0 && edadNum <= 120 ? edadNum : null,
+        fecha_nacimiento: fnac.fecha,
+        edad,
       });
 
-      const procedimiento = val(o, 'PROCEDIMIENTO') || val(o, 'CIRUGÍA') || val(o, 'CIRUGIA') || null;
+      const procedimiento = val(o, 'PROCEDIMIENTO', 'CIRUGÍA', 'CIRUGIA') || null;
       const notasBase = val(o, 'NOTAS') || null;
-      const suspendida = !esAplazados && !!notasBase && notasBase.toUpperCase().includes('SUSPENDIDO');
+      const suspendida = !esAplazados && !!notasBase && CAMPO_SUSPENDIDA.test(notasBase);
       const ojo2 = normalizeOjo(ojo2Txt);
-      let notas = notasBase;
-      if (suspendida) notas = null;
-      else if (ojo2 && ojo && ojo2 !== ojo) notas = notas ? `${notas} (2º ojo: ${ojo2})` : `(2º ojo: ${ojo2})`;
+      const notasExtra: string[] = [];
+      if (!suspendida && notasBase) notasExtra.push(notasBase);
+      if (!suspendida && ojo2 && ojo && ojo2 !== ojo) notasExtra.push(`(2º ojo: ${ojo2})`);
       if (horaPendiente && !suspendida) {
-        notas = [notas, `Por completar: hora no válida («${horaPendiente}»)`].filter(Boolean).join(' · ');
+        notasExtra.push(`Por completar: hora no válida («${horaPendiente}»)`);
         filasPorCompletar += 1;
       }
+
+      // Anestesia: solo valores reales; lo demás (nombres de proveedores, etc.) va a notas.
+      const anest = esAplazados ? { valor: null, sobrante: null } : anestesiaImport(val(o, 'ANESTESIA'));
+      if (anest.sobrante && !suspendida) { notasExtra.push(`Anestesia (archivo): ${anest.sobrante}`); horaAnestesiaSobrante.push(fila.numero); }
+
+      // LIO: lectura estricta. Un texto que no es lente (horarios) no se guarda como LIO.
+      const interp = interpretarLio(lioTxt, marcaTxt, notasBase);
+      if (interp.textoNoLente) notasExtra.push(`Nota en columna LIO: ${interp.textoNoLente}`);
+      const marcaRuido = !marcaTxt || /^(x+|n\/?a|-+)$/i.test(marcaTxt);
+      const marcaEsMarca = !marcaRuido && !/\d|PAGO|COMPRA|CITAR|TORIC/i.test(marcaTxt);
+      if (!marcaRuido && !marcaEsMarca && !suspendida) notasExtra.push(`Marca/nota: ${marcaTxt}`);
+      const notas = notasExtra.length ? notasExtra.join(' · ') : null;
 
       const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? 'agendada' : 'aplazada';
       const ojoClave = ojo || '';
       const dedupe = fecha
         ? `F|${nombreV.clave}|${fecha}|${ojoClave}|${claveTexto(procedimiento || '')}`
-        : `A|${nombreV.clave}|${claveTexto(procedimiento || '')}`;
+        : `A|${nombreV.clave}|${ojoClave}|${claveTexto(procedimiento || '')}`;
       const ojoDia = fecha ? `O|${nombreV.clave}|${fecha}|${ojoClave}` : '';
+
+      if (esConsultados && (agendadosEnArchivo.has(`${nombreV.clave}|${ojoClave}`) || (!ojoClave && agendadosEnArchivo.has(`${nombreV.clave}|*`)))) {
+        omitirDuplicado(hoja, fila, 'Ya tiene cirugía agendada en la hoja CIRUGIA: no se importa como pendiente de programar');
+        continue;
+      }
+
+      const fechaConsulta = esConsultados ? parseFechaImport(o['FECHA CONSULTA'] ?? '', 'dmy') : null;
+      const estatusConsulta = esConsultados ? val(o, 'ESTATUS') : '';
+      const motivoAplazamiento = esConsultados
+        ? ['Pendiente de programar', fechaConsulta ? `consultado el ${fechaConsulta.split('-').reverse().join('/')}` : '', estatusConsulta ? `estatus: ${estatusConsulta}` : ''].filter(Boolean).join(' · ')
+        : val(o, 'MOTIVO') || null;
 
       validasCx.push({
         hoja, fila, clave: nombreV.clave, nombre: nombreV.nombre,
         paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, dedupe, ojoDia,
+        interp, plan: [], sinGuardar: [], faltantes: [],
         data: {
           nombre_paciente: nombreV.nombre,
-          expediente: val(o, 'No. Expediente') || null,
+          expediente: val(o, 'No. Expediente', 'NO. EXPEDIENTE', 'NO. EXP', 'No. Exp') || null,
           fecha,
           hora,
           jornada: esAplazados ? null : val(o, 'JORNADA') || null,
           diagnostico: val(o, 'DIAGNOSTICO') || null,
           procedimiento,
           ojo,
-          lio: val(o, 'LIO') || val(o, 'LIO_2') || null,
-          marca_lio: esAplazados ? null : val(o, 'MARCA') || val(o, 'MARCA_2') || null,
-          tiempo_estimado: esAplazados ? null : val(o, 'TIEMPO ESTIMADO CX') || val(o, 'TIEMPO CX') || null,
-          tiempo_estancia: esAplazados ? null : val(o, 'TIEMPO DE ESTANCIA') || val(o, 'TIEMPO ESTANCIA') || null,
-          anestesia: esAplazados ? null : valorAnestesia(val(o, 'ANESTESIA')),
+          lio: interp.textoNoLente ? null : lioTxt || null,
+          marca_lio: esAplazados || !marcaEsMarca ? null : marcaTxt,
+          tiempo_estimado: esAplazados ? null : val(o, 'TIEMPO ESTIMADO CX', 'TIEMPO CX') || null,
+          tiempo_estancia: esAplazados ? null : val(o, 'TIEMPO DE ESTANCIA', 'TIEMPO ESTANCIA') || null,
+          anestesia: anest.valor,
           estado,
-          notas: esAplazados ? null : notas,
+          notas,
           ...(estado === 'aplazada'
-            ? { procedencia: val(o, 'PROCEDENCIA') || null, motivo_aplazamiento: val(o, 'MOTIVO') || null }
+            ? { procedencia: val(o, 'PROCEDENCIA') || null, motivo_aplazamiento: motivoAplazamiento }
             : {}),
         },
       });
-    }
   }
 
+  if (filasVaciasCx > 0) avisos.push(`${filasVaciasCx} fila${filasVaciasCx === 1 ? '' : 's'} con solo la fecha (horarios sin paciente) se ignoraron.`);
+  if (notasArchivo.length > 0) avisos.push(`Notas sueltas del archivo (no son pacientes, no se importan): ${notasArchivo.slice(0, 5).join('; ')}${notasArchivo.length > 5 ? ` y ${notasArchivo.length - 5} más` : ''}.`);
+  if (sinProcedimientoConsultados.length > 0) avisos.push(`CONSULTADOS: ${sinProcedimientoConsultados.length} paciente${sinProcedimientoConsultados.length === 1 ? '' : 's'} sin procedimiento definido (estudios pendientes, interconsulta…) no se importaron como pendientes de programar (${listaFilas(sinProcedimientoConsultados)}).`);
+  if (fechasNacDescartadas.length > 0) avisos.push(`Fechas de nacimiento descartadas por ser futuras o no cuadrar con la edad (${listaFilas(fechasNacDescartadas)}). El paciente se importa con la edad.`);
+  if (horaAnestesiaSobrante.length > 0) avisos.push(`ANESTESIA trae texto que no es un tipo de anestesia (${listaFilas(horaAnestesiaSobrante)}): se guardó en notas y la anestesia queda por completar.`);
   if (filasPorCompletar > 0) avisos.push(`${filasPorCompletar} fila${filasPorCompletar === 1 ? '' : 's'} se importaron sin hora porque la hora no es válida. Quedaron marcadas «Por completar» en notas; corrige la hora en la agenda.`);
 
   // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.
@@ -1042,6 +1375,37 @@ async function manejarPOST(request: Request) {
   pacientesNuevos.forEach((_, k) => { if (!usadosPac.has(k)) pacientesNuevos.delete(k); });
   doctoresNuevos.forEach((_, k) => { if (!usadosDoc.has(k)) doctoresNuevos.delete(k); });
 
+  // Lentes: stock libre → ASIGNAR, sin stock → SOLICITAR, «pago lente» → COMPRA_DIRECTA.
+  const inventario = await cargarInventarioLentes(supabase);
+  if (!inventario.ok) avisos.push('No se pudo leer el inventario de lentes: todos los lentes se enviarán a «Solicitar». Revisa el inventario y asigna las piezas que sí existan.');
+  for (const p of porInsertarCx) {
+    const estadoFila = p.data.estado as string;
+    if (estadoFila === 'cancelada') continue;
+    const r = planificarLentes(p.interp, inventario.piezas, inventario.libres, estadoFila === 'agendada');
+    p.plan = r.plan;
+    p.sinGuardar = r.sinGuardar;
+    const f: string[] = [];
+    if (estadoFila === 'agendada') {
+      if (!p.data.hora) f.push('hora');
+      if (!p.data.anestesia) f.push('anestesia');
+    }
+    if (!p.data.ojo) f.push('ojo');
+    if (!p.data.procedimiento) f.push('procedimiento');
+    if ((requiereLente(p.data.procedimiento as string | null) && p.plan.length === 0) || p.sinGuardar.length > 0 || p.interp.pendientes.length > 0) f.push('lente');
+    p.faltantes = f;
+  }
+  const ABREV_ORDEN = { PRIMERO: '1º', SEGUNDO: '2º', RESPALDO: 'Resp.' } as const;
+  const textoLentes = (p: PendCx) =>
+    [
+      ...p.plan.map((l) => `${ABREV_ORDEN[l.orden]} ${[l.fabricante, l.modelo && !l.fabricante?.includes(l.modelo) ? l.modelo : '', l.poder_d ?? '?'].filter(Boolean).join(' ')}${l.torico ? ' tórico' : ''} → ${etiquetaModoLente(l.modo)}`),
+      ...p.sinGuardar.map((x) => `sin guardar: ${x}`),
+      ...p.interp.pendientes.filter((x) => !p.sinGuardar.length || !/falta/.test(x)).map((x) => `pendiente: ${x}`),
+    ].join(' · ');
+  const conteoModo = (m: LentePlanImport['modo']) => porInsertarCx.reduce((n, p) => n + p.plan.filter((l) => l.modo === m).length, 0);
+  const conteoFalta = (k: string) => porInsertarCx.filter((p) => p.faltantes.includes(k)).length;
+  const sinHoraCx = conteoFalta('hora');
+  if (sinHoraCx > 0) avisos.push(`${sinHoraCx} cirugía${sinHoraCx === 1 ? '' : 's'} agendada${sinHoraCx === 1 ? '' : 's'} sin hora (${listaFilas(porInsertarCx.filter((p) => p.faltantes.includes('hora')).map((p) => p.fila.numero))}): quedan en «Por completar».`);
+
   const resumenCx = {
     total: totalFilas,
     aImportar: porInsertarCx.length,
@@ -1052,6 +1416,9 @@ async function manejarPOST(request: Request) {
     conError: rechazos.length,
     doctoresNuevos: Array.from(doctoresNuevos.values()),
     pacientesNuevos: pacientesNuevos.size,
+    porCompletar: porInsertarCx.filter((p) => p.faltantes.length > 0).length,
+    faltantes: { hora: sinHoraCx, ojo: conteoFalta('ojo'), anestesia: conteoFalta('anestesia'), lente: conteoFalta('lente'), procedimiento: conteoFalta('procedimiento') },
+    lentes: { asignar: conteoModo('ASIGNAR'), solicitar: conteoModo('SOLICITAR'), compraDirecta: conteoModo('COMPRA_DIRECTA') },
   };
 
   if (!confirmar) {
@@ -1068,6 +1435,9 @@ async function manejarPOST(request: Request) {
         estado: p.data.estado as string,
         paciente_nuevo: p.pacienteNuevo,
         doctor_nuevo: p.doctorNuevo,
+        detalle: [p.data.ojo, p.data.procedimiento].filter(Boolean).join(' · ') || undefined,
+        faltantes: p.faltantes,
+        lentes: textoLentes(p) || undefined,
       })),
       pendientesDecision: pendientesDecision.map((x) => ({
         fila: x.p.fila.numero,
@@ -1133,28 +1503,36 @@ async function manejarPOST(request: Request) {
     else completadas++;
   }
   if (completadas > 0) avisos.push(`${completadas} cirugía${completadas === 1 ? '' : 's'} ya existente${completadas === 1 ? '' : 's'} se completó${completadas === 1 ? '' : 'ron'} con hora y/o anestesia del archivo (solo campos vacíos).`);
-  // Comentarios clínica (oct 2026): LIO del Excel → reserva de inventario o lente del hospital.
-  // Agendadas: reservan. Completadas (históricas): consumen lo que se indicó como usado.
-  const mapaLios = await cargarLiosInventario(supabase);
-  for (let i = 0; i < resultados.length; i++) {
-    const r = resultados[i];
-    if (!r.ok) continue;
-    const { p } = filasCx[i];
-    const estadoFila = p.data.estado as string;
-    if (estadoFila !== 'agendada' && estadoFila !== 'completada') continue;
-    const lentes = parsearLio(p.data.lio as string | null, p.data.marca_lio as string | null);
-    if (lentes.length === 0) continue;
-    await vincularLentesImportados(
-      supabase,
-      (r.row as { id: string }).id,
-      lentes,
-      estadoFila === 'completada',
-      mapaLios,
-      auth.user.id,
-      avisos,
-      p.fila.numero
-    );
-  }
+  // Lentes de cada cirugía (mismo plan que se mostró en la vista previa): asignar / solicitar / compra directa.
+  let lentesAsignados = 0;
+  let lentesPorSolicitar = 0;
+  let lentesCompraDirecta = 0;
+  const avisosLentes: string[] = [];
+  const idsInsertadas = resultados.map((r, i) => (r.ok ? { id: (r.row as { id: string }).id, p: filasCx[i].p } : null)).filter((x): x is { id: string; p: PendCx } => !!x && x.p.plan.length > 0);
+  await mapConLimite(idsInsertadas, 6, async ({ id, p }) => {
+    let plan = p.plan;
+    let r = await guardarPlanLentes(id, plan, { reservarPrimero: true });
+    if (!r.ok) {
+      // La pieza ya no está libre (otro usuario la reservó): ese lente pasa a «Solicitar».
+      const fallido = r.orden;
+      plan = plan.map((l) => (l.orden === fallido && l.modo === 'ASIGNAR' ? { ...l, modo: 'SOLICITAR' as const, inventario_item_id: null } : l));
+      await liberarLentes(id);
+      r = await guardarPlanLentes(id, plan, { reservarPrimero: true });
+      if (r.ok) avisosLentes.push(`Fila ${p.fila.numero}: el ${fallido.toLowerCase()} ya no tenía pieza libre; quedó por solicitar.`);
+    }
+    if (!r.ok) {
+      avisosLentes.push(`Fila ${p.fila.numero}: no se pudo guardar el plan de lentes (${r.error}). Captúralo en la cirugía.`);
+      return;
+    }
+    for (const l of plan) {
+      if (l.modo === 'ASIGNAR') lentesAsignados++;
+      else if (l.modo === 'SOLICITAR') lentesPorSolicitar++;
+      else lentesCompraDirecta++;
+    }
+    const primero = plan.find((l) => l.orden === 'PRIMERO' && l.modo === 'ASIGNAR' && l.inventario_item_id);
+    if (primero) await supabase.from('agenda_cirugias').update({ inventario_item_id: primero.inventario_item_id }).eq('id', id);
+  });
+  avisos.push(...avisosLentes);
   for (const lote of trozos(doctorRows, LOTE_INSERT)) {
     const { error } = await supabase.from('agenda_cirugia_doctores').insert(lote);
     if (error) handleSupabaseError(error, 'agenda.import.doctores');
@@ -1175,6 +1553,8 @@ async function manejarPOST(request: Request) {
     importadas,
     aplazadasImportadas,
     completadas,
+    lentes: { asignados: lentesAsignados, porSolicitar: lentesPorSolicitar, compraDirecta: lentesCompraDirecta },
+    porCompletar: porInsertarCx.filter((p) => p.faltantes.length > 0).length,
     omitidasDuplicadas: duplicados.length,
     errores: rechazos.length,
     doctoresCreados: docs.ids.size,
@@ -1188,68 +1568,59 @@ async function manejarPOST(request: Request) {
 
 export const POST = ruta('agenda/import#POST', manejarPOST);
 
-/** Texto de la columna ANESTESIA del Excel → valor de agenda_cirugias.anestesia. */
-function valorAnestesia(texto: string): string | null {
-  const t = texto.toUpperCase();
-  if (!t) return null;
-  if (t.includes('SEDAC')) return 'LOCAL_SEDACION';
-  if (t.includes('GENERAL')) return 'GENERAL';
-  if (t.includes('LOCAL')) return 'LOCAL';
-  return null;
-}
+type FilaItemInv = {
+  id: string;
+  marca?: string | null;
+  modelo?: string | null;
+  potencia_dioptrias?: number | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  sphere?: number | null;
+  stock: number | null;
+  estado?: string | null;
+  fecha_caducidad?: string | null;
+  expiration_date?: string | null;
+};
 
-type ItemLioInv = { id: string; marca: string | null; potencia_dioptrias: number | null; stock: number };
+/**
+ * Piezas de LIO del inventario y cuántas están libres (stock menos reservas activas de cirugías).
+ * Tolera esquema legado (marca/potencia_dioptrias) y nuevo (manufacturer/sphere).
+ */
+async function cargarInventarioLentes(supabase: Admin): Promise<{ piezas: PiezaInventario[]; libres: Map<string, number>; ok: boolean }> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const leer = (columnas: string, filtro: string) =>
+    leerPaginado<FilaItemInv>((d, h) =>
+      supabase.from('inventario_items').select(columnas).not(filtro, 'is', null).order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: FilaItemInv[] | null; error: unknown }>
+    );
+  let items: FilaItemInv[] | null = null;
+  try { items = await leer('id, marca, modelo, potencia_dioptrias, stock, estado, fecha_caducidad', 'potencia_dioptrias'); } catch { /* esquema nuevo */ }
+  if (!items) {
+    try { items = await leer('id, manufacturer, model, sphere, stock, estado, expiration_date', 'sphere'); } catch { items = null; }
+  }
+  if (!items) return { piezas: [], libres: new Map(), ok: false };
 
-/** Piezas de LIO con stock, indexadas por marca+poder (varias piezas posibles por clave). */
-async function cargarLiosInventario(supabase: Admin): Promise<Map<string, string[]>> {
-  const { data } = await supabase
-    .from('inventario_items')
-    .select('id, marca, potencia_dioptrias, stock')
-    .gt('stock', 0)
-    .not('potencia_dioptrias', 'is', null);
-  const mapa = new Map<string, string[]>();
-  for (const it of (data ?? []) as ItemLioInv[]) {
-    const k = claveLente(it.marca ?? '', it.potencia_dioptrias);
-    mapa.set(k, [...(mapa.get(k) ?? []), it.id]);
-  }
-  return mapa;
-}
+  const reservadas = new Map<string, number>();
+  try {
+    const filas = await leerPaginado<{ inventario_item_id: string | null }>((d, h) =>
+      supabase.from('cirugia_lentes').select('inventario_item_id').eq('estado', 'RESERVADO').not('inventario_item_id', 'is', null).order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: { inventario_item_id: string | null }[] | null; error: unknown }>
+    );
+    for (const f of filas) if (f.inventario_item_id) reservadas.set(f.inventario_item_id, (reservadas.get(f.inventario_item_id) ?? 0) + 1);
+  } catch { /* sin tabla de reservas: se usa el stock completo */ }
 
-async function vincularLentesImportados(
-  supabase: Admin,
-  cirugiaId: string,
-  lentes: ReturnType<typeof parsearLio>,
-  completada: boolean,
-  mapa: Map<string, string[]>,
-  usuarioId: string,
-  avisos: string[],
-  filaNumero: number
-): Promise<void> {
-  for (const l of lentes) {
-    const ids = l.poder != null ? mapa.get(claveLente(l.marca, l.poder)) ?? [] : [];
-    let reservado = false;
-    for (const itemId of ids) {
-      const r = await reservarLente({
-        cirugiaId, orden: l.orden, origen: 'INVENTARIO', inventarioItemId: itemId, fabricante: l.marca, poderD: l.poder,
-      });
-      if (r.ok) {
-        reservado = true;
-        if (l.orden === 'PRIMERO') {
-          await supabase.from('agenda_cirugias').update({ inventario_item_id: itemId }).eq('id', cirugiaId);
-        }
-        break;
-      }
-      if (r.codigo !== 'LENTE_SIN_DISPONIBLE') break;
-    }
-    if (!reservado) {
-      const r = await reservarLente({ cirugiaId, orden: l.orden, origen: 'HOSPITAL', fabricante: l.marca, poderD: l.poder });
-      if (!r.ok) avisos.push(`Fila ${filaNumero}: no se pudo registrar el lente ${l.orden} (${r.error}).`);
-      else if (ids.length > 0) avisos.push(`Fila ${filaNumero}: lente ${l.orden} (${l.marca} ${l.poder ?? ''}) sin piezas disponibles; se registró como lente del hospital.`);
-    }
+  const piezas: PiezaInventario[] = [];
+  const libres = new Map<string, number>();
+  for (const it of items) {
+    const caduca = it.fecha_caducidad ?? it.expiration_date ?? null;
+    const utilizable = (!it.estado || it.estado === 'DISPONIBLE') && (!caduca || String(caduca).slice(0, 10) > hoy);
+    const stock = Number(it.stock) || 0;
+    piezas.push({
+      id: it.id,
+      marca: it.marca ?? it.manufacturer ?? null,
+      modelo: it.modelo ?? it.model ?? null,
+      potencia: it.potencia_dioptrias ?? it.sphere ?? null,
+      stock: utilizable ? stock : 0,
+    });
+    libres.set(it.id, utilizable ? Math.max(0, stock - (reservadas.get(it.id) ?? 0)) : 0);
   }
-  if (completada) {
-    const requeridos: OrdenLente[] = ['PRIMERO'];
-    const res = await completarLentesCirugia(cirugiaId, requeridos, usuarioId);
-    if (!res.ok) avisos.push(`Fila ${filaNumero}: lente no descontado del inventario (${res.error}).`);
-  }
+  return { piezas, libres, ok: true };
 }

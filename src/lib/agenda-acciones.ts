@@ -4,11 +4,13 @@
  */
 import type { AgendaCirugia } from '@/types';
 import { puedeGestionarAgenda } from '@/lib/permisos-agenda';
+import { puedeConfirmarse } from '@/lib/confirmacion-cita';
 
 // «Aplazar» se eliminó: aplazar y reagendar son lo mismo; solo queda reagendar.
-export type AccionRapida = 'reagendar' | 'cancelar';
+export type AccionRapida = 'confirmar' | 'reagendar' | 'cancelar';
 
 export const ETIQUETA_ACCION: Record<AccionRapida, string> = {
+  confirmar: 'Confirmar',
   reagendar: 'Reagendar',
   cancelar: 'Cancelar',
 };
@@ -33,4 +35,18 @@ export function accionesDisponibles(
   if (evento.estado === 'agendada') return ['reagendar', 'cancelar'];
   if (evento.estado === 'reagendada') return ['reagendar'];
   return [];
+}
+
+/**
+ * Acciones del popover/hoja móvil: «Confirmar» (asistencia, con medio) primero si la cita
+ * está abierta y aún no confirmada, seguida de las acciones normales.
+ */
+export function accionesConConfirmar(
+  evento: Pick<AgendaCirugia, 'tipo' | 'estado' | 'confirmacion'>,
+  userRol: string
+): AccionRapida[] {
+  const base = accionesDisponibles(evento, userRol);
+  if (base.length === 0 && !puedeGestionarAgenda(userRol)) return base;
+  const confirmable = puedeGestionarAgenda(userRol) && puedeConfirmarse(evento.estado) && evento.confirmacion !== 'confirmada';
+  return confirmable ? ['confirmar', ...base] : base;
 }

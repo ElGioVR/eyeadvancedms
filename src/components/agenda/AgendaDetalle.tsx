@@ -5,13 +5,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { enviarJSON, mensajeDeError } from '@/lib/fetcher';
 import { StickyNote, Calendar, Clock, MapPin, User, Stethoscope, AlertTriangle, Eye, Timer, Building2, CheckCircle2, X, FileSpreadsheet, CalendarPlus } from 'lucide-react';
-import { fmtDate, fmtTime, tipoConfig, estadoConfig, estadoLabels, fmtDateShort, urlAgendarConsulta } from '@/components/agenda/agenda-comun';
+import { fmtDate, fmtTime, tipoConfig, estadoVisual, fmtDateShort, urlAgendarConsulta } from '@/components/agenda/agenda-comun';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { cn } from '@/lib/utils';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { estadoCerrado } from '@/lib/permisos-edicion';
-import { type AccionRapida, accionesDisponibles, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
+import { ETIQUETA_MEDIO, estaConfirmada } from '@/lib/confirmacion-cita';
+import { type AccionRapida, accionesConConfirmar, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { type TelefonoPaciente } from '@/lib/telefonos-paciente';
@@ -90,9 +91,9 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
             edad={cirugia.paciente_edad}
           />
           <div className="flex items-center gap-2 mt-1">
-            <span className={cn('inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-              <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
-              {estadoLabels[cirugia.estado]}
+            <span className={cn('inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full', estadoVisual(cirugia).lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', estadoVisual(cirugia).dot)} />
+              {estadoVisual(cirugia).label}
             </span>
             {cirugia.fecha && <span className="text-xs text-muted">{fmtDateShort(cirugia.fecha)}</span>}
           </div>
@@ -149,9 +150,11 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
   const [updating, setUpdating] = useState(false);
   const [completando, setCompletando] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const completandoRef = useRef(false);
+  completandoRef.current = completando;
   const [adjustedPos, setAdjustedPos] = useState(position);
   const esCirugia = !cirugia.tipo || cirugia.tipo === 'cirugia';
-  const acciones = accionesDisponibles(cirugia, userRol);
+  const acciones = accionesConConfirmar(cirugia, userRol);
   // Contacto del paciente para WhatsApp/correo: solo al abrir la ventana (payload mínimo).
   const { data: contacto } = useSWR<{ telefono: string | null; telefonos?: TelefonoPaciente[]; email: string | null }>(
     cirugia.paciente_id && puedeGestionarAgenda(userRol) ? `/api/pacientes/${cirugia.paciente_id}/contacto` : null,
@@ -174,6 +177,10 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
+      // El modal de completar vive fuera de la tarjeta: un clic dentro de él
+      // no debe cerrar la tarjeta (se desmontaría el modal a medio llenado).
+      if (completandoRef.current) return;
+      if ((e.target as Element | null)?.closest?.('[role="dialog"]')) return;
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', handler);
@@ -213,7 +220,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="min-w-0">
           <div className="flex items-center gap-3 min-w-0">
-            <span className={cn('h-3 w-3 rounded-full shrink-0', estadoConfig[cirugia.estado].dot)} />
+            <span className={cn('h-3 w-3 rounded-full shrink-0', estadoVisual(cirugia).dot)} />
             <h3 className="text-base font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
           </div>
           <FichaPaciente
@@ -333,10 +340,15 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
       {/* Status + Actions */}
       <div className="px-4 pb-4 pt-2 border-t border-line/70 space-y-2">
         <div className="flex items-center gap-2">
-          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoConfig[cirugia.estado].lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', estadoConfig[cirugia.estado].dot)} />
-            {estadoLabels[cirugia.estado]}
+          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full', estadoVisual(cirugia).lightBg, tipoConfig[cirugia.tipo || 'cirugia'].text)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', estadoVisual(cirugia).dot)} />
+            {estadoVisual(cirugia).label}
           </span>
+          {estaConfirmada(cirugia) && cirugia.confirmacion_medio && (
+            <span className="text-[10px] font-medium text-muted" title="Medio por el que se confirmó">
+              por {ETIQUETA_MEDIO[cirugia.confirmacion_medio]}
+            </span>
+          )}
           <div className="flex-1" />
           {esCirugia && !agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
             <button onClick={() => setCompletando(true)} disabled={updating}
@@ -359,7 +371,9 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
                   'rounded-lg border px-2 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50',
                   a === 'cancelar'
                     ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10'
-                    : 'border-line text-fg-2 hover:bg-surface-2'
+                    : a === 'confirmar'
+                      ? 'border-pink-300 bg-pink-400/10 text-pink-700 hover:bg-pink-400/20 dark:border-pink-400/40 dark:text-pink-300'
+                      : 'border-line text-fg-2 hover:bg-surface-2'
                 )}>
                 {ETIQUETA_ACCION[a]}
               </button>

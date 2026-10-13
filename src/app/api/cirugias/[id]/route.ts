@@ -159,6 +159,14 @@ async function manejarGET(
     const participantes = { data: conHorario(participantesBase.data as { id: string }[] | null, horariosParticipantes.data as Horario[] | null) };
     const personal = { data: conHorario(personalBase.data as { id: string }[] | null, horariosPersonal.data as Horario[] | null) };
     if (clinicos.data) Object.assign(cirugia, clinicos.data);
+    // Cierre de la cirugía (dx definitivo, realizada, complicaciones): consulta aparte y tolerante
+    // a que el parche de columnas aún no esté aplicado.
+    const cierre = await supabase
+      .from('agenda_cirugias')
+      .select('diagnostico_definitivo, cirugia_realizada, complicaciones')
+      .eq('id', id)
+      .maybeSingle();
+    if (!cierre.error && cierre.data) Object.assign(cirugia, cierre.data);
     // Teléfonos del paciente para WhatsApp (varios números, mig. 1800000000470).
     const pacienteId = cirugia.paciente_id as string | null;
     if (pacienteId && cirugia.pacientes && typeof cirugia.pacientes === 'object') {

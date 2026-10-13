@@ -84,6 +84,9 @@ interface CirugiaData {
   tiempo_estimado?: string | null;
   tiempo_estancia?: string | null;
   procedimiento?: string | null;
+  diagnostico_definitivo?: string | null;
+  cirugia_realizada?: string | null;
+  complicaciones?: string | null;
   lio_diseno?: string | null;
   lio_torico?: boolean | null;
   especialidad?: { nombre: string } | null;
@@ -480,6 +483,9 @@ export default function CirugiaDetailPage() {
               { label: 'Origen', value: cirugia.origen?.nombre },
               { label: 'Procedencia', value: cirugia.procedencia },
               { label: 'Diagnóstico', value: cirugia.diagnostico, full: true },
+              { label: 'Diagnóstico definitivo', value: cirugia.diagnostico_definitivo, full: true },
+              { label: 'Cirugía realizada', value: cirugia.cirugia_realizada, full: true },
+              { label: 'Complicaciones', value: cirugia.complicaciones, full: true },
               { label: 'Motivo de consulta', value: cirugia.motivo_consulta, full: true },
             ],
           },
@@ -644,6 +650,31 @@ export default function CirugiaDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Cierre de la cirugía (formulario «Completar cirugía») */}
+          {(cirugia.estado === 'completada' || cirugia.diagnostico_definitivo || cirugia.cirugia_realizada || cirugia.complicaciones) && (() => {
+            type LenteRes = { orden?: string; fabricante?: string | null; modelo?: string | null; poder_d?: number | null };
+            const res = historial.find((h) => h.accion === 'LENTES_RESUELTOS')?.detalle as { usados?: LenteRes[]; liberados?: LenteRes[] } | null | undefined;
+            const etq = (l: LenteRes) => `${l.orden ?? ''}: ${[l.fabricante, l.modelo].filter(Boolean).join(' ') || 'Lente'}${l.poder_d != null ? ` +${l.poder_d} D` : ''}`;
+            return (
+              <div className="bg-surface border border-line rounded-xl p-6">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
+                  <FileText className="h-4 w-4 text-emerald-600" /> Cierre de la cirugía
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <Field label="Diagnóstico definitivo" value={cirugia.diagnostico_definitivo} full />
+                  <Field label="Cirugía realizada" value={cirugia.cirugia_realizada} full />
+                  <Field label="Complicaciones" value={cirugia.complicaciones} full />
+                  {res && (
+                    <>
+                      <Field label="Lentes usados" value={res.usados?.length ? res.usados.map(etq).join(' · ') : 'Ninguno'} full />
+                      {!!res.liberados?.length && <Field label="Lentes liberados" value={res.liberados.map(etq).join(' · ')} full />}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 3. LIO */}
           <div className="bg-surface border border-line rounded-xl p-6">

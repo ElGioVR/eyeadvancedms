@@ -14,7 +14,16 @@ export interface ImportResumen {
   conError: number;
   doctoresNuevos: string[];
   pacientesNuevos: number;
+  /** Filas que quedarán en «Por completar» (hora, ojo, anestesia, lente, doctor, aseguradora…). */
+  porCompletar?: number;
+  faltantes?: Record<string, number>;
+  /** Cirugías: qué pasará con los lentes. */
+  lentes?: { asignar: number; solicitar: number; compraDirecta: number };
 }
+
+const ETIQUETA_FALTANTE_IMPORT: Record<string, string> = {
+  hora: 'hora', ojo: 'ojo', anestesia: 'anestesia', lente: 'lente', procedimiento: 'procedimiento', doctor: 'doctor', aseguradora: 'aseguradora',
+};
 
 export interface ImportFilaPreview {
   fila: number;
@@ -25,6 +34,9 @@ export interface ImportFilaPreview {
   estado?: string;
   paciente_nuevo: boolean;
   doctor_nuevo: boolean;
+  detalle?: string;
+  faltantes?: string[];
+  lentes?: string;
 }
 
 export interface ImportRechazo { fila: number; hoja?: string; motivo: string }
@@ -54,6 +66,8 @@ export interface ImportPreviewResp {
 export interface ImportResultado {
   importadas: number;
   aplazadasImportadas?: number;
+  lentes?: { asignados: number; porSolicitar: number; compraDirecta: number };
+  porCompletar?: number;
   omitidasDuplicadas: number;
   errores: number;
   doctoresCreados: number;
@@ -216,19 +230,43 @@ export function ImportAgenda({
           {(r.pacientesNuevos > 0 || r.doctoresNuevos.length > 0) && (
             <p className="text-xs text-muted">Los pacientes y doctores nuevos quedarán marcados con «Completar información» para terminar su ficha.</p>
           )}
+          {(r.lentes || (r.porCompletar ?? 0) > 0) && (
+            <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-xs text-fg-2">
+              {r.lentes && (
+                <p><b>Lentes:</b> {r.lentes.asignar} por asignar del inventario · {r.lentes.solicitar} por solicitar (sin stock libre) · {r.lentes.compraDirecta} de compra directa. Lo que no se pudo leer queda en «Por completar».</p>
+              )}
+              {(r.porCompletar ?? 0) > 0 && (
+                <p>
+                  <b>Quedarán en «Por completar» {r.porCompletar}:</b>{' '}
+                  {Object.entries(r.faltantes ?? {}).filter(([, n]) => (n ?? 0) > 0).map(([k, n]) => `${n} sin ${ETIQUETA_FALTANTE_IMPORT[k] ?? k}`).join(' · ') || 'datos faltantes'}.
+                </p>
+              )}
+            </div>
+          )}
           <div className="max-h-56 overflow-y-auto rounded-lg border border-line divide-y divide-line/70 text-xs">
             {preview.filas.map((f) => (
-              <div key={f.fila} className="flex items-center gap-3 px-3 py-2">
-                <span className="text-muted w-14 shrink-0">{f.fecha ? f.fecha.slice(5) : 'Sin fecha'}{f.hora ? ` ${f.hora.slice(0, 5)}` : ''}</span>
-                <span className="font-medium text-fg truncate flex-1">
-                  {f.paciente}
-                  {f.paciente_nuevo && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
-                </span>
-                <span className="text-muted truncate w-32">
-                  {f.doctor || '—'}
-                  {f.doctor_nuevo && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
-                </span>
-                {f.estado && f.estado !== 'agendada' && <span className="text-[10px] font-bold uppercase text-muted w-16">{f.estado}</span>}
+              <div key={f.fila} className="px-3 py-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-muted w-14 shrink-0">{f.fecha ? f.fecha.slice(5) : 'Sin fecha'}{f.hora ? ` ${f.hora.slice(0, 5)}` : ''}</span>
+                  <span className="font-medium text-fg truncate flex-1">
+                    {f.paciente}
+                    {f.paciente_nuevo && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
+                  </span>
+                  <span className="text-muted truncate w-32">
+                    {f.doctor || '—'}
+                    {f.doctor_nuevo && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">NUEVO</span>}
+                  </span>
+                  {f.estado && f.estado !== 'agendada' && <span className="text-[10px] font-bold uppercase text-muted w-16">{f.estado}</span>}
+                </div>
+                {(f.detalle || f.lentes || (f.faltantes && f.faltantes.length > 0)) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1 pl-[4.25rem] text-[11px] text-muted">
+                    {f.detalle && <span>{f.detalle}</span>}
+                    {f.lentes && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-800 dark:bg-sky-500/10 dark:text-sky-200">{f.lentes}</span>}
+                    {f.faltantes?.map((k) => (
+                      <span key={k} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">falta {ETIQUETA_FALTANTE_IMPORT[k] ?? k}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {r.aImportar > preview.filas.length && <p className="text-center text-muted py-1.5">… y {r.aImportar - preview.filas.length} más</p>}
@@ -286,6 +324,12 @@ export function ImportAgenda({
             <div className="rounded bg-amber-50 p-2 dark:bg-amber-500/10"><span className="font-bold text-amber-700 dark:text-amber-300">{result.pacientesCreados}</span> pacientes nuevos</div>
             <div className="rounded bg-amber-50 p-2 dark:bg-amber-500/10"><span className="font-bold text-amber-700 dark:text-amber-300">{result.doctoresCreados}</span> doctores nuevos</div>
           </div>
+          {(result.lentes || (result.porCompletar ?? 0) > 0) && (
+            <div className="rounded-lg border border-line bg-surface-2 p-3 text-xs text-fg-2 space-y-1">
+              {result.lentes && <p><b>Lentes:</b> {result.lentes.asignados} asignados del inventario · {result.lentes.porSolicitar} por solicitar (ya están en el plan de resurtimiento) · {result.lentes.compraDirecta} de compra directa.</p>}
+              {(result.porCompletar ?? 0) > 0 && <p><b>{result.porCompletar}</b> quedaron en <b>Pendientes → Por completar</b> (hora, ojo, anestesia, lente, aseguradora…).</p>}
+            </div>
+          )}
           {(result.pacientesCreados > 0 || result.doctoresCreados > 0) && (
             <p className="text-xs text-muted">Complétalos en Pacientes y en Configuración → Personal médico (aparecen con «Completar información»).</p>
           )}

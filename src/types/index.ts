@@ -256,6 +256,10 @@ export interface AgendaCirugia {
   tipo_consulta_label?: string | null;
   /** Texto de la tarjeta: procedimiento (+ojo), estudios o tipo de consulta. */
   detalle?: string | null;
+  /** Confirmación de asistencia: null | 'enviada' | 'confirmada' (+ medio y fecha). */
+  confirmacion?: 'enviada' | 'confirmada' | null;
+  confirmacion_medio?: 'whatsapp' | 'telefono' | 'correo' | 'presencial' | null;
+  confirmacion_at?: string | null;
 }
 
 export interface AgendaCirugiaImportRow {

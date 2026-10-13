@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, MessageCircle, Phone, Mail, UserCheck, type LucideIcon } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import FormField from '@/components/ui/FormField';
 import SelectorHoraSlot from '@/components/agenda/SelectorHoraSlot';
@@ -24,8 +24,9 @@ import type { AgendaCirugia } from '@/types';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { TIPOS_CONSULTA_AGENDA, opcionTipoConsulta, type TipoConsultaAgenda } from '@/lib/catalogos/tipos-consulta';
 import { ETIQUETA_ACCION, esEventoConsulta, type AccionRapida } from '@/lib/agenda-acciones';
+import { MEDIOS_CONFIRMACION, ETIQUETA_MEDIO, type MedioConfirmacion } from '@/lib/confirmacion-cita';
 
-export { ETIQUETA_ACCION, accionesDisponibles, type AccionRapida } from '@/lib/agenda-acciones';
+export { ETIQUETA_ACCION, accionesDisponibles, accionesConConfirmar, type AccionRapida } from '@/lib/agenda-acciones';
 
 const esConsulta = esEventoConsulta;
 
@@ -68,7 +69,131 @@ function mensaje(err: unknown): string {
 
 /* ───────── Modal de acción (reagendar / cancelar) ───────── */
 
-export function AccionRapidaModal({
+const ICONO_MEDIO: Record<MedioConfirmacion, LucideIcon> = {
+  whatsapp: MessageCircle,
+  telefono: Phone,
+  correo: Mail,
+  presencial: UserCheck,
+};
+
+/**
+ * Confirmar la asistencia a una cita (consulta, estudio o cirugía) indicando por qué medio
+ * confirmó el paciente. Lo usan la agenda (popover y móvil) y la bandeja de pendientes.
+ */
+export function ConfirmarCitaModal({
+  cita,
+  onClose,
+  onDone,
+}: {
+  cita: { id: string; tipo: 'cirugia' | 'consulta' | 'estudio'; paciente: string; fecha?: string | null; hora?: string | null };
+  onClose: () => void;
+  onDone: (medio: MedioConfirmacion) => void;
+}) {
+  const [medio, setMedio] = useState<MedioConfirmacion | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const guardar = async () => {
+    if (!medio || guardando) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      await enviarJSON('/api/agenda/bandeja', 'PATCH', { tipo: cita.tipo, id: cita.id, confirmacion: 'confirmada', medio });
+      onDone(medio);
+    } catch (err) {
+      setError(mensaje(err));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-md">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-bold text-fg">
+            Confirmar {cita.tipo === 'cirugia' ? 'cirugía' : cita.tipo === 'estudio' ? 'estudio' : 'consulta'}
+          </h3>
+          <p className="text-sm text-muted">
+            {cita.paciente}
+            {cita.fecha ? ` · ${cita.fecha}` : ''}
+            {cita.hora ? ` · ${cita.hora.slice(0, 5)}` : ''}
+          </p>
+        </div>
+        <fieldset>
+          <legend className="mb-2 text-sm font-semibold text-fg">¿Por qué medio confirmó el paciente?</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {MEDIOS_CONFIRMACION.map((m) => {
+              const Icono = ICONO_MEDIO[m];
+              const activo = medio === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={activo}
+                  onClick={() => setMedio(m)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-colors',
+                    activo
+                      ? 'border-pink-400 bg-pink-400/10 text-pink-700 dark:text-pink-300'
+                      : 'border-line text-fg-2 hover:bg-surface-2'
+                  )}
+                >
+                  <Icono className="h-4 w-4" aria-hidden /> {ETIQUETA_MEDIO[m]}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+        {error && (
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2">
+            Volver
+          </button>
+          <button
+            onClick={guardar}
+            disabled={!medio || guardando}
+            className="inline-flex items-center gap-2 rounded-lg bg-pink-500 px-4 py-2 text-sm font-bold text-white hover:bg-pink-600 disabled:opacity-50"
+          >
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
+            Confirmar cita
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function AccionRapidaModal(props: {
+  evento: AgendaCirugia;
+  accion: AccionRapida;
+  onClose: () => void;
+  onDone: (cambios: Partial<AgendaCirugia>, texto: string) => void;
+}) {
+  const { evento, accion, onClose, onDone } = props;
+  if (accion === 'confirmar') {
+    return (
+      <ConfirmarCitaModal
+        cita={{ id: evento.id, tipo: evento.tipo || 'cirugia', paciente: evento.nombre_paciente, fecha: evento.fecha, hora: evento.hora }}
+        onClose={onClose}
+        onDone={(medio) =>
+          onDone(
+            { confirmacion: 'confirmada', confirmacion_medio: medio, confirmacion_at: new Date().toISOString() },
+            `Cita confirmada (${ETIQUETA_MEDIO[medio]})`
+          )
+        }
+      />
+    );
+  }
+  return <AccionRapidaModalBase {...props} accion={accion} />;
+}
+
+function AccionRapidaModalBase({
   evento,
   accion,
   onClose,

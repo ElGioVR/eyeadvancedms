@@ -445,3 +445,87 @@ export function faltantesDoctor(d: { nombre?: string | null; apellido?: string |
   if (!d.especialidad) f.push('especialidad');
   return f;
 }
+
+/* ─────────── Limpieza de campos del archivo (importación pulida) ─────────── */
+
+/**
+ * Teléfono del archivo → solo dígitos, sin lada de país (52/521/1). «6611 0737 55» → «6611073755».
+ * Devuelve null si no hay al menos 7 dígitos.
+ */
+export function normalizarTelefonoImport(v: string | null | undefined): string | null {
+  let d = (v ?? '').replace(/\D/g, '');
+  if (d.length === 13 && d.startsWith('521')) d = d.slice(3);
+  else if (d.length === 12 && d.startsWith('52')) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+  if (d.length < 7) return null;
+  return d.slice(0, 20);
+}
+
+const aMinutos = (h: string) => parseInt(h.slice(0, 2), 10) * 60 + parseInt(h.slice(3, 5), 10);
+const deMinutos = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
+
+/**
+ * Hora de egreso coherente con la de ingreso. Si termina antes de empezar suele ser un error de
+ * AM/PM («1:30 PM» → «2:00 AM»): se corrige sumando 12 h cuando así queda una cita de hasta 4 h.
+ */
+export function corregirHoraFin(
+  inicio: string | null,
+  fin: string | null,
+): { hora: string | null; corregida: boolean; descartada: boolean } {
+  if (!fin) return { hora: null, corregida: false, descartada: false };
+  if (!inicio) return { hora: null, corregida: false, descartada: true };
+  const i = aMinutos(inicio);
+  const f = aMinutos(fin);
+  if (f > i) return { hora: fin, corregida: false, descartada: false };
+  const alt = f + 12 * 60;
+  if (f < 12 * 60 && alt > i && alt - i <= 4 * 60) return { hora: deMinutos(alt), corregida: true, descartada: false };
+  return { hora: null, corregida: false, descartada: true };
+}
+
+/** Texto de ANESTESIA del Excel → valor de agenda_cirugias.anestesia (o null + texto sobrante). */
+export function anestesiaImport(texto: string | null | undefined): { valor: string | null; sobrante: string | null } {
+  const t = claveTexto(texto ?? '');
+  if (!t) return { valor: null, sobrante: null };
+  if (/SEDAC/.test(t)) return { valor: 'LOCAL_SEDACION', sobrante: null };
+  if (/GENERAL/.test(t)) return { valor: 'GENERAL', sobrante: null };
+  if (/PERIBULBAR|RETROBULBAR|TOPICA|LOCAL/.test(t)) return { valor: 'LOCAL', sobrante: null };
+  return { valor: null, sobrante: limpiarEspacios(texto ?? '') };
+}
+
+/**
+ * Fecha de nacimiento descartada si es futura o no cuadra con la edad escrita (±2 años);
+ * típico de celdas con día/mes cambiados o capturadas con el año equivocado.
+ */
+export function fechaNacimientoCoherente(
+  fnac: string | null,
+  edad: number | null,
+  hoy: string,
+): { fecha: string | null; descartada: boolean } {
+  if (!fnac) return { fecha: null, descartada: false };
+  if (fnac > hoy) return { fecha: null, descartada: true };
+  if (edad !== null) {
+    const [ay, am, ad] = fnac.split('-').map(Number);
+    const [hy, hm, hd] = hoy.split('-').map(Number);
+    const anios = hy - ay - (hm < am || (hm === am && hd < ad) ? 1 : 0);
+    if (Math.abs(anios - edad) > 2) return { fecha: null, descartada: true };
+  }
+  return { fecha: fnac, descartada: false };
+}
+
+/** Columnas CONSULTA / TIPO DE CONSULTA del archivo → valores de BD. REVISIÓN histórica = subsecuente. */
+export function tipoConsultaImport(
+  consulta: string | null | undefined,
+  tipoVisita: string | null | undefined,
+  conProcedimiento: boolean,
+  conEstudio: boolean,
+): { tipo_consulta: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO'; tipo_visita: 'PRIMERA_VEZ' | 'SUBSECUENTE' } {
+  const c = claveTexto(consulta ?? '');
+  const v = claveTexto(tipoVisita ?? '');
+  let tipo: 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO';
+  if (/ESTUDIO/.test(c)) tipo = 'ESTUDIO';
+  else if (/PROCED/.test(c)) tipo = 'PROCEDIMIENTO';
+  else if (c) tipo = 'CONSULTA';
+  else tipo = conProcedimiento ? 'PROCEDIMIENTO' : conEstudio ? 'ESTUDIO' : 'CONSULTA';
+  const subsecuente = /SUBSEC|RETORNO|REVIS/.test(v) || /REVIS|SUBSEC/.test(c);
+  return { tipo_consulta: tipo, tipo_visita: subsecuente ? 'SUBSECUENTE' : 'PRIMERA_VEZ' };
+}
