@@ -1,28 +1,26 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { EnlaceVolver } from '@/components/layout/RutaNavegacion';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, User, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
+import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import BotonesExportar from '@/components/ui/BotonesExportar';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
 import Skeleton from '@/components/ui/Skeleton';
 import { useUser } from '@/hooks/useUser';
 import { useInvalidar } from '@/hooks/useFetch';
-import { useEspecialidades } from '@/hooks/useEspecialidades';
-import { TIPOS_CONSULTA_AGENDA, etiquetaTipoConsulta, tipoAgendaDesdeBd, valoresBdTipoConsulta, type TipoConsultaAgenda } from '@/lib/catalogos/tipos-consulta';
+import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 import { enviarJSON } from '@/lib/fetcher';
 import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
-import FichaPaciente from '@/components/ui/FichaPaciente';
 import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
-import EditarServiciosConsulta, { type ServicioEditable } from '@/components/consultations/EditarServiciosConsulta';
-import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
+import { type ServicioEditable } from '@/components/consultations/EditarServiciosConsulta';
 import Link from 'next/link';
+import HojaMembretada from '@/components/print/HojaMembretada';
 import AgendarEstudioModal from '@/components/consultations/AgendarEstudioModal';
 import ConsultaAccionesFab from '@/components/consultations/ConsultaAccionesFab';
 
@@ -276,17 +274,7 @@ export default function ConsultaDetailPage() {
   } | null>(null);
   const [edadPaciente, setEdadPaciente] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editCosto, setEditCosto] = useState('');
-  const [editNotas, setEditNotas] = useState('');
-  const [editDiagnostico, setEditDiagnostico] = useState('');
-  const [editandoServicios, setEditandoServicios] = useState(false);
-  // Punto II: especialidad y tipo de consulta editables
-  const [editEspecialidadId, setEditEspecialidadId] = useState('');
-  const [editTipo, setEditTipo] = useState<TipoConsultaAgenda>('PRIMERA');
-  const { especialidades } = useEspecialidades();
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const irAEditar = () => router.push(`/consultas/${id}/editar`);
   const [completing, setCompleting] = useState(false);
 
   /**
@@ -339,30 +327,6 @@ export default function ConsultaDetailPage() {
     }
   }
 
-  function startEditing() {
-    setEditCosto(String(consulta?.costo_total ?? 0));
-    setEditNotas(consulta?.notas || '');
-    setEditDiagnostico(consulta?.diagnostico || '');
-    setEditEspecialidadId(consulta?.especialidad_id || '');
-    setEditTipo(tipoAgendaDesdeBd(consulta?.tipo_consulta, consulta?.tipo_visita));
-    setEditError(null);
-    setEditing(true);
-  }
-
-  // Enlace "Editar" desde la agenda: abre directo en modo edición (?editar=1).
-  const autoEditRef = useRef(false);
-  useEffect(() => {
-    if (autoEditRef.current || !consulta) return;
-    if (new URLSearchParams(window.location.search).get('editar') !== '1') return;
-    const rol = user?.rol;
-    const puede = (rol === 'admin' || rol === 'doctor' || rol === 'recepcionista' || rol === 'enfermero')
-      && consulta.estatus !== 'CANCELADA' && !(rol === 'enfermero' && consulta.estatus === 'COMPLETADA');
-    if (!puede) return;
-    autoEditRef.current = true;
-    startEditing();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consulta, user?.rol]);
-
   async function handleComplete() {
     if (completing) return;
     setCompleting(true);
@@ -376,47 +340,6 @@ export default function ConsultaDetailPage() {
     }
   }
 
-  async function handleSaveEdit() {
-    if (!consulta || savingEdit) return;
-    const body: Record<string, unknown> = {};
-    if ((consulta.notas || '') !== editNotas) body.notas = editNotas;
-    if ((consulta.diagnostico || '') !== editDiagnostico) body.diagnostico = editDiagnostico.trim() || null;
-    if ((consulta.especialidad_id || '') !== editEspecialidadId) body.especialidad_id = editEspecialidadId || null;
-    if (tipoAgendaDesdeBd(consulta.tipo_consulta, consulta.tipo_visita) !== editTipo) {
-      Object.assign(body, valoresBdTipoConsulta(editTipo));
-    }
-    if (!esEnfermera && consulta.estatus_pago !== 'PAGADO') {
-      const costo = Number(editCosto);
-      if (!Number.isFinite(costo) || costo < 0) {
-        setEditError('Costo total inválido');
-        return;
-      }
-      if (costo !== consulta.costo_total) body.costo_total = costo;
-    }
-    if (Object.keys(body).length === 0) {
-      setEditing(false);
-      setEditError(null);
-      return;
-    }
-    setSavingEdit(true);
-    setEditError(null);
-    try {
-      const optimista: Partial<ConsultaDetalle> = { ...(body as Partial<ConsultaDetalle>) };
-      if ('especialidad_id' in body) {
-        optimista.especialidad = especialidades.find((e) => e.id === body.especialidad_id)?.nombre ?? null;
-      }
-      await patchConsulta(body, optimista);
-      setEditing(false);
-      toast('Cambios guardados');
-    } catch (err) {
-      const msg = err instanceof Error && err.message ? err.message : 'Error al guardar';
-      setEditError(msg);
-      toast(msg, 'error');
-    } finally {
-      setSavingEdit(false);
-    }
-  }
-
   if (loading && !consulta) {
     return <ConsultaDetailSkeleton />;
   }
@@ -425,9 +348,7 @@ export default function ConsultaDetailPage() {
     return (
       <div className="text-center py-12 animate-fadeIn">
         <p className="text-gray-500 dark:text-gray-400">{error || 'Consulta no encontrada'}</p>
-        <button onClick={() => router.push('/agenda')} className="mt-4 text-primary-600 hover:text-primary-700 text-sm font-semibold">
-          Volver a Consultas
-        </button>
+        <EnlaceVolver porDefecto={{ href: '/agenda', label: 'Agenda' }} className="mt-4 inline-block text-primary-600 hover:text-primary-700 text-sm font-semibold" />
       </div>
     );
   }
@@ -444,7 +365,7 @@ export default function ConsultaDetailPage() {
       <BarraRevalidando activo={validandoDetalle} className="-top-2 no-print" />
       <PageHeader
         title={`Consulta ${consulta.folio || consulta.id.slice(0, 8)}`}
-        subtitle={`${consulta.paciente || 'Sin paciente'} — ${consulta.fecha}`}
+        subtitle={consulta.fecha}
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -454,40 +375,6 @@ export default function ConsultaDetailPage() {
             >
               <Printer className="h-4 w-4" /> Imprimir
             </button>
-            <BotonesExportar
-              crear={() => {
-                const c = consulta;
-                const est = (n: 1 | 2 | 3) => {
-                  const nombre = n === 1 ? c.estudio_1 : n === 2 ? c.estudio_2 : c.estudio_3;
-                  const doc = n === 1 ? c.est1_doctor : n === 2 ? c.est2_doctor : c.est3_doctor;
-                  return nombre ? `${nombre}${doc ? ` (${doc})` : ''}` : '';
-                };
-                return {
-                  titulo: `Consulta ${c.folio || c.id.slice(0, 8)}`,
-                  subtitulo: `${c.paciente || 'Sin paciente'} — ${c.fecha}`,
-                  nombreArchivo: `consulta-${c.folio || c.id.slice(0, 8)}`,
-                  filas: [
-                    { seccion: 'Paciente', campo: 'Nombre', valor: c.paciente || '' },
-                    { seccion: 'Paciente', campo: 'Expediente', valor: c.paciente_expediente ?? '' },
-                    { seccion: 'Consulta', campo: 'Fecha', valor: c.fecha ?? '' },
-                    { seccion: 'Consulta', campo: 'Hora', valor: [c.hora_inicio, c.hora_fin].filter(Boolean).join(' - ') },
-                    { seccion: 'Consulta', campo: 'Doctor', valor: c.doctor ?? '' },
-                    { seccion: 'Consulta', campo: 'Especialidad', valor: c.especialidad ?? '' },
-                    { seccion: 'Consulta', campo: 'Tipo', valor: c.tipo_consulta ?? '' },
-                    { seccion: 'Consulta', campo: 'Diagnóstico', valor: c.diagnostico ?? '' },
-                    { seccion: 'Estudios', campo: 'Estudio 1', valor: est(1) },
-                    { seccion: 'Estudios', campo: 'Estudio 2', valor: est(2) },
-                    { seccion: 'Estudios', campo: 'Estudio 3', valor: est(3) },
-                    { seccion: 'Procedimiento', campo: 'Procedimiento', valor: c.procedimiento ? `${c.procedimiento}${c.proc_doctor ? ` (${c.proc_doctor})` : ''}` : '' },
-                    { seccion: 'Pago', campo: 'Estatus', valor: c.estatus ?? '' },
-                    { seccion: 'Pago', campo: 'Costo total', valor: c.costo_total != null ? String(c.costo_total) : '' },
-                    { seccion: 'Pago', campo: 'Pagado', valor: c.monto_pagado != null ? String(c.monto_pagado) : '' },
-                    { seccion: 'Pago', campo: 'Método de pago', valor: c.metodo_pago ?? '' },
-                    { seccion: 'Notas', campo: 'Notas', valor: c.notas ?? '' },
-                  ],
-                };
-              }}
-            />
             <EnviarPaciente
               cita={{
                 tipo: 'consulta',
@@ -521,7 +408,7 @@ export default function ConsultaDetailPage() {
                 <Scissors className="h-4 w-4" /> Crear cirugía
               </button>
             )}
-            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && !editing && (
+            {(user?.rol === 'admin' || user?.rol === 'recepcionista') && !consultaCerrada && (
               <button
                 onClick={handleComplete}
                 disabled={completing}
@@ -531,60 +418,66 @@ export default function ConsultaDetailPage() {
                 {completing ? 'Completando...' : 'Completar'}
               </button>
             )}
-            {puedeEditar && !editing && (
+            {puedeEditar && (
               <button
-                onClick={startEditing}
+                onClick={irAEditar}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors no-print sm:px-4 sm:py-2.5 sm:text-sm"
               >
                 <Edit3 className="h-4 w-4" /> Editar
               </button>
             )}
-            {puedeEditar && editing && (
-              <>
-                <button
-                  onClick={() => { setEditing(false); setEditError(null); }}
-                  disabled={savingEdit}
-                  className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface-2 transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={savingEdit}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 no-print sm:px-4 sm:py-2.5 sm:text-sm"
-                >
-                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  {savingEdit ? 'Guardando...' : 'Guardar'}
-                </button>
-              </>
-            )}
           </div>
         }
       />
 
+      <HojaMembretada
+        documento="Consulta médica"
+        folio={consulta.folio || consulta.id.slice(0, 8)}
+        estado={estatusLabels[consulta.estatus] ?? consulta.estatus}
+        paciente={[
+          { label: 'Nombre', value: consulta.paciente, full: true },
+          { label: 'Expediente', value: consulta.paciente_expediente },
+          { label: 'Edad', value: edadPaciente },
+          { label: 'Sexo', value: consulta.paciente_sexo === 'H' ? 'Masculino' : consulta.paciente_sexo === 'M' ? 'Femenino' : consulta.paciente_sexo },
+          { label: 'Teléfono', value: consulta.paciente_telefono },
+          { label: 'Aseguradora', value: aseguradoraData?.aseguradora?.nombre },
+          { label: 'Póliza', value: consulta.paciente_poliza },
+        ]}
+        secciones={[
+          {
+            titulo: 'Datos de la consulta',
+            filas: [
+              { label: 'Fecha', value: consulta.fecha },
+              { label: 'Hora', value: consulta.hora_inicio ? `${consulta.hora_inicio.slice(0, 5)}${consulta.hora_fin ? ` – ${consulta.hora_fin.slice(0, 5)}` : ''}` : null },
+              { label: 'Doctor', value: consulta.doctor ? `Dr. ${consulta.doctor}` : null },
+              { label: 'Especialidad', value: consulta.especialidad },
+              { label: 'Tipo de consulta', value: etiquetaTipoConsulta(consulta.tipo_consulta, consulta.tipo_visita) },
+              { label: 'Diagnóstico', value: consulta.diagnostico, full: true },
+            ],
+          },
+          {
+            titulo: 'Estudios y procedimientos',
+            filas: [
+              ...([1, 2, 3] as const).map((n) => {
+                const nombre = n === 1 ? consulta.estudio_1 : n === 2 ? consulta.estudio_2 : consulta.estudio_3;
+                const doc = n === 1 ? consulta.est1_doctor : n === 2 ? consulta.est2_doctor : consulta.est3_doctor;
+                return { label: `Estudio ${n}`, value: nombre ? `${nombre}${doc ? ` — ${doc}` : ''}` : null, full: true };
+              }),
+              { label: 'Procedimiento', value: consulta.procedimiento ? `${consulta.procedimiento}${consulta.proc_doctor ? ` — ${consulta.proc_doctor}` : ''}` : null, full: true },
+            ],
+          },
+          { titulo: 'Notas', filas: [{ label: 'Observaciones', value: consulta.notas, full: true }] },
+        ]}
+        espacioManuscrito={{ titulo: 'Indicaciones y receta', renglones: 8 }}
+        firmas={consulta.doctor ? [{ nombre: `Dr. ${consulta.doctor}`, rol: 'Médico tratante' }] : []}
+      />
+
       {/* Cabecera del paciente: compacta en móvil, detallada en escritorio */}
-      <div className="bg-surface border border-line rounded-xl p-3.5 sm:p-6 mb-4 sm:mb-6 flex items-start gap-3 sm:gap-4">
+      <div className="bg-surface border border-line rounded-xl p-3.5 sm:p-6 mb-4 sm:mb-6">
+       <div className="flex items-start gap-3 sm:gap-4">
         <Avatar initials={consulta.iniciales} className="bg-primary-500 shrink-0" size="md" />
         <div className="flex-1 min-w-0">
           <h2 className="text-base sm:text-lg font-extrabold leading-tight text-fg break-words">{consulta.paciente}</h2>
-          <div className="mt-0.5 sm:hidden">
-            <FichaPaciente
-              variante="compacta"
-              expediente={consulta.paciente_expediente}
-              sexo={consulta.paciente_sexo}
-              fechaNacimiento={consulta.paciente_fecha_nacimiento}
-              edad={consulta.paciente_edad}
-            />
-          </div>
-          <div className="hidden sm:block">
-            <FichaPaciente
-              variante="linea"
-              expediente={consulta.paciente_expediente}
-              sexo={consulta.paciente_sexo}
-              fechaNacimiento={consulta.paciente_fecha_nacimiento}
-              edad={consulta.paciente_edad}
-            />
-          </div>
           <p className="mt-1 text-xs sm:text-sm text-muted">
             Dr. {consulta.doctor}
             {consulta.fecha ? ` · ${consulta.fecha}` : ''}
@@ -595,19 +488,12 @@ export default function ConsultaDetailPage() {
             {!esEnfermera && <StatusBadge status={consulta.estatus_pago} config={estatusPagoConfig} />}
           </div>
         </div>
-      </div>
+       </div>
 
-      {/* Patient summary */}
+      {/* Datos del expediente (en la misma tarjeta: el nombre solo aparece una vez) */}
       {(consulta.paciente || consulta.paciente_sexo) && (
-        <div className="bg-surface border border-line rounded-xl p-6 mb-6">
-          <h3 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-fg">
-            <User className="h-4 w-4 text-primary-600" /> Resumen del Paciente
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Nombre</span>
-              <p className="mt-0.5 font-medium text-fg">{consulta.paciente || '—'}</p>
-            </div>
+        <div className="mt-4 border-t border-line/70 pt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Expediente</span>
               <p className="mt-0.5 font-medium text-fg">{consulta.paciente_expediente || '—'}</p>
@@ -669,6 +555,7 @@ export default function ConsultaDetailPage() {
           )}
         </div>
       )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
@@ -680,53 +567,13 @@ export default function ConsultaDetailPage() {
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Field label="Doctor" value={consulta.doctor || '—'} />
-              {editing ? (
-                <>
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Especialidad</span>
-                    <select
-                      value={editEspecialidadId}
-                      onChange={(e) => setEditEspecialidadId(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
-                    >
-                      <option value="">Sin especialidad</option>
-                      {especialidades.filter((e) => e.id).map((e) => (
-                        <option key={e.clave} value={e.id}>{e.nombre}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Tipo de consulta</span>
-                    <select
-                      value={editTipo}
-                      onChange={(e) => setEditTipo(e.target.value as TipoConsultaAgenda)}
-                      className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
-                    >
-                      {TIPOS_CONSULTA_AGENDA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                    <span className="mt-1 block text-[11px] text-muted">Cambiar el tipo no recalcula el costo; ajústalo en «Costo total».</span>
-                  </label>
-                </>
-              ) : (
                 <>
                   <Field label="Especialidad" value={consulta.especialidad || '—'} />
                   <Field label="Tipo de consulta" value={etiquetaTipoConsulta(consulta.tipo_consulta, consulta.tipo_visita)} />
-                </>
-              )}
-              <Field label="Fecha y Hora" value={consulta.fecha && consulta.hora_inicio ? `${consulta.fecha} ${consulta.hora_inicio.slice(0, 5)}` : '—'} />
+                </>              <Field label="Fecha y Hora" value={consulta.fecha && consulta.hora_inicio ? `${consulta.fecha} ${consulta.hora_inicio.slice(0, 5)}` : '—'} />
               <Field label="Hora Fin" value={consulta.hora_fin ? consulta.hora_fin.slice(0, 5) : '—'} />
               <Field label="Método de Pago" value={consulta.metodo_pago || '—'} />
-              {editing ? (
-                <div className="col-span-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Diagnóstico</span>
-                  <div className="mt-1">
-                    <BuscadorDiagnosticoCIE10 id="editar-diagnostico" value={editDiagnostico} onChange={setEditDiagnostico} />
-                  </div>
-                </div>
-              ) : (
-                <Field label="Diagnóstico" value={consulta.diagnostico} full />
-              )}
-            </div>
+                <Field label="Diagnóstico" value={consulta.diagnostico} full />            </div>
           </div>
 
           {/* Clinical details */}
@@ -738,7 +585,7 @@ export default function ConsultaDetailPage() {
               {puedeEditar && user?.rol !== 'enfermero' && (
                 <button
                   type="button"
-                  onClick={() => setEditandoServicios(true)}
+                  onClick={irAEditar}
                   className="no-print inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-bold text-primary-600 hover:bg-surface-2"
                 >
                   <Edit3 className="h-3.5 w-3.5" /> Estudios y procedimientos
@@ -886,21 +733,7 @@ export default function ConsultaDetailPage() {
               ) : (
                 <Field label="Procedimientos" value="—" full />
               )}
-              {editing ? (
-                <div className="col-span-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Notas</span>
-                  <textarea
-                    value={editNotas}
-                    onChange={(e) => setEditNotas(e.target.value)}
-                    rows={4}
-                    className="mt-1 w-full rounded-lg border border-line bg-white dark:bg-surface-2 px-3 py-2 text-sm font-medium text-fg focus:border-primary-500 focus:outline-none"
-                  />
-                  {editError && <p className="mt-1 text-xs font-bold text-red-600">{editError}</p>}
-                </div>
-              ) : (
-                <Field label="Notas" value={consulta.notas} full />
-              )}
-            </div>
+                <Field label="Notas" value={consulta.notas} full />            </div>
           </div>
         </div>
 
@@ -915,20 +748,7 @@ export default function ConsultaDetailPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center gap-2">
                 <span className="text-muted">Costo total</span>
-                {editing ? (
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editCosto}
-                    onChange={(e) => setEditCosto(e.target.value)}
-                    disabled={consulta.estatus_pago === 'PAGADO'}
-                    className="w-28 rounded-lg border border-line bg-white dark:bg-surface-2 px-2 py-1 text-right text-sm font-bold text-fg focus:border-primary-500 focus:outline-none disabled:opacity-50"
-                  />
-                ) : (
-                  <span className="font-bold text-fg">${consulta.costo_total.toLocaleString('es-MX')}</span>
-                )}
-              </div>
+                  <span className="font-bold text-fg">${consulta.costo_total.toLocaleString('es-MX')}</span>              </div>
               {consulta.estatus_pago === 'PAGADO' && (
                 <p className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-400">
                   Esta consulta ya fue pagada, no puede ser editado el monto.
@@ -1129,7 +949,7 @@ export default function ConsultaDetailPage() {
         fecha={consulta.fecha}
         horaInicio={consulta.hora_inicio}
         horaFin={consulta.hora_fin}
-        visible={!editing && !consultaCerrada}
+        visible={!consultaCerrada}
         onDone={() => {
           void mutateDetalle();
           void mutateHistorial();
@@ -1137,24 +957,6 @@ export default function ConsultaDetailPage() {
         }}
       />
 
-      {editandoServicios && (
-        <EditarServiciosConsulta
-          consultaId={consulta.id}
-          pacienteId={consulta.paciente_id}
-          doctorConsultaId={consulta.doctor_id}
-          doctorConsultaNombre={consulta.doctor}
-          estudios={consulta.estudios_editables ?? []}
-          procedimientos={consulta.procedimientos_editables ?? []}
-          onClose={() => setEditandoServicios(false)}
-          onSaved={() => {
-            setEditandoServicios(false);
-            toast('Estudios y procedimientos actualizados');
-            void mutateDetalle();
-            void mutateHistorial();
-            void invalidar('/api/consultas', '/api/agenda', '/api/dashboard', '/api/productividad');
-          }}
-        />
-      )}
     </div>
   );
 }

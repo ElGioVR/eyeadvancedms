@@ -1,5 +1,6 @@
 'use client';
 
+import { marcarReinicioRuta } from '@/lib/navegacion/rutas';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -202,7 +203,7 @@ export default function Sidebar({ collapsed, onToggle, isOpen, onClose }: Sideba
                       title={!showLabels ? item.label : undefined}
                       aria-label={!showLabels ? item.label : undefined}
                       aria-current={isActive ? 'page' : undefined}
-                      onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                      onClick={() => { marcarReinicioRuta(); if (window.innerWidth < 1024) onClose(); }}
                     >
                       {isActive && showLabels && (
                         <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary-600 dark:bg-primary-400" />

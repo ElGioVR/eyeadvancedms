@@ -163,7 +163,7 @@ async function manejarGET(request: Request) {
     .from('agenda_cirugias')
     .select(`
       id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
-      procedimiento, procedencia, tiempo_estimado, ojo,
+      procedimiento, procedencia, tiempo_estimado, ojo, diagnostico,
       doctores:doctor_id (alias),
       paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
       origen:origen_id (nombre),
@@ -269,8 +269,10 @@ async function manejarGET(request: Request) {
     estado: c.estado,
     // Cirugías homologadas (RPC) no traen texto libre: se usa el catálogo.
     procedimiento: c.procedimiento || (c as any).servicio?.nombre || null,
-    // Lo que se ve en la tarjeta: procedimiento + ojo.
-    detalle: detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento || (c as any).servicio?.nombre, ojo: (c as any).ojo }),
+    // Lo que se ve en la tarjeta: procedimiento + ojo; si no hay, el diagnóstico (a qué viene el paciente).
+    detalle:
+      detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento || (c as any).servicio?.nombre, ojo: (c as any).ojo }) ||
+      c.diagnostico || null,
     procedencia: c.procedencia || (c as any).origen?.nombre || null,
     tiempo_estimado: c.tiempo_estimado || null,
     mi_participacion: !!sessionDoctorId && (mias.has(c.id) || c.doctor_id === sessionDoctorId),

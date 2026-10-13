@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors } from 'lucide-react';
+import { Plus, FileText, Calendar, User, ChevronDown, Stethoscope, Scissors, Cake, Mail, Shield } from 'lucide-react';
+import { fechaNacimientoLegible } from '@/lib/ficha-paciente';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -236,6 +237,28 @@ export default function PacientesPage() {
                         edad={paciente.edad}
                       />
                     </div>
+                    {(paciente.fecha_nacimiento || paciente.email || paciente.aseguradora) && (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted">
+                        {fechaNacimientoLegible(paciente.fecha_nacimiento) && (
+                          <span className="inline-flex items-center gap-1" title="Fecha de nacimiento">
+                            <Cake className="h-3 w-3 shrink-0" />
+                            {fechaNacimientoLegible(paciente.fecha_nacimiento)}
+                          </span>
+                        )}
+                        {paciente.email && (
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1" title="Correo">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{paciente.email}</span>
+                          </span>
+                        )}
+                        {paciente.aseguradora && (
+                          <span className="inline-flex items-center gap-1" title="Aseguradora">
+                            <Shield className="h-3 w-3 shrink-0" />
+                            {paciente.aseguradora}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="hidden sm:block text-right min-w-[120px]">

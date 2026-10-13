@@ -10,11 +10,11 @@ import {
   inicialesDe,
   siguienteFolioConsulta,
 } from '@/lib/consultas-acceso';
-import { MotorDevengoService } from '@/services/productividad';
 import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/lib/agenda-conflictos';
 import { DURACION_CITA_MIN, duracionEntre, sumarMinutos } from '@/lib/agenda-slots';
 import { notificarAsignacion } from '@/services/notificaciones';
 import { z } from 'zod';
+import { buscarGenerico } from '@/lib/api/catalogo-generico';
 import { enSegundoPlano } from '@/lib/segundo-plano';
 import { ruta } from '@/lib/api/ruta';
 import { idempotente } from '@/lib/api/idempotencia';
@@ -303,12 +303,29 @@ async function manejarPOST(request: Request) {
     else if (nombre) query = query.ilike('nombre', nombre.replace(/[\\%_]/g, (c) => `\\${c}`));
     else return Promise.resolve({ id: null, nombre: null, costo: 0, cobertura: 0 });
 
-    const promesa = Promise.resolve(query.limit(1).maybeSingle()).then(({ data: svc }) => ({
-      id: svc?.id || servicioId || null,
-      nombre: svc?.nombre || nombre || null,
-      costo: Number(svc?.costo) || 0,
-      cobertura: Number(svc?.porcentaje_cobertura) || 0,
-    }));
+    const promesa = (async (): Promise<ServicioResuelto> => {
+      let { data: svc } = await query.limit(1).maybeSingle();
+      // Un id que no es de esta aseguranza (p. ej. concepto genérico): se intenta por nombre
+      if (!svc && servicioId && nombre) {
+        const r = await supabase
+          .from('aseguranza_servicios')
+          .select('id, nombre, costo, porcentaje_cobertura')
+          .eq('aseguranza_id', aseguranzaId)
+          .eq('activo', true)
+          .eq('tipo', tipo)
+          .ilike('nombre', nombre.replace(/[\\%_]/g, (c) => `\\${c}`))
+          .limit(1)
+          .maybeSingle();
+        svc = r.data;
+      }
+      if (svc) {
+        return { id: svc.id, nombre: svc.nombre, costo: Number(svc.costo) || 0, cobertura: Number(svc.porcentaje_cobertura) || 0 };
+      }
+      // Sin entrada propia de la aseguranza: precio del catálogo genérico
+      const gen = await buscarGenerico(supabase, tipo, servicioId, nombre);
+      if (gen) return { id: gen.id, nombre: gen.nombre, costo: gen.costo, cobertura: 0 };
+      return { id: servicioId || null, nombre: nombre || null, costo: 0, cobertura: 0 };
+    })();
     servicioCache.set(clave, promesa);
     return promesa;
   }
@@ -574,8 +591,6 @@ async function manejarPOST(request: Request) {
     eventosHistorial.push({ consulta_id: consultaData.id, tipo_evento: 'PAGADO', usuario_id: auth.user.id, payload: { monto: costoTotal } });
   }
 
-  const configValor = (honorariosConfig.data?.valor as Record<string, unknown>) || {};
-  const devengoAutomatico = configValor.devengo_automatico !== false;
 
   // Best-effort: no retrasa la respuesta (antes se esperaba antes de responder).
   enSegundoPlano(Promise.all([
@@ -597,12 +612,7 @@ async function manejarPOST(request: Request) {
     Promise.resolve(supabase.from('consulta_historial').insert(eventosHistorial)).then(({ error }) => {
       if (error) handleSupabaseError(error, 'consultas.crear.historial');
     }),
-    // Honorarios automáticos (devengo) — respeta devengo_automatico
-    devengoAutomatico
-      ? new MotorDevengoService().generarDesdeConsulta(consultaData.id).catch((err) => {
-          console.error('Error al generar honorarios:', err);
-        })
-      : null,
+    // Honorarios: se devengan al completar la consulta/estudio (no al crearla).
     // Notificación al doctor (best-effort)
     consultaData.doctor_id
       ? notificarAsignacion({

@@ -12,6 +12,7 @@ import { completarLentesCirugia, liberarLentes, reservarLente, type OrdenLente }
 import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
+import { resolverServicioFacturacion } from '@/lib/cirugia-servicio-facturacion';
 import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
 
@@ -47,6 +48,25 @@ const cirugiaUpdateSchema = z.object({
   notificado: z.boolean().optional(),
   inventario_item_id: z.string().uuid().optional().nullable(),
   lentes_requeridos: z.array(z.enum(['PRIMERO', 'SEGUNDO', 'RESPALDO'])).max(3).optional(),
+  // Formulario de edición (mismo que la creación).
+  duracion_min: z.number().int().min(1).max(1440).optional(),
+  quirofano: z.string().max(100).optional().nullable(),
+  documentos_faltantes: z.array(z.object({
+    tipo_documento: z.string().trim().min(1).max(100),
+    motivo: z.string().trim().min(1).max(300),
+  })).max(10).optional().nullable(),
+  especialidad_id: z.string().uuid().optional().nullable(),
+  origen_id: z.string().uuid().optional().nullable(),
+  servicio_id: z.string().uuid().optional().nullable(),
+  catalogo_quirurgico_id: z.string().uuid().optional().nullable(),
+  procedimientos_qx_ids: z.array(z.string().uuid()).max(20).optional(),
+  modelo_lio_id: z.string().uuid().optional().nullable(),
+  lio_torico: z.boolean().optional().nullable(),
+  // Cierre de la cirugía (modal de completar).
+  lentes_ingresar_inventario: z.array(z.enum(['PRIMERO', 'SEGUNDO', 'RESPALDO'])).max(3).optional(),
+  diagnostico_definitivo: z.string().max(2000).optional().nullable(),
+  cirugia_realizada: z.string().max(2000).optional().nullable(),
+  complicaciones: z.string().max(2000).optional().nullable(),
 }).strict();
 
 async function manejarGET(
@@ -113,7 +133,7 @@ async function manejarPATCH(
   const prevP = Promise.resolve(
     supabase
       .from('agenda_cirugias')
-      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente')
+      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente, origen_id')
       .eq('id', id)
       .maybeSingle()
   );
@@ -142,7 +162,9 @@ async function manejarPATCH(
   const cambiaHora = data.hora !== undefined && data.hora !== prev.hora;
   const cambiaDoctor = data.doctor_id !== undefined && data.doctor_id !== prev.doctor_id;
 
-  if (cambiaFecha || cambiaHora || cambiaDoctor) {
+  const cambiaDuracion = data.duracion_min !== undefined && data.duracion_min !== prev.duracion_min;
+
+  if (cambiaFecha || cambiaHora || cambiaDoctor || cambiaDuracion) {
     const nuevaFecha = data.fecha ?? prev.fecha;
     const nuevaHora = data.hora ?? prev.hora;
     const nuevoDoctor = data.doctor_id ?? prev.doctor_id;
@@ -152,7 +174,7 @@ async function manejarPATCH(
       const conflictos = await detectarConflictosAgenda({
         fecha: nuevaFecha,
         hora: nuevaHora,
-        duracion_min: prev.duracion_min ?? 60,
+        duracion_min: data.duracion_min ?? prev.duracion_min ?? 60,
         medicos: nuevoDoctor ? [nuevoDoctor] : [],
         recurso_id: nuevoRecurso,
       });
@@ -225,12 +247,42 @@ async function manejarPATCH(
     notas: 'notas',
     notificado: 'notificado',
     inventario_item_id: 'inventario_item_id',
+    duracion_min: 'duracion_min',
+    quirofano: 'quirofano',
+    documentos_faltantes: 'documentos_faltantes',
+    especialidad_id: 'especialidad_id',
+    origen_id: 'origen_id',
+    servicio_id: 'servicio_id',
+    catalogo_quirurgico_id: 'catalogo_quirurgico_id',
+    modelo_lio_id: 'modelo_lio_id',
+    lio_torico: 'lio_torico',
+    diagnostico_definitivo: 'diagnostico_definitivo',
+    cirugia_realizada: 'cirugia_realizada',
+    complicaciones: 'complicaciones',
   };
 
   for (const [key, dbCol] of Object.entries(fieldMap)) {
     const val = (data as Record<string, unknown>)[key];
     if (val !== undefined) {
       updates[dbCol] = typeof val === 'string' ? val?.trim() || null : val;
+    }
+  }
+
+  // Con modelo de LIO del catálogo, diseño y tórico salen del modelo (misma regla que la alta).
+  if (data.modelo_lio_id) {
+    const { data: modelo } = await supabase.from('cat_modelos_lio').select('diseno, torico').eq('id', data.modelo_lio_id).maybeSingle();
+    if (modelo) {
+      updates.lio_diseno = modelo.diseno === 'MONOFOCAL' || modelo.diseno === 'TRIFOCAL' ? modelo.diseno : null;
+      updates.lio_torico = !!modelo.torico;
+    }
+  }
+
+  // Cambian los procedimientos quirúrgicos sin servicio explícito: la facturación se resuelve desde el catálogo.
+  if (data.procedimientos_qx_ids?.length && data.servicio_id === undefined) {
+    const origen = (data.origen_id as string | null | undefined) ?? (prev as { origen_id?: string | null }).origen_id ?? null;
+    if (origen) {
+      const r = await resolverServicioFacturacion(supabase, origen, data.procedimientos_qx_ids);
+      if (r.id) updates.servicio_id = r.id;
     }
   }
 
@@ -246,6 +298,21 @@ async function manejarPATCH(
       { error: handleSupabaseError(error, 'agenda.actualizar').mensaje },
       { status: 500 }
     );
+  }
+
+  // Procedimientos quirúrgicos (varios): se reemplazan y el primero queda como principal.
+  if (data.procedimientos_qx_ids !== undefined) {
+    const qxIds = Array.from(new Set(data.procedimientos_qx_ids));
+    await supabase.from('agenda_cirugias_procedimientos_qx').delete().eq('cirugia_id', id);
+    if (qxIds.length) {
+      const { error: errQx } = await supabase
+        .from('agenda_cirugias_procedimientos_qx')
+        .insert(qxIds.map((qid, i) => ({ cirugia_id: id, catalogo_quirurgico_id: qid, orden: i + 1 })));
+      if (errQx) {
+        return NextResponse.json({ error: handleSupabaseError(errQx, 'agenda.procedimientos-qx').mensaje }, { status: 500 });
+      }
+    }
+    await supabase.from('agenda_cirugias').update({ catalogo_quirurgico_id: qxIds[0] ?? null }).eq('id', id);
   }
 
   // EST-003: Registrar cambio de estado en historial
@@ -290,17 +357,28 @@ async function manejarPATCH(
     itemId = newId;
   }
 
-  if (itemId && nuevoEstado === 'completada' && estadoAnterior !== 'completada') {
-    const requeridos: OrdenLente[] = data.lentes_requeridos ?? ['PRIMERO'];
-    const result = await completarLentesCirugia(id, requeridos, auth.user.id);
+  if (nuevoEstado === 'completada' && estadoAnterior !== 'completada') {
+    // Sin lentes_requeridos se conserva el comportamiento anterior (el primero, si hay pieza asignada).
+    const requeridos: OrdenLente[] = data.lentes_requeridos ?? (itemId ? ['PRIMERO'] : []);
+    const result = await completarLentesCirugia(id, requeridos, auth.user.id, data.lentes_ingresar_inventario ?? []);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+    // Trazabilidad: qué lentes se usaron y cuáles se liberaron queda en el historial.
+    await supabase.from('cirugia_historial').insert({
+      cirugia_id: id,
+      usuario_id: auth.user.id,
+      accion: 'LENTES_RESUELTOS',
+      detalle: {
+        usados: result.data.filter((l) => l.estado === 'USADO').map((l) => ({ orden: l.orden, fabricante: l.fabricante, modelo: l.modelo, poder_d: l.poder_d })),
+        liberados: result.data.filter((l) => l.estado === 'LIBERADO').map((l) => ({ orden: l.orden, fabricante: l.fabricante, modelo: l.modelo, poder_d: l.poder_d })),
+      },
+    });
   }
 
-  if (itemId && nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
+  if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
     await liberarLentes(id);
-    await liberarLIO(itemId, id, auth.user.id); // legado
+    if (itemId) await liberarLIO(itemId, id, auth.user.id); // legado
   }
 
   // Devengo y notificaciones (best-effort) corren juntos; se esperan antes de responder.
@@ -308,6 +386,18 @@ async function manejarPATCH(
   if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
     // best-effort: no bloquea la cancelación de agenda
     pendientes.push(new MotorDevengoService().cancelarPorCirugia(id).catch(() => undefined));
+  }
+
+  // Honorarios: solo se devengan al COMPLETAR la cirugía; si deja de estar completada se retiran los no pagados.
+  if (nuevoEstado !== estadoAnterior && nuevoEstado !== 'cancelada' && (nuevoEstado === 'completada' || estadoAnterior === 'completada')) {
+    pendientes.push((async () => {
+      const motor = new MotorDevengoService();
+      if (nuevoEstado === 'completada') {
+        if (await motor.devengoAutomaticoActivo()) await motor.generarDesdeCirugia(id);
+      } else {
+        await motor.cancelarPorCirugia(id);
+      }
+    })().catch((err) => console.error('Honorarios al cambiar estado de la cirugía:', err)));
   }
 
   // Notificaciones al doctor (best-effort, nunca bloquean la respuesta)

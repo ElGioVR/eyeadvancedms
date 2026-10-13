@@ -5,6 +5,7 @@ import { leerJSON } from '@/lib/api/validar';
 import { idDeQuery, monto, respuestaErrorDb, textoLargo } from '@/lib/api/configuracion';
 import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
+import { existeNombre } from '@/lib/api/catalogo-nombres';
 
 const TABLA = 'catalogo_procedimientos';
 const CONTEXTO = 'configuracion/catalogo-procedimientos';
@@ -48,6 +49,10 @@ async function manejarPOST(request: Request) {
   const body = await leerJSON(request, createSchema);
   if (body instanceof NextResponse) return body;
 
+  if (await existeNombre(TABLA, body.nombre)) {
+    return NextResponse.json({ error: 'Ya existe un procedimiento con ese nombre' }, { status: 409 });
+  }
+
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from(TABLA)
@@ -70,6 +75,9 @@ async function manejarPUT(request: Request) {
   if (body instanceof NextResponse) return body;
 
   const { id, ...updates } = body;
+  if (updates.nombre && (await existeNombre(TABLA, updates.nombre, { excluirId: id }))) {
+    return NextResponse.json({ error: 'Ya existe un procedimiento con ese nombre' }, { status: 409 });
+  }
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase

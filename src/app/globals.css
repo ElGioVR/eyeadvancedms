@@ -181,10 +181,60 @@ body {
   .valor-suave { transition: none; }
 }
 
+/* Hoja membretada (consulta / cirugía): oculta en pantalla, única visible al imprimir. */
+.hoja-impresion { display: none; }
+
+@page { size: letter; margin: 14mm 15mm 18mm; }
+
 @media print {
-  .no-print, nav, header, footer, .sidebar { display: none !important; }
+  .no-print, nav, header, footer, aside, .sidebar { display: none !important; }
+  html, body { background: #fff !important; height: auto !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-page { padding: 0 !important; margin: 0 !important; }
-  body { background: white !important; }
+  /* Con hoja membretada: se imprime solo la hoja, no la pantalla. */
+  .print-page:has(.hoja-impresion) > *:not(.hoja-impresion) { display: none !important; }
+
+  /* Fondo blanco en todo el árbol que contiene la hoja (el lienzo gris de la app no se imprime) */
+  *:has(> .hoja-impresion), *:has(.hoja-impresion) { background: #fff !important; }
+
+  .hoja-impresion { display: block; color: #1e293b; font-family: Georgia, 'Times New Roman', serif; font-size: 10.5pt; line-height: 1.45; padding-bottom: 14mm; }
+  .hoja-impresion header, .hoja-impresion footer { display: flex !important; }
+  .hoja-membrete { align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 2.25pt solid #1f86c2; position: relative; }
+  .hoja-membrete::after { content: ''; position: absolute; left: 0; right: 0; bottom: -5pt; border-bottom: 0.5pt solid #1f86c2; opacity: .55; }
+  .hoja-marca { display: flex; align-items: center; }
+  .hoja-logo { height: 52px; width: auto; object-fit: contain; }
+  .hoja-doc { text-align: right; }
+  .hoja-doc-titulo { margin: 0; font-size: 17pt; font-style: italic; color: #16486e; line-height: 1.15; }
+  .hoja-doc-folio { margin: 4px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; font-weight: 700; letter-spacing: 0.1em; color: #0f172a; }
+  .hoja-doc-estado { display: inline-block; margin: 5px 0 0; padding: 1.5px 9px; border: 0.5pt solid #1f86c2; border-radius: 99px; font-family: Arial, Helvetica, sans-serif; font-size: 6.5pt; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #1f86c2; }
+
+  .hoja-paciente { margin-top: 24px; padding: 11px 16px 13px; border: 0.5pt solid #d7e3ee; border-left: 3pt solid #1f86c2; border-radius: 2px; background: #f4f8fb !important; break-inside: avoid; }
+  .hoja-paciente .hoja-grid { grid-template-columns: repeat(4, 1fr); }
+  .hoja-paciente .hoja-full .hoja-valor { font-size: 14pt; letter-spacing: 0.01em; }
+  .hoja-etiqueta-seccion { margin: 0 0 7px; font-family: Arial, Helvetica, sans-serif; font-size: 6.5pt; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: #1f86c2; }
+
+  .hoja-seccion { margin-top: 22px; break-inside: avoid; }
+  .hoja-titulo-seccion { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: #16486e; }
+  .hoja-titulo-seccion::after { content: ''; flex: 1; border-top: 0.5pt solid #b6c6d4; }
+  .hoja-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px 22px; }
+  .hoja-grid > div { display: flex; flex-direction: column; min-width: 0; padding-bottom: 4px; border-bottom: 0.4pt dotted #cbd5e1; }
+  .hoja-paciente .hoja-grid > div { border-bottom: 0; padding-bottom: 0; }
+  .hoja-grid > .hoja-full { grid-column: 1 / -1; }
+  .hoja-label { font-family: Arial, Helvetica, sans-serif; font-size: 6.2pt; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #7a8ba0; }
+  .hoja-valor { margin-top: 2px; font-size: 10.5pt; color: #0f172a; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .hoja-valor-fuerte { font-weight: 700; }
+
+  .hoja-renglones { display: flex; flex-direction: column; gap: 0; }
+  .hoja-renglones span { display: block; height: 8.5mm; border-bottom: 0.4pt solid #cbd5e1; }
+
+  .hoja-firmas { display: flex; justify-content: flex-end; gap: 40px; margin-top: 34px; break-inside: avoid; }
+  .hoja-firma { display: flex; flex-direction: column; align-items: center; min-width: 200px; }
+  .hoja-firma-linea { width: 100%; border-top: 0.75pt solid #475569; margin-bottom: 5px; }
+  .hoja-firma-nombre { font-size: 10pt; font-weight: 700; }
+  .hoja-firma-rol { font-family: Arial, Helvetica, sans-serif; font-size: 6.5pt; letter-spacing: 0.2em; text-transform: uppercase; color: #7a8ba0; }
+
+  /* Pie repetido en cada página */
+  .hoja-pie { position: fixed; left: 0; right: 0; bottom: 0; background: #fff !important; justify-content: space-between; padding-top: 5px; border-top: 0.5pt solid #94a3b8; font-family: Arial, Helvetica, sans-serif; font-size: 7pt; letter-spacing: 0.08em; color: #64748b; }
 }
 
 /* ─────────────────────────────────────────────
@@ -400,4 +450,24 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .cv-auto {
   content-visibility: auto;
   contain-intrinsic-size: auto 120px;
+}
+
+
+/* Campos con error (formulario de cirugía): marca roja + motivo bajo el campo */
+[data-error='true'] > label,
+[data-error='true'] > div > label { color: #dc2626; }
+[data-error='true']:not([data-campo='participantes']) :is(input, select, textarea) {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+section[data-error='true'],
+div[data-error='true'].rounded-xl:not([data-campo='participantes']),
+div[data-error='true'].rounded-lg {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+[data-error='true'] [role='radiogroup'] {
+  border-radius: 0.5rem;
+  outline: 2px solid #ef4444;
+  outline-offset: 3px;
 }

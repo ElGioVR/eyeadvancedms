@@ -33,7 +33,7 @@ async function manejarGET(
 
   // Paciente (+ nombre de aseguranza) y consultas (+ doctor + cobros) en paralelo:
   // 1 viaje en lugar de 4 en serie.
-  const [pacienteRes, consultasRes, pendienteRes] = await Promise.all([
+  const [pacienteRes, consultasRes, pendienteRes, cirugiasRes] = await Promise.all([
     supabase
       .from('pacientes')
       .select('id, nombre_completo, sexo, fecha_nacimiento, edad, telefono, email, direccion, contacto_emergencia, tel_emergencia, aseguranza_id, numero_poliza, numero_afiliacion, numero_expediente, created_at, aseguranzas:aseguranza_id (nombre)')
@@ -52,6 +52,13 @@ async function manejarGET(
       .limit(200),
     // Alta automática con datos por completar (mig. 400; sin la columna → false)
     supabase.from('pacientes').select('pendiente_completar').eq('id', id).maybeSingle(),
+    // Cirugías del paciente (resumen en el expediente de consulta)
+    supabase
+      .from('agenda_cirugias')
+      .select('id, fecha, hora, procedimiento, ojo, estado, doctores:doctor_id (alias)')
+      .eq('paciente_id', id)
+      .order('fecha', { ascending: false })
+      .limit(100),
   ]);
   const pendienteCompletar = !pendienteRes.error && (pendienteRes.data as { pendiente_completar?: boolean } | null)?.pendiente_completar === true;
 
@@ -125,6 +132,15 @@ async function manejarGET(
     total_consultas: consultasResult.length,
     pendiente_completar: pendienteCompletar,
     faltantes: pendienteCompletar ? faltantesPaciente(patient) : [],
+    cirugias: (cirugiasRes.data || []).map((c) => ({
+      id: c.id,
+      fecha: c.fecha,
+      hora: c.hora,
+      procedimiento: c.procedimiento,
+      ojo: c.ojo,
+      estado: c.estado,
+      doctor: (Array.isArray(c.doctores) ? c.doctores[0] : c.doctores)?.alias || '',
+    })),
   });
 }
 

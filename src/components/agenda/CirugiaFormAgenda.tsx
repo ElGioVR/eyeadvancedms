@@ -23,7 +23,7 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
     nombre_paciente: string; expediente: string; fecha: string; hora: string;
     jornada: string; diagnostico: string; procedimiento: string; ojo: string; lio: string; marca_lio: string;
     inventario_item_id: string;
-    tiempo_estimado: string; tiempo_estancia: string; doctor_id: string; notas: string; procedencia: string; motivo_aplazamiento: string;
+    tiempo_estimado: string; tiempo_estancia: string; doctor_id: string; notas: string; procedencia: string;
     anestesia: string;
   }
 
@@ -31,7 +31,7 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
     nombre_paciente: '', expediente: '', fecha: initialDate || '', hora: initialHour || '',
     jornada: '', diagnostico: '', procedimiento: '', ojo: '', lio: '', marca_lio: '',
     inventario_item_id: '',
-    tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '', motivo_aplazamiento: '',
+    tiempo_estimado: '', tiempo_estancia: '', doctor_id: '', notas: '', procedencia: '',
     anestesia: '',
   };
 
@@ -69,7 +69,7 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
       procedimiento: data.procedimiento || '', ojo: data.ojo || '', lio: data.lio || '', marca_lio: data.marca_lio || '',
       inventario_item_id: data.inventario_item_id || '',
       tiempo_estimado: data.tiempo_estimado || '', tiempo_estancia: data.tiempo_estancia || '', doctor_id: data.doctor_id || '',
-      notas: data.notas || '', procedencia: data.procedencia || '', motivo_aplazamiento: data.motivo_aplazamiento || '',
+      notas: data.notas || '', procedencia: data.procedencia || '',
       anestesia: data.anestesia || '',
     });
     setFormCargado(true);
@@ -101,7 +101,6 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
         marca_lio: form.marca_lio || null, inventario_item_id: form.inventario_item_id || null,
         tiempo_estimado: form.tiempo_estimado || null, tiempo_estancia: form.tiempo_estancia || null,
         doctor_id: form.doctor_id || null, notas: form.notas || null, procedencia: form.procedencia || null,
-        motivo_aplazamiento: form.motivo_aplazamiento || null,
         // Sin valor = no se toca (la base conserva la anestesia actual).
         anestesia: form.anestesia || undefined,
       };
@@ -179,7 +178,6 @@ export function CirugiaForm({ cirugiaId, doctores, userRol, initialDate, initial
           {ANESTESIAS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
         </select>
       </div>
-      <div><label className={labelCls}>Motivo de aplazamiento</label><input type="text" value={form.motivo_aplazamiento} onChange={e => setForm(f => ({ ...f, motivo_aplazamiento: e.target.value }))} placeholder="Solo si aplica" className={inputCls} /></div>
       <div className="flex gap-3 pt-3 border-t border-line/70">
         <button onClick={onClose} className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">CANCELAR</button>
         <button onClick={handleSubmit} disabled={saving} aria-busy={saving} className="flex-1 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:opacity-50">

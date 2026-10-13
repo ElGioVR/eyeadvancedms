@@ -1,5 +1,6 @@
 'use client';
 
+import { EnlaceVolver } from '@/components/layout/RutaNavegacion';
 import { useState, useMemo, useEffect } from 'react';
 import useSWR from 'swr';
 import { useUser } from '@/hooks/useUser';
@@ -277,9 +278,7 @@ export default function HistorialMedicoPage() {
       <div className="flex items-center justify-center min-h-[60vh] animate-fadeIn">
         <div className="text-center space-y-3">
           <p className="text-sm font-bold text-red-600">{error || 'Paciente no encontrado'}</p>
-          <Link href="/pacientes" className="inline-flex items-center gap-2 text-sm font-bold text-primary-600 hover:text-primary-800">
-            <ArrowLeft className="h-4 w-4" /> Volver
-          </Link>
+          <EnlaceVolver porDefecto={{ href: '/pacientes', label: 'Pacientes' }} icono={<ArrowLeft className="h-4 w-4" />} className="inline-flex items-center gap-2 text-sm font-bold text-primary-600 hover:text-primary-800" />
         </div>
       </div>
     );
@@ -293,13 +292,11 @@ export default function HistorialMedicoPage() {
       <BarraRevalidando activo={isValidating} className="-top-2" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Link
-          href="/pacientes"
+        <EnlaceVolver
+          porDefecto={{ href: '/pacientes', label: 'Pacientes' }}
+          icono={<ArrowLeft className="h-4 w-4" />}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 dark:border-line dark:bg-surface dark:text-fg dark:hover:bg-surface-2 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Link>
+        />
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-fg break-words">
             HISTORIAL MÉDICO - {paciente.nombre_completo}

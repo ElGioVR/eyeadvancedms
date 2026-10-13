@@ -9,6 +9,7 @@ import { fechaReal, uuidOpcional, validarRango } from '@/lib/productividad/valid
 import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
 import { exigirLimite } from '@/lib/api/limites';
+import { ESTATUS_CIRUGIA_REPORTE, parseEstatusReporte } from '@/lib/reportes-estatus';
 
 // Un reporte de meses puede requerir decenas de páginas + lotes.
 export const maxDuration = 60;
@@ -18,6 +19,7 @@ const querySchema = z.object({
   hasta: fechaReal.optional(),
   doctor_id: uuidOpcional,
   formato: z.string().max(10).optional(),
+  estatus: z.string().max(200).optional(),
 });
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -123,7 +125,8 @@ async function listarCirugias(
   supabase: Supabase,
   desde: string,
   hasta: string,
-  doctorId: string | null
+  doctorId: string | null,
+  estados: string[] | null = null
 ): Promise<FilaCirugia[]> {
   const filas: FilaCirugia[] = [];
   for (let pagina = 0; pagina * PAGE_SIZE < MAX_FILAS; pagina++) {
@@ -138,6 +141,7 @@ async function listarCirugias(
       .order('id', { ascending: true })
       .range(inicio, inicio + PAGE_SIZE - 1);
     if (doctorId) q = q.eq('doctor_id', doctorId);
+    if (estados) q = q.in('estado', estados);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
     filas.push(...((data || []) as unknown as FilaCirugia[]));
@@ -239,7 +243,8 @@ async function manejarGET(request: Request) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const filas = await listarCirugias(supabase, desde, hasta, doctorId);
+    const estados = parseEstatusReporte(q.estatus, ESTATUS_CIRUGIA_REPORTE);
+    const filas = await listarCirugias(supabase, desde, hasta, doctorId, estados);
     const [cirujanos, pacientesPorNombre] = await Promise.all([
       cargarCirujanos(supabase, filas),
       cargarPacientesPorNombre(supabase, filas),

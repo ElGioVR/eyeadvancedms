@@ -134,18 +134,45 @@ async function manejarPATCH(request: Request) {
 async function manejarDELETE(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  // Eliminar una aseguradora afecta precios, coberturas y facturación: solo administración.
+  const roleError = await requireRole(auth.user, ['admin']);
   if (roleError) return roleError;
 
   const id = idDeQuery(request, 'Falta el ID de la aseguranza');
   if (id instanceof NextResponse) return id;
 
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase
-    .from('aseguranzas')
-    .update({ activo: false })
-    .eq('id', id);
+  const { data: aseg, error: errAseg } = await supabase.from('aseguranzas').select('id, nombre').eq('id', id).maybeSingle();
+  if (errAseg) return respuestaErrorDb(errAseg, 'configuracion.aseguranzas.eliminar');
+  if (!aseg) return NextResponse.json({ error: 'La aseguradora no existe' }, { status: 404 });
 
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (norm(aseg.nombre) === 'particular') {
+    return NextResponse.json({ error: 'La aseguradora "Particular" no se puede eliminar' }, { status: 403 });
+  }
+
+  // Confirmación explícita: hay que escribir el nombre exacto.
+  const confirmar = new URL(request.url).searchParams.get('confirmar') ?? '';
+  if (norm(confirmar) !== norm(aseg.nombre)) {
+    return NextResponse.json({ error: 'Escribe el nombre exacto de la aseguradora para confirmar' }, { status: 400 });
+  }
+
+  // No se elimina si todavía hay pacientes o cirugías ligados: primero hay que reasignarlos.
+  const [pac, cir] = await Promise.all([
+    supabase.from('pacientes').select('id', { count: 'exact', head: true }).eq('aseguranza_id', id),
+    supabase.from('agenda_cirugias').select('id', { count: 'exact', head: true }).eq('origen_id', id),
+  ]);
+  const nPac = pac.count ?? 0;
+  const nCir = cir.count ?? 0;
+  if (nPac > 0 || nCir > 0) {
+    const partes = [nPac > 0 ? `${nPac} paciente${nPac === 1 ? '' : 's'}` : '', nCir > 0 ? `${nCir} cirugía${nCir === 1 ? '' : 's'}` : ''].filter(Boolean).join(' y ');
+    return NextResponse.json(
+      { error: `No se puede eliminar: tiene ${partes} asociad${nPac + nCir === 1 ? 'o' : 'os'}. Reasígnalos a otra aseguradora primero.` },
+      { status: 409 },
+    );
+  }
+
+  const { error } = await supabase.from('aseguranzas').update({ activo: false }).eq('id', id);
   if (error) return respuestaErrorDb(error, 'configuracion.aseguranzas.eliminar');
 
   return NextResponse.json({ success: true });

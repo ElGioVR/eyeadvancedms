@@ -21,20 +21,67 @@ async function manejarGET(
   if (auth instanceof NextResponse) return auth;
   const rolP = requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
 
-  const r = await leerConRol(rolP, async () =>
-    getSupabaseAdmin()
+  const supabase = getSupabaseAdmin();
+  const r = await leerConRol(rolP, async () => {
+    const completo = await supabase
       .from('cirugia_lentes')
-      .select('orden, origen, inventario_item_id, fabricante, modelo, poder_d, torico')
+      .select('orden, origen, inventario_item_id, fabricante, modelo, poder_d, torico, estado, modo, marca, cilindro, estado_logistica')
       .eq('cirugia_id', id)
       .eq('estado', 'RESERVADO')
-      .order('orden')
-  );
+      .order('orden');
+    // Sin la migración de logística (columnas nuevas) se sigue sirviendo lo anterior.
+    if (completo.error && /column|schema cache/i.test(completo.error.message)) {
+      return supabase
+        .from('cirugia_lentes')
+        .select('orden, origen, inventario_item_id, fabricante, modelo, poder_d, torico, estado')
+        .eq('cirugia_id', id)
+        .eq('estado', 'RESERVADO')
+        .order('orden');
+    }
+    return completo;
+  });
   if ('denegado' in r) return r.denegado;
   const { data, error } = r.datos;
   if (error) {
     return NextResponse.json({ error: handleSupabaseError(error, 'agenda.lentes.GET').mensaje }, { status: 500 });
   }
-  return NextResponse.json({ lentes: data ?? [] });
+  const { data: cirugia } = await supabase
+    .from('agenda_cirugias')
+    .select('diagnostico, procedimiento')
+    .eq('id', id)
+    .maybeSingle();
+  return NextResponse.json({ lentes: data ?? [], cirugia: cirugia ?? null });
+}
+
+const confirmarSchema = z.object({ accion: z.literal('CONFIRMAR_LISTO'), orden: z.enum(ORDENES_LENTE) }).strict();
+
+/** PATCH: confirma que el lente de compra directa ya está listo para operar. */
+async function manejarPATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const idInvalido = validarId(id, 'ID de cirugía');
+  if (idInvalido) return idInvalido;
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const roleError = await requireRole(auth.user, ['admin', 'doctor', 'recepcionista', 'enfermero']);
+  if (roleError) return roleError;
+  const cuerpo = await leerJSON(request, confirmarSchema);
+  if (cuerpo instanceof NextResponse) return cuerpo;
+
+  const ahora = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from('cirugia_lentes')
+    .update({ estado_logistica: 'LISTO', confirmado_at: ahora, confirmado_por: auth.user.id, updated_at: ahora })
+    .eq('cirugia_id', id)
+    .eq('orden', cuerpo.orden)
+    .eq('modo', 'COMPRA_DIRECTA')
+    .eq('estado', 'RESERVADO')
+    .select('orden');
+  if (error) return NextResponse.json({ error: handleSupabaseError(error, 'agenda.lentes.PATCH').mensaje }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: 'Ese lente no está pendiente de confirmación.' }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }
 
 /** Un lente por orden: inventario (con pieza) u hospital (con marca y poder). */
@@ -143,3 +190,4 @@ async function manejarPUT(
 
 export const GET = ruta('agenda/[id]/lentes#GET', manejarGET);
 export const PUT = ruta('agenda/[id]/lentes#PUT', manejarPUT);
+export const PATCH = ruta('agenda/[id]/lentes#PATCH', manejarPATCH);

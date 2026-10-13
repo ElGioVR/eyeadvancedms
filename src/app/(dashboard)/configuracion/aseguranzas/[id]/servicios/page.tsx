@@ -239,7 +239,7 @@ export default function ServiciosPage() {
       <PageHeader
         title="Matriz de Consultas"
         subtitle={insuranceName ? `Servicios de ${insuranceName}` : 'Cargando...'}
-        backLink={{ href: '/configuracion/aseguranzas', label: 'Aseguranzas' }}
+        backLink={{ href: '/configuracion/conceptos', label: 'Conceptos' }}
         action={
           insuranceName ? (
             <div className="flex items-center gap-2">

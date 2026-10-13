@@ -1,10 +1,10 @@
-import { redirect } from 'next/navigation';
+import FormularioConsulta from '@/components/consultations/FormularioConsulta';
 
-export default async function EditarConsultaRedirect({
+export default async function EditarConsultaPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/consultas/${id}`);
+  return <FormularioConsulta consultaId={id} />;
 }

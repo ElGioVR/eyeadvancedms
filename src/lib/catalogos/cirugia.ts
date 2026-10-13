@@ -37,7 +37,17 @@ export const TIPOS_DOCUMENTO_APOYO = [
   'Exámenes complementarios',
   'Estudios de gabinete',
   'Consentimiento informado',
+  'Estudios de laboratorio',
+  'Cálculo de lente',
 ] as const;
+
+/** Documentos que la cirugía debe llevar: si falta alguno, se indica el motivo. */
+export const DOCUMENTOS_REQUERIDOS: ReadonlyArray<{ tipo: string; etiqueta: string; soloConLente?: boolean }> = [
+  { tipo: 'Consulta de medicina interna', etiqueta: 'Consulta internista' },
+  { tipo: 'Estudios de laboratorio', etiqueta: 'Estudios de laboratorio' },
+  { tipo: 'Consentimiento informado', etiqueta: 'Consentimiento' },
+  { tipo: 'Cálculo de lente', etiqueta: 'Cálculo de lente', soloConLente: true },
+];
 export const TIPO_DOCUMENTO_OTRO = 'Otro';
 export const TIPO_MEDICINA_INTERNA = TIPOS_DOCUMENTO_APOYO[0];
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { EnlaceVolver } from '@/components/layout/RutaNavegacion';
 import { useEffect } from 'react';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import useSWR from 'swr';
@@ -72,7 +73,7 @@ export default function CirugiaDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 dark:text-gray-400">{error || 'Cirugía no encontrada'}</p>
-        <button onClick={() => router.push('/agenda')} className="mt-4 text-primary-600 hover:text-primary-700 text-sm font-semibold">Volver a Agenda</button>
+        <EnlaceVolver porDefecto={{ href: '/agenda', label: 'Agenda' }} className="mt-4 inline-block text-primary-600 hover:text-primary-700 text-sm font-semibold" />
       </div>
     );
   }

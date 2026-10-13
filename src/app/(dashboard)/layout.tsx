@@ -1,5 +1,6 @@
 'use client';
 
+import { RutaNavegacionProvider } from '@/components/layout/RutaNavegacion';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
@@ -23,6 +24,7 @@ export default function DashboardLayout({
   return (
     <ToastProvider>
       <PestanaUnica>
+        <RutaNavegacionProvider>
         <div className="min-h-screen flex bg-canvas">
           <Sidebar
             collapsed={sidebarCollapsed}
@@ -34,12 +36,12 @@ export default function DashboardLayout({
           <div
             className={cn(
               'flex-1 flex flex-col min-w-0 transition-[margin] duration-300',
-              'lg:ml-[76px]',
+              'lg:ml-[76px] print:!ml-0',
               sidebarCollapsed ? 'xl:ml-[76px]' : 'xl:ml-[272px]'
             )}
           >
             <TopBar onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
-            <main className="flex-1 overflow-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8">
+            <main className="flex-1 overflow-auto print:!overflow-visible print:!p-0 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8">
               {/* Entrada suave al cambiar de módulo (solo opacidad: sin transform, no rompe elementos fixed) */}
               <div key={pathname} className="animate-fadeIn">
                 {children}
@@ -51,6 +53,7 @@ export default function DashboardLayout({
           <OfflineAndInstall />
           <TiempoReal />
         </div>
+        </RutaNavegacionProvider>
       </PestanaUnica>
     </ToastProvider>
   );

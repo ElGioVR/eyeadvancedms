@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useRutaNavegacion, useVolver } from '@/components/layout/RutaNavegacion';
+import { usePathname } from 'next/navigation';
+import { rutaSinQuery } from '@/lib/navegacion/rutas';
 import { cn } from '@/lib/utils';
 
 interface BackLink {
@@ -22,10 +25,16 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({ title, subtitle, action, backLink, eyebrow, acento = true }: PageHeaderProps) {
+  const ruta = useRutaNavegacion();
+  const pathname = usePathname();
+  const volver = useVolver(backLink ?? { href: '/dashboard', label: 'Inicio' });
+  // Pantallas previas de la ruta recorrida (Pacientes › Agenda › …), sin la actual.
+  const previas = ruta.filter((e) => rutaSinQuery(e.href) !== rutaSinQuery(pathname ?? '')).slice(-3);
+  const usarRuta = !!backLink && volver.hayRuta && previas.length > 0;
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between lg:mb-8">
       <div className="min-w-0">
-        {backLink && (
+        {backLink && !usarRuta && (
           <Link
             href={backLink.href}
             onClick={backLink.onClick}
@@ -34,6 +43,23 @@ export default function PageHeader({ title, subtitle, action, backLink, eyebrow,
             <ChevronLeft className="h-4 w-4" />
             {backLink.label}
           </Link>
+        )}
+        {usarRuta && (
+          <nav aria-label="Ruta de navegación" className="mb-3 flex flex-wrap items-center gap-x-0.5 gap-y-1 text-sm font-medium text-muted">
+            {previas.map((e, i) => (
+              <span key={`${e.href}-${i}`} className="inline-flex items-center">
+                {i > 0 && <ChevronRight className="mx-0.5 h-3.5 w-3.5 opacity-60" aria-hidden />}
+                <Link
+                  href={e.href}
+                  className="inline-flex items-center gap-0.5 rounded-lg py-1 pr-1.5 transition-colors hover:text-fg"
+                  title={i === previas.length - 1 ? `Volver a ${e.label}` : e.label}
+                >
+                  {i === previas.length - 1 && <ChevronLeft className="h-4 w-4" aria-hidden />}
+                  {e.label}
+                </Link>
+              </span>
+            ))}
+          </nav>
         )}
         {eyebrow && (
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-600 dark:text-primary-300">

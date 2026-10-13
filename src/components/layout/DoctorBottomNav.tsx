@@ -1,5 +1,6 @@
 'use client';
 
+import { marcarReinicioRuta } from '@/lib/navegacion/rutas';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Calendar, Package, TrendingUp, User, Users, Menu } from 'lucide-react';
@@ -99,6 +100,7 @@ export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
               className="group relative flex flex-1 flex-col items-center justify-center gap-1 transition-transform active:scale-95"
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
+              onClick={marcarReinicioRuta}
             >
               <span
                 className={cn(

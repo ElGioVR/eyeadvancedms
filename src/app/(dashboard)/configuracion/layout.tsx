@@ -10,7 +10,7 @@ const tabs = [
   { label: 'Perfil', href: '/configuracion' },
   { label: 'Usuarios', href: '/configuracion/usuarios' },
   { label: 'Personal médico', href: '/configuracion/doctores' },
-  { label: 'Aseguranzas', href: '/configuracion/aseguranzas' },
+  { label: 'Conceptos', href: '/configuracion/conceptos' },
   { label: 'Marcas', href: '/configuracion/marcas' },
   { label: 'Mensajes', href: '/configuracion/mensajes' },
   { label: 'Sistema', href: '/configuracion/sistema' },
@@ -21,6 +21,7 @@ const TABS_ENFERMERIA = new Set(['/configuracion', '/configuracion/sistema']);
 
 function getActiveTab(pathname: string) {
   if (pathname === '/configuracion') return 'Perfil';
+  if (pathname.startsWith('/configuracion/aseguranzas')) return 'Conceptos';
   const match = tabs.find((t) => t.href !== '/configuracion' && pathname.startsWith(t.href));
   return match?.label || 'Perfil';
 }

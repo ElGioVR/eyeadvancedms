@@ -394,6 +394,22 @@ async function manejarPATCH(
     );
   }
 
+  // Honorarios: solo se devengan al COMPLETAR la consulta/estudio. Si deja de estar completada
+  // o se cancela, se retiran sus honorarios no pagados. Best-effort: no bloquea el cambio de estatus.
+  if (data.estatus !== undefined && data.estatus !== existing.estatus
+    && (data.estatus === 'COMPLETADA' || existing.estatus === 'COMPLETADA' || data.estatus === 'CANCELADA')) {
+    try {
+      const motor = new MotorDevengoService();
+      if (data.estatus === 'COMPLETADA') {
+        if (await motor.devengoAutomaticoActivo()) await motor.generarDesdeConsulta(id);
+      } else {
+        await motor.cancelarPorConsulta(id);
+      }
+    } catch (err) {
+      console.error('Honorarios al cambiar estatus de la consulta:', err);
+    }
+  }
+
   // Notificaciones al doctor por cancelación / reagendado (best-effort)
   const cancelada = data.estatus === 'CANCELADA' && existing.estatus !== 'CANCELADA';
   const reprogramada =

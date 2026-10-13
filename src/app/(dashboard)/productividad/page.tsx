@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   CheckCircle2,
+  ClipboardList,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -32,6 +33,7 @@ import FiltrosReporte from '@/components/productividad/FiltrosReporte';
 import ModalRangoFechas, { type RangoFechas } from '@/components/productividad/ModalRangoFechas';
 import Embudo from '@/components/productividad/Embudo';
 import PagosHistorial from '@/components/productividad/PagosHistorial';
+import ReportesTrazabilidad from '@/components/productividad/ReportesTrazabilidad';
 import ProgresoSync from '@/components/productividad/ProgresoSync';
 import {
   ejecutarSync,
@@ -77,7 +79,7 @@ const DoctorDetalle = dynamic(() => import('@/components/productividad/DoctorDet
   loading: () => <Skeleton className="h-72 w-full rounded-xl" />,
 });
 
-type VistaId = 'metricas' | 'honorarios' | 'doctores' | 'pagos' | 'sync';
+type VistaId = 'metricas' | 'honorarios' | 'doctores' | 'pagos' | 'trazabilidad' | 'sync';
 
 type ReporteCsvTab = 'metricas' | 'honorarios' | 'pagos' | 'entradas_salidas' | 'cirugias';
 
@@ -120,6 +122,7 @@ const VISTAS: Array<{ id: VistaId; label: string; icon: LucideIcon }> = [
   { id: 'honorarios', label: 'Honorarios', icon: Wallet },
   { id: 'doctores', label: 'Doctores', icon: Users },
   { id: 'pagos', label: 'Pagos', icon: History },
+  { id: 'trazabilidad', label: 'Trazabilidad', icon: ClipboardList },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
 ];
 
@@ -942,6 +945,8 @@ export default function ProductividadPage() {
       )}
 
       {vista === 'pagos' && <PagosHistorial desde={desde} hasta={hasta} doctorId={doctorId} />}
+
+      {vista === 'trazabilidad' && <ReportesTrazabilidad desde={desde} hasta={hasta} doctorId={doctorId} />}
 
       {vista === 'sync' && <SyncTab />}
 

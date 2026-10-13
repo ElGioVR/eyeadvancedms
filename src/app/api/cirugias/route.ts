@@ -1,3 +1,4 @@
+import { resolverServicioFacturacion } from '@/lib/cirugia-servicio-facturacion';
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
@@ -14,7 +15,7 @@ import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
 import { ruta } from '@/lib/api/ruta';
-import { liberarLentes, reservarLente } from '@/lib/cirugia-lentes';
+import { guardarPlanLentes, liberarLentes, reservarLente } from '@/lib/cirugia-lentes';
 import { liberarLIO } from '@/lib/inventario';
 import { idempotente } from '@/lib/api/idempotencia';
 
@@ -88,11 +89,23 @@ const personalSchema = z.object({
 const cirugiaCreateSchema = z.object({
   paciente_id: z.string().uuid(),
   origen_id: z.string().uuid(),
-  servicio_id: z.string().uuid(),
+  // Opcional: si falta, se resuelve desde los procedimientos quirúrgicos (el precio vive en el catálogo quirúrgico).
+  servicio_id: z.string().uuid().optional().nullable(),
+  // Procedimiento del catálogo quirúrgico (Conceptos). Se guarda tras crear la cirugía.
+  catalogo_quirurgico_id: z.string().uuid().optional().nullable(),
+  // Todos los procedimientos quirúrgicos de la cirugía (el primero también va en catalogo_quirurgico_id).
+  procedimientos_qx_ids: z.array(z.string().uuid()).max(10).optional().nullable(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD'),
   hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'La hora debe tener formato HH:MM o HH:MM:SS'),
   duracion_min: z.number().int().positive('La duración estimada debe ser mayor a 0').max(24 * 60, 'La duración estimada no puede exceder 24 horas'),
   recurso_id: z.string().uuid().optional().nullable(),
+  // Quirófano en texto libre (se guarda tras crear la cirugía).
+  quirofano: z.string().trim().max(100).optional().nullable(),
+  // Documentos requeridos que no se adjuntan, con su motivo.
+  documentos_faltantes: z.array(z.object({
+    tipo_documento: z.string().trim().min(1).max(100),
+    motivo: z.string().trim().min(1, 'Indica el motivo').max(300),
+  })).max(10).optional().nullable(),
   ojo: z.enum(['OD', 'OI', 'OU']),
   inventario_item_id: z.string().uuid().optional().nullable(),
   lio: z.string().min(1).max(255).optional().nullable(),
@@ -109,6 +122,18 @@ const cirugiaCreateSchema = z.object({
     fabricante: z.string().trim().max(255).optional().nullable(),
     poder_d: z.number().min(0).max(40).optional().nullable(),
   }).refine((l) => l.origen === 'HOSPITAL' || !!l.inventario_item_id, { message: 'Falta el lente de inventario' })).max(2).optional(),
+  // Plan de lentes (primero, segundo y respaldo): asignar / solicitar / compra directa.
+  lentes_plan: z.array(z.object({
+    orden: z.enum(['PRIMERO', 'SEGUNDO', 'RESPALDO']),
+    modo: z.enum(['ASIGNAR', 'SOLICITAR', 'COMPRA_DIRECTA']),
+    torico: z.boolean(),
+    marca: z.boolean(),
+    fabricante: z.string().trim().max(255).optional().nullable(),
+    modelo: z.string().trim().max(255).optional().nullable(),
+    poder_d: z.number().min(0).max(40).optional().nullable(),
+    cilindro: z.number().min(0).max(12).optional().nullable(),
+    inventario_item_id: z.string().uuid().optional().nullable(),
+  }).refine((l) => l.modo !== 'ASIGNAR' || !!l.inventario_item_id, { message: 'Falta la pieza de inventario a asignar' })).max(3).optional(),
   participantes: z.array(participanteSchema).min(1, 'Debe asignar al menos un participante').max(20, 'Demasiados participantes'),
   notas: z.string().max(2000).optional().nullable(),
   // Punto I (Modificaciones agenda): diagnóstico propio y anestesia obligatoria.
@@ -157,6 +182,14 @@ async function manejarPOST(request: Request) {
   if (data instanceof NextResponse) return data;
 
   const supabase = getSupabaseAdmin();
+
+  // Servicio de facturación: sin uno explícito se resuelve desde el catálogo quirúrgico.
+  if (!data.servicio_id) {
+    const qx = Array.from(new Set([...(data.procedimientos_qx_ids ?? []), ...(data.catalogo_quirurgico_id ? [data.catalogo_quirurgico_id] : [])]));
+    const r = await resolverServicioFacturacion(supabase, data.origen_id, qx);
+    if (!r.id) return NextResponse.json({ error: r.error || 'Debe seleccionar un procedimiento quirúrgico' }, { status: 400 });
+    data.servicio_id = r.id;
+  }
 
   // AGE-001 / AGE-002 / VAL-005: detectar conflictos de agenda antes de crear.
   // Médicos con horario propio (equipo homologado) se revisan con su rango;
@@ -238,10 +271,18 @@ async function manejarPOST(request: Request) {
   }
 
   if (conflictos.length > 0) {
-    return NextResponse.json(
-      { error: 'Conflicto de agenda', conflictos },
-      { status: 409 }
-    );
+    // Un mismo choque puede venir dos veces (verificación de la app y de la BD): se deja uno.
+    const vistos = new Set<string>();
+    const unicos = conflictos.filter((c) => {
+      const k = `${String(c.tipo).toLowerCase()}|${c.entidad_id}|${c.hora_inicio}`;
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+    const c = unicos[0];
+    const tipoTxt = String(c.tipo).toLowerCase();
+    const mensaje = `El médico ya tiene ${tipoTxt === 'estudio' ? 'un estudio' : tipoTxt === 'consulta' ? 'una consulta' : tipoTxt === 'cirugia' ? 'una cirugía' : `un(a) ${tipoTxt}`} el ${c.fecha} de ${String(c.hora_inicio).slice(0, 5)} a ${String(c.hora_fin).slice(0, 5)}. Elige otro horario u otro médico.`;
+    return NextResponse.json({ error: mensaje, conflictos: unicos }, { status: 409 });
   }
 
   // Misma persona, fecha y ojo (sin cancelar ni reagendar) → hay que decidir si es
@@ -300,6 +341,25 @@ async function manejarPOST(request: Request) {
   }
 
   const cirugiaId = (result as any)?.cirugia_id;
+  if (cirugiaId && (data.catalogo_quirurgico_id || data.quirofano || data.documentos_faltantes?.length)) {
+    await supabase
+      .from('agenda_cirugias')
+      .update({
+        ...(data.catalogo_quirurgico_id ? { catalogo_quirurgico_id: data.catalogo_quirurgico_id } : {}),
+        ...(data.quirofano ? { quirofano: data.quirofano } : {}),
+        ...(data.documentos_faltantes?.length ? { documentos_faltantes: data.documentos_faltantes } : {}),
+      })
+      .eq('id', cirugiaId);
+  }
+  const qxIds = Array.from(new Set(data.procedimientos_qx_ids ?? []));
+  if (cirugiaId && qxIds.length) {
+    await supabase
+      .from('agenda_cirugias_procedimientos_qx')
+      .upsert(
+        qxIds.map((id, i) => ({ cirugia_id: cirugiaId, catalogo_quirurgico_id: id, orden: i + 1 })),
+        { onConflict: 'cirugia_id,catalogo_quirurgico_id' },
+      );
+  }
   if (cirugiaId && data.tipo_caso) {
     await supabase
       .from('agenda_cirugias')
@@ -442,6 +502,15 @@ async function manejarPOST(request: Request) {
           { status: 409 }
         );
       }
+    }
+  }
+
+  if (cirugiaId && data.lentes_plan?.length) {
+    const r = await guardarPlanLentes(cirugiaId, data.lentes_plan);
+    if (!r.ok) {
+      await liberarLentes(cirugiaId);
+      await supabase.from('agenda_cirugias').update({ estado: 'cancelada', updated_at: new Date().toISOString() }).eq('id', cirugiaId);
+      return NextResponse.json({ error: `Lente ${r.orden.toLowerCase()}: ${r.error}` }, { status: 409 });
     }
   }
 

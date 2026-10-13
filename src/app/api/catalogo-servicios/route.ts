@@ -5,6 +5,7 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { requireAuth } from '@/lib/supabase/server';
 import { leerQuery, uuid } from '@/lib/api/validar';
 import { ruta } from '@/lib/api/ruta';
+import { TABLA_GENERICA, type TipoServicio } from '@/lib/api/catalogo-generico';
 
 const querySchema = z.object({
   // IDs no UUID se ignoran (antes: aseguranza_id se descartaba en silencio y un
@@ -72,15 +73,46 @@ async function manejarGET(request: Request) {
     query = query.ilike('nombre', `%${termino.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
   }
 
-  const { data: servicios, error } = await query;
+  // Catálogos genéricos (Configuración → Conceptos): también se pueden usar en la
+  // consulta aunque la aseguranza aún no tenga su copia con precio propio.
+  const tipos: TipoServicio[] = tipo ? [tipo] : ['CONSULTA', 'ESTUDIO', 'PROCEDIMIENTO'];
+  const genericosP = Promise.all(
+    tipos.map(async (t) => {
+      let g = supabase.from(TABLA_GENERICA[t]).select('id, nombre, costo').eq('activo', true).order('nombre').limit(MAX_SERVICIOS);
+      if (termino) g = g.ilike('nombre', `%${termino.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      const { data, error: errG } = await g;
+      // Tabla inexistente (migración pendiente) u otro fallo: se omite ese catálogo
+      return errG || !data ? [] : data.map((f) => ({ ...f, tipo: t }));
+    }),
+  );
+
+  const [{ data: servicios, error }, genericos] = await Promise.all([query, genericosP]);
 
   if (error) {
     return NextResponse.json({ error: handleSupabaseError(error, 'catalogo-servicios.listar').mensaje }, { status: 500 });
   }
 
+  const norm = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  const propios = servicios || [];
+  const existentes = new Set(propios.map((s) => `${s.tipo}|${norm(s.nombre)}`));
+  const extra = genericos
+    .flat()
+    .filter((g) => !existentes.has(`${g.tipo}|${norm(g.nombre)}`))
+    .map((g) => ({
+      id: g.id,
+      tipo: g.tipo,
+      nombre: g.nombre,
+      costo: Number(g.costo) || 0,
+      porcentaje_cobertura: null,
+      requiere_lio: false,
+      generico: true,
+    }));
+
+  const todos = [...propios, ...extra].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
   return NextResponse.json({
     aseguranza_id: aseguranzaId,
-    servicios: servicios || [],
+    servicios: todos,
   });
 }
 

@@ -5,7 +5,7 @@
  *  - Por confirmar: citas de hoy/mañana → WhatsApp con el mensaje de
  *    confirmación (eligiendo el número), «Confirmó», reagendar o cancelar.
  *  - Por cerrar: citas que ya terminaron y siguen abiertas → completar,
- *    posponer, aplazar o cancelar. Incluye un buscador de TODAS las citas
+ *    posponer o cancelar. Incluye un buscador de TODAS las citas
  *    pasadas con su resultado («qué pasó») e historial para darles seguimiento.
  * Todo lo que depende de la hora lo calcula el servidor (sin Date en el render inicial).
  */
@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { fetchJSON } from '@/lib/fetcher';
 import {
   AlertTriangle, Bell, CalendarClock, CheckCircle2, ChevronDown, ExternalLink, History, Inbox,
-  MessageCircle, PauseCircle, RefreshCw, Search, Send, Star, X, XCircle,
+  MessageCircle, RefreshCw, Search, Send, Star, X, XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { enviarJSON, mensajeDeError } from '@/lib/fetcher';
@@ -100,7 +100,7 @@ interface CitaAccion {
   doctor: string | null;
 }
 
-/** Evento mínimo que necesita el modal de aplazar/reagendar/cancelar. */
+/** Evento mínimo que necesita el modal de reagendar/cancelar. */
 function comoEvento(i: CitaAccion): AgendaCirugia {
   return {
     id: i.id,
@@ -174,11 +174,6 @@ function AccionesCierre({
       <button type="button" disabled={ocupado} onClick={() => onAccion(i, 'reagendar')} className={BTN}>
         <CalendarClock className="h-3.5 w-3.5" /> Posponer
       </button>
-      {(i.tipo !== 'cirugia' || i.estado === 'agendada') && (
-        <button type="button" disabled={ocupado} onClick={() => onAccion(i, 'aplazar')} className={BTN}>
-          <PauseCircle className="h-3.5 w-3.5" /> Aplazar
-        </button>
-      )}
       {(i.tipo !== 'cirugia' || i.estado === 'agendada') && (
         <button type="button" disabled={ocupado} onClick={() => onAccion(i, 'cancelar')} className={cn(BTN, 'text-rose-700 dark:text-rose-300')}>
           <XCircle className="h-3.5 w-3.5" /> Cancelar

@@ -77,7 +77,7 @@ interface Props {
   /** Avisa al padre del mes visible para que cargue ese rango de datos. */
   onMonthChange?: (year: number, month: number) => void;
   loading?: boolean;
-  /** Acciones rápidas disponibles para el evento (aplazar / reagendar / cancelar). */
+  /** Acciones rápidas disponibles para el evento (reagendar / cancelar). */
   getAcciones?: (cirugia: AgendaCirugia) => AccionRapida[];
   onAccion?: (cirugia: AgendaCirugia, accion: AccionRapida) => void;
   /** «Agendar consulta» con los datos del evento precargados. */

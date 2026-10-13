@@ -40,6 +40,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import ClientDate from '@/components/ui/ClientDate';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import { SkeletonTarjetas } from '@/components/ui/Skeleton';
+import PlanResurtimiento from '@/components/inventario/PlanResurtimiento';
 
 const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
@@ -330,6 +331,8 @@ export default function InventarioPage() {
           </div>
         ))}
       </div>
+
+      <PlanResurtimiento puedeEditar={puedeEscribir} />
 
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-3 shadow-soft dark:shadow-none sm:p-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar folio, código, marca, modelo…" />

@@ -2,10 +2,10 @@
 
 /**
  * Acciones rápidas de agenda (Modificaciones agenda, punto IV):
- * aplazar, reagendar, cancelar y agendar SIN entrar al perfil del paciente.
+ * reagendar, cancelar y agendar SIN entrar al perfil del paciente.
  *
  * Rutas por tipo de evento:
- *  - consulta / estudio → POST /api/consultas/[id]/acciones (aplazar | reagendar | cancelar)
+ *  - consulta / estudio → POST /api/consultas/[id]/acciones (reagendar | cancelar)
  *  - cirugía            → PATCH /api/agenda/[id] (estado + motivo; fecha/hora al reagendar)
  * Alta rápida → POST /api/consultas (el servidor valida empalmes y responde 409).
  */
@@ -37,21 +37,19 @@ async function ejecutarAccion(
 ): Promise<Partial<AgendaCirugia>> {
   if (esConsulta(evento)) {
     const body: Record<string, unknown> = { accion, motivo: datos.motivo };
-    if (accion !== 'cancelar' && datos.hora) {
+    if (accion === 'reagendar' && datos.hora) {
       body.hora_inicio = datos.hora;
       body.hora_fin = sumarMinutos(datos.hora, DURACION_CITA_MIN);
-      if (accion === 'reagendar') body.fecha = datos.fecha;
+      body.fecha = datos.fecha;
     }
     await enviarJSON(`/api/consultas/${evento.id}/acciones`, 'POST', body);
     if (accion === 'cancelar') return { estado: 'cancelada' };
-    if (accion === 'aplazar') return { estado: 'aplazada', hora: datos.hora ?? evento.hora };
     return { estado: 'reagendada', fecha: datos.fecha ?? evento.fecha, hora: datos.hora ?? evento.hora };
   }
 
   // Cirugía
   const cambios: Record<string, unknown> = { motivo: datos.motivo };
   if (accion === 'cancelar') cambios.estado = 'cancelada';
-  if (accion === 'aplazar') cambios.estado = 'aplazada';
   if (accion === 'reagendar') {
     cambios.fecha = datos.fecha;
     cambios.hora = datos.hora;
@@ -60,7 +58,6 @@ async function ejecutarAccion(
   await enviarJSON(`/api/agenda/${evento.id}`, 'PATCH', cambios);
   return {
     estado: (cambios.estado as AgendaCirugia['estado']) ?? evento.estado,
-    ...(accion === 'aplazar' ? { motivo_aplazamiento: datos.motivo } : {}),
     ...(accion === 'reagendar' ? { fecha: datos.fecha ?? evento.fecha, hora: datos.hora ?? evento.hora } : {}),
   };
 }
@@ -69,7 +66,7 @@ function mensaje(err: unknown): string {
   return err instanceof Error && err.message ? err.message : 'No se pudo completar la acción';
 }
 
-/* ───────── Modal de acción (aplazar / reagendar / cancelar) ───────── */
+/* ───────── Modal de acción (reagendar / cancelar) ───────── */
 
 export function AccionRapidaModal({
   evento,
@@ -89,8 +86,7 @@ export function AccionRapidaModal({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Consulta aplazada = mismo día, otra hora. Cirugía aplazada = sin nueva fecha.
-  const pideHora = accion === 'reagendar' || (accion === 'aplazar' && consulta);
+  const pideHora = accion === 'reagendar';
   const pideFecha = accion === 'reagendar';
   const duracion = consulta ? DURACION_CITA_MIN : evento.duracion_min ?? 60;
 
@@ -102,8 +98,7 @@ export function AccionRapidaModal({
     setError(null);
     try {
       const cambios = await ejecutarAccion(evento, accion, { motivo: motivo.trim(), fecha, hora });
-      const texto =
-        accion === 'cancelar' ? 'Cita cancelada' : accion === 'aplazar' ? 'Cita aplazada' : 'Cita reagendada';
+      const texto = accion === 'cancelar' ? 'Cita cancelada' : 'Cita reagendada';
       onDone(cambios, texto);
     } catch (err) {
       setError(mensaje(err));
@@ -127,12 +122,6 @@ export function AccionRapidaModal({
           </p>
         </div>
 
-        {accion === 'aplazar' && !consulta && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-            La cirugía quedará aplazada sin fecha nueva. Para moverla a otro día usa «Reagendar».
-          </p>
-        )}
-
         {pideFecha && (
           <FormField label="Nueva fecha" required>
             <input type="date" value={fecha} onChange={(e) => { setFecha(e.target.value); setHora(''); }} className="input-field" />
@@ -140,7 +129,7 @@ export function AccionRapidaModal({
         )}
         {pideHora && (
           <SelectorHoraSlot
-            label={accion === 'aplazar' ? 'Nueva hora (mismo día)' : 'Nueva hora'}
+            label="Nueva hora"
             required
             medicoId={evento.doctor_id}
             fecha={fecha}

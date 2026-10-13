@@ -49,11 +49,11 @@ describe('agenda-slots (intervalos de 15 min)', () => {
   });
 });
 
-describe('agenda-acciones (aplazar / reagendar / cancelar)', () => {
+describe('agenda-acciones (reagendar / cancelar)', () => {
   it('consultas y estudios activos admiten las tres acciones para cualquier rol', () => {
     for (const rol of ['admin', 'recepcionista', 'doctor']) {
-      assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'agendada' }, rol), ['aplazar', 'reagendar', 'cancelar']);
-      assert.deepEqual(accionesDisponibles({ tipo: 'estudio', estado: 'aplazada' }, rol), ['aplazar', 'reagendar', 'cancelar']);
+      assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'agendada' }, rol), ['reagendar', 'cancelar']);
+      assert.deepEqual(accionesDisponibles({ tipo: 'estudio', estado: 'aplazada' }, rol), ['reagendar', 'cancelar']);
     }
   });
 
@@ -68,12 +68,12 @@ describe('agenda-acciones (aplazar / reagendar / cancelar)', () => {
   });
 
   it('cirugías respetan la máquina de estados y el rol', () => {
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'recepcionista'), ['aplazar', 'reagendar', 'cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'recepcionista'), ['reagendar', 'cancelar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'reagendada' }, 'admin'), ['reagendar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'aplazada' }, 'admin'), []);
     // Doctor con acceso total a la agenda (oct 2026); enfermería solo consulta.
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'doctor'), ['aplazar', 'reagendar', 'cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'doctor'), ['reagendar', 'cancelar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), []);
-    assert.deepEqual(accionesDisponibles({ estado: 'agendada' }, 'admin'), ['aplazar', 'reagendar', 'cancelar']);
+    assert.deepEqual(accionesDisponibles({ estado: 'agendada' }, 'admin'), ['reagendar', 'cancelar']);
   });
 });

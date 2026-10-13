@@ -13,6 +13,9 @@ interface Props {
   modelos: ModeloLio[];
   torico: boolean;
   onTorico: (v: boolean) => void;
+  /** Check «Marca» (true/false) junto a Tórico. */
+  marca?: boolean;
+  onMarca?: (v: boolean) => void;
   fabricante: string;
   onFabricante: (v: string) => void;
   modeloId: string;
@@ -23,7 +26,7 @@ interface Props {
 const etiquetaDiseno = (d: string) => DISENOS_LIO.find((x) => x.value === d)?.label || d;
 const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export default function SelectorModeloLio({ modelos, torico, onTorico, fabricante, onFabricante, modeloId, onModelo, cargando }: Props) {
+export default function SelectorModeloLio({ modelos, torico, onTorico, marca, onMarca, fabricante, onFabricante, modeloId, onModelo, cargando }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [abierto, setAbierto] = useState(false);
   const cajaRef = useRef<HTMLDivElement>(null);
@@ -57,6 +60,7 @@ export default function SelectorModeloLio({ modelos, torico, onTorico, fabricant
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-y-2">
       <label className="inline-flex cursor-pointer items-center gap-2">
         <span className="relative">
           <input
@@ -71,6 +75,13 @@ export default function SelectorModeloLio({ modelos, torico, onTorico, fabricant
         <span className="text-sm font-bold text-fg">Tórico</span>
         <span className="text-xs text-muted">{torico ? 'Solo lentes tóricos' : 'Solo lentes no tóricos'}</span>
       </label>
+      {onMarca && (
+        <label className="ml-5 inline-flex cursor-pointer items-center gap-2">
+          <input type="checkbox" className="h-4 w-4 rounded border-line" checked={!!marca} onChange={(e) => onMarca(e.target.checked)} />
+          <span className="text-sm font-bold text-fg">Marca</span>
+        </label>
+      )}
+      </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>

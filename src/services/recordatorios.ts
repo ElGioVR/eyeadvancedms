@@ -1,6 +1,6 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { notificarUsuarios, usuariosDeDoctores } from '@/services/notificaciones';
+import { notificarRoles, notificarUsuarios, usuariosDeDoctores } from '@/services/notificaciones';
 
 const MINUTOS_ANTES = parseInt(process.env.AGENDA_NOTIFICACION_MINUTOS || '30', 10);
 
@@ -75,6 +75,82 @@ export async function procesarRecordatoriosCirugia(): Promise<{ revisadas: numbe
   return { revisadas: aEnviar.length, enviadas };
 }
 
+/** Hora (Tijuana) a partir de la cual se manda el recordatorio de inicio de jornada. */
+const HORA_INICIO_JORNADA = parseInt(process.env.AGENDA_INICIO_JORNADA_HORA || '7', 10);
+
+/**
+ * Recordatorio de inicio de jornada: lentes de COMPRA DIRECTA de las cirugías de hoy
+ * que aún no se han confirmado como listos. Cada lente se reclama de forma atómica
+ * (recordado_fecha = hoy) → un solo aviso por día aunque corra en varias instancias.
+ * Requiere sql/patch-lentes-logistica-supabase.sql.
+ */
+export async function procesarRecordatorioLentesCompraDirecta(): Promise<{ enviadas: number }> {
+  const ahora = ahoraTijuana();
+  const hoy = new Date(ahora).toISOString().slice(0, 10);
+  const hora = new Date(ahora).getUTCHours();
+  if (hora < HORA_INICIO_JORNADA) return { enviadas: 0 };
+
+  const supabase = getSupabaseAdmin();
+  const { data: lentes, error } = await supabase
+    .from('cirugia_lentes')
+    .select('id, cirugia_id, orden, fabricante, modelo, poder_d, cilindro, torico, agenda_cirugias!inner(fecha, hora, nombre_paciente, doctor_id, estado)')
+    .eq('modo', 'COMPRA_DIRECTA')
+    .eq('estado', 'RESERVADO')
+    .eq('estado_logistica', 'POR_COMPRAR')
+    .eq('agenda_cirugias.fecha', hoy)
+    .eq('agenda_cirugias.estado', 'agendada')
+    .or(`recordado_fecha.is.null,recordado_fecha.lt.${hoy}`)
+    .limit(200);
+  if (error) throw new Error('Error al consultar lentes de compra directa');
+  if (!lentes?.length) return { enviadas: 0 };
+
+  // Reclamo atómico por lente.
+  const { data: reclamados } = await supabase
+    .from('cirugia_lentes')
+    .update({ recordado_fecha: hoy })
+    .in('id', lentes.map((l) => l.id))
+    .or(`recordado_fecha.is.null,recordado_fecha.lt.${hoy}`)
+    .select('id');
+  const mios = new Set((reclamados ?? []).map((r) => r.id));
+  const aEnviar = (lentes as any[])
+    .filter((l) => mios.has(l.id))
+    .map((l) => ({ l, c: Array.isArray(l.agenda_cirugias) ? l.agenda_cirugias[0] : l.agenda_cirugias }))
+    .filter((x) => x.c);
+  if (!aEnviar.length) return { enviadas: 0 };
+
+  const linea = ({ l, c }: (typeof aEnviar)[number]) =>
+    `${c.hora ? String(c.hora).slice(0, 5) + ' ' : ''}${c.nombre_paciente}: ${[l.fabricante, l.modelo].filter(Boolean).join(' ')}${l.poder_d != null ? ` ${l.poder_d}D` : ''}${l.torico && l.cilindro != null ? ` cil. ${l.cilindro}` : ''}`;
+
+  // Inventario / recepción: todos los lentes del día en un solo aviso.
+  let enviadas = await notificarRoles(['admin', 'recepcionista'], {
+    tipo: 'SISTEMA',
+    titulo: `Lentes de compra directa para hoy (${aEnviar.length})`,
+    mensaje: aEnviar.map(linea).join(' · '),
+    entidadTipo: 'agenda_cirugia',
+    entidadId: aEnviar[0].l.cirugia_id,
+  });
+
+  // Cada doctor: solo los de sus cirugías.
+  const porDoctor = new Map<string, typeof aEnviar>();
+  for (const x of aEnviar) {
+    if (!x.c.doctor_id) continue;
+    porDoctor.set(x.c.doctor_id, [...(porDoctor.get(x.c.doctor_id) ?? []), x]);
+  }
+  const usuarios = await usuariosDeDoctores([...porDoctor.keys()]);
+  for (const [doctorId, items] of porDoctor) {
+    const userId = usuarios.get(doctorId);
+    if (!userId) continue;
+    enviadas += await notificarUsuarios([userId], {
+      tipo: 'SISTEMA',
+      titulo: `Confirma tus lentes de compra directa (${items.length})`,
+      mensaje: `Antes de iniciar: ${items.map(linea).join(' · ')}`,
+      entidadTipo: 'agenda_cirugia',
+      entidadId: items[0].l.cirugia_id,
+    });
+  }
+  return { enviadas };
+}
+
 /**
  * "Cron sin cron" para el plan gratuito de Vercel: se invoca desde el sondeo de
  * notificaciones que hace cada usuario conectado (cada 30 s). Como mucho corre
@@ -89,7 +165,10 @@ export async function procesarRecordatoriosSiToca(): Promise<void> {
   const ahora = Date.now();
   if (enCurso || ahora - ultimaCorrida < INTERVALO_MS) return;
   ultimaCorrida = ahora;
-  enCurso = procesarRecordatoriosCirugia()
+  enCurso = Promise.all([
+    procesarRecordatoriosCirugia(),
+    procesarRecordatorioLentesCompraDirecta(),
+  ])
     .catch((e) => console.error('[recordatorios]', e))
     .finally(() => {
       enCurso = null;

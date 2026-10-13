@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
 
 export interface PacienteAPI {
   id: string;
@@ -14,6 +15,9 @@ export interface PacienteAPI {
   email: string | null;
   direccion: string | null;
   numero_expediente?: string | null;
+  fecha_nacimiento?: string | null;
+  /** Lista completa de teléfonos (GET /api/pacientes/[id]). */
+  telefonos?: TelefonoPaciente[];
   /** true = viene de /api/search (sin edad/sexo/aseguranza); se completa al seleccionarlo. */
   parcial?: boolean;
   subtitulo?: string;
@@ -127,6 +131,8 @@ export type ServicioPaciente = {
   nombre: string;
   costo: number;
   porcentaje_cobertura?: number | null;
+  /** true = concepto del catálogo general (la aseguranza aún no tiene su copia) */
+  generico?: boolean;
 };
 
 export interface PacienteDetalleAPI {
@@ -139,6 +145,9 @@ export interface PacienteDetalleAPI {
   telefono?: string | null;
   email?: string | null;
   direccion?: string | null;
+  numero_expediente?: string | null;
+  fecha_nacimiento?: string | null;
+  telefonos?: TelefonoPaciente[];
 }
 
 /** GET /api/pacientes/[id] → forma que usa el selector (sexo H/M). */
@@ -155,6 +164,9 @@ export function normalizarPacienteDetalle(p: PacienteDetalleAPI): PacienteAPI {
     telefono: p.telefono ?? null,
     email: p.email ?? null,
     direccion: p.direccion ?? null,
+    numero_expediente: p.numero_expediente ?? null,
+    fecha_nacimiento: p.fecha_nacimiento ?? null,
+    telefonos: p.telefonos ?? [],
   };
 }
 

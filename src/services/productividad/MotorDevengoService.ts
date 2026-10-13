@@ -68,7 +68,12 @@ function resultadoVacio(): ResultadoDevengo {
   };
 }
 
-const ESTATUS_DEVENGABLES = ['AGENDADA', 'PROCESADA', 'COMPLETADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA'];
+/**
+ * Regla general: un honorario solo se devenga cuando el servicio (consulta, estudio o
+ * cirugía) está COMPLETADO. Antes de eso no existe evento; si el servicio deja de estar
+ * completado o se cancela, sus eventos no pagados se cancelan.
+ */
+const ESTATUS_DEVENGABLES = ['COMPLETADA'];
 
 export class MotorDevengoService {
   private supabase = getSupabaseAdmin();
@@ -78,6 +83,12 @@ export class MotorDevengoService {
    * se hacía 1 viaje por evento creado.
    */
   private periodoPorFecha = new Map<string, Promise<string | null>>();
+
+  /** Config «Devengo automático» de Configuración › Honorarios (activo por defecto). */
+  async devengoAutomaticoActivo(): Promise<boolean> {
+    const { data } = await this.supabase.from('configuracion_sistema').select('valor').eq('clave', 'honorarios').maybeSingle();
+    return (data?.valor as Record<string, unknown> | null)?.devengo_automatico !== false;
+  }
 
   async marcarDeployed(tabla: 'consultas' | 'agenda_cirugias', id: string): Promise<void> {
     await this.supabase
@@ -121,7 +132,7 @@ export class MotorDevengoService {
             .select('id, doctor_id, fecha, estado, deployed_to_performance, consulta_id')
             .gte('fecha', gte)
             .lte('fecha', lte)
-            .neq('estado', 'cancelada')
+            .eq('estado', 'completada')
             .order('id', { ascending: true })
             .range(a, b)
       ),
@@ -307,7 +318,14 @@ export class MotorDevengoService {
     if (e1 || !consulta) throw new Error(`Consulta ${consultaId} no encontrada`);
 
     if (consulta.estatus === 'CANCELADA') {
+      await this.cancelarPorConsulta(consultaId);
       resultado.ligados_sin_linea += 1;
+      return resultado;
+    }
+
+    // Solo las consultas / estudios COMPLETADOS devengan honorarios.
+    if (!ESTATUS_DEVENGABLES.includes(consulta.estatus)) {
+      await this.cancelarPorConsulta(consultaId);
       return resultado;
     }
 
@@ -464,6 +482,12 @@ export class MotorDevengoService {
     if (e1 || !cirugia) throw new Error(`Cirugía ${cirugiaId} no encontrada`);
 
     if (cirugia.estado === 'cancelada') {
+      await this.cancelarPorCirugia(cirugiaId);
+      return resultado;
+    }
+
+    // Solo las cirugías COMPLETADAS devengan honorarios.
+    if (cirugia.estado !== 'completada') {
       await this.cancelarPorCirugia(cirugiaId);
       return resultado;
     }

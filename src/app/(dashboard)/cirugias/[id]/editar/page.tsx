@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation';
+import FormularioCirugia from '@/components/cirugia/FormularioCirugia';
 
-/** La edición ahora vive en el mismo detalle de la cirugía; esta ruta solo redirige. */
-export default async function EditarCirugiaRedirect({ params }: { params: Promise<{ id: string }> }) {
+/** Edición de cirugía: el mismo formulario que la alta, con los datos ya llenos. */
+export default async function EditarCirugiaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  redirect(`/cirugias/${id}`);
+  return <FormularioCirugia cirugiaId={id} />;
 }

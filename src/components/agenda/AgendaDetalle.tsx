@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { type TelefonoPaciente } from '@/lib/telefonos-paciente';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
+import EstadoLentesCirugia from '@/components/agenda/EstadoLentesCirugia';
 import CompletarCirugiaLentes from '@/components/agenda/CompletarCirugiaLentes';
 import { type OrdenLente } from '@/lib/cirugia-lentes-puro';
 
@@ -59,8 +60,16 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
         <CompletarCirugiaLentes
           cirugiaId={cirugia.id}
           onCancel={() => setCompletando(false)}
-          onConfirm={async (requeridos: OrdenLente[]) => {
-            await enviarJSON(`/api/agenda/${cirugia.id}`, 'PATCH', { estado: 'completada', lentes_requeridos: requeridos });
+          onConfirm={async (d) => {
+            await enviarJSON(`/api/agenda/${cirugia.id}`, 'PATCH', {
+              estado: 'completada',
+              motivo: 'Cirugía completada',
+              lentes_requeridos: d.requeridos,
+              lentes_ingresar_inventario: d.ingresarAInventario,
+              diagnostico_definitivo: d.diagnostico_definitivo,
+              cirugia_realizada: d.cirugia_realizada,
+              complicaciones: d.complicaciones,
+            });
             setCompletando(false);
             onRefetch();
           }}
@@ -100,6 +109,9 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
           </div>
         ))}
       </div>
+      {cirugia.estado === 'agendada' && !agendaSoloPropia(userRol) && (
+        <EstadoLentesCirugia cirugiaId={cirugia.id} puedeConfirmar />
+      )}
       {cirugia.notas && (
         <div className="rounded-lg bg-surface-2 border border-line/70 p-3">
           <div className="flex items-center gap-1.5 mb-1"><StickyNote className="h-3 w-3 text-gray-400" /><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Notas</span></div>
@@ -130,7 +142,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
 /* ───────── Detail Popover Card (Google Calendar style) ───────── */
 export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEstado, onAccion }: {
   cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
-  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado, extra?: { lentes_requeridos?: OrdenLente[] }) => Promise<void>;
+  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado, extra?: { lentes_requeridos?: OrdenLente[]; lentes_ingresar_inventario?: OrdenLente[]; diagnostico_definitivo?: string; cirugia_realizada?: string; complicaciones?: string }) => Promise<void>;
   onAccion: (accion: AccionRapida) => void;
 }) {
   const router = useRouter();
@@ -182,8 +194,14 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
       <CompletarCirugiaLentes
         cirugiaId={cirugia.id}
         onCancel={() => setCompletando(false)}
-        onConfirm={async (requeridos: OrdenLente[]) => {
-          await onEstado('completada', { lentes_requeridos: requeridos });
+        onConfirm={async (d) => {
+          await onEstado('completada', {
+            lentes_requeridos: d.requeridos,
+            lentes_ingresar_inventario: d.ingresarAInventario,
+            diagnostico_definitivo: d.diagnostico_definitivo,
+            cirugia_realizada: d.cirugia_realizada,
+            complicaciones: d.complicaciones,
+          });
           setCompletando(false);
         }}
       />

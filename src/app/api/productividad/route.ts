@@ -13,6 +13,7 @@ import {
 } from '@/lib/rangos';
 import { listarResumenHonorarios, type ResumenFila } from '@/lib/productividad';
 import { ruta } from '@/lib/api/ruta';
+import { ESTATUS_CONSULTA_REPORTE, estatusConsultaCrudos, parseEstatusReporte } from '@/lib/reportes-estatus';
 
 type TabId = 'honorarios' | 'por_doctor' | 'cirugias' | 'entradas_salidas' | 'estudios' | 'pagos' | 'tarifas' | 'periodos' | 'sync';
 
@@ -29,6 +30,7 @@ const querySchema = z.object({
   doctor_id: uuidOpcional,
   formato: z.string().max(10).optional(),
   tab: z.string().max(40).optional(),
+  estatus: z.string().max(200).optional(),
 });
 
 /** Lee `LIMITE_PANTALLA` filas o, para CSV, todas paginando con `.range()`. */
@@ -164,7 +166,8 @@ async function cargarTabs(
   hasta: string,
   doctorId: string | null,
   tabs: TabId[],
-  completo = false
+  completo = false,
+  estatusConsulta: string[] | null = null
 ) {
   const supabase = getSupabaseAdmin();
   const need = (t: TabId) => tabs.includes(t);
@@ -218,6 +221,7 @@ async function cargarTabs(
             .order('hora_inicio', { ascending: false })
             .order('id', { ascending: true });
           if (doctorId) q = q.eq('doctor_id', doctorId);
+          if (estatusConsulta) q = q.in('estatus', estatusConsulta);
           return q.range(a, b);
         }, completo).then(consolidarConsultas)
       : Promise.resolve([]),
@@ -516,6 +520,7 @@ async function manejarGET(request: Request) {
   if (q instanceof NextResponse) return q;
   const { desde, hasta } = rangoPersonalizado(q.desde, q.hasta);
   const doctorId = q.doctor_id ?? null;
+  const estatusConsulta = estatusConsultaCrudos(parseEstatusReporte(q.estatus, ESTATUS_CONSULTA_REPORTE));
   const formato = (q.formato || 'json').toLowerCase();
   const tabRaw = q.tab || 'honorarios';
   const tab = (TABS.includes(tabRaw as TabId) ? tabRaw : 'honorarios') as TabId;
@@ -531,7 +536,7 @@ async function manejarGET(request: Request) {
       doctorId
         ? Promise.resolve(supabase.from('doctores').select('id').eq('id', doctorId).maybeSingle())
         : Promise.resolve({ data: { id: '' } }),
-      cargarTabs(desde, hasta, doctorId, [tab], formato === 'csv'),
+      cargarTabs(desde, hasta, doctorId, [tab], formato === 'csv', estatusConsulta),
     ]);
     if (!doc) {
       return NextResponse.json({ error: 'Doctor no encontrado' }, { status: 404 });

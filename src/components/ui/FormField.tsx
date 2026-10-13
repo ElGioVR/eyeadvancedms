@@ -67,6 +67,7 @@ interface FormSelectProps {
   displayOptions?: string[];
   required?: boolean;
   className?: string;
+  disabled?: boolean;
 }
 
 export function FormSelect({
@@ -77,6 +78,7 @@ export function FormSelect({
   displayOptions,
   required,
   className,
+  disabled,
 }: FormSelectProps) {
   return (
     <FormField label={label} required={required} className={className}>
@@ -84,6 +86,7 @@ export function FormSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
+        disabled={disabled}
         className="input-field"
       >
         {options.map((option, i) => (

@@ -37,7 +37,8 @@ const previewQuery = z.object({
   hasta: fechaReal.optional(),
 });
 
-const ESTATUS_DEVENGABLES = ['AGENDADA', 'PROCESADA', 'COMPLETADA', 'PENDIENTE_ESTUDIO', 'PENDIENTE_CIRUGIA'];
+// Solo lo COMPLETADO devenga honorarios (ver MotorDevengoService).
+const ESTATUS_DEVENGABLES = ['COMPLETADA'];
 
 type ConsultaSync = { id: string; deployed_to_performance: boolean | null };
 type CirugiaSync = {
@@ -218,7 +219,8 @@ async function manejarPOST(request: Request) {
     // `metricas_ligados`; los grupos corren en paralelo.
     const procesarCirugia = async (cirugia: CirugiaSync): Promise<Paso> => {
       try {
-        if (cirugia.estado === 'cancelada') {
+        if (cirugia.estado !== 'completada') {
+          // Cancelada o aún no completada: no devenga (y se retiran eventos no pagados previos).
           await service.cancelarPorCirugia(cirugia.id);
           return { tipo: 'cancelado' };
         }

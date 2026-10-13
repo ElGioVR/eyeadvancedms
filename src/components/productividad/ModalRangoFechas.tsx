@@ -5,6 +5,7 @@ import { AlertTriangle, CalendarRange, Loader2, Download } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import { FORMATOS_DESCARGA, type FormatoDescarga } from '@/lib/exportar-reporte';
+import type { OpcionEstatusReporte } from '@/lib/reportes-estatus';
 
 export interface RangoFechas {
   desde: string;
@@ -31,7 +32,9 @@ interface ModalRangoFechasProps {
   conFormato?: boolean;
   /** Formato marcado al abrir (por defecto CSV). */
   formatoInicial?: FormatoDescarga;
-  onConfirm: (rango: RangoFechas, doctorId?: string, formato?: FormatoDescarga) => void;
+  /** Si se pasa, muestra un switch por estatus (todos activos al abrir). */
+  estatusOpciones?: OpcionEstatusReporte[];
+  onConfirm: (rango: RangoFechas, doctorId?: string, formato?: FormatoDescarga, estatus?: string[]) => void;
 }
 
 const inputCls =
@@ -50,6 +53,7 @@ export default function ModalRangoFechas({
   doctorId = '',
   conFormato = false,
   formatoInicial = 'csv',
+  estatusOpciones,
   onConfirm,
 }: ModalRangoFechasProps) {
   const [fechaDesde, setFechaDesde] = useState(desde);
@@ -57,6 +61,7 @@ export default function ModalRangoFechas({
   const [doctorSel, setDoctorSel] = useState(doctorId);
   const [formato, setFormato] = useState<FormatoDescarga>(formatoInicial);
   const [error, setError] = useState<string | null>(null);
+  const [estatusSel, setEstatusSel] = useState<string[]>(() => estatusOpciones?.map((o) => o.id) ?? []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -64,10 +69,11 @@ export default function ModalRangoFechas({
     setFechaHasta(hasta);
     setDoctorSel(doctorId);
     setFormato(formatoInicial);
+    setEstatusSel(estatusOpciones?.map((o) => o.id) ?? []);
     setError(null);
-  }, [isOpen, desde, hasta, doctorId, formatoInicial]);
+  }, [isOpen, desde, hasta, doctorId, formatoInicial, estatusOpciones]);
 
-  const valido = !!fechaDesde && !!fechaHasta && fechaDesde <= fechaHasta;
+  const valido = !!fechaDesde && !!fechaHasta && fechaDesde <= fechaHasta && (!estatusOpciones || estatusSel.length > 0);
 
   const confirmar = () => {
     if (!fechaDesde || !fechaHasta) {
@@ -78,8 +84,17 @@ export default function ModalRangoFechas({
       setError('El rango es inválido: "Desde" debe ser anterior a "Hasta".');
       return;
     }
+    if (estatusOpciones && estatusSel.length === 0) {
+      setError('Activa al menos un estatus.');
+      return;
+    }
     setError(null);
-    onConfirm({ desde: fechaDesde, hasta: fechaHasta }, doctorSel, conFormato ? formato : undefined);
+    onConfirm(
+      { desde: fechaDesde, hasta: fechaHasta },
+      doctorSel,
+      conFormato ? formato : undefined,
+      estatusOpciones ? estatusSel : undefined
+    );
   };
 
   return (
@@ -153,6 +168,57 @@ export default function ModalRangoFechas({
                   {f.label}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {estatusOpciones && (
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Estatus a incluir</span>
+              <button
+                type="button"
+                onClick={() => setEstatusSel(estatusSel.length === estatusOpciones.length ? [] : estatusOpciones.map((o) => o.id))}
+                className="text-[11px] font-semibold text-primary-600 hover:underline"
+              >
+                {estatusSel.length === estatusOpciones.length ? 'Ninguno' : 'Todos'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {estatusOpciones.map((o) => {
+                const activo = estatusSel.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="switch"
+                    aria-checked={activo}
+                    onClick={() => setEstatusSel((prev) => (activo ? prev.filter((x) => x !== o.id) : [...prev, o.id]))}
+                    className={cn(
+                      'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                      activo
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                        : 'border-line bg-surface-2 text-muted'
+                    )}
+                  >
+                    <span>{o.label}</span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+                        activo ? 'bg-primary-600' : 'bg-gray-300 dark:bg-line-strong'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                          activo ? 'translate-x-[18px]' : 'translate-x-0.5'
+                        )}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

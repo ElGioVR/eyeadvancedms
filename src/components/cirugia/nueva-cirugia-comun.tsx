@@ -230,8 +230,9 @@ export interface BorradorCirugia {
   ojo: string;
   fecha: string;
   hora: string;
-  duracionMin: number | '';
-  recursoId: string;
+  horaFin: string;
+  quirofano: string;
+  motivosDocumentos: Record<string, string>;
   participantes: MiembroEquipo[];
   notas: string;
   diagnostico: string;
@@ -241,13 +242,7 @@ export interface BorradorCirugia {
   especialidad: string;
   especialidadEditada: boolean;
   procedimientosAdicionales: string[];
-  lioTorico: boolean;
-  fabricanteLio: string;
-  modeloLioId: string;
-  lioManual: boolean;
-  lioManualMarca: string;
-  lioManualModelo: string;
-  lioManualPotencia: string;
+  lentes?: import('@/components/cirugia/LenteLogistica').LenteForm[];
 }
 
 export const CLAVE_BORRADOR_CIRUGIA = 'draft:nueva-cirugia';

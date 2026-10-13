@@ -2,7 +2,7 @@
 
 import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambiosEvento, mensajeError, getMonday, addDays, DIAS_CORTOS, daysInMonth, firstDayOfMonth, dateStr, parseTimeToMinutes, duracionEventoMin, DEFAULT_HOUR_START, DEFAULT_HOUR_END, HOUR_HEIGHT, ResumenAgenda, ESTADOS_ORDEN, MESES, estadoLabels, estadoConfig, fmtDateShort, fmtDate, urlAgendarConsulta, tipoConfig, fmtTime, fmtHourAMPM, OverlapItem, computeOverlapColumns, getDocColor, getDoctorInitials } from '@/components/agenda/agenda-comun';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
+import { agendaSoloPropia, puedeFiltrarSoloMio, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { type AgendaCirugia, type AgendaCirugiaEstado } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -15,8 +15,7 @@ import ReportesAgendaCsv from '@/components/agenda/ReportesAgendaCsv';
 import BandejaAgenda from '@/components/agenda/BandejaAgenda';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
-import BotonesExportar from '@/components/ui/BotonesExportar';
-import { etiquetaOjo } from '@/lib/catalogos/cirugia';
+import FichaPaciente from '@/components/ui/FichaPaciente';
 import { Upload, Plus, Calendar, Stethoscope, User, SlidersHorizontal, Minimize2, ChevronLeft, ChevronRight, Maximize2, Square, Columns3, GripVertical, Clock, X } from 'lucide-react';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import Aislado from '@/components/ui/Aislado';
@@ -44,6 +43,11 @@ function guardarVistaAgenda(patch: Record<string, unknown>) {
 
 interface Props { userRol: string; doctores: Doctor[]; userId?: string; initialDate: string; }
 
+// Vista de día: cada hora es más alta para que la tarjeta muestre bien al paciente y a qué viene.
+const DAY_HOUR_HEIGHT = 112;
+// Alto mínimo de una tarjeta (citas cortas); el cálculo de columnas lo respeta para que no se encimen.
+const DAY_CARD_MIN_H = 76;
+
 export default function AgendaContent({ userRol, doctores, userId, initialDate }: Props) {
   // Precarga en reposo de los módulos diferidos (el popover abre sin espera).
   useEffect(() => {
@@ -55,14 +59,20 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
     else setTimeout(precargar, 1500);
   }, []);
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
+  const alturaHora = calendarView === 'day' ? DAY_HOUR_HEIGHT : HOUR_HEIGHT;
   const [currentDate, setCurrentDate] = useState(new Date(`${initialDate}T12:00:00`));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  // Enfermería: su filtro se conoce desde las props (determinista en SSR y cliente), así
-  // la primera petición ya sale con él y no se repite al aplicar el efecto.
-  const [filterDoctor, setFilterDoctor] = useState(() =>
-    agendaSoloPropia(userRol) ? doctores.find((d) => d.usuario_id === userId)?.id ?? '' : ''
-  );
-  const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
+  // Todos ven toda la agenda; doctor y enfermería pueden activar «Solo lo mío» (filtra por su ficha).
+  const [filterDoctor, setFilterDoctor] = useState('');
+  const miFicha = puedeFiltrarSoloMio(userRol) && userId ? doctores.find((d) => d.usuario_id === userId) ?? null : null;
+  const claveSoloMio = `agenda:solo-mio:${userId ?? ''}`;
+  const soloMio = !!miFicha && filterDoctor === miFicha.id;
+  const alternarSoloMio = (activo: boolean) => {
+    if (!miFicha) return;
+    setFilterDoctor(activo ? miFicha.id : '');
+    try { localStorage.setItem(claveSoloMio, activo ? '1' : '0'); } catch { /* sin almacenamiento */ }
+  };
+  const [filterEstados, setFilterEstados] = useState<Set<string>>(new Set(['agendada', 'aplazada', 'reagendada', 'completada']));
   // Punto II: filtro por especialidad ('' = todas). Solo aplica a consultas/estudios.
   const [filterEspecialidad, setFilterEspecialidad] = useState('');
   const { especialidades } = useEspecialidades();
@@ -83,7 +93,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [dayCreate, setDayCreate] = useState<{ x: number; y: number; date: string; hour?: string } | null>(null);
-  // Acciones rápidas (aplazar / reagendar / cancelar) y alta rápida sin salir de la agenda.
+  // Acciones rápidas (reagendar / cancelar) y alta rápida sin salir de la agenda.
   const [accionRapida, setAccionRapida] = useState<{ evento: AgendaCirugia; accion: AccionRapida } | null>(null);
   // Alta rápida desde un hueco de la agenda: solo consultas (los estudios van en el formulario completo).
   const [agendarRapido, setAgendarRapido] = useState<{ fecha: string; hora: string; tipo: 'PRIMERA' | 'ESTUDIOS' } | null>(null);
@@ -91,13 +101,14 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const stripRef = useRef<HTMLDivElement>(null);
   const stripSelectedRef = useRef<HTMLButtonElement>(null);
 
-  // Enfermería (solo agenda propia): filtro fijo a su ficha de personal
+  // Recuerda la preferencia «Solo lo mío» de esta persona entre sesiones.
   useEffect(() => {
-    if (agendaSoloPropia(userRol) && doctores.length > 0 && userId) {
-      const myDoctor = doctores.find(d => d.usuario_id === userId);
-      if (myDoctor) setFilterDoctor(myDoctor.id);
-    }
-  }, [userRol, doctores, userId]);
+    if (!miFicha) return;
+    try {
+      if (localStorage.getItem(claveSoloMio) === '1') setFilterDoctor(miFicha.id);
+    } catch { /* sin almacenamiento */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [miFicha?.id, claveSoloMio]);
 
   // Volver a la agenda: recuerda la vista (día/semana/mes) y la fecha, y las restaura al regresar.
   const restauradaRef = useRef(false);
@@ -296,7 +307,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   }, [mutateAgenda, refetch, toast]);
 
   const cirugiasFiltradas = useMemo(() => {
+    // Las canceladas no se muestran en la agenda (siguen en la bandeja de seguimiento).
     return cirugias.filter(c =>
+      c.estado !== 'cancelada' &&
       filterTipos.has(c.tipo || 'cirugia') &&
       filterEstados.has(c.estado || 'agendada') &&
       (!filterEspecialidad || c.especialidad === filterEspecialidad)
@@ -516,10 +529,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
       }
       let px: number | null = null;
       if (firstEventMin !== null) {
-        px = Math.max(0, ((firstEventMin - HOUR_START * 60) / 60) * HOUR_HEIGHT - 8);
+        px = Math.max(0, ((firstEventMin - HOUR_START * 60) / 60) * alturaHora - 8);
       } else {
         const viewDate = calendarView === 'day' ? (selectedDate || todayStr) : todayStr;
-        if (viewDate === todayStr) px = Math.max(0, (new Date().getHours() - HOUR_START) * HOUR_HEIGHT - 100);
+        if (viewDate === todayStr) px = Math.max(0, (new Date().getHours() - HOUR_START) * alturaHora - 100);
       }
       if (px !== null) timeGridRef.current.scrollTo({ top: px, behavior: 'smooth' });
     }
@@ -528,7 +541,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
 
   const nowMinutes = mounted ? now.getHours() * 60 + now.getMinutes() : 0;
   const showTimeIndicator = mounted && (calendarView === 'week' || calendarView === 'day') && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
-  const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+  const timeIndicatorTop = ((nowMinutes - HOUR_START * 60) / 60) * alturaHora;
 
   const dayViewDate = toDateStr(currentDate);
 
@@ -567,28 +580,6 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           )}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <BotonesExportar
-                segmentado
-                crear={() => {
-                  const dia = selectedDate || todayStr;
-                  const items = cirugiasPorFecha[dia] ?? [];
-                  return {
-                    titulo: `Agenda del ${dia}`,
-                    subtitulo: `${items.length} evento${items.length === 1 ? '' : 's'}`,
-                    nombreArchivo: `agenda-${dia}`,
-                    filas: items.flatMap((c) => {
-                      const seccion = `${(c.hora || 'Sin hora').slice(0, 5)} · ${c.tipo || 'cirugia'}`;
-                      return [
-                        { seccion, campo: 'Paciente', valor: c.nombre_paciente || '' },
-                        { seccion, campo: 'Procedimiento', valor: c.procedimiento || '' },
-                        { seccion, campo: 'Ojo', valor: etiquetaOjo(c.ojo) },
-                        { seccion, campo: 'Estado', valor: c.estado || '' },
-                        { seccion, campo: 'Doctor', valor: c.doctor_nombre || '' },
-                      ];
-                    }),
-                  };
-                }}
-              />
               <span className="mx-1 hidden h-6 w-px bg-line xl:block" />
               {bandeja}
               {reportes}
@@ -758,6 +749,19 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {miFicha && (
+            <button
+              type="button"
+              onClick={() => alternarSoloMio(!soloMio)}
+              aria-pressed={soloMio}
+              className={cn(
+                'inline-flex h-10 items-center rounded-xl border px-3 text-xs font-bold shadow-soft transition-colors active:scale-95 dark:shadow-none',
+                soloMio ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300' : 'border-line bg-surface text-fg-2',
+              )}
+            >
+              Solo lo mío
+            </button>
+          )}
           <button
             onClick={() => setShowFilters(true)}
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-fg-2 shadow-soft transition-colors active:scale-95 dark:shadow-none"
@@ -862,6 +866,12 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 iconClassName="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"
                 inputClassName="w-full rounded-lg border border-line bg-surface-2 pl-8 pr-3 py-2 text-xs text-fg placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
+              {miFicha && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-bold text-fg-2">
+                  <input type="checkbox" checked={soloMio} onChange={(e) => alternarSoloMio(e.target.checked)} className="h-4 w-4 rounded border-line text-primary-600 focus:ring-primary-500" />
+                  Solo lo mío
+                </label>
+              )}
               <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
                 className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-medium text-fg-2 focus:outline-none focus:ring-1 focus:ring-primary-500/30">
                 <option value="">Todos los doctores</option>
@@ -893,7 +903,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               </div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">Estados</p>
               <div className="space-y-1">
-                {Object.entries(estadoLabels).map(([k, v]) => (
+                {Object.entries(estadoLabels).filter(([k]) => k !== 'cancelada').map(([k, v]) => (
                   <button key={k} onClick={() => {
                     setFilterEstados(prev => {
                       const next = new Set(prev);
@@ -1234,7 +1244,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                     {/* Hour Labels */}
                     <div>
                       {hours.map(h => (
-                        <div key={h} className="border-r border-line/70 flex items-start justify-end pr-2 pt-1.5" style={{ height: HOUR_HEIGHT }}>
+                        <div key={h} className="border-r border-line/70 flex items-start justify-end pr-2 pt-1.5" style={{ height: DAY_HOUR_HEIGHT }}>
                           <span className="text-[11px] font-bold text-muted leading-none">{fmtHourAMPM(h)}</span>
                         </div>
                       ))}
@@ -1249,7 +1259,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                           onClick={(e) => !agendaSoloPropia(userRol) && handleQuickAdd(dayViewDate, h, e)}
                           className={cn('border-b border-line/70 transition-colors',
                             !agendaSoloPropia(userRol) && 'hover:bg-primary-50 dark:hover:bg-primary-900/10 cursor-pointer'
-                          )} style={{ height: HOUR_HEIGHT }} />
+                          )} style={{ height: DAY_HOUR_HEIGHT }} />
                       ))}
 
                       {/* Surgery Blocks */}
@@ -1262,9 +1272,9 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         const overlapItems: OverlapItem[] = dayEvents.map(c => {
                           const startMin = parseTimeToMinutes(c.hora);
                           const dur = duracionEventoMin(c);
-                          return { id: c.id, startMin, endMin: startMin + dur };
+                          return { id: c.id, startMin, endMin: startMin + Math.max(dur, Math.ceil((DAY_CARD_MIN_H / DAY_HOUR_HEIGHT) * 60)) };
                         });
-                        const overlapMap = computeOverlapColumns(overlapItems, HOUR_HEIGHT, HOUR_START);
+                        const overlapMap = computeOverlapColumns(overlapItems, DAY_HOUR_HEIGHT, HOUR_START);
                         return dayEvents.map(c => {
                         if (!c.hora) return null;
                         const startMin = parseTimeToMinutes(c.hora);
@@ -1275,9 +1285,10 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                         const colWidth = 100 / totalCols;
                         const leftPct = col * colWidth;
                         const rightPct = 100 - (col + 1) * colWidth;
-                        const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+                        const top = ((startMin - HOUR_START * 60) / 60) * DAY_HOUR_HEIGHT;
                         const durationMin = duracionEventoMin(c);
-                        const height = Math.max(52, (durationMin / 60) * HOUR_HEIGHT - 2);
+                        const height = Math.max(DAY_CARD_MIN_H, (durationMin / 60) * DAY_HOUR_HEIGHT - 2);
+                        const amplio = height >= 96;
 
                         return (
                           <div key={c.id}
@@ -1285,7 +1296,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                             onDragStart={e => handleDragStart(e, c.id)}
                             onClick={e => handleEventClick(e, c)}
                             className={cn(
-                              'absolute rounded-lg px-3 py-2 cursor-pointer transition-all z-10',
+                              'absolute overflow-hidden rounded-lg px-3 py-1.5 cursor-pointer transition-all z-10',
                               'hover:brightness-95 hover:shadow-lg hover:scale-[1.005]',
                               draggingId === c.id && 'opacity-40',
                               tipoConfig[c.tipo || 'cirugia'].bg, tipoConfig[c.tipo || 'cirugia'].text,
@@ -1293,29 +1304,42 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                               c.mi_participacion && 'ring-2 ring-primary-500 ring-offset-1 ring-offset-surface',
                               'shadow-sm',
                             )} style={{ top, height, left: `calc(${leftPct}% + 4px)`, right: `calc(${rightPct}% + 4px)` }}>
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-extrabold truncate flex items-center gap-1">
-                                {c.tipo === 'consulta' && <User className="h-3 w-3 shrink-0" />}
-                                {c.nombre_paciente}
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="flex min-w-0 items-start gap-1 text-[13px] font-extrabold leading-tight">
+                                {c.tipo === 'consulta' && <User className="mt-0.5 h-3 w-3 shrink-0" />}
+                                <span className={amplio ? 'line-clamp-2' : 'truncate'} title={c.nombre_paciente}>{c.nombre_paciente}</span>
                               </span>
-                              <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-2 shrink-0', estadoConfig[c.estado].lightBg, tipoConfig[c.tipo || 'cirugia'].text)}>
+                              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold', estadoConfig[c.estado].lightBg, tipoConfig[c.tipo || 'cirugia'].text)}>
                                 {estadoLabels[c.estado]}
                               </span>
                             </div>
-                            {height > 40 && (
-                              <div className="flex items-center gap-2 mt-1 text-[10px] opacity-70">
-                                <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{fmtTime(c.hora)}</span>
-                                {(c.detalle || c.procedimiento) && <span className="flex min-w-0 items-center gap-1" title={c.detalle || c.procedimiento || ''}><Stethoscope className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{c.detalle || c.procedimiento}</span></span>}
-                              </div>
-                            )}
-                            {height > 60 && c.doctor_nombre && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <span className={cn('h-4 w-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white', getDocColor(c.doctor_nombre))}>
-                                  {getDoctorInitials(c.doctor_nombre)}
+                            <div className="mt-1 flex items-start gap-2 text-[11px] leading-snug opacity-90">
+                              <span className="flex shrink-0 items-center gap-1 font-semibold"><Clock className="h-3 w-3" />{fmtTime(c.hora)}</span>
+                              {(c.detalle || c.procedimiento) && (
+                                <span className="flex min-w-0 items-start gap-1" title={c.detalle || c.procedimiento || ''}>
+                                  <Stethoscope className="mt-0.5 h-3 w-3 shrink-0" />
+                                  <span className={amplio ? 'line-clamp-2' : 'truncate'}>{c.detalle || c.procedimiento}</span>
                                 </span>
-                                <span className="text-[10px] font-medium opacity-70">{c.doctor_nombre}</span>
-                              </div>
-                            )}
+                              )}
+                            </div>
+                            <div className={cn('mt-1 flex gap-x-3 gap-y-0.5 text-[11px] leading-snug', amplio ? 'flex-col' : 'items-center justify-between')}>
+                              <FichaPaciente
+                                variante="compacta"
+                                className="min-w-0 truncate text-[11px] text-inherit opacity-80"
+                                expediente={c.paciente_expediente ?? c.expediente}
+                                sexo={c.paciente_sexo}
+                                fechaNacimiento={c.paciente_fecha_nacimiento}
+                                edad={c.paciente_edad}
+                              />
+                              {c.doctor_nombre && (
+                                <span className="flex shrink-0 items-center gap-1.5 font-semibold opacity-90">
+                                  <span className={cn('flex h-4 w-4 items-center justify-center rounded-full text-[7px] font-bold text-white', getDocColor(c.doctor_nombre))}>
+                                    {getDoctorInitials(c.doctor_nombre)}
+                                  </span>
+                                  <span className="max-w-[140px] truncate">{c.doctor_nombre}</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       });
@@ -1400,7 +1424,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           cirugia={detailCirugia}
           position={detailPosition}
           userRol={userRol}
-          onEdit={() => { setDetailCirugia(null); setDetailPosition(null); router.push(detailCirugia.tipo && detailCirugia.tipo !== 'cirugia' ? `/consultas/${detailCirugia.id}?editar=1` : `/cirugias/${detailCirugia.id}?editar=1`); }}
+          onEdit={() => { const destino = detailCirugia.tipo && detailCirugia.tipo !== 'cirugia' ? `/consultas/${detailCirugia.id}/editar` : `/cirugias/${detailCirugia.id}/editar`; setDetailCirugia(null); setDetailPosition(null); router.push(destino); }}
           onClose={() => { setDetailCirugia(null); setDetailPosition(null); }}
           onEstado={async (s, extra) => {
             const id = detailCirugia.id;
@@ -1477,7 +1501,13 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 iconClassName="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
                 inputClassName="w-full rounded-lg border border-line bg-surface-2 pl-10 pr-4 py-2.5 text-sm text-fg placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
               />
-              <div>
+              {miFicha && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-bold text-fg-2">
+                  <input type="checkbox" checked={soloMio} onChange={(e) => alternarSoloMio(e.target.checked)} className="h-4 w-4 rounded border-line text-primary-600 focus:ring-primary-500" />
+                  Solo lo mío
+                </label>
+              )}
+                            <div>
                 <label className="block text-xs font-bold text-muted mb-1.5">Doctor</label>
                 <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}
                   className="w-full rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-sm font-medium text-fg-2 focus:outline-none focus:ring-2 focus:ring-primary-500/30">
@@ -1507,7 +1537,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
               <div>
                 <label className="block text-xs font-bold text-muted mb-1.5">Estado</label>
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(estadoLabels).map(([k, v]) => (
+                  {Object.entries(estadoLabels).filter(([k]) => k !== 'cancelada').map(([k, v]) => (
                     <button key={k} onClick={() => {
                       setFilterEstados(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
                     }} className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
@@ -1535,7 +1565,7 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
                 <button onClick={() => {
                   setFilterDoctor('');
                   setFilterTipos(new Set(['cirugia', 'consulta', 'estudio']));
-                  setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada']));
+                  setFilterEstados(new Set(['agendada', 'aplazada', 'reagendada', 'completada']));
                   setFilterEspecialidad('');
                   setSearchQuery('');
                 }}

@@ -7,6 +7,7 @@ import { leerJSON, validarId } from '@/lib/api/validar';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { MotorDevengoService } from '@/services/productividad';
 import { ruta } from '@/lib/api/ruta';
+import { buscarGenerico } from '@/lib/api/catalogo-generico';
 
 /**
  * PUT /api/consultas/[id]/servicios
@@ -110,7 +111,11 @@ async function manejarPUT(request: Request, { params }: { params: Promise<{ id: 
       .eq('tipo', tipo);
     q = servicioId ? q.eq('id', servicioId) : q.ilike('nombre', nombre.replace(/[\\%_]/g, (c) => `\\${c}`));
     const { data: svc } = await q.limit(1).maybeSingle();
-    return { id: svc?.id || servicioId || null, nombre: svc?.nombre || nombre, costo: Number(svc?.costo) || 0 };
+    if (svc) return { id: svc.id, nombre: svc.nombre, costo: Number(svc.costo) || 0 };
+    // Sin entrada propia de la aseguranza: catálogo genérico
+    const gen = await buscarGenerico(supabase, tipo, servicioId, nombre);
+    if (gen) return gen;
+    return { id: servicioId || null, nombre, costo: 0 };
   };
 
   const pedidos: Array<{ tipo: Tipo; servicio: z.infer<typeof servicioSchema> }> = [

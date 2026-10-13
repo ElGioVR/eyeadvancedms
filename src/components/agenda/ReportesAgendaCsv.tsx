@@ -7,6 +7,7 @@ import ModalRangoFechas, { type OpcionDoctor, type RangoFechas } from '@/compone
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { descargarReporte, type FormatoDescarga } from '@/lib/exportar-reporte';
+import { ESTATUS_CIRUGIA_REPORTE, ESTATUS_CONSULTA_REPORTE } from '@/lib/reportes-estatus';
 
 type ReporteAgenda = 'pacientes_atendidos' | 'cirugias' | 'entradas_salidas';
 
@@ -85,7 +86,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
     setModal(null);
   }, []);
 
-  const descargar = useCallback(async (rango: RangoFechas, doctorSel?: string, formato: FormatoDescarga = 'csv') => {
+  const descargar = useCallback(async (rango: RangoFechas, doctorSel?: string, formato: FormatoDescarga = 'csv', estatus?: string[]) => {
     if (!modal) return;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -94,6 +95,7 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
     try {
       const params = new URLSearchParams({ desde: rango.desde, hasta: rango.hasta, formato: 'csv' });
       if (doctorSel) params.set('doctor_id', doctorSel);
+      if (estatus) params.set('estatus', estatus.join(','));
       let url: string;
       let nombre: string;
       if (modal === 'pacientes_atendidos') {
@@ -173,6 +175,9 @@ export default function ReportesAgendaCsv({ desde, hasta, doctores, doctorId = '
         doctorId={doctorId}
         conFormato
         formatoInicial={modal === 'pacientes_atendidos' ? 'xlsx' : 'csv'}
+        estatusOpciones={
+          modal === 'cirugias' ? ESTATUS_CIRUGIA_REPORTE : modal === 'entradas_salidas' ? ESTATUS_CONSULTA_REPORTE : undefined
+        }
         onConfirm={descargar}
       />
     </>

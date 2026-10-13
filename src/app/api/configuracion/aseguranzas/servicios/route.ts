@@ -17,6 +17,8 @@ const querySchema = z.object({
   aseguranza_id: z.string().uuid('ID de aseguranza no válido').optional(),
   tipo: z.enum(TIPOS).optional(),
   search: z.string().max(200).optional(),
+  // Listado ligero para la pantalla Conceptos: sin join ni fechas.
+  compacto: z.enum(['1']).optional().catch(undefined),
 });
 
 const createSchema = z.object({
@@ -50,7 +52,11 @@ async function manejarGET(request: Request) {
   const supabase = getSupabaseAdmin();
   let query = supabase
     .from('aseguranza_servicios')
-    .select('id, aseguranza_id, tipo, nombre, costo, porcentaje_cobertura, activo, created_at, updated_at, aseguranzas:aseguranza_id(nombre)')
+    .select(
+      q.compacto
+        ? 'id, aseguranza_id, tipo, nombre, costo'
+        : 'id, aseguranza_id, tipo, nombre, costo, porcentaje_cobertura, activo, created_at, updated_at, aseguranzas:aseguranza_id(nombre)',
+    )
     .eq('activo', true)
     .order('nombre')
     .limit(LIMITE_LISTADO);
