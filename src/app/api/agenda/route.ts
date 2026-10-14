@@ -192,7 +192,7 @@ async function manejarGET(request: Request) {
     .from('agenda_cirugias')
     .select(`
       id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
-      procedimiento, procedencia, tiempo_estimado, ojo, diagnostico,
+      procedimiento, procedencia, tiempo_estimado, ojo, diagnostico, notas,
       doctores:doctor_id (alias),
       paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
       origen:origen_id (nombre),
@@ -238,6 +238,7 @@ async function manejarGET(request: Request) {
       estudio_2,
       estudio_3,
       procedimiento,
+      notas,
       doctores:doctor_id (alias),
       especialidad:especialidad_id (nombre),
       pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente)
@@ -310,6 +311,7 @@ async function manejarGET(request: Request) {
       detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento || (c as any).servicio?.nombre, ojo: (c as any).ojo }) ||
       c.diagnostico || null,
     procedencia: c.procedencia || (c as any).origen?.nombre || null,
+    notas: (c as any).notas || null,
     tiempo_estimado: c.tiempo_estimado || null,
     mi_participacion: !!sessionDoctorId && (mias.has(c.id) || c.doctor_id === sessionDoctorId),
     tipo: 'cirugia' as const,
@@ -342,6 +344,7 @@ async function manejarGET(request: Request) {
     hora: c.hora_inicio,
     procedimiento: detalle || c.tipo_consulta || 'Consulta',
     detalle,
+    notas: (c as any).notas || null,
     // Punto II: especialidad y tipo (Primera / Subsecuente / Estudios / Procedimientos).
     especialidad: (c as any).especialidad?.nombre || null,
     tipo_consulta_label: etiquetaTipoConsulta(c.tipo_consulta, (c as any).tipo_visita),

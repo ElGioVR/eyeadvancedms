@@ -343,6 +343,7 @@ export function AgendarRapidoModal({
   );
   const [especialidad, setEspecialidad] = useState('');
   const [estudioId, setEstudioId] = useState('');
+  const [notas, setNotas] = useState('');
   const { especialidades } = useEspecialidades();
   const esEstudio = tipo === 'ESTUDIOS';
 
@@ -388,6 +389,7 @@ export function AgendarRapidoModal({
         tipo_consulta: t.tipo,
         tipo_visita: t.tipoVisita,
         especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
+        notas: notas.trim() || null,
         ...(esEstudio && estudioId
           ? { estudios: [{ id: estudioId, nombre: estudios.find((e) => e.id === estudioId)?.nombre || 'Estudio', doctor_id: doctorId }] }
           : {}),
@@ -495,6 +497,11 @@ export function AgendarRapidoModal({
             <input type="date" value={fecha} onChange={(e) => { setFecha(e.target.value); setHora(''); }} className="input-field" />
           </FormField>
           <SelectorHoraSlot label="Hora" required medicoId={doctorId} fecha={fecha} value={hora} onChange={setHora} />
+          <div className="sm:col-span-2">
+            <FormField label="Notas">
+              <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={3} maxLength={5000} className="input-field w-full" placeholder="Notas de la cita…" />
+            </FormField>
+          </div>
         </div>
 
         {error && (

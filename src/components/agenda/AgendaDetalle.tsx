@@ -19,6 +19,7 @@ import { type TelefonoPaciente } from '@/lib/telefonos-paciente';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import EstadoLentesCirugia from '@/components/agenda/EstadoLentesCirugia';
 import CompletarCirugiaLentes from '@/components/agenda/CompletarCirugiaLentes';
+import NotaEditable from '@/components/agenda/NotaEditable';
 import { type OrdenLente } from '@/lib/cirugia-lentes-puro';
 
 /* ───────── Detail Modal ───────── */
@@ -113,12 +114,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
       {cirugia.estado === 'agendada' && !agendaSoloPropia(userRol) && (
         <EstadoLentesCirugia cirugiaId={cirugia.id} puedeConfirmar />
       )}
-      {cirugia.notas && (
-        <div className="rounded-lg bg-surface-2 border border-line/70 p-3">
-          <div className="flex items-center gap-1.5 mb-1"><StickyNote className="h-3 w-3 text-gray-400" /><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Notas</span></div>
-          <p className="text-sm text-fg-2">{cirugia.notas}</p>
-        </div>
-      )}
+      <NotaEditable id={cirugia.id} tipo={cirugia.tipo} notas={cirugia.notas} puedeEditar={!estadoCerrado(cirugia.estado) || !agendaSoloPropia(userRol)} onGuardada={onRefetch} />
       {(!agendaSoloPropia(userRol) || !estadoCerrado(cirugia.estado)) && (
         <div className="flex gap-2 pt-2 border-t border-line/70">
           {!agendaSoloPropia(userRol) && cirugia.estado === 'agendada' && (
@@ -323,12 +319,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
             <span>{[cirugia.marca_lio, cirugia.lio].filter(Boolean).join(' — ')}</span>
           </div>
         )}
-        {cirugia.notas && (
-          <div className="flex items-start gap-2.5 text-sm text-fg-2">
-            <StickyNote className="h-4 w-4 text-muted shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{cirugia.notas}</span>
-          </div>
-        )}
+        <NotaEditable id={cirugia.id} tipo={cirugia.tipo} notas={cirugia.notas} compacto />
         {cirugia.motivo_aplazamiento && (
           <div className="flex items-start gap-2.5 text-sm text-amber-700 dark:text-amber-400">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />

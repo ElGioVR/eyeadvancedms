@@ -850,6 +850,7 @@ function FormularioConsultaContent({ consultaId }: { consultaId?: string }) {
           aseguranza_id: consultationData.origenId || null,
           consulta_servicio_id: consultationData.consultaServicioId || null,
           diagnostico: consultationData.diagnostico,
+          notas: notas.trim() || null,
           estudios: estudiosData,
           procedimientos: procedimientosData,
           procedimiento: procedimientosData.length > 0 ? procedimientosData.map((p) => p.nombre).join(', ') : null,
@@ -878,7 +879,7 @@ function FormularioConsultaContent({ consultaId }: { consultaId?: string }) {
     } finally {
       setSaving(false);
     }
-  }, [saving, pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError, invalidar, especialidades, volver.href]);
+  }, [saving, pacienteSeleccionado, consultationData, toast, router, estudiosSeleccionados, procedimientosSeleccionados, catalogoEstudios, catalogoProcedimientos, dateTimeError, invalidar, especialidades, volver.href, notas]);
 
   const guardarEdicion = useCallback(async () => {
     if (saving || !consultaId) return;
@@ -1237,7 +1238,7 @@ function FormularioConsultaContent({ consultaId }: { consultaId?: string }) {
                   onChange={(v) => updateConsultation('diagnostico', v)}
                 />
               </div>
-              {modoEdicion && (
+              {(
                 <div>
                   <label htmlFor="consulta-notas" className="mb-1.5 block text-[13px] font-medium text-fg-2">Notas</label>
                   <textarea

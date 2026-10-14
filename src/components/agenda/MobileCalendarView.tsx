@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { AgendaCirugia, AgendaCirugiaEstado } from '@/types';
 import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { ETIQUETA_ACCION, type AccionRapida } from '@/lib/agenda-acciones';
+import NotaEditable from '@/components/agenda/NotaEditable';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import { estaConfirmada as esConfirmada } from '@/lib/confirmacion-cita';
 
@@ -570,14 +571,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                 </div>
               )}
 
-              {selectedCirugia.notas && (
-                <div className="rounded-xl border border-line/70 p-4">
-                  <h4 className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-muted mb-2">
-                    <FileText className="h-3.5 w-3.5" /> Notas
-                  </h4>
-                  <p className="text-sm text-fg-2 whitespace-pre-wrap">{selectedCirugia.notas}</p>
-                </div>
-              )}
+              <NotaEditable id={selectedCirugia.id} tipo={selectedCirugia.tipo} notas={selectedCirugia.notas} />
             </div>
 
             {(() => {
