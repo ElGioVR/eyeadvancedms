@@ -4,9 +4,6 @@ import { useCallback, useRef, useState } from 'react';
 import { refreshUser } from '@/hooks/useUser';
 import { enviarJSON } from '@/lib/fetcher';
 
-// supabase-js solo se descarga al subir/eliminar una foto.
-const getSupabaseBrowser = async () => (await import('@/lib/supabase/client')).createClient();
-
 export const AVATAR_MAX_SIZE = 500 * 1024;
 export const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -42,29 +39,14 @@ export function useAvatarUpload(userId: string | null | undefined, notificar: No
     setCropModalOpen(true);
   }, [notificar]);
 
-  const guardarUrl = useCallback(async (avatarUrl: string | null) => {
-    try {
-      await enviarJSON('/api/configuracion/usuarios', 'PATCH', { id: userId, avatar_url: avatarUrl });
-    } catch (err) {
-      throw new Error(err instanceof Error && err.message ? err.message : 'No se pudo guardar la foto');
-    }
-  }, [userId]);
-
   const onCropComplete = useCallback(async (blob: Blob) => {
     if (!userId || uploading) return;
     setUploading(true);
     try {
-      const supabase = await getSupabaseBrowser();
-      const filePath = `avatars/${userId}/avatar.jpg`;
-      const { error } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      // La ruta no cambia al reemplazar la foto: el parámetro evita que el
-      // navegador/CDN siga mostrando la imagen anterior.
-      const avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
-      await guardarUrl(avatarUrl);
+      // La subida pasa por el servidor (no depende de las políticas RLS de Storage).
+      const form = new FormData();
+      form.append('file', new File([blob], 'avatar.jpg', { type: blob.type || 'image/jpeg' }));
+      const { avatar_url: avatarUrl } = await enviarJSON<{ avatar_url: string }>('/api/usuarios/me/avatar', 'POST', form);
       setAvatarPreview(avatarUrl);
       notificar('Foto de perfil actualizada');
       // Solo se refresca el perfil compartido (avatar en Sidebar/TopBar), sin recargar la pantalla.
@@ -74,15 +56,13 @@ export function useAvatarUpload(userId: string | null | undefined, notificar: No
     } finally {
       setUploading(false);
     }
-  }, [userId, uploading, guardarUrl, notificar]);
+  }, [userId, uploading, notificar]);
 
   const eliminar = useCallback(async () => {
     if (!userId || uploading) return;
     setUploading(true);
     try {
-      const supabase = await getSupabaseBrowser();
-      await supabase.storage.from('avatars').remove([`avatars/${userId}/avatar.jpg`]);
-      await guardarUrl(null);
+      await enviarJSON('/api/usuarios/me/avatar', 'DELETE');
       setAvatarPreview(null);
       notificar('Foto de perfil eliminada');
       // Solo se refresca el perfil compartido (avatar en Sidebar/TopBar), sin recargar la pantalla.
@@ -92,7 +72,7 @@ export function useAvatarUpload(userId: string | null | undefined, notificar: No
     } finally {
       setUploading(false);
     }
-  }, [userId, uploading, guardarUrl, notificar]);
+  }, [userId, uploading, notificar]);
 
   return {
     fileInputRef,

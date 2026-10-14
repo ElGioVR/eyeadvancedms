@@ -223,10 +223,17 @@ async function manejarPATCH(request: Request) {
   const supabase = getSupabaseAdmin();
   const { id, password_actual: passwordActual, ...updates } = data;
   const isSelfService = id === auth.user.id;
-  const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in data);
+  // El formulario de edición manda siempre nombre/email/rol: los valores que no cambian se ignoran
+  // para que un admin pueda editar su propio usuario sin tocar el rol.
+  if (isSelfService) {
+    if (updates.rol !== undefined && updates.rol === auth.perfil?.rol) delete updates.rol;
+    if (updates.email !== undefined && updates.email.toLowerCase() === (auth.user.email || auth.perfil?.email || '').toLowerCase()) delete updates.email;
+    if (updates.activo !== undefined && updates.activo === (auth.perfil?.activo ?? true)) delete updates.activo;
+  }
+  const hasAdministrativeFields = ['email', 'rol', 'activo'].some((field) => field in updates);
 
   if (isSelfService && !hasAdministrativeFields) {
-    const invalidFields = Object.keys(data).filter(
+    const invalidFields = Object.keys(updates).concat(passwordActual !== undefined ? ['password_actual'] : []).filter(
       (field) => !['id', 'nombre', 'password', 'password_actual', 'avatar_url'].includes(field),
     );
     if (invalidFields.length > 0) {
