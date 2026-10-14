@@ -250,7 +250,7 @@ async function manejarPATCH(
   const [existingResult, requerido] = await Promise.all([
     supabase
       .from('consultas')
-      .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id, pacientes:paciente_id (nombre_completo)')
+      .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id, notas, pacientes:paciente_id (nombre_completo)')
       .eq('id', id)
       .maybeSingle(),
     doctorRequerido(auth.user.id, auth.perfil),
@@ -369,12 +369,23 @@ async function manejarPATCH(
   ].some(v => v !== undefined);
 
   if (hasFieldChanges && !data.estatus) {
-    eventos.push({
-      tipo_evento: 'EDICION',
-      payload: {
-        campos_modificados: Object.keys(updateData).filter(k => !['estatus', 'estatus_pago', 'costo_total', 'monto_pagado', 'fecha_pago'].includes(k)),
-      },
-    });
+    // Notas: se guarda el texto anterior y el nuevo para poder rastrear quién cambió qué.
+    const notasAnterior = ((existing as { notas?: string | null }).notas ?? '').trim();
+    const notasNueva = data.notas !== undefined ? (data.notas ?? '').trim() : notasAnterior;
+    const notasCambiaron = data.notas !== undefined && notasNueva !== notasAnterior;
+    const campos = Object.keys(updateData)
+      .filter(k => !['estatus', 'estatus_pago', 'costo_total', 'monto_pagado', 'fecha_pago'].includes(k))
+      .filter(k => k !== 'notas' || notasCambiaron);
+    if (campos.length > 0) {
+      eventos.push({
+        tipo_evento: 'EDICION',
+        payload: {
+          campos_modificados: campos,
+          ...(campos.length === 1 && campos[0] === 'notas' ? { accion: 'notas_editadas' } : {}),
+          ...(notasCambiaron ? { notas_anterior: notasAnterior || null, notas_nueva: notasNueva || null } : {}),
+        },
+      });
+    }
   }
 
   const { data: updated, error: updateError } = await supabase

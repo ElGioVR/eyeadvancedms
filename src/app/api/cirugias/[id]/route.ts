@@ -193,12 +193,22 @@ async function manejarGET(
   }
   const { cirugia, participantes, archivos, productividad, historial, procedimientos_adicionales, personal } = resultado;
 
+  // Nombre de quien hizo cada movimiento del historial.
+  const historialBase = (historial.data || []) as Array<{ usuario_id: string | null }>;
+  const idsUsuarios = [...new Set(historialBase.map((h) => h.usuario_id).filter((u): u is string => !!u))];
+  const mapaUsuarios = new Map<string, string | null>();
+  if (idsUsuarios.length > 0) {
+    const { data: us } = await getSupabaseAdmin().from('usuarios').select('id, nombre').in('id', idsUsuarios);
+    for (const u of (us || []) as Array<{ id: string; nombre: string | null }>) mapaUsuarios.set(u.id, u.nombre);
+  }
+  const historialConUsuario = historialBase.map((h) => ({ ...h, usuario_nombre: h.usuario_id ? mapaUsuarios.get(h.usuario_id) ?? null : null }));
+
   return NextResponse.json({
     cirugia,
     participantes: participantes.data || [],
     archivos: archivos.data || [],
     productividad: soloEnfermeria ? [] : (productividad.data || []),
-    historial: historial.data || [],
+    historial: historialConUsuario,
     procedimientos_adicionales,
     personal,
   });

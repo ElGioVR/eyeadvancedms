@@ -226,6 +226,9 @@ async function manejarPATCH(request: Request) {
 
   const tabla = data.tipo === 'cirugia' ? 'agenda_cirugias' : 'consultas';
   const supabase = getSupabaseAdmin();
+  // Confirmación previa (para el historial); si falta la columna, el update de abajo avisa.
+  const { data: previo } = await supabase.from(tabla).select('confirmacion, confirmacion_medio').eq('id', data.id).maybeSingle();
+  const anterior = ((previo as { confirmacion?: string | null } | null)?.confirmacion ?? null) as string | null;
   let q = supabase
     .from(tabla)
     .update({
@@ -246,6 +249,17 @@ async function manejarPATCH(request: Request) {
     );
   }
   if (error) return errorInterno(error, 'agenda.bandeja.confirmar');
+
+  // Trazabilidad: quién marcó la confirmación, por qué medio y cuándo (best-effort).
+  // «Mensaje enviado» sobre una cita ya confirmada no cambia nada, así que no se registra.
+  const cambio = data.confirmacion !== anterior && !(data.confirmacion === 'enviada' && anterior === 'confirmada');
+  if (cambio) {
+    const detalle = { confirmacion: data.confirmacion, anterior, medio: data.confirmacion === 'confirmada' ? data.medio : null };
+    const { error: errHist } = data.tipo === 'cirugia'
+      ? await supabase.from('cirugia_historial').insert({ cirugia_id: data.id, usuario_id: auth.user.id, accion: 'CONFIRMACION_CITA', detalle })
+      : await supabase.from('consulta_historial').insert({ consulta_id: data.id, usuario_id: auth.user.id, tipo_evento: 'EDICION', payload: { accion: 'confirmacion', ...detalle } });
+    if (errHist) console.error('Historial de confirmación:', errHist.message);
+  }
   return NextResponse.json({ ok: true });
 }
 

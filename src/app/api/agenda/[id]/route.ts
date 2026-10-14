@@ -133,7 +133,7 @@ async function manejarPATCH(
   const prevP = Promise.resolve(
     supabase
       .from('agenda_cirugias')
-      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente, origen_id')
+      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente, origen_id, notas')
       .eq('id', id)
       .maybeSingle()
   );
@@ -313,6 +313,20 @@ async function manejarPATCH(
       }
     }
     await supabase.from('agenda_cirugias').update({ catalogo_quirurgico_id: qxIds[0] ?? null }).eq('id', id);
+  }
+
+  // Trazabilidad: cambio de notas (texto anterior y nuevo).
+  if (data.notas !== undefined) {
+    const anterior = ((prev as { notas?: string | null }).notas ?? '').trim();
+    const nueva = (data.notas ?? '').trim();
+    if (anterior !== nueva) {
+      await supabase.from('cirugia_historial').insert({
+        cirugia_id: id,
+        usuario_id: auth.user.id,
+        accion: 'NOTAS_EDITADAS',
+        detalle: { anterior: anterior || null, nueva: nueva || null },
+      });
+    }
   }
 
   // EST-003: Registrar cambio de estado en historial

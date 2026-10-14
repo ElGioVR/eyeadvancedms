@@ -261,6 +261,10 @@ export function describirEventoHistorial(
     case 'PAGADO':
       return { titulo: 'Pago registrado', motivo: null };
     case 'EDICION':
+      if (p.accion === 'confirmacion') {
+        return { titulo: p.confirmacion === 'confirmada' ? 'Cita confirmada' : p.confirmacion === 'enviada' ? 'Confirmación enviada' : 'Confirmación quitada', motivo: null };
+      }
+      if (p.accion === 'notas_editadas') return { titulo: 'Notas editadas', motivo: null };
       return { titulo: 'Datos editados', motivo: null };
     default:
       return null;

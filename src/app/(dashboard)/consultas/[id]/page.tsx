@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import EnviarPaciente from '@/components/ui/EnviarPaciente';
 import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
+import { ETIQUETA_MEDIO, type MedioConfirmacion } from '@/lib/confirmacion-cita';
 import { type ServicioEditable } from '@/components/consultations/EditarServiciosConsulta';
 import Link from 'next/link';
 import HojaMembretada from '@/components/print/HojaMembretada';
@@ -878,7 +879,18 @@ export default function ConsultaDetailPage() {
                           const motivo = typeof payload.motivo === 'string' && payload.motivo
                             ? payload.motivo
                             : null;
-                          const titulo = estudioAgendado
+                          const notasEditadas = payload.accion === 'notas_editadas' || (evento.tipo_evento === 'EDICION' && 'notas_nueva' in payload);
+                          const confirmacionEv = payload.accion === 'confirmacion';
+                          const textoConf = confirmacionEv
+                            ? (payload.confirmacion === 'confirmada'
+                              ? `Cita confirmada${typeof payload.medio === 'string' && payload.medio ? ` por ${ETIQUETA_MEDIO[payload.medio as MedioConfirmacion] ?? payload.medio}` : ''}`
+                              : payload.confirmacion === 'enviada' ? 'Mensaje de confirmación enviado' : 'Se quitó la confirmación')
+                            : null;
+                          const titulo = confirmacionEv
+                            ? 'Confirmación de la cita'
+                            : notasEditadas && payload.accion === 'notas_editadas'
+                              ? 'Notas editadas'
+                              : estudioAgendado
                             ? 'Estudio agendado'
                             : esAplazamiento
                               ? 'Aplazado'
@@ -894,6 +906,13 @@ export default function ConsultaDetailPage() {
                                 <p className="text-xs text-muted">
                                   {String(payload.estudio_nombre || 'Estudio')} · Fecha: {String(payload.fecha_estudio || '—')} {String(payload.hora_estudio || '')} · Asignado a: {String(payload.asignado_a || '—')}
                                 </p>
+                              )}
+                              {textoConf && <p className="text-xs text-muted">{textoConf}</p>}
+                              {notasEditadas && (
+                                <div className="text-xs text-muted whitespace-pre-wrap">
+                                  <p>Antes: {String(payload.notas_anterior || '(vacía)')}</p>
+                                  <p>Ahora: {String(payload.notas_nueva || '(vacía)')}</p>
+                                </div>
                               )}
                               {(fechaNueva || horaNueva) && (
                                 <p className="text-xs text-muted">

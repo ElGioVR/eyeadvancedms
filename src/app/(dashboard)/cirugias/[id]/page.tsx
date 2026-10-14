@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { enviarJSON, fetchJSON, mensajeDeError } from '@/lib/fetcher';
 import { useParams, useRouter } from 'next/navigation';
+import { describirEventoCirugia } from '@/lib/historial-cirugia';
 import {
   ArrowLeft, Printer, Calendar, Clock, User, Stethoscope, Eye, FileText,
   Activity, CreditCard, Shield, Upload, X, File, Download, Trash2,
@@ -61,6 +62,7 @@ interface ProductividadItem {
 }
 interface HistorialItem {
   id: string;
+  usuario_nombre?: string | null;
   accion: string;
   detalle: unknown;
   usuario_id: string | null;
@@ -827,14 +829,18 @@ export default function CirugiaDetailPage() {
                 <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200 dark:bg-surface-3" />
                 {historial.map((h) => {
                   const Icon = h.accion.includes('ARCHIVO') ? Upload : h.accion.includes('ESTADO') ? AlertTriangle : CheckCircle2;
+                  const ev = describirEventoCirugia(h.accion, h.detalle);
                   return (
                     <div key={h.id} className="relative flex items-start gap-3">
                       <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface border border-line">
                         <Icon className="h-4 w-4 text-muted" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-fg">{h.accion}</p>
-                        <p className="text-xs text-muted"><ClientDate date={h.created_at} dateTime /></p>
+                        <p className="text-sm font-medium text-fg">{ev.titulo}</p>
+                        {ev.lineas.map((l, i) => (
+                          <p key={i} className="whitespace-pre-wrap text-xs text-muted">{l}</p>
+                        ))}
+                        <p className="text-xs text-muted">{h.usuario_nombre || 'Sistema'} — <ClientDate date={h.created_at} dateTime /></p>
                       </div>
                     </div>
                   );
