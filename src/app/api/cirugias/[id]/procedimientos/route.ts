@@ -1,4 +1,4 @@
-import { estadoCerrado } from '@/lib/permisos-edicion';
+import { cirugiaCancelada } from '@/lib/permisos-edicion';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -36,8 +36,8 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
     .maybeSingle();
   if (errCirugia) return errorInterno(errCirugia, 'cirugias.procedimientos.leer');
   if (!cirugia) return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
-  if (estadoCerrado(cirugia.estado)) {
-    return NextResponse.json({ error: 'La cirugía ya está cerrada; no se pueden cambiar sus procedimientos' }, { status: 409 });
+  if (cirugiaCancelada(cirugia.estado)) {
+    return NextResponse.json({ error: 'La cirugía está cancelada; no se pueden cambiar sus procedimientos' }, { status: 409 });
   }
 
   // Sin duplicados y sin repetir el procedimiento principal.

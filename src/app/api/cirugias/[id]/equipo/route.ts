@@ -1,4 +1,5 @@
-import { estadoCerrado } from '@/lib/permisos-edicion';
+import { cirugiaCancelada } from '@/lib/permisos-edicion';
+import { MotorDevengoService } from '@/services/productividad';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -65,9 +66,11 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
     .maybeSingle();
   if (errC) return errorInterno(errC, 'cirugias.equipo.leer');
   if (!cirugia) return NextResponse.json({ error: 'Cirugía no encontrada' }, { status: 404 });
-  if (estadoCerrado(cirugia.estado)) {
-    return NextResponse.json({ error: 'La cirugía ya está cerrada; no se puede cambiar el equipo' }, { status: 409 });
+  if (cirugiaCancelada(cirugia.estado)) {
+    return NextResponse.json({ error: 'La cirugía está cancelada; no se puede cambiar el equipo' }, { status: 409 });
   }
+  // Corrección de una cirugía ya completada (16 oct 2026): el horario real ya ocurrió.
+  const completada = String(cirugia.estado).toLowerCase() === 'completada';
 
   // Participantes: sin repetir médico+rol.
   const vistos = new Set<string>();
@@ -120,8 +123,8 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
     activos.forEach((p: { id: string; nombre: string }) => nombres.set(p.id, p.nombre));
   }
 
-  // Conflictos de agenda (excluyendo esta misma cirugía).
-  if (cirugia.fecha && cirugia.hora) {
+  // Conflictos de agenda (excluyendo esta misma cirugía). No aplica a una completada.
+  if (!completada && cirugia.fecha && cirugia.hora) {
     const conflictosMedicos = await detectarConflictosAgenda({
       fecha: cirugia.fecha as string,
       hora: cirugia.hora as string,
@@ -133,7 +136,7 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: otros[0].descripcion, conflictos: otros }, { status: 409 });
     }
   }
-  if (cirugia.fecha && data.personal.length) {
+  if (!completada && cirugia.fecha && data.personal.length) {
     const conflictosPersonal = await detectarConflictosPersonal({
       fecha: cirugia.fecha as string,
       miembros: data.personal.map((p) => ({ personal_id: p.personal_id, hora_inicio: p.hora_inicio, hora_fin: p.hora_fin })),
@@ -225,6 +228,26 @@ async function manejarPUT(request: Request, { params }: { params: { id: string }
         await calcularProductividadCirugia(id);
       } catch {
         // Si falla, la productividad queda PENDIENTE sin monto.
+      }
+      // Completada: los honorarios ya se devengaron. Se retiran (si no están pagados) los de
+      // quien salió del equipo y se generan los de quien entró (idempotente por médico).
+      if (completada) {
+        try {
+          const medicosActuales = Array.from(new Set(participantes.map((p) => p.medico_id)));
+          let q = supabase
+            .from('eventos_honorario')
+            .update({ estado: 'CANCELADO' })
+            .eq('origen_tipo', 'OPERACION')
+            .eq('origen_id', id)
+            .neq('estado', 'PAGADO')
+            .neq('estado', 'CANCELADO');
+          if (medicosActuales.length) q = q.not('doctor_id', 'in', `(${medicosActuales.join(',')})`);
+          await q;
+          const motor = new MotorDevengoService();
+          if (await motor.devengoAutomaticoActivo()) await motor.generarDesdeCirugia(id);
+        } catch {
+          // best-effort: Productividad permite recalcular manualmente.
+        }
       }
     })(),
     'cirugias.equipo.productividad'

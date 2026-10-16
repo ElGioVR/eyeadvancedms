@@ -15,6 +15,20 @@ interface CobroJoin {
   pagado: boolean | null;
 }
 
+interface CirugiaFila {
+  id: string;
+  fecha: string | null;
+  hora: string | null;
+  procedimiento: string | null;
+  ojo: string | null;
+  estado: string;
+  diagnostico?: string | null;
+  diagnostico_definitivo?: string | null;
+  cirugia_realizada?: string | null;
+  doctores: { alias?: string | null } | Array<{ alias?: string | null }> | null;
+}
+interface LenteFila { orden: string; fabricante: string | null; modelo: string | null; poder_d: number | null; torico: boolean; estado: string }
+
 async function manejarGET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -52,14 +66,42 @@ async function manejarGET(
       .limit(200),
     // Alta automática con datos por completar (mig. 400; sin la columna → false)
     supabase.from('pacientes').select('pendiente_completar').eq('id', id).maybeSingle(),
-    // Cirugías del paciente (resumen en el expediente de consulta)
-    supabase
-      .from('agenda_cirugias')
-      .select('id, fecha, hora, procedimiento, ojo, estado, doctores:doctor_id (alias)')
-      .eq('paciente_id', id)
-      .order('fecha', { ascending: false })
-      .limit(100),
+    // Cirugías del paciente (expediente de consulta y pestaña «Cirugías» del historial).
+    // Con diagnóstico y cierre; si la BD no tiene esas columnas, se lee lo básico.
+    (async () => {
+      const base = 'id, fecha, hora, procedimiento, ojo, estado, doctores:doctor_id (alias)';
+      const completo = await supabase
+        .from('agenda_cirugias')
+        .select(`${base}, diagnostico, diagnostico_definitivo, cirugia_realizada`)
+        .eq('paciente_id', id)
+        .order('fecha', { ascending: false, nullsFirst: true })
+        .limit(100);
+      if (!completo.error) return completo as unknown as { data: CirugiaFila[] | null; error: unknown };
+      return (await supabase
+        .from('agenda_cirugias')
+        .select(base)
+        .eq('paciente_id', id)
+        .order('fecha', { ascending: false, nullsFirst: true })
+        .limit(100)) as unknown as { data: CirugiaFila[] | null; error: unknown };
+    })(),
   ]);
+  // Lentes de esas cirugías (usados o apartados): pestañas «Cirugías» y «Lentes».
+  const idsCirugias = (cirugiasRes.data || []).map((c) => c.id);
+  const lentesPorCirugia = new Map<string, LenteFila[]>();
+  if (idsCirugias.length) {
+    const { data: lentes, error: errLentes } = await supabase
+      .from('cirugia_lentes')
+      .select('cirugia_id, orden, fabricante, modelo, poder_d, torico, estado')
+      .in('cirugia_id', idsCirugias)
+      .in('estado', ['USADO', 'RESERVADO'])
+      .limit(300);
+    if (!errLentes) {
+      for (const l of (lentes || []) as Array<LenteFila & { cirugia_id: string }>) {
+        if (!lentesPorCirugia.has(l.cirugia_id)) lentesPorCirugia.set(l.cirugia_id, []);
+        lentesPorCirugia.get(l.cirugia_id)!.push(l);
+      }
+    }
+  }
   const pendienteCompletar = !pendienteRes.error && (pendienteRes.data as { pendiente_completar?: boolean } | null)?.pendiente_completar === true;
 
   const patient = pacienteRes.data;
@@ -137,9 +179,14 @@ async function manejarGET(
       fecha: c.fecha,
       hora: c.hora,
       procedimiento: c.procedimiento,
+      realizada: c.cirugia_realizada ?? null,
       ojo: c.ojo,
       estado: c.estado,
+      diagnostico: c.diagnostico_definitivo || c.diagnostico || null,
       doctor: (Array.isArray(c.doctores) ? c.doctores[0] : c.doctores)?.alias || '',
+      lentes: (lentesPorCirugia.get(c.id) || [])
+        .sort((a, b) => ['PRIMERO', 'SEGUNDO', 'RESPALDO'].indexOf(a.orden) - ['PRIMERO', 'SEGUNDO', 'RESPALDO'].indexOf(b.orden))
+        .map((l) => ({ orden: l.orden, fabricante: l.fabricante, modelo: l.modelo, poder_d: l.poder_d, torico: l.torico, estado: l.estado })),
     })),
   });
 }
@@ -170,7 +217,8 @@ async function manejarPATCH(
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin', 'recepcionista']);
+  // Doctor también corrige datos generales desde la cirugía/consulta (16 oct 2026).
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista', 'doctor']);
   if (roleError) return roleError;
 
   const { id } = await params;
@@ -217,6 +265,16 @@ async function manejarPATCH(
   }
   if (!actualizado) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  // Copias del nombre y expediente en la agenda de cirugías (columnas propias de la cita):
+  // se mantienen al día para que la agenda y la vista previa muestren lo corregido.
+  const copia: Record<string, unknown> = {};
+  if (data.nombre_completo !== undefined) copia.nombre_paciente = data.nombre_completo.trim();
+  if (data.numero_expediente !== undefined) copia.expediente = data.numero_expediente?.trim() || null;
+  if (Object.keys(copia).length) {
+    const { error: errCopia } = await supabase.from('agenda_cirugias').update(copia).eq('paciente_id', id);
+    if (errCopia) handleSupabaseError(errCopia, 'pacientes.actualizar.agenda');
   }
 
   // Alta automática por importación: se quita la marca cuando la ficha ya está completa.

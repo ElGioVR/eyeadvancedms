@@ -11,7 +11,7 @@ interface LenteReservado {
   modelo: string | null;
   poder_d: number | null;
   torico: boolean;
-  modo?: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+  modo?: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA' | 'SIN_TRAMITE';
   marca?: boolean;
   cilindro?: number | null;
   estado_logistica?: 'POR_SOLICITAR' | 'SOLICITADO' | 'POR_COMPRAR' | 'LISTO';
@@ -24,7 +24,13 @@ export interface DatosCierreCirugia {
   diagnostico_definitivo: string;
   cirugia_realizada: string;
   complicaciones: string;
+  /** Horario real de la cirugía (inicio ajustado al comenzar y fin al terminar). */
+  hora?: string;
+  duracion_min?: number;
 }
+
+const aMin = (h: string) => { const [a, b] = h.split(':').map(Number); return a * 60 + b; };
+const deMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 const ETIQUETA_ORDEN: Record<OrdenLente, string> = {
   PRIMERO: 'Primer lente',
@@ -32,7 +38,7 @@ const ETIQUETA_ORDEN: Record<OrdenLente, string> = {
   RESPALDO: 'Lente de respaldo',
 };
 const ORDENES_ORDENADOS: OrdenLente[] = ['PRIMERO', 'SEGUNDO', 'RESPALDO'];
-const ETIQUETA_MODO = { ASIGNAR: 'Asignado de inventario', SOLICITAR: 'Solicitado', COMPRA_DIRECTA: 'Compra directa' } as const;
+const ETIQUETA_MODO = { ASIGNAR: 'Asignado de inventario', SOLICITAR: 'Solicitado', COMPRA_DIRECTA: 'Compra directa', SIN_TRAMITE: 'Solo registro' } as const;
 
 function descripcion(l: LenteReservado): string {
   const partes = [
@@ -73,6 +79,8 @@ export default function CompletarCirugiaLentes({
   const [usarDx, setUsarDx] = useState(false);
   const [usarProc, setUsarProc] = useState(false);
   const [complicaciones, setComplicaciones] = useState('');
+  const [horaInicioReal, setHoraInicioReal] = useState('');
+  const [horaFinReal, setHoraFinReal] = useState('');
   const [sinComplicaciones, setSinComplicaciones] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,13 +91,16 @@ export default function CompletarCirugiaLentes({
     try {
       const r = await fetch(`/api/agenda/${cirugiaId}/lentes`, { signal });
       if (!r.ok) throw new Error('lentes');
-      const d = (await r.json()) as { lentes: LenteReservado[]; cirugia?: { diagnostico?: string | null; procedimiento?: string | null } | null };
+      const d = (await r.json()) as { lentes: LenteReservado[]; cirugia?: { diagnostico?: string | null; procedimiento?: string | null; hora?: string | null; duracion_min?: number | null } | null };
       setLentes(d.lentes);
       if (inicial) {
         // Por defecto, el primero (si hay pieza física), como el comportamiento anterior.
         setMarcados(new Set(d.lentes.filter((l) => l.orden === 'PRIMERO' && !sinPieza(l)).map((l) => l.orden)));
         setDxInicial(d.cirugia?.diagnostico ?? '');
         setProcInicial(d.cirugia?.procedimiento ?? '');
+        // Hora programada como inicio sugerido; el fin real se captura aquí.
+        const hi = String(d.cirugia?.hora ?? '').slice(0, 5);
+        if (/^\d{2}:\d{2}$/.test(hi)) setHoraInicioReal(hi);
       }
     } catch {
       if (!signal?.aborted) setError('No se pudieron cargar los lentes asignados.');
@@ -128,8 +139,11 @@ export default function CompletarCirugiaLentes({
     if (!dxDefinitivo.trim()) f.push('diagnóstico definitivo');
     if (!realizada.trim()) f.push('cirugía realizada');
     if (!sinComplicaciones && !complicaciones.trim()) f.push('complicaciones (o marca «Sin complicaciones»)');
+    if (!horaInicioReal) f.push('hora de inicio');
+    if (!horaFinReal) f.push('hora de terminación');
+    else if (horaInicioReal && aMin(horaFinReal) <= aMin(horaInicioReal)) f.push('hora de terminación posterior al inicio');
     return f;
-  }, [dxDefinitivo, realizada, complicaciones, sinComplicaciones]);
+  }, [dxDefinitivo, realizada, complicaciones, sinComplicaciones, horaInicioReal, horaFinReal]);
   const usadoSinConfirmar = (lentes ?? []).filter((l) => marcados.has(l.orden) && pendienteConfirmar(l));
   const puedeCompletar = lentes !== null && faltantes.length === 0 && usadoSinConfirmar.length === 0 && confirmado && !enviando;
 
@@ -143,6 +157,8 @@ export default function CompletarCirugiaLentes({
         diagnostico_definitivo: dxDefinitivo.trim(),
         cirugia_realizada: realizada.trim(),
         complicaciones: sinComplicaciones ? 'Sin complicaciones' : complicaciones.trim(),
+        hora: horaInicioReal,
+        duracion_min: Math.max(1, aMin(horaFinReal) - aMin(horaInicioReal)),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo completar la cirugía.');
@@ -213,6 +229,17 @@ export default function CompletarCirugiaLentes({
 
         <section className="mt-5 space-y-3">
           <p className="text-sm font-bold text-fg">2. Cierre de la cirugía</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-bold text-muted">Hora real de inicio
+              <input type="time" value={horaInicioReal} onChange={(e) => setHoraInicioReal(e.target.value)} disabled={enviando} className={campo} />
+            </label>
+            <label className="block text-xs font-bold text-muted">Hora de terminación
+              <input type="time" value={horaFinReal} min={horaInicioReal || undefined} onChange={(e) => setHoraFinReal(e.target.value)} disabled={enviando} className={campo} />
+            </label>
+            {horaInicioReal && horaFinReal && aMin(horaFinReal) > aMin(horaInicioReal) && (
+              <p className="col-span-2 -mt-1 text-[11px] text-muted">Duración: {aMin(horaFinReal) - aMin(horaInicioReal)} min ({horaInicioReal}–{deMin(aMin(horaFinReal))}).</p>
+            )}
+          </div>
           <div>
             {dxInicial && (
               <div className="mb-1 flex items-start justify-between gap-3 rounded-md bg-surface-2 px-2 py-1.5 text-xs text-fg-2">
@@ -254,7 +281,7 @@ export default function CompletarCirugiaLentes({
 
         <label className="mt-5 flex cursor-pointer items-start gap-2 rounded-lg border border-line p-3 text-sm text-fg">
           <input type="checkbox" className="mt-0.5" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} disabled={enviando} />
-          <span>Confirmo los lentes usados y los datos del cierre. Al completar, la cirugía ya no se podrá modificar.</span>
+          <span>Confirmo los lentes usados y los datos del cierre. Si después hay un error, la cirugía completada se puede corregir con «Editar cirugía» (los lentes usados ya no cambian).</span>
         </label>
 
         {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}

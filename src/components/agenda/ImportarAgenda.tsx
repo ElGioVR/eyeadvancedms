@@ -204,10 +204,12 @@ export function ImportAgenda({
             <FileSpreadsheet className="h-10 w-10 mx-auto text-muted mb-3" />
             <input type="file" accept=".xlsx,.csv" onChange={e => setFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary-600 file:text-white hover:file:bg-primary-700" />
           </div>
+          <div className="mb-4 space-y-2">
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg-2"><input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={incluirDuplicados} onChange={(e) => setIncluirDuplicados(e.target.checked)} />Importar también las filas duplicadas (mismo paciente, fecha, ojo y procedimiento)</label>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg-2"><input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={completarExistentes} onChange={(e) => setCompletarExistentes(e.target.checked)} /><span>Completar cirugías ya guardadas con los datos del archivo <span className="text-muted">(hora, anestesia, diagnóstico, procedencia, expediente, tiempos, cirujano y lente; solo donde estén vacíos, sin duplicar ni sobrescribir). Úsalo para volver a subir un Excel cuya primera carga quedó incompleta.</span></span></label>
+          </div>
           <div className="flex justify-end gap-3">
             <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-gray-50">Cancelar</button>
-            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-fg-2"><input type="checkbox" className="h-4 w-4" checked={incluirDuplicados} onChange={(e) => setIncluirDuplicados(e.target.checked)} />Importar también las filas duplicadas (mismo paciente, fecha, ojo y procedimiento)</label>
-            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-fg-2"><input type="checkbox" className="h-4 w-4" checked={completarExistentes} onChange={(e) => setCompletarExistentes(e.target.checked)} />Completar cirugías ya guardadas con la hora y anestesia del archivo (solo donde estén vacías)</label>
           <button onClick={() => enviar(false)} disabled={!file || loading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50">{loading ? 'Revisando…' : 'Previsualizar'}</button>
           </div>
         </>

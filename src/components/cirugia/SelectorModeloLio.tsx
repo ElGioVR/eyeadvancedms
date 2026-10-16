@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Loader2, Plus, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DISENOS_LIO, fabricanteCanonico, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+import { DISENOS_LIO, fabricanteCanonico, type DisenoLio, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+
+export interface NuevoModeloLio { fabricante: string; modelo: string; diseno: DisenoLio; torico: boolean }
 
 /**
  * Selección de LIO al estilo de la calculadora ESCRS:
@@ -21,14 +23,38 @@ interface Props {
   modeloId: string;
   onModelo: (id: string) => void;
   cargando?: boolean;
+  /** Alta rápida de marca/modelo que no está en el catálogo; devuelve el modelo creado. */
+  onAgregar?: (m: NuevoModeloLio) => Promise<ModeloLio>;
+  /** Diseño sugerido por la cirugía elegida (monofocal / trifocal): ordena primero esos modelos. */
+  disenoSugerido?: DisenoLio | null;
 }
 
 const etiquetaDiseno = (d: string) => DISENOS_LIO.find((x) => x.value === d)?.label || d;
 const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export default function SelectorModeloLio({ modelos, torico, onTorico, marca, onMarca, fabricante, onFabricante, modeloId, onModelo, cargando }: Props) {
+export default function SelectorModeloLio({ modelos, torico, onTorico, marca, onMarca, fabricante, onFabricante, modeloId, onModelo, cargando, onAgregar, disenoSugerido }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [abierto, setAbierto] = useState(false);
+  const uid = useId();
+  const [alta, setAlta] = useState<null | { fabricante: string; modelo: string; diseno: DisenoLio; guardando: boolean; error: string | null }>(null);
+  const abrirAlta = (modeloTxt: string) => {
+    setAbierto(false);
+    setAlta({ fabricante: fabricante || '', modelo: modeloTxt.trim(), diseno: disenoSugerido || 'MONOFOCAL', guardando: false, error: null });
+  };
+  const guardarAlta = async () => {
+    if (!alta || !onAgregar || alta.guardando) return;
+    if (!alta.fabricante.trim() || !alta.modelo.trim()) { setAlta({ ...alta, error: 'Escribe la marca y el modelo' }); return; }
+    setAlta({ ...alta, guardando: true, error: null });
+    try {
+      const m = await onAgregar({ fabricante: alta.fabricante.trim(), modelo: alta.modelo.trim(), diseno: alta.diseno, torico });
+      onFabricante(fabricanteCanonico(m.fabricante));
+      onModelo(m.id);
+      setBusqueda('');
+      setAlta(null);
+    } catch (e) {
+      setAlta((a) => (a ? { ...a, guardando: false, error: e instanceof Error && e.message ? e.message : 'No se pudo agregar el modelo' } : a));
+    }
+  };
   const cajaRef = useRef<HTMLDivElement>(null);
 
   const delTipo = useMemo(() => modelos.filter((m) => m.activo && m.torico === torico), [modelos, torico]);
@@ -36,13 +62,20 @@ export default function SelectorModeloLio({ modelos, torico, onTorico, marca, on
     () => Array.from(new Set(delTipo.map((m) => fabricanteCanonico(m.fabricante)))).sort((a, b) => a.localeCompare(b, 'es')),
     [delTipo],
   );
+  // Todas las marcas (de cualquier tipo) para sugerir en el alta rápida.
+  const todasMarcas = useMemo(
+    () => Array.from(new Set(modelos.map((m) => fabricanteCanonico(m.fabricante)))).sort((a, b) => a.localeCompare(b, 'es')),
+    [modelos],
+  );
   const candidatos = useMemo(() => {
     const q = normalizar(busqueda.trim());
     return delTipo
       .filter((m) => !fabricante || fabricanteCanonico(m.fabricante) === fabricante)
       .filter((m) => !q || normalizar(`${m.fabricante} ${m.modelo}`).includes(q))
-      .sort((a, b) => fabricanteCanonico(a.fabricante).localeCompare(fabricanteCanonico(b.fabricante), 'es') || a.modelo.localeCompare(b.modelo, 'es'));
-  }, [delTipo, fabricante, busqueda]);
+      .sort((a, b) =>
+        Number(!!disenoSugerido && b.diseno === disenoSugerido) - Number(!!disenoSugerido && a.diseno === disenoSugerido)
+        || fabricanteCanonico(a.fabricante).localeCompare(fabricanteCanonico(b.fabricante), 'es') || a.modelo.localeCompare(b.modelo, 'es'));
+  }, [delTipo, fabricante, busqueda, disenoSugerido]);
   const seleccionado = modelos.find((m) => m.id === modeloId) || null;
 
   // Cerrar la lista al hacer clic fuera.
@@ -133,9 +166,22 @@ export default function SelectorModeloLio({ modelos, torico, onTorico, marca, on
               role="listbox"
               className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-line bg-surface py-1 shadow-lg"
             >
+              {onAgregar && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => abrirAlta(busqueda)}
+                    className="flex w-full items-center gap-2 border-b border-line/70 px-4 py-2 text-left text-sm font-bold text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/10"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {busqueda.trim() ? `Agregar «${busqueda.trim()}» como modelo nuevo` : 'Agregar marca o modelo nuevo'}
+                  </button>
+                </li>
+              )}
               {candidatos.length === 0 ? (
                 <li className="px-4 py-2 text-xs text-muted">
                   {delTipo.length === 0 ? 'No hay modelos de este tipo en el catálogo.' : 'Sin coincidencias.'}
+                  {onAgregar && ' Usa «Agregar» para registrarlo.'}
                 </li>
               ) : (
                 candidatos.map((m) => (
@@ -157,6 +203,42 @@ export default function SelectorModeloLio({ modelos, torico, onTorico, marca, on
           )}
         </div>
       </div>
+
+      {onAgregar && !alta && !seleccionado && (
+        <button type="button" onClick={() => abrirAlta(busqueda)} className="inline-flex items-center gap-1 text-xs font-bold text-primary-600 hover:underline">
+          <Plus className="h-3.5 w-3.5" /> ¿No aparece la marca o el modelo? Agregarlo
+        </button>
+      )}
+      {alta && (
+        <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3 dark:border-primary-500/30 dark:bg-primary-500/5">
+          <p className="mb-2 text-xs font-bold text-fg">Nuevo modelo de LIO {torico ? '(tórico)' : '(no tórico)'}</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-muted" htmlFor={`${uid}-marca`}>Marca</label>
+              <input id={`${uid}-marca`} list={`${uid}-marcas`} value={alta.fabricante} onChange={(e) => setAlta({ ...alta, fabricante: e.target.value })} placeholder="Ej. Hoya" className={inputCls} maxLength={120} />
+              <datalist id={`${uid}-marcas`}>{todasMarcas.map((f) => <option key={f} value={f} />)}</datalist>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-muted" htmlFor={`${uid}-modelo`}>Modelo</label>
+              <input id={`${uid}-modelo`} value={alta.modelo} onChange={(e) => setAlta({ ...alta, modelo: e.target.value })} placeholder="Ej. iSert 251" className={inputCls} maxLength={160} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-muted" htmlFor={`${uid}-diseno`}>Tipo</label>
+              <select id={`${uid}-diseno`} value={alta.diseno} onChange={(e) => setAlta({ ...alta, diseno: e.target.value as DisenoLio })} className={cn(inputCls, 'appearance-none')}>
+                {DISENOS_LIO.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </select>
+            </div>
+          </div>
+          {alta.error && <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{alta.error}</p>}
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setAlta(null)} className="rounded-lg border border-line px-3 py-1.5 text-xs font-bold text-fg-2 hover:bg-surface">Cancelar</button>
+            <button type="button" onClick={() => void guardarAlta()} disabled={alta.guardando} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+              {alta.guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar y usar
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-muted">Queda en el catálogo para las próximas cirugías (marcado «por verificar» en Configuración → Marcas).</p>
+        </div>
+      )}
     </div>
   );
 }

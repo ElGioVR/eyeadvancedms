@@ -33,7 +33,7 @@ export interface LenteCirugia {
   torico: boolean;
   estado: EstadoLente;
   requerido: boolean;
-  modo?: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+  modo?: ModoLente;
 }
 
 export interface ReservarLenteInput {
@@ -199,7 +199,9 @@ export async function completarLentesCirugia(
 
 /* ───────── Logística de lentes (asignar / solicitar / compra directa) ───────── */
 
-export type ModoLente = 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+/** SIN_TRAMITE: solo registro (lo surte el proveedor/hospital); sin reserva, pedido ni recordatorio. */
+export type ModoLente = 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA' | 'SIN_TRAMITE';
+export const MODOS_LENTE_VALIDOS = ['ASIGNAR', 'SOLICITAR', 'COMPRA_DIRECTA', 'SIN_TRAMITE'] as const;
 
 export interface LentePlanInput {
   orden: OrdenLente;
@@ -218,7 +220,9 @@ export interface LentePlanInput {
  *  - ASIGNAR: compromete la pieza (el PRIMERO ya lo comprometió crear_cirugia); guarda marca/cilindro.
  *  - SOLICITAR: queda en el plan de resurtimiento (estado_logistica POR_SOLICITAR).
  *  - COMPRA_DIRECTA: sin plan; estado POR_COMPRAR (recordatorio + confirmación al iniciar).
- * Requiere sql/patch-lentes-logistica-supabase.sql.
+ *  - SIN_TRAMITE: solo registro (origen HOSPITAL, LISTO); no toca inventario.
+ * Requiere sql/patch-lentes-logistica-supabase.sql (y para SIN_TRAMITE,
+ * sql/patch-agenda-cirugia-comentarios-16oct-supabase.sql).
  */
 export async function guardarPlanLentes(
   cirugiaId: string,
@@ -302,12 +306,18 @@ export async function guardarPlanLentes(
         poder_d: l.poder_d ?? null,
         estado: 'RESERVADO',
         requerido: false,
-        estado_logistica: l.modo === 'SOLICITAR' ? 'POR_SOLICITAR' : 'POR_COMPRAR',
+        estado_logistica: l.modo === 'SOLICITAR' ? 'POR_SOLICITAR' : l.modo === 'COMPRA_DIRECTA' ? 'POR_COMPRAR' : 'LISTO',
         ...meta,
       },
       { onConflict: 'cirugia_id,orden' },
     );
-    if (error) return { ok: false, orden: l.orden, error: 'No se pudo guardar el plan del lente.' };
+    if (error) {
+      // BD sin el parche que admite «solo registro» (CHECK cirugia_lentes_modo_check).
+      if (l.modo === 'SIN_TRAMITE' && /modo_check|check constraint/i.test(error.message ?? '')) {
+        return { ok: false, orden: l.orden, error: 'Falta aplicar sql/patch-agenda-cirugia-comentarios-16oct-supabase.sql para guardar lentes sin Asignar/Solicitar/Compra directa.' };
+      }
+      return { ok: false, orden: l.orden, error: 'No se pudo guardar el plan del lente.' };
+    }
   }
   return { ok: true };
 }

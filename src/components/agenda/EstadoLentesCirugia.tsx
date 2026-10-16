@@ -13,7 +13,7 @@ interface Lente {
   poder_d: number | null;
   torico: boolean;
   cilindro?: number | null;
-  modo?: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+  modo?: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA' | 'SIN_TRAMITE';
   inventario_item_id?: string | null;
   estado_logistica?: 'POR_SOLICITAR' | 'SOLICITADO' | 'POR_COMPRAR' | 'LISTO';
 }
@@ -30,7 +30,7 @@ export default function EstadoLentesCirugia({ cirugiaId, puedeConfirmar }: { cir
   const { data, mutate } = useSWR<{ lentes: Lente[] }>(`/api/agenda/${cirugiaId}/lentes`, { revalidateOnFocus: true });
   const { toast } = useToast();
   const [confirmando, setConfirmando] = useState<string | null>(null);
-  const lentes = (data?.lentes ?? []).filter((l) => l.modo && l.modo !== 'ASIGNAR');
+  const lentes = (data?.lentes ?? []).filter((l) => l.modo === 'SOLICITAR' || l.modo === 'COMPRA_DIRECTA');
   if (lentes.length === 0) return null;
 
   const confirmar = async (orden: Lente['orden']) => {

@@ -133,7 +133,8 @@ async function manejarPATCH(
   const prevP = Promise.resolve(
     supabase
       .from('agenda_cirugias')
-      .select('estado, inventario_item_id, fecha, hora, doctor_id, duracion_min, recurso_id, nombre_paciente, origen_id, notas')
+      // Fila completa (una sola): permite registrar qué campos cambian al corregir una completada.
+      .select('*')
       .eq('id', id)
       .maybeSingle()
   );
@@ -164,7 +165,10 @@ async function manejarPATCH(
 
   const cambiaDuracion = data.duracion_min !== undefined && data.duracion_min !== prev.duracion_min;
 
-  if (cambiaFecha || cambiaHora || cambiaDoctor || cambiaDuracion) {
+  // Al COMPLETAR (o al corregir una ya completada) se registra el horario real, que ya
+  // ocurrió: no se revisan empalmes.
+  const yaOcurrio = data.estado === 'completada' || prev.estado === 'completada';
+  if (!yaOcurrio && (cambiaFecha || cambiaHora || cambiaDoctor || cambiaDuracion)) {
     const nuevaFecha = data.fecha ?? prev.fecha;
     const nuevaHora = data.hora ?? prev.hora;
     const nuevoDoctor = data.doctor_id ?? prev.doctor_id;
@@ -313,6 +317,25 @@ async function manejarPATCH(
       }
     }
     await supabase.from('agenda_cirugias').update({ catalogo_quirurgico_id: qxIds[0] ?? null }).eq('id', id);
+  }
+
+  // Trazabilidad: corrección de una cirugía ya completada (qué campos se tocaron).
+  if (String(prev.estado).toLowerCase() === 'completada' && !nuevoEstado) {
+    const norm = (v: unknown) => (v === null || v === undefined || v === '' ? null : typeof v === 'object' ? JSON.stringify(v) : String(v));
+    const previo = prev as Record<string, unknown>;
+    const campos = Object.keys(updates).filter((k) => {
+      if (k === 'updated_at') return false;
+      if (k === 'hora') return norm(updates[k])?.slice(0, 5) !== norm(previo[k])?.slice(0, 5);
+      return norm(updates[k]) !== norm(previo[k]);
+    });
+    if (campos.length) {
+      await supabase.from('cirugia_historial').insert({
+        cirugia_id: id,
+        usuario_id: auth.user.id,
+        accion: 'CIRUGIA_CORREGIDA',
+        detalle: { campos },
+      });
+    }
   }
 
   // Trazabilidad: cambio de notas (texto anterior y nuevo).

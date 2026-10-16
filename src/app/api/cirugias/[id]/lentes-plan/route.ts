@@ -16,7 +16,7 @@ import { guardarPlanLentes, liberarLentes, type OrdenLente } from '@/lib/cirugia
 const planSchema = z.object({
   plan: z.array(z.object({
     orden: z.enum(['PRIMERO', 'SEGUNDO', 'RESPALDO']),
-    modo: z.enum(['ASIGNAR', 'SOLICITAR', 'COMPRA_DIRECTA']),
+    modo: z.enum(['ASIGNAR', 'SOLICITAR', 'COMPRA_DIRECTA', 'SIN_TRAMITE']),
     torico: z.boolean(),
     marca: z.boolean(),
     fabricante: z.string().trim().max(255).optional().nullable(),

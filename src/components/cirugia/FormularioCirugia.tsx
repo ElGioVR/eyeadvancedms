@@ -9,16 +9,17 @@ import { type TelefonoPaciente, normalizarTelefonos, telefonoPrincipal } from '@
 import { type MiembroEquipo, ROLES_POR_DEFECTO, equipoPorDefecto, sincronizarHorario, ROLES_APOYO, ETIQUETAS_ROL, esRolApoyo, validarEquipo } from '@/lib/catalogos/equipo-quirurgico';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
 import { type ModeloLio, URL_IOLCON } from '@/lib/catalogos/modelos-lio';
+import type { NuevoModeloLio } from '@/components/cirugia/SelectorModeloLio';
 import { type LIODisponible, URL_LIOS_DISPONIBLES, obtenerLIOs } from '@/components/cirugia/LIOSelector';
 import { useInvalidar } from '@/hooks/useFetch';
-import { esProcedimientoConLio, TIPO_DOCUMENTO_OTRO, tipoLioDe, ANESTESIAS, TIPO_MEDICINA_INTERNA, DOCUMENTOS_REQUERIDOS } from '@/lib/catalogos/cirugia';
+import { esProcedimientoConLio, TIPO_DOCUMENTO_OTRO, tipoLioDe, tipoLioDesdeProcedimiento, ANESTESIAS, TIPO_MEDICINA_INTERNA, DOCUMENTOS_REQUERIDOS } from '@/lib/catalogos/cirugia';
 import { buscarEspecialidad } from '@/lib/catalogos/especialidades';
 import { esEnfermeria, esMedicoTratante, esAnestesiologo, ROL_ANESTESIOLOGO, puedeOcuparRol } from '@/lib/catalogos/personal';
 import { ApiError, enviarJSON, mensajeDeError, nuevaClaveIdempotencia } from '@/lib/fetcher';
 import { useBorrador } from '@/hooks/useBorrador';
 import { useUser } from '@/hooks/useUser';
 import { aMinutos, deMinutos } from '@/lib/agenda-slots';
-import { estadoCerrado } from '@/lib/permisos-edicion';
+import { puedeEditarCirugia } from '@/lib/permisos-edicion';
 import PageHeader from '@/components/ui/PageHeader';
 import { useVolver } from '@/components/layout/RutaNavegacion';
 import AvisoBorrador from '@/components/ui/AvisoBorrador';
@@ -28,12 +29,15 @@ import { DatosPacienteFicha, PanelExpediente } from '@/components/pacientes/Pane
 import { PacienteDetalleAPI, normalizarPacienteDetalle } from '@/components/consultations/nueva-consulta-comun';
 import { BuscadorServicio } from '@/components/consultations/BuscadorServicio';
 import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
+import EditorDatosPaciente, { faltantesDatosGenerales, puedeEditarPaciente } from '@/components/pacientes/EditorDatosPaciente';
 import { cn } from '@/lib/utils';
 import CampoTextoDiferido from '@/components/ui/CampoTextoDiferido';
 import LenteLogistica, { type LenteForm, type LenteComprometidoInfo, type OrdenLenteForm, lenteVacio, MODOS_LENTE, lenteCapturado, validarLente } from '@/components/cirugia/LenteLogistica';
 import BuscadorDiagnosticoCIE10 from '@/components/diagnosticos/BuscadorDiagnosticoCIE10';
 
 const SIN_GENERICOS = new Set<string>();
+/** Bloque reservado en la agenda cuando aún no se conoce la hora de fin. */
+const DURACION_ESTIMADA_MIN = 60;
 
 /** Nombre normalizado para comparar: sin acentos, minúsculas y espacios simples. */
 const normalizarNombre = (t: string) =>
@@ -62,7 +66,11 @@ function FormularioCirugiaContent({ cirugiaId: cirugiaEditId }: { cirugiaId?: st
   const modoEdicion = !!cirugiaEditId;
   const { user } = useUser();
   const esUsuarioEnfermeria = user?.rol === 'enfermero';
+  const rolUsuarioRef = useRef<string | null>(null);
+  rolUsuarioRef.current = user?.rol ?? null;
   const [edicion, setEdicion] = useState<EdicionCirugiaData | null>(null);
+  // Corrección de una cirugía ya completada: se editan los datos; los lentes usados quedan fijos.
+  const cirugiaCompletada = String(edicion?.cirugia?.estado ?? '').toLowerCase() === 'completada';
   const [cargandoEdicion, setCargandoEdicion] = useState(modoEdicion);
   const [archivosExistentes, setArchivosExistentes] = useState<ArchivoExistente[]>([]);
   const edicionCargadaRef = useRef(false);
@@ -116,7 +124,8 @@ function FormularioCirugiaContent({ cirugiaId: cirugiaEditId }: { cirugiaId?: st
   }>(null);
   const [resumenPaciente, setResumenPaciente] = useState<PacienteResumen | null>(null);
   // Datos personales completos del paciente elegido (tarjeta de la sección 1 y expediente lateral).
-  const { data: fichaPaciente } = useSWR<PacienteDetalleAPI>(
+  const [editandoPaciente, setEditandoPaciente] = useState(false);
+  const { data: fichaPaciente, mutate: mutateFicha } = useSWR<PacienteDetalleAPI>(
     pacienteSeleccionado ? `/api/pacientes/${encodeURIComponent(pacienteSeleccionado.id)}` : null,
     { revalidateOnFocus: false },
   );
@@ -147,6 +156,12 @@ function FormularioCirugiaContent({ cirugiaId: cirugiaEditId }: { cirugiaId?: st
     return d > 0 ? d : '';
   }, [hora, horaFin]);
   const horaFinInvalida = Boolean(hora && horaFin) && duracionMin === '';
+  // La hora de fin es opcional al agendar (se registra la real al completar): sin ella se
+  // aparta un bloque estimado en la agenda para detectar empalmes.
+  const duracionEfectiva = useMemo<number | ''>(
+    () => (duracionMin !== '' ? duracionMin : hora && !horaFin ? DURACION_ESTIMADA_MIN : ''),
+    [duracionMin, hora, horaFin],
+  );
   // Equipo quirúrgico homologado: Rol · Persona · Horario. Roles por defecto
   // precargados (ids deterministas para no romper la hidratación); solo el
   // cirujano es obligatorio y se pueden agregar más filas.
@@ -183,7 +198,20 @@ function FormularioCirugiaContent({ cirugiaId: cirugiaEditId }: { cirugiaId?: st
   const modelosLio = useMemo(() => (Array.isArray(modelosLioSWR.data) ? modelosLioSWR.data : []), [modelosLioSWR.data]);
   const modeloLioSel = modelosLio.find((m) => m.id === primerLente.modeloId) || null;
   const procedenciasSWR = useSWR<string[]>('/api/catalogos/procedencias', OPCIONES_CATALOGO);
-  const catalogoQxSWR = useSWR<{ id: string; nombre: string; ojo: string | null }[]>('/api/configuracion/catalogo-quirurgico', OPCIONES_CATALOGO);
+  const catalogoQxSWR = useSWR<{ id: string; nombre: string; ojo: string | null; activo?: boolean }[]>('/api/configuracion/catalogo-quirurgico', OPCIONES_CATALOGO);
+  // Cirugías elegibles: activas y una por nombre (el ojo se elige aparte, no forma parte del nombre).
+  const cirugiasElegibles = useMemo(() => {
+    const vistos = new Set<string>();
+    return (catalogoQxSWR.data || []).filter((c) => {
+      if (c.activo === false) return false;
+      const k = normalizarNombre(c.nombre);
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+  }, [catalogoQxSWR.data]);
+  // Alta rápida de una cirugía que no está en el catálogo.
+  const [altaCirugia, setAltaCirugia] = useState<null | { nombre: string; guardando: boolean; error: string | null }>(null);
   const procedenciasSugeridas = useMemo(() => (Array.isArray(procedenciasSWR.data) ? procedenciasSWR.data : []), [procedenciasSWR.data]);
   // Sin consulta de origen: precarga el diagnóstico de la última consulta del paciente
   // (solo si el usuario no lo ha escrito/cambiado).
@@ -516,9 +544,15 @@ useEffect(() => {
     () => qxIds.map((id) => (catalogoQxSWR.data || []).find((c) => c.id === id)?.nombre ?? '').filter(Boolean),
     [catalogoQxSWR.data, qxIds],
   );
-  const agregarQx = (id: string) => {
+  const agregarQx = (id: string, nombreConocido?: string) => {
     if (!id || qxIds.includes(id)) return;
     setQxIds((prev) => [...prev, id]);
+    // El nombre de la cirugía ya dice si el LIO es tórico (y si es monofocal o trifocal):
+    // se aplica al primer lente mientras no se haya capturado nada en él.
+    const pista = tipoLioDesdeProcedimiento(nombreConocido ?? (catalogoQxSWR.data || []).find((c) => c.id === id)?.nombre);
+    if (pista?.torico != null) {
+      setLentes((prev) => prev.map((l) => (l.orden === 'PRIMERO' && !lenteCapturado(l) ? { ...l, torico: pista.torico as boolean } : l)));
+    }
     // Si aún no hay facturación, se sugiere el servicio con el mismo nombre exacto.
     if (!servicioId) {
       const nombre = (catalogoQxSWR.data || []).find((c) => c.id === id)?.nombre;
@@ -527,6 +561,45 @@ useEffect(() => {
     }
   };
   const quitarQx = (id: string) => setQxIds((prev) => prev.filter((x) => x !== id));
+  // Diseño de LIO sugerido por la cirugía (ordena primero los modelos de ese tipo).
+  const disenoLioSugerido = useMemo(
+    () => nombresQx.map((n) => tipoLioDesdeProcedimiento(n)?.diseno ?? null).find(Boolean) ?? null,
+    [nombresQx],
+  );
+  const puedeAgregarCatalogos = !!user && user.rol !== 'enfermero';
+  const registrarCirugiaCatalogo = async () => {
+    if (!altaCirugia || altaCirugia.guardando) return;
+    const nombre = altaCirugia.nombre.trim().replace(/\s+/g, ' ');
+    if (!nombre) { setAltaCirugia({ ...altaCirugia, error: 'Escribe el nombre de la cirugía' }); return; }
+    const existente = cirugiasElegibles.find((c) => normalizarNombre(c.nombre) === normalizarNombre(nombre));
+    if (existente) { agregarQx(existente.id); setAltaCirugia(null); return; }
+    setAltaCirugia({ ...altaCirugia, guardando: true, error: null });
+    try {
+      const creada = await enviarJSON<{ id: string; nombre: string; ojo: string | null; activo?: boolean }>(
+        '/api/configuracion/catalogo-quirurgico', 'POST', { nombre },
+      );
+      await catalogoQxSWR.mutate((prev) => [...(prev || []), { ...creada, activo: true }], { revalidate: false });
+      agregarQx(creada.id, creada.nombre);
+      setAltaCirugia(null);
+      toast('Cirugía agregada al catálogo', 'success');
+    } catch (err) {
+      setAltaCirugia((a) => (a ? { ...a, guardando: false, error: mensajeDeError(err, 'No se pudo agregar la cirugía') } : a));
+    }
+  };
+  /** Alta rápida de marca/modelo de LIO desde el bloque de lentes. */
+  const agregarModeloLio = async (m: NuevoModeloLio): Promise<ModeloLio> => {
+    try {
+      const creado = await enviarJSON<ModeloLio>('/api/catalogos/modelos-lio', 'POST', m);
+      await modelosLioSWR.mutate(
+        (prev) => (Array.isArray(prev) && !prev.some((x) => x.id === creado.id) ? [...prev, { ...creado, activo: true }] : prev),
+        { revalidate: false },
+      );
+      toast(`Modelo ${creado.modelo} agregado`, 'success');
+      return creado;
+    } catch (err) {
+      throw new Error(mensajeDeError(err, 'No se pudo agregar el modelo'));
+    }
+  };
   // La facturación se toma del primer procedimiento quirúrgico con nombre igual a un servicio de la aseguradora.
   useEffect(() => {
     if (!qxIds.length) return;
@@ -594,8 +667,8 @@ useEffect(() => {
 
   // El horario de cada miembro sigue al de la cirugía hasta que se edita a mano.
   useEffect(() => {
-    setParticipantes((prev) => sincronizarHorario(prev, hora, duracionMin));
-  }, [hora, duracionMin]);
+    setParticipantes((prev) => sincronizarHorario(prev, hora, duracionEfectiva));
+  }, [hora, duracionEfectiva]);
 
   // Roles del catálogo (médicos y de apoyo: instrumentista, enfermero, circulante).
   const opcionesRol = useMemo(() => {
@@ -737,12 +810,11 @@ useEffect(() => {
     const e: { campo: string; mensaje: string }[] = [];
     const add = (campo: string, mensaje: string) => { if (!e.some((x) => x.campo === campo)) e.push({ campo, mensaje }); };
     if (!pacienteSeleccionado) add('paciente', 'Debe seleccionar un paciente');
-    if (!qxIds.length && !servicioId) add('qx', 'Debe seleccionar un procedimiento quirúrgico');
+    if (!qxIds.length && !servicioId) add('qx', 'Selecciona la cirugía');
     if (!ojo) add('ojo', 'Debe seleccionar el ojo');
     if (!fecha) add('fecha', 'Debe indicar la fecha');
     if (!hora) add('hora', 'Debe indicar la hora de inicio');
-    if (!horaFin) add('horaFin', 'Debe indicar la hora de fin');
-    else if (duracionMin === '') add('horaFin', 'La hora de fin debe ser posterior a la hora de inicio');
+    if (horaFin && duracionMin === '') add('horaFin', 'La hora de fin debe ser posterior a la hora de inicio');
     if (!anestesia) add('anestesia', 'Selecciona el tipo de anestesia');
     if (!participantes.some((m) => m.personaId)) {
       add('participantes', 'Debe asignar al menos un participante');
@@ -765,7 +837,7 @@ useEffect(() => {
         }
       }
     }
-    if (esCirugiaConLio) {
+    if (esCirugiaConLio && !cirugiaCompletada) {
       for (const l of lentes) {
         if (l.orden === 'PRIMERO' && !lenteCapturado(l)) continue;
         const el = validarLente(l, modelosLio);
@@ -812,7 +884,7 @@ useEffect(() => {
     await enviarJSON(`/api/agenda/${id}`, 'PATCH', {
       fecha,
       hora,
-      duracion_min: Number(duracionMin),
+      duracion_min: Number(duracionEfectiva) || DURACION_ESTIMADA_MIN,
       quirofano: quirofano.trim() || null,
       ojo,
       anestesia,
@@ -824,8 +896,10 @@ useEffect(() => {
       procedimientos_qx_ids: qxIds,
       documentos_faltantes: docsFaltantesPayload,
       especialidad_id: especialidades.find((e) => e.clave === especialidad)?.id || null,
-      modelo_lio_id: esCirugiaConLio ? primerLente.modeloId || null : null,
-      lio_torico: esCirugiaConLio ? primerLente.torico : null,
+      ...(cirugiaCompletada ? {} : {
+        modelo_lio_id: esCirugiaConLio ? primerLente.modeloId || null : null,
+        lio_torico: esCirugiaConLio ? primerLente.torico : null,
+      }),
     });
 
     // Enfermería edita los datos, pero el equipo y los lentes los gestiona el personal de agenda.
@@ -845,7 +919,8 @@ useEffect(() => {
           .filter((p) => p.hora_inicio && p.hora_fin)
           .map((p) => ({ rol: p.rol, personal_id: p.personal_id, hora_inicio: p.hora_inicio!.slice(0, 5), hora_fin: p.hora_fin!.slice(0, 5) })),
       });
-      if (esCirugiaConLio) {
+      // Completada: los lentes ya se resolvieron al cerrar (usados / liberados) y no se tocan.
+      if (esCirugiaConLio && !cirugiaCompletada) {
         setPasoGuardado('Guardando lentes…');
         await enviarJSON(`/api/cirugias/${id}/lentes-plan`, 'PUT', { plan: construirPlanLentes() });
       }
@@ -929,7 +1004,7 @@ useEffect(() => {
         procedimientos_qx_ids: qxIds,
         fecha,
         hora,
-        duracion_min: Number(duracionMin),
+        duracion_min: Number(duracionEfectiva) || DURACION_ESTIMADA_MIN,
         recurso_id: null,
         quirofano: quirofano.trim() || null,
         documentos_faltantes: docsFaltantesPayload,
@@ -1049,7 +1124,7 @@ useEffect(() => {
   // ── Edición: precarga de la cirugía en el mismo formulario ──
   useEffect(() => {
     if (!modoEdicion || loadingInitial || edicionCargadaRef.current) return;
-    if (roles.length === 0 || modelosLioSWR.data === undefined) return;
+    if (roles.length === 0 || modelosLioSWR.data === undefined || !user) return;
     edicionCargadaRef.current = true;
     let cancelado = false;
     (async () => {
@@ -1059,8 +1134,10 @@ useEffect(() => {
         const d = (await res.json()) as EdicionCirugiaData;
         if (cancelado) return;
         const c = d.cirugia;
-        if (estadoCerrado(c.estado)) {
-          toast('Una cirugía completada o cancelada ya no se puede editar', 'warning');
+        if (!puedeEditarCirugia(c.estado, rolUsuarioRef.current)) {
+          toast(String(c.estado).toLowerCase().startsWith('cancel')
+            ? 'Una cirugía cancelada no se puede editar: reagéndala o crea una nueva'
+            : 'Enfermería no puede corregir una cirugía completada; pídelo a recepción', 'warning');
           router.replace(`/cirugias/${cirugiaEditId}`);
           return;
         }
@@ -1154,7 +1231,7 @@ useEffect(() => {
     })();
     return () => { cancelado = true; edicionCargadaRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoEdicion, loadingInitial, roles.length, modelosLioSWR.data]);
+  }, [modoEdicion, loadingInitial, roles.length, modelosLioSWR.data, user?.rol]);
 
   // Edición: especialidad guardada (cuando ya cargó el catálogo).
   const especialidadEdicionAplicada = useRef(false);
@@ -1213,7 +1290,7 @@ useEffect(() => {
       // Borradores anteriores a la logística de lentes no traen modo/marca/cilindro.
       setLentes((d.lentes as Partial<LenteForm>[]).map((l) => ({
         ...lenteVacio((l.orden as OrdenLenteForm) || 'PRIMERO'), ...l,
-        modo: MODOS_LENTE.some((m) => m.value === l.modo) ? (l.modo as LenteForm['modo']) : 'ASIGNAR',
+        modo: l.modo === 'SIN_TRAMITE' || MODOS_LENTE.some((m) => m.value === l.modo) ? (l.modo as LenteForm['modo']) : 'SIN_TRAMITE',
         cilindro: l.cilindro ?? '', marca: !!l.marca,
       })));
     }
@@ -1243,7 +1320,7 @@ useEffect(() => {
     el?.querySelector<HTMLElement>('input, select, button, textarea')?.focus({ preventScroll: true });
   };
   const ETIQUETA_CAMPO: Record<string, string> = {
-    paciente: 'Paciente', qx: 'Procedimiento quirúrgico', ojo: 'Ojo', fecha: 'Fecha', hora: 'Hora de inicio', horaFin: 'Hora de fin',
+    paciente: 'Paciente', qx: 'Cirugía', ojo: 'Ojo', fecha: 'Fecha', hora: 'Hora de inicio', horaFin: 'Hora de fin',
     anestesia: 'Anestesia', participantes: 'Participantes', lentes: 'Lente intraocular', documentos: 'Documentos requeridos', archivos: 'Archivos',
   };
   const labelCls = 'block text-xs font-bold text-muted mb-1';
@@ -1302,6 +1379,11 @@ useEffect(() => {
             onDescartar={borrador.descartar}
           />
         )}
+        {modoEdicion && cirugiaCompletada && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            Esta cirugía ya está <strong>completada</strong>. Puedes corregir sus datos, el equipo y los archivos; el cambio queda en el historial. Los lentes usados no se modifican.
+          </div>
+        )}
         {modoEdicion && esUsuarioEnfermeria && (
           <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
             Como enfermería puedes editar los datos de la cirugía; los cambios al equipo y a los lentes los registra el personal de agenda.
@@ -1338,7 +1420,7 @@ useEffect(() => {
               <EncabezadoSeccion n="1" titulo="Paciente" Icon={User} completo={!!pacienteSeleccionado} />
               <MsgCampo m={msgs.paciente} />
               {modoEdicion && (
-                <p className="text-xs text-muted">El paciente no se puede cambiar al editar. Si es otro paciente, crea una nueva cirugía.</p>
+                <p className="text-xs text-muted">El paciente no se puede cambiar al editar (si es otro paciente, crea una nueva cirugía); sus datos generales sí se pueden corregir aquí.</p>
               )}
               {!modoEdicion && (<>
               <div className="relative">
@@ -1487,9 +1569,46 @@ useEffect(() => {
               </>)}
 
               {pacienteSeleccionado && (
-                fichaPaciente && fichaPaciente.id === pacienteSeleccionado.id ? (
-                  <DatosPacienteFicha key={pacienteSeleccionado.id} sinDatosDelPanel paciente={normalizarPacienteDetalle(fichaPaciente)} />
-                ) : (
+                fichaPaciente && fichaPaciente.id === pacienteSeleccionado.id ? (() => {
+                  const ficha = normalizarPacienteDetalle(fichaPaciente);
+                  const faltan = faltantesDatosGenerales(ficha);
+                  const puedeEditar = puedeEditarPaciente(user?.rol);
+                  if (editandoPaciente) {
+                    return (
+                      <EditorDatosPaciente
+                        key={ficha.id}
+                        paciente={ficha}
+                        inputCls={inputCls}
+                        labelCls={labelCls}
+                        onCancelar={() => setEditandoPaciente(false)}
+                        onGuardado={(c) => {
+                          setEditandoPaciente(false);
+                          void mutateFicha();
+                          setPacienteSeleccionado((p) => (p ? { ...p, nombre_completo: c.nombre_completo } : p));
+                          setQueryPaciente(c.nombre_completo);
+                          void invalidar('/api/pacientes', '/api/search', '/api/agenda', '/api/cirugias');
+                          toast('Datos del paciente actualizados', 'success');
+                        }}
+                      />
+                    );
+                  }
+                  return (
+                    <>
+                      {/* Datos generales completos (antes solo se veía nombre y expediente). */}
+                      <DatosPacienteFicha key={pacienteSeleccionado.id} paciente={ficha} />
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {faltan.length > 0 && (
+                          <span className="text-xs text-amber-700 dark:text-amber-300">Faltan datos generales: {faltan.join(', ')}.</span>
+                        )}
+                        {puedeEditar && (
+                          <button type="button" onClick={() => setEditandoPaciente(true)} className="text-xs font-bold text-primary-600 hover:underline">
+                            {faltan.length > 0 ? 'Completar datos del paciente' : 'Editar datos generales'}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })() : (
                   <div className="mt-4 flex items-center gap-2 text-sm text-muted">
                     <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                     Cargando datos del paciente…
@@ -1542,7 +1661,7 @@ useEffect(() => {
 
             {/* 3. Datos de cirugía */}
             <section className="rounded-2xl border border-line bg-surface p-5">
-              <EncabezadoSeccion n="3" titulo="Datos de la cirugía" Icon={Stethoscope} completo={!!((qxIds.length > 0 || servicioId) && ojo && fecha && hora && horaFin && duracionMin !== '' && anestesia && participantes.some((m) => m.rol === 'cirujano' && m.personaId))} />
+              <EncabezadoSeccion n="3" titulo="Datos de la cirugía" Icon={Stethoscope} completo={!!((qxIds.length > 0 || servicioId) && ojo && fecha && hora && !horaFinInvalida && anestesia && participantes.some((m) => m.rol === 'cirujano' && m.personaId))} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls}>Especialidad</label>
@@ -1577,7 +1696,7 @@ useEffect(() => {
                 </div>
                 <div className="sm:col-span-2" {...ec('qx')}>
                   <div className="mb-1.5 flex items-center justify-between">
-                    <label className={labelCls}>Procedimientos quirúrgicos</label>
+                    <label className={labelCls}>Cirugía *</label>
                     {qxIds.length > 0 && (
                       <span className="text-[11px] font-bold text-muted">{qxIds.length} agregado{qxIds.length === 1 ? '' : 's'}</span>
                     )}
@@ -1588,15 +1707,16 @@ useEffect(() => {
                       <ul className="space-y-1.5">
                         {qxIds.map((id) => {
                           const c = (catalogoQxSWR.data || []).find((x) => x.id === id);
+                          // El ojo no se muestra aquí: se elige en «Ojo».
                           return (
                             <li key={id} className="flex items-center justify-between gap-2 rounded-md bg-primary-50 px-3 py-2 text-sm dark:bg-primary-500/15">
                               <span className="min-w-0 truncate font-semibold text-primary-700 dark:text-primary-300">
-                                {c ? (c.ojo ? `${c.nombre} (${c.ojo})` : c.nombre) : 'Procedimiento'}
+                                {c ? c.nombre : 'Cirugía'}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => quitarQx(id)}
-                                aria-label={`Quitar ${c?.nombre ?? 'procedimiento'}`}
+                                aria-label={`Quitar ${c?.nombre ?? 'cirugía'}`}
                                 className="shrink-0 rounded-md p-1 text-primary-700 hover:bg-red-50 hover:text-red-600 dark:text-primary-300 dark:hover:bg-red-900/20"
                               >
                                 <X className="h-4 w-4" />
@@ -1607,16 +1727,46 @@ useEffect(() => {
                       </ul>
                     )}
                     <BuscadorServicio
-                      items={(catalogoQxSWR.data || [])
+                      items={cirugiasElegibles
                         .filter((c) => !qxIds.includes(c.id))
-                        .map((c) => ({ id: c.id, nombre: c.ojo ? `${c.nombre} (${c.ojo})` : c.nombre }))}
+                        .map((c) => ({ id: c.id, nombre: c.nombre }))}
                       genericosIds={SIN_GENERICOS}
-                      onElegir={agregarQx}
-                      placeholder={qxIds.length ? '+ Agregar otro procedimiento quirúrgico…' : 'Buscar procedimiento quirúrgico…'}
+                      onElegir={(id) => agregarQx(id)}
+                      placeholder={qxIds.length ? '+ Agregar otra cirugía (combinada)…' : 'Buscar cirugía: facoemulsificación, pterigión…'}
                       inputClassName="border-transparent bg-transparent px-2 py-1.5 shadow-none focus:ring-0 focus:border-transparent dark:bg-transparent"
                     />
                   </div>
-                  <div className="text-xs text-muted mt-1">Puedes agregar varios. El precio de cada procedimiento viene del catálogo quirúrgico.</div>
+                  <div className="text-xs text-muted mt-1">Puedes agregar varias (cirugía combinada). El ojo se elige abajo; el precio viene del catálogo quirúrgico.</div>
+                  {puedeAgregarCatalogos && !altaCirugia && (
+                    <button type="button" onClick={() => setAltaCirugia({ nombre: '', guardando: false, error: null })} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-primary-600 hover:underline">
+                      <Plus className="h-3.5 w-3.5" /> ¿No está en la lista? Agregar cirugía
+                    </button>
+                  )}
+                  {altaCirugia && (
+                    <div className="mt-2 rounded-lg border border-line bg-surface-2 p-3">
+                      <label htmlFor="alta-cirugia-nombre" className={labelCls}>Nombre de la cirugía (sin el ojo)</label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          id="alta-cirugia-nombre"
+                          value={altaCirugia.nombre}
+                          onChange={(e) => setAltaCirugia({ ...altaCirugia, nombre: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void registrarCirugiaCatalogo(); } }}
+                          maxLength={255}
+                          placeholder="Ej. Vitrectomía posterior + endoláser"
+                          className={inputCls}
+                          autoFocus
+                        />
+                        <div className="flex shrink-0 gap-2">
+                          <button type="button" onClick={() => setAltaCirugia(null)} className="rounded-lg border border-line px-3 py-2 text-xs font-bold text-fg-2 hover:bg-surface">Cancelar</button>
+                          <button type="button" onClick={() => void registrarCirugiaCatalogo()} disabled={altaCirugia.guardando} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+                            {altaCirugia.guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Agregar
+                          </button>
+                        </div>
+                      </div>
+                      {altaCirugia.error && <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{altaCirugia.error}</p>}
+                      <p className="mt-1 text-[11px] text-muted">Queda en Configuración → Conceptos → Quirúrgico; ahí se le pone precio.</p>
+                    </div>
+                  )}
                 </div>
                 {/* Lentes: solo cuando algún procedimiento es Faco / LIO */}
                 {esCirugiaConLio && (
@@ -1630,7 +1780,21 @@ useEffect(() => {
                       </a>
                     </div>
                     <MsgCampo m={msgs.lentes} />
-                    {lentes.map((l) => (
+                    {cirugiaCompletada ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-muted">La cirugía ya está completada: los lentes se resolvieron al cerrarla y no se modifican aquí.</p>
+                        {(edicion?.lentes ?? []).filter((l) => l.estado === 'USADO').length === 0 ? (
+                          <p className="text-sm text-fg-2">Sin lente usado registrado.</p>
+                        ) : (
+                          (edicion?.lentes ?? []).filter((l) => l.estado === 'USADO').map((l) => (
+                            <p key={l.orden} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg">
+                              <span className="font-bold">Lente usado:</span>{' '}
+                              {[l.fabricante, l.modelo, l.poder_d != null ? `${l.poder_d} D` : null, l.torico ? `tórico${l.cilindro != null ? ` cil. ${l.cilindro}` : ''}` : null].filter(Boolean).join(' · ') || 'sin datos'}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    ) : lentes.map((l) => (
                       <LenteLogistica
                         key={l.orden}
                         lente={l}
@@ -1644,9 +1808,11 @@ useEffect(() => {
                         onQuitar={l.orden === 'PRIMERO' ? undefined : () => setLentes((prev) => prev.filter((x) => x.orden !== l.orden))}
                         inputCls={inputCls}
                         labelCls={labelCls}
+                        onAgregarModelo={puedeAgregarCatalogos ? agregarModeloLio : undefined}
+                        disenoSugerido={disenoLioSugerido}
                       />
                     ))}
-                    <div className="flex flex-wrap gap-4">
+                    {!cirugiaCompletada && <div className="flex flex-wrap gap-4">
                       {(['SEGUNDO', 'RESPALDO'] as const)
                         .filter((o) => !lentes.some((l) => l.orden === o))
                         .map((o) => (
@@ -1659,7 +1825,7 @@ useEffect(() => {
                             + Agregar {o === 'SEGUNDO' ? 'segundo lente' : 'lente de respaldo'}
                           </button>
                         ))}
-                    </div>
+                    </div>}
                   </div>
                 )}
                 <div {...ec('ojo')}>
@@ -1832,7 +1998,7 @@ useEffect(() => {
                     <MsgCampo m={msgs.hora} />
                   </div>
                   <div {...ec('horaFin')}>
-                    <label className={labelCls}>Hora fin</label>
+                    <label className={labelCls}>Hora fin <span className="font-normal">(opcional)</span></label>
                     <input
                       type="time"
                       value={horaFin}
@@ -1845,6 +2011,9 @@ useEffect(() => {
                       <p className="mt-1 text-xs text-red-600">Debe ser posterior a la hora de inicio</p>
                     )}
                     {!horaFinInvalida && <MsgCampo m={msgs.horaFin} />}
+                    {!horaFin && !horaFinInvalida && !msgs.horaFin && (
+                      <p className="mt-1 text-[11px] text-muted">Si aún no se sabe, déjala vacía: se aparta 1 h en la agenda y la hora real se registra al completar la cirugía.</p>
+                    )}
                   </div>
                 </div>
                 <div className="sm:col-span-2">

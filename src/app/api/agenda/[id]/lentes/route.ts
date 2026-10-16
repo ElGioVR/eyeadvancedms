@@ -47,7 +47,7 @@ async function manejarGET(
   }
   const { data: cirugia } = await supabase
     .from('agenda_cirugias')
-    .select('diagnostico, procedimiento')
+    .select('diagnostico, procedimiento, hora, duracion_min')
     .eq('id', id)
     .maybeSingle();
   return NextResponse.json({ lentes: data ?? [], cirugia: cirugia ?? null });

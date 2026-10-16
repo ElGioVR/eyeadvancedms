@@ -15,7 +15,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import { etiquetaModeloLio } from '@/lib/catalogos/modelos-lio';
 import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe, ANESTESIAS, OJOS_CIRUGIA } from '@/lib/catalogos/cirugia';
-import { estadoCerrado } from '@/lib/permisos-edicion';
+import { puedeEditarCirugia } from '@/lib/permisos-edicion';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -518,7 +518,7 @@ export default function CirugiaDetailPage() {
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {!estadoCerrado(data?.cirugia?.estado) && (
+            {puedeEditarCirugia(data?.cirugia?.estado, user?.rol) && (
               <button type="button" onClick={iniciarEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">Editar cirugía</button>
             )}
             <EnviarPaciente

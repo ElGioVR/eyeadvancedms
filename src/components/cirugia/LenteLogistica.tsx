@@ -4,11 +4,17 @@ import { useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { coincideConModelo, fabricanteCanonico, type ModeloLio } from '@/lib/catalogos/modelos-lio';
-import SelectorModeloLio from '@/components/cirugia/SelectorModeloLio';
+import SelectorModeloLio, { type NuevoModeloLio } from '@/components/cirugia/SelectorModeloLio';
+import type { DisenoLio } from '@/lib/catalogos/modelos-lio';
 import type { LIODisponible } from '@/components/cirugia/LIOSelector';
 
 export type OrdenLenteForm = 'PRIMERO' | 'SEGUNDO' | 'RESPALDO';
-export type ModoLente = 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+/**
+ * Cómo se obtiene el lente. SIN_TRAMITE = no se elige ninguna logística: el lente solo se
+ * registra (lo surte el proveedor/hospital, p. ej. Hoya o Zeiss); no reserva inventario ni
+ * genera pedido o recordatorio. Requiere sql/patch-agenda-cirugia-comentarios-16oct-supabase.sql.
+ */
+export type ModoLente = 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA' | 'SIN_TRAMITE';
 
 export interface LenteForm {
   orden: OrdenLenteForm;
@@ -35,13 +41,19 @@ export interface LenteComprometidoInfo {
 export const ETIQUETA_ORDEN: Record<OrdenLenteForm, string> = { PRIMERO: 'Primer lente', SEGUNDO: 'Segundo lente', RESPALDO: 'Lente de respaldo' };
 
 export const MODOS_LENTE: Array<{ value: ModoLente; label: string; ayuda: string }> = [
-  { value: 'ASIGNAR', label: 'Asignar', ayuda: 'Compromete una pieza del inventario a esta cirugía.' },
-  { value: 'SOLICITAR', label: 'Solicitar', ayuda: 'Entra al plan de resurtimiento del inventario para esta cirugía.' },
-  { value: 'COMPRA_DIRECTA', label: 'Compra directa', ayuda: 'No genera plan: se recuerda al inicio de la jornada y se confirma antes de iniciar la cirugía.' },
+  { value: 'ASIGNAR', label: 'Asignar', ayuda: 'Toma una pieza que ya está en el inventario de la clínica y la aparta para esta cirugía (no baja el stock hasta completar la cirugía).' },
+  { value: 'SOLICITAR', label: 'Solicitar', ayuda: 'La clínica no lo tiene: entra al Plan de resurtimiento (Inventario) como «por solicitar». Ahí se marca «solicitado» y, al llegar, «recibir» lo da de alta en inventario y lo aparta para esta cirugía. Si no llega, no se puede marcar como usado al completar.' },
+  { value: 'COMPRA_DIRECTA', label: 'Compra directa', ayuda: 'Lo paga/compra el paciente o se compra aparte: no entra al plan; se recuerda el día de la cirugía y hay que confirmar «listo» antes de operar.' },
 ];
 
+/** Sin opción elegida: el lente solo se registra (no se reserva, no se pide, no se recuerda). */
+export const AYUDA_SIN_TRAMITE = 'Sin opción elegida: el lente solo queda registrado en la cirugía (útil cuando lo surte el proveedor u hospital, p. ej. Hoya o Zeiss). No aparta inventario ni genera pedido.';
+export const ETIQUETA_MODO_LENTE: Record<ModoLente, string> = {
+  ASIGNAR: 'Asignado de inventario', SOLICITAR: 'Solicitado', COMPRA_DIRECTA: 'Compra directa', SIN_TRAMITE: 'Solo registro',
+};
+
 export const lenteVacio = (orden: OrdenLenteForm): LenteForm => ({
-  orden, modo: 'ASIGNAR', torico: false, marca: false, fabricante: '', modeloId: '', potencia: '', cilindro: '', itemId: null,
+  orden, modo: 'SIN_TRAMITE', torico: false, marca: false, fabricante: '', modeloId: '', potencia: '', cilindro: '', itemId: null,
 });
 
 /** ¿El lente tiene algo capturado? (el primero solo cuenta si el usuario lo tocó). */
@@ -58,10 +70,12 @@ export function validarLente(l: LenteForm, modelos: ModeloLio[]): string | null 
     return null;
   }
   if (!l.modeloId && !l.fabricante) return `${nombre}: elige fabricante y modelo.`;
-  if (!modelos.some((m) => m.id === l.modeloId)) return `${nombre}: elige el modelo del lente.`;
+  if (!modelos.some((m) => m.id === l.modeloId)) return `${nombre}: elige el modelo de la lista o usa «+ Agregar modelo» si no aparece.`;
   const p = num(l.potencia);
+  // Solo registro: la potencia puede no conocerse aún al agendar (se valida si se escribe).
+  if (l.modo === 'SIN_TRAMITE' && l.potencia.trim() === '') return null;
   if (!Number.isFinite(p) || p < 0 || p > 40) return `${nombre}: captura la dioptría/potencia (0 a 40).`;
-  if (l.torico) {
+  if (l.torico && (l.modo !== 'SIN_TRAMITE' || l.cilindro.trim() !== '')) {
     const c = num(l.cilindro);
     if (!Number.isFinite(c) || c <= 0 || c > 12) return `${nombre}: captura el cilindro del lente tórico.`;
   }
@@ -82,6 +96,9 @@ interface Props {
   onQuitar?: () => void;
   inputCls: string;
   labelCls: string;
+  /** Alta rápida de marca/modelo (ver SelectorModeloLio). */
+  onAgregarModelo?: (m: NuevoModeloLio) => Promise<ModeloLio>;
+  disenoSugerido?: DisenoLio | null;
 }
 
 const compactoFab = (t: string | null | undefined) =>
@@ -96,6 +113,7 @@ const fmtFecha = (f: string | null) => (f ? f.slice(0, 10).split('-').reverse().
 
 export default function LenteLogistica({
   lente, onChange, modelos, cargandoModelos, lios, comprometidos, itemsEnOtrosLentes, cirugiaIdActual, onQuitar, inputCls, labelCls,
+  onAgregarModelo, disenoSugerido,
 }: Props) {
   const modeloSel = modelos.find((m) => m.id === lente.modeloId) || null;
   const p = num(lente.potencia);
@@ -118,7 +136,7 @@ export default function LenteLogistica({
 
   const libres = coincidencias.filter((c) => c.libres > 0);
   const soloComprometidos = coincidencias.filter((c) => c.libres <= 0 && c.comprometidos.length > 0);
-  const modoInfo = MODOS_LENTE.find((m) => m.value === lente.modo) ?? MODOS_LENTE[0];
+  const modoInfo = MODOS_LENTE.find((m) => m.value === lente.modo) ?? null;
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
@@ -140,6 +158,8 @@ export default function LenteLogistica({
         onFabricante={(v) => onChange({ fabricante: v })}
         modeloId={lente.modeloId}
         onModelo={(id) => onChange({ modeloId: id, itemId: null })}
+        onAgregar={onAgregarModelo}
+        disenoSugerido={disenoSugerido}
       />
 
       <div className={cn('grid grid-cols-1 gap-3', lente.torico ? 'sm:grid-cols-2' : 'sm:grid-cols-1 sm:max-w-xs')}>
@@ -172,7 +192,7 @@ export default function LenteLogistica({
       </div>
 
       <div>
-        <p className={labelCls}>¿Cómo se obtiene este lente?</p>
+        <p className={labelCls}>¿Cómo se obtiene este lente? <span className="font-normal">(opcional)</span></p>
         <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Obtención del lente">
           {MODOS_LENTE.map((m) => (
             <button
@@ -180,7 +200,10 @@ export default function LenteLogistica({
               type="button"
               role="radio"
               aria-checked={lente.modo === m.value}
-              onClick={() => onChange({ modo: m.value, itemId: m.value === 'ASIGNAR' ? lente.itemId : null })}
+              // Volver a tocar la opción elegida la quita: el lente queda «solo registro».
+              onClick={() => (lente.modo === m.value
+                ? onChange({ modo: 'SIN_TRAMITE', itemId: null })
+                : onChange({ modo: m.value, itemId: m.value === 'ASIGNAR' ? lente.itemId : null }))}
               className={cn(
                 'rounded-lg border px-3 py-2 text-sm font-bold transition-colors',
                 lente.modo === m.value
@@ -192,7 +215,7 @@ export default function LenteLogistica({
             </button>
           ))}
         </div>
-        <p className="mt-1 text-xs text-muted">{modoInfo.ayuda}</p>
+        <p className="mt-1 text-xs text-muted">{modoInfo ? `${modoInfo.ayuda} (Toca de nuevo para quitar la opción.)` : AYUDA_SIN_TRAMITE}</p>
       </div>
 
       {lente.modo === 'ASIGNAR' && (
@@ -223,7 +246,7 @@ export default function LenteLogistica({
           ) : (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>No hay piezas libres con estos datos. Cambia a <strong>Solicitar</strong> o <strong>Compra directa</strong>.</span>
+              <span>No hay piezas libres con estos datos. Cambia a <strong>Solicitar</strong> o <strong>Compra directa</strong>, o quita la opción para solo registrar el lente.</span>
             </div>
           )}
           {lente.itemId && (
@@ -248,7 +271,7 @@ export default function LenteLogistica({
         </div>
       )}
 
-      {lente.modo === 'SOLICITAR' && libres.length > 0 && (
+      {lente.modo !== 'ASIGNAR' && libres.length > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-muted">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Ya hay {libres.reduce((a, c) => a + c.libres, 0)} pieza(s) libre(s) con estos datos en inventario; considera Asignar.

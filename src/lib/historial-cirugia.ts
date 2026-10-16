@@ -10,6 +10,15 @@ const ETIQUETAS: Record<string, string> = {
   LENTES_RESUELTOS: 'Lentes resueltos',
   NOTAS_EDITADAS: 'Notas editadas',
   CONFIRMACION_CITA: 'Confirmación de la cita',
+  CIRUGIA_CORREGIDA: 'Corrección tras completar',
+};
+
+/** Nombres legibles de columnas corregidas (CIRUGIA_CORREGIDA). */
+const CAMPOS: Record<string, string> = {
+  fecha: 'fecha', hora: 'hora', duracion_min: 'duración', quirofano: 'quirófano', ojo: 'ojo', anestesia: 'anestesia',
+  procedencia: 'procedencia', diagnostico: 'diagnóstico', notas: 'notas', origen_id: 'origen', servicio_id: 'facturación',
+  catalogo_quirurgico_id: 'cirugía', documentos_faltantes: 'documentos', especialidad_id: 'especialidad',
+  diagnostico_definitivo: 'diagnóstico definitivo', cirugia_realizada: 'cirugía realizada', complicaciones: 'complicaciones',
 };
 
 const txt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
@@ -26,6 +35,9 @@ export function describirEventoCirugia(accion: string, detalle: unknown): { titu
     if (conf === 'confirmada') lineas.push(`Cita confirmada${medio ? ` por ${medio}` : ''}`);
     else if (conf === 'enviada') lineas.push('Mensaje de confirmación enviado');
     else lineas.push('Se quitó la confirmación');
+  } else if (accion === 'CIRUGIA_CORREGIDA') {
+    const campos = Array.isArray(d.campos) ? (d.campos as unknown[]).map((c) => CAMPOS[String(c)] ?? String(c)) : [];
+    if (campos.length) lineas.push(`Campos: ${campos.join(', ')}`);
   } else if (accion === 'ESTADO_CAMBIADO') {
     lineas.push(`${txt(d.de) || '—'} → ${txt(d.a) || '—'}`);
     if (txt(d.motivo)) lineas.push(`Motivo: ${txt(d.motivo)}`);

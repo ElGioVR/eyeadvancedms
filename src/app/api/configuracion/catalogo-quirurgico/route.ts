@@ -39,17 +39,34 @@ async function manejarGET() {
 async function manejarPOST(request: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const roleError = await requireRole(auth.user, ['admin']);
+  // Alta: también desde el formulario de cirugía («¿No está en la lista? Agregar cirugía»),
+  // por quien agenda. Editar precio, renombrar o borrar sigue siendo solo de admin.
+  const roleError = await requireRole(auth.user, ['admin', 'recepcionista', 'doctor']);
   if (roleError) return roleError;
 
   const body = await leerJSON(request, baseSchema);
   if (body instanceof NextResponse) return body;
+  // Solo admin fija precio/estado al crear; el resto crea con precio 0 (se captura en Configuración).
+  if ((await requireRole(auth.user, ['admin'])) !== null) {
+    delete body.precio;
+    delete body.activo;
+  }
+  body.nombre = body.nombre.replace(/\s+/g, ' ');
 
+  const supabase = getSupabaseAdmin();
   if (await existeNombre(TABLA, body.nombre, { ojo: body.ojo ?? null })) {
+    // Desde la cirugía: si ya existe (aunque esté inactiva) se reutiliza en vez de fallar.
+    if (!body.ojo) {
+      const exacto = body.nombre.replace(/[\\%_]/g, (c) => `\\${c}`);
+      const { data: ya } = await supabase.from(TABLA).select('id, nombre, ojo, activo').ilike('nombre', exacto).is('ojo', null).limit(1).maybeSingle();
+      if (ya) {
+        if (ya.activo === false) await supabase.from(TABLA).update({ activo: true, updated_at: new Date().toISOString() }).eq('id', ya.id);
+        return NextResponse.json({ ...ya, activo: true });
+      }
+    }
     return NextResponse.json({ error: 'Ya existe ese procedimiento para ese ojo' }, { status: 409 });
   }
 
-  const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.from(TABLA).insert(body).select().single();
   if (error) return respuestaErrorDb(error, CONTEXTO, { duplicado: 'Ya existe ese procedimiento para ese ojo' });
 

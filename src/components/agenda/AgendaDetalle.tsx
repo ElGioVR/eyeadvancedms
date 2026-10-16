@@ -10,7 +10,7 @@ import { etiquetaOjo } from '@/lib/catalogos/cirugia';
 import { cn } from '@/lib/utils';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
-import { estadoCerrado } from '@/lib/permisos-edicion';
+import { estadoCerrado, puedeEditarCirugia } from '@/lib/permisos-edicion';
 import { ETIQUETA_MEDIO, estaConfirmada } from '@/lib/confirmacion-cita';
 import { type AccionRapida, accionesConConfirmar, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
 import { useRouter } from 'next/navigation';
@@ -71,6 +71,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
               diagnostico_definitivo: d.diagnostico_definitivo,
               cirugia_realizada: d.cirugia_realizada,
               complicaciones: d.complicaciones,
+              ...(d.hora ? { hora: d.hora, duracion_min: d.duracion_min } : {}),
             });
             setCompletando(false);
             onRefetch();
@@ -127,9 +128,11 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
               </button>
             </>
           )}
-          <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">
-            Editar
-          </button>
+          {puedeEditarCirugia(cirugia.estado, userRol) && (
+            <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">
+              {cirugia.estado === 'completada' ? 'Corregir datos' : 'Editar'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -139,7 +142,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
 /* ───────── Detail Popover Card (Google Calendar style) ───────── */
 export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose, onEstado, onAccion }: {
   cirugia: AgendaCirugia; position: { x: number; y: number }; userRol: string;
-  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado, extra?: { lentes_requeridos?: OrdenLente[]; lentes_ingresar_inventario?: OrdenLente[]; diagnostico_definitivo?: string; cirugia_realizada?: string; complicaciones?: string }) => Promise<void>;
+  onEdit: () => void; onClose: () => void; onEstado: (s: AgendaCirugiaEstado, extra?: { lentes_requeridos?: OrdenLente[]; lentes_ingresar_inventario?: OrdenLente[]; diagnostico_definitivo?: string; cirugia_realizada?: string; complicaciones?: string; hora?: string; duracion_min?: number }) => Promise<void>;
   onAccion: (accion: AccionRapida) => void;
 }) {
   const router = useRouter();
@@ -204,6 +207,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
             diagnostico_definitivo: d.diagnostico_definitivo,
             cirugia_realizada: d.cirugia_realizada,
             complicaciones: d.complicaciones,
+            ...(d.hora ? { hora: d.hora, duracion_min: d.duracion_min } : {}),
           });
           setCompletando(false);
         }}
@@ -347,7 +351,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
               Completar
             </button>
           )}
-          {(esCirugia ? (!agendaSoloPropia(userRol) || !estadoCerrado(cirugia.estado)) : !estadoCerrado(cirugia.estado)) && (
+          {(esCirugia ? puedeEditarCirugia(cirugia.estado, userRol) : !estadoCerrado(cirugia.estado)) && (
             <button onClick={onEdit}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full border border-line text-fg-2 hover:bg-surface-2 transition-colors">
               Editar

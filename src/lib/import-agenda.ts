@@ -156,6 +156,11 @@ export interface PacienteExistente {
   nombre_completo: string | null;
   telefono: string | null;
   created_at?: string | null;
+  /** Datos generales: se completan desde el archivo solo si están vacíos. */
+  sexo?: string | null;
+  fecha_nacimiento?: string | null;
+  edad?: number | null;
+  numero_expediente?: string | null;
 }
 
 /** Últimos 10 dígitos del teléfono (o null). */

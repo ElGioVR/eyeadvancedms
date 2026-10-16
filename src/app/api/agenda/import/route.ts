@@ -292,7 +292,7 @@ async function cargarPacientes(supabase: Admin): Promise<PacienteExistente[]> {
   return leerPaginado<PacienteExistente>((d, h) =>
     supabase
       .from('pacientes')
-      .select('id, nombre_completo, telefono, created_at')
+      .select('id, nombre_completo, telefono, created_at, sexo, fecha_nacimiento, edad, numero_expediente')
       .order('id', { ascending: true })
       .range(d, h) as unknown as PromiseLike<{ data: PacienteExistente[] | null; error: unknown }>
   );
@@ -304,6 +304,32 @@ interface PacienteNuevo {
   sexo: string | null;
   fecha_nacimiento: string | null;
   edad: number | null;
+  /** No. Exp del archivo (solo si no lo tiene otro paciente). */
+  numero_expediente?: string | null;
+}
+
+/** Datos generales vacíos de pacientes ya existentes que el archivo sí trae. */
+type CompletarPaciente = Partial<Pick<PacienteNuevo, 'telefono' | 'sexo' | 'fecha_nacimiento' | 'edad' | 'numero_expediente'>>;
+
+/** Completa (solo campos vacíos) los datos generales de pacientes existentes. Devuelve cuántos. */
+async function aplicarCompletarPacientes(supabase: Admin, mapa: Map<string, CompletarPaciente>): Promise<number> {
+  let n = 0;
+  await mapConLimite(Array.from(mapa.entries()), 6, async ([id, cambios]) => {
+    const { error } = await supabase.from('pacientes').update({ ...cambios, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      // Expediente repetido (índice único): se guarda lo demás.
+      if (cambios.numero_expediente && error.code === '23505') {
+        const { numero_expediente: _e, ...resto } = cambios;
+        if (Object.keys(resto).length) {
+          const r = await supabase.from('pacientes').update({ ...resto, updated_at: new Date().toISOString() }).eq('id', id);
+          if (!r.error) n++;
+        }
+      } else handleSupabaseError(error, 'agenda.import.completar-paciente');
+      return;
+    }
+    n++;
+  });
+  return n;
 }
 
 /** Referencia a doctor/paciente: id existente o clave de uno por crear. */
@@ -353,7 +379,8 @@ async function crearPacientes(supabase: Admin, nuevos: Map<string, PacienteNuevo
   if (claves.length === 0) return { ids, fallos };
   const filas = claves.map((k) => {
     const p = nuevos.get(k)!;
-    return { ...p, pendiente_completar: faltantesPaciente(p).length > 0 };
+    const { numero_expediente, ...resto } = p;
+    return { ...resto, ...(numero_expediente ? { numero_expediente } : {}), pendiente_completar: faltantesPaciente(p).length > 0 };
   });
   const res = await insertarEnLotes(supabase, 'pacientes', filas, 'id', ['pendiente_completar']);
   res.forEach((r, i) => {
@@ -651,6 +678,18 @@ async function manejarPOST(request: Request) {
   }
   const resolverDoctor = crearResolverDoctores(doctores);
   const resolverPaciente = crearResolverPacientes(pacientes);
+  const pacientePorId = new Map(pacientes.map((p) => [p.id, p]));
+  const normExp = (t: string | null | undefined) => (t ?? '').trim().toUpperCase();
+  const expedientesUsados = new Set(pacientes.map((p) => normExp(p.numero_expediente)).filter(Boolean));
+  /** Expediente del archivo si nadie más lo tiene (índice único); lo reserva. */
+  const tomarExpediente = (exp: string | null | undefined): string | null => {
+    const k = normExp(exp);
+    if (!k || k.length > 50 || expedientesUsados.has(k)) return null;
+    expedientesUsados.add(k);
+    return (exp ?? '').trim();
+  };
+  // Pacientes ya registrados con datos generales vacíos que el archivo trae (sexo, nacimiento…).
+  const completarPacientes = new Map<string, CompletarPaciente>();
 
   // Estado común a ambos tipos
   const rechazos: FilaRechazada[] = [];
@@ -670,8 +709,25 @@ async function manejarPOST(request: Request) {
   /** Paciente de la fila: existente o por crear (una sola vez por nombre). */
   const refPaciente = (clave: string, datos: PacienteNuevo): { ref: Ref; nuevo: boolean } => {
     const id = resolverPaciente(clave, datos.telefono);
-    if (id) return { ref: { id }, nuevo: false };
-    if (!pacientesNuevos.has(clave)) pacientesNuevos.set(clave, datos);
+    if (id) {
+      const ex = pacientePorId.get(id);
+      if (ex) {
+        const c: CompletarPaciente = { ...(completarPacientes.get(id) ?? {}) };
+        if (!ex.sexo && datos.sexo && !c.sexo) c.sexo = datos.sexo;
+        if (!ex.fecha_nacimiento && datos.fecha_nacimiento && !c.fecha_nacimiento) c.fecha_nacimiento = datos.fecha_nacimiento;
+        if (ex.edad == null && datos.edad != null && c.edad == null) c.edad = datos.edad;
+        if (!ex.telefono && datos.telefono && !c.telefono) c.telefono = datos.telefono;
+        if (!ex.numero_expediente && datos.numero_expediente && !c.numero_expediente) {
+          const exp = tomarExpediente(datos.numero_expediente);
+          if (exp) c.numero_expediente = exp;
+        }
+        if (Object.keys(c).length) completarPacientes.set(id, c);
+      }
+      return { ref: { id }, nuevo: false };
+    }
+    if (!pacientesNuevos.has(clave)) {
+      pacientesNuevos.set(clave, { ...datos, numero_expediente: tomarExpediente(datos.numero_expediente) });
+    }
     return { ref: { nuevo: clave }, nuevo: true };
   };
 
@@ -1020,6 +1076,8 @@ async function manejarPOST(request: Request) {
     }
     if (noEncontrados.size) avisos.push(`Servicios que no están en el catálogo (se guardaron con el texto del archivo y precio 0): ${Array.from(noEncontrados).slice(0, 8).join('; ')}${noEncontrados.size > 8 ? ` y ${noEncontrados.size - 8} más` : ''}.`);
 
+    const pacientesCompletadosC = await aplicarCompletarPacientes(supabase, completarPacientes);
+    if (pacientesCompletadosC > 0) avisos.push(`${pacientesCompletadosC} paciente${pacientesCompletadosC === 1 ? '' : 's'} ya registrado${pacientesCompletadosC === 1 ? '' : 's'} se completó${pacientesCompletadosC === 1 ? '' : 'ron'} con datos generales del archivo (solo datos vacíos).`);
     await supabase.from('agenda_import_log').insert({
       usuario_id: auth.user.id,
       archivo_nombre: archivoNombre,
@@ -1188,6 +1246,7 @@ async function manejarPOST(request: Request) {
         sexo: normalizarSexo(val(o, 'SEXO')),
         fecha_nacimiento: fnac.fecha,
         edad,
+        numero_expediente: val(o, 'No. Expediente', 'NO. EXPEDIENTE', 'NO. EXP', 'No. Exp') || null,
       });
 
       const procedimiento = val(o, 'PROCEDIMIENTO', 'CIRUGÍA', 'CIRUGIA') || null;
@@ -1252,9 +1311,9 @@ async function manejarPOST(request: Request) {
           anestesia: anest.valor,
           estado,
           notas,
-          ...(estado === 'aplazada'
-            ? { procedencia: val(o, 'PROCEDENCIA') || null, motivo_aplazamiento: motivoAplazamiento }
-            : {}),
+          // PROCEDENCIA se guarda siempre (antes solo en aplazadas: las agendadas quedaban sin ella).
+          procedencia: val(o, 'PROCEDENCIA') || null,
+          ...(estado === 'aplazada' ? { motivo_aplazamiento: motivoAplazamiento } : {}),
         },
       });
   }
@@ -1269,7 +1328,14 @@ async function manejarPOST(request: Request) {
   // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.
   const fechasArchivo = Array.from(new Set(validasCx.map((f) => f.data.fecha as string | null).filter((f): f is string => !!f)));
   const haySinFecha = validasCx.some((f) => !f.data.fecha);
-  type Existente = { id: string; nombre_paciente: string | null; fecha: string | null; hora: string | null; procedimiento: string | null; ojo: string | null; anestesia: string | null };
+  type Existente = {
+    id: string; nombre_paciente: string | null; fecha: string | null; hora: string | null; procedimiento: string | null; ojo: string | null; anestesia: string | null;
+    diagnostico?: string | null; procedencia?: string | null; expediente?: string | null; tiempo_estimado?: string | null; tiempo_estancia?: string | null;
+    lio?: string | null; marca_lio?: string | null; doctor_id?: string | null; estado?: string | null;
+  };
+  // Columnas que «Completar cirugías ya guardadas» llena si están vacías.
+  const CAMPOS_COMPLETABLES = ['hora', 'anestesia', 'diagnostico', 'procedencia', 'expediente', 'tiempo_estimado', 'tiempo_estancia', 'lio', 'marca_lio'] as const;
+  const COLS_EXISTENTE = `id, nombre_paciente, fecha, hora, procedimiento, ojo, anestesia, estado${completarExistentes ? ', diagnostico, procedencia, expediente, tiempo_estimado, tiempo_estancia, lio, marca_lio, doctor_id' : ''}`;
   let existentesCx: Existente[];
   try {
     const [porFecha, sinFecha] = await Promise.all([
@@ -1278,7 +1344,7 @@ async function manejarPOST(request: Request) {
           leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('id, nombre_paciente, fecha, hora, procedimiento, ojo, anestesia')
+              .select(COLS_EXISTENTE)
               .in('fecha', grupo)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
@@ -1289,7 +1355,7 @@ async function manejarPOST(request: Request) {
         ? leerPaginado<Existente>((d, h) =>
             supabase
               .from('agenda_cirugias')
-              .select('id, nombre_paciente, fecha, hora, procedimiento, ojo, anestesia')
+              .select(COLS_EXISTENTE)
               .is('fecha', null)
               .order('id', { ascending: true })
               .range(d, h) as unknown as PromiseLike<{ data: Existente[] | null; error: unknown }>
@@ -1307,7 +1373,7 @@ async function manejarPOST(request: Request) {
   const enBdCx = new Set(existentesCx.map(claveExistente));
   const existentePorClave = new Map<string, Existente>();
   for (const e of existentesCx) if (!existentePorClave.has(claveExistente(e))) existentePorClave.set(claveExistente(e), e);
-  const actualizarCx: Array<{ id: string; cambios: { hora?: string; anestesia?: string }; fila: Hoja['filas'][number]; hoja: Hoja }> = [];
+  const actualizarCx: Array<{ id: string; cambios: Record<string, unknown>; fila: Hoja['filas'][number]; hoja: Hoja; p: PendCx; lentes: boolean }> = [];
   // Mismo paciente, fecha y ojo (cualquier procedimiento): posible reagenda o reintervención.
   const enBdOjoDia = new Set(
     existentesCx.filter((e) => e.fecha).map((e) => `O|${claveTexto(e.nombre_paciente || '')}|${e.fecha}|${e.ojo || ''}`)
@@ -1326,12 +1392,25 @@ async function manejarPOST(request: Request) {
   }
   for (const p of validasCx) {
     if (completarExistentes && enBdCx.has(p.dedupe)) {
+      // Re-subir el mismo Excel completa lo que faltó en la primera carga (solo campos vacíos;
+      // nunca se sobrescribe lo capturado). Documento «Agenda de cirugía», 16 oct 2026.
       const ex = existentePorClave.get(p.dedupe);
-      const cambios: { hora?: string; anestesia?: string } = {};
-      if (ex && p.data.hora && (!ex.hora || ex.hora.slice(0, 5) === '00:00')) cambios.hora = p.data.hora as string;
-      if (ex && p.data.anestesia && !ex.anestesia) cambios.anestesia = p.data.anestesia as string;
-      if (ex && Object.keys(cambios).length > 0) {
-        actualizarCx.push({ id: ex.id, cambios, fila: p.fila, hoja: p.hoja });
+      const cambios: Record<string, unknown> = {};
+      if (ex) {
+        const exR = ex as Record<string, unknown>;
+        for (const campo of CAMPOS_COMPLETABLES) {
+          const nuevo = p.data[campo];
+          const actual = exR[campo];
+          const vacio = actual === null || actual === undefined || String(actual).trim() === '' || (campo === 'hora' && String(actual).slice(0, 5) === '00:00');
+          if (vacio && nuevo !== null && nuevo !== undefined && String(nuevo).trim() !== '') cambios[campo] = nuevo;
+        }
+        // Cirujano: solo si ya existe en el sistema (no se crean doctores al completar).
+        if (!ex.doctor_id && p.doctor && 'id' in p.doctor) cambios.doctor_id = p.doctor.id;
+      }
+      // Lentes: se revisan al confirmar (solo si la cirugía no tiene ninguno guardado).
+      const conLente = !!ex && ex.estado !== 'cancelada' && p.interp.lentes.length > 0;
+      if (ex && (Object.keys(cambios).length > 0 || conLente)) {
+        actualizarCx.push({ id: ex.id, cambios, fila: p.fila, hoja: p.hoja, p, lentes: conLente });
       } else {
         omitirDuplicado(p.hoja, p.fila, 'Ya existe en el sistema y no hay datos nuevos que completar');
       }
@@ -1394,6 +1473,13 @@ async function manejarPOST(request: Request) {
     if ((requiereLente(p.data.procedimiento as string | null) && p.plan.length === 0) || p.sinGuardar.length > 0 || p.interp.pendientes.length > 0) f.push('lente');
     p.faltantes = f;
   }
+  // Cirugías existentes a completar: plan de lentes con la misma regla (se guarda solo si no tienen).
+  for (const u of actualizarCx) {
+    if (!u.lentes) continue;
+    const r = planificarLentes(u.p.interp, inventario.piezas, inventario.libres, true);
+    u.p.plan = r.plan;
+    if (r.plan.length === 0) u.lentes = false;
+  }
   const ABREV_ORDEN = { PRIMERO: '1º', SEGUNDO: '2º', RESPALDO: 'Resp.' } as const;
   const textoLentes = (p: PendCx) =>
     [
@@ -1422,6 +1508,7 @@ async function manejarPOST(request: Request) {
   };
 
   if (!confirmar) {
+    if (completarPacientes.size > 0) avisos.push(`${completarPacientes.size} paciente${completarPacientes.size === 1 ? '' : 's'} ya registrado${completarPacientes.size === 1 ? '' : 's'} tiene${completarPacientes.size === 1 ? '' : 'n'} datos generales vacíos que el archivo trae: se completarán al confirmar (no se sobrescribe nada).`);
     return NextResponse.json({
       preview: true,
       tipo: 'cirugias',
@@ -1497,12 +1584,38 @@ async function manejarPOST(request: Request) {
     await liberarLentes(anterior);
     await supabase.from('agenda_cirugias').update({ estado: 'REAGENDADA' }).eq('id', anterior);
   }
-  for (const u of actualizarCx) {
-    const { error: errUpd } = await supabase.from('agenda_cirugias').update(u.cambios as never).eq('id', u.id);
-    if (errUpd) rechazar(u.hoja, u.fila, mensajeSeguro(errUpd, 'agenda.import', 'No se pudo completar la cirugía existente'));
-    else completadas++;
+  // Cirugías ya guardadas: se completan solo los campos vacíos y, si no tienen lentes, el plan.
+  const conLentesGuardados = new Set<string>();
+  const idsConLente = actualizarCx.filter((u) => u.lentes).map((u) => u.id);
+  for (const grupo of trozos(idsConLente, 200)) {
+    const { data: ya } = await supabase.from('cirugia_lentes').select('cirugia_id').in('cirugia_id', grupo).neq('estado', 'LIBERADO');
+    (ya || []).forEach((x: { cirugia_id: string }) => conLentesGuardados.add(x.cirugia_id));
   }
-  if (completadas > 0) avisos.push(`${completadas} cirugía${completadas === 1 ? '' : 's'} ya existente${completadas === 1 ? '' : 's'} se completó${completadas === 1 ? '' : 'ron'} con hora y/o anestesia del archivo (solo campos vacíos).`);
+  let lentesCompletados = 0;
+  for (const u of actualizarCx) {
+    let tocada = false;
+    if (Object.keys(u.cambios).length > 0) {
+      const { error: errUpd } = await supabase.from('agenda_cirugias').update({ ...u.cambios, updated_at: new Date().toISOString() } as never).eq('id', u.id);
+      if (errUpd) { rechazar(u.hoja, u.fila, mensajeSeguro(errUpd, 'agenda.import', 'No se pudo completar la cirugía existente')); continue; }
+      tocada = true;
+    }
+    if (u.lentes && !conLentesGuardados.has(u.id)) {
+      const r = await guardarPlanLentes(u.id, u.p.plan, { reservarPrimero: true });
+      if (r.ok) {
+        lentesCompletados++;
+        tocada = true;
+        const primero = u.p.plan.find((l) => l.orden === 'PRIMERO' && l.modo === 'ASIGNAR' && l.inventario_item_id);
+        if (primero) await supabase.from('agenda_cirugias').update({ inventario_item_id: primero.inventario_item_id }).eq('id', u.id);
+      } else {
+        avisos.push(`Fila ${u.fila.numero}: no se pudo guardar el lente de la cirugía existente (${r.error}). Captúralo en la cirugía.`);
+      }
+    }
+    if (tocada) completadas++;
+    else omitirDuplicado(u.hoja, u.fila, 'Ya existe en el sistema y no hay datos nuevos que completar');
+  }
+  if (completadas > 0) avisos.push(`${completadas} cirugía${completadas === 1 ? '' : 's'} ya existente${completadas === 1 ? '' : 's'} se completó${completadas === 1 ? '' : 'ron'} con los datos del archivo (solo campos vacíos${lentesCompletados ? `; ${lentesCompletados} con su lente` : ''}).`);
+  const pacientesCompletados = await aplicarCompletarPacientes(supabase, completarPacientes);
+  if (pacientesCompletados > 0) avisos.push(`${pacientesCompletados} paciente${pacientesCompletados === 1 ? '' : 's'} ya registrado${pacientesCompletados === 1 ? '' : 's'} se completó${pacientesCompletados === 1 ? '' : 'ron'} con sexo, fecha de nacimiento, teléfono o expediente del archivo (solo datos vacíos).`);
   // Lentes de cada cirugía (mismo plan que se mostró en la vista previa): asignar / solicitar / compra directa.
   let lentesAsignados = 0;
   let lentesPorSolicitar = 0;

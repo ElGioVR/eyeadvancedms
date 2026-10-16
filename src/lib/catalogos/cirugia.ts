@@ -81,6 +81,34 @@ export function esProcedimientoConLio(nombre: string | null | undefined): boolea
   return /\bFACO|\bLIO\b|CATARATA|FACOEMULSIFICACION/.test(n);
 }
 
+/**
+ * Tipo de LIO implícito en el nombre de la cirugía (catálogo de la clínica, 16 oct 2026):
+ * «Facoemulsificación del cristalino + LIO trifocal tórico» → { TRIFOCAL, tórico }.
+ * «no tórico» se revisa antes que «tórico». Sin pista → null (no cambia nada).
+ */
+export function tipoLioDesdeProcedimiento(nombre: string | null | undefined): { diseno: LioDiseno | null; torico: boolean | null } | null {
+  if (!nombre) return null;
+  const n = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const diseno: LioDiseno | null = /TRIFOCAL/.test(n) ? 'TRIFOCAL' : /MONOFOCAL/.test(n) ? 'MONOFOCAL' : null;
+  const torico = /NO\s+TORIC/.test(n) ? false : /TORIC/.test(n) ? true : null;
+  return diseno || torico !== null ? { diseno, torico } : null;
+}
+
+/**
+ * Catálogo oficial de cirugías (documento «Agenda de cirugía», 16 oct 2026). El ojo NO forma
+ * parte del nombre: se elige aparte. Lo siembra sql/patch-agenda-cirugia-comentarios-16oct-supabase.sql.
+ */
+export const CIRUGIAS_OFICIALES = [
+  'Facoemulsificación del cristalino + LIO monofocal no tórico',
+  'Facoemulsificación del cristalino + LIO monofocal tórico',
+  'Facoemulsificación del cristalino + LIO trifocal no tórico',
+  'Facoemulsificación del cristalino + LIO trifocal tórico',
+  'Resección de pterigión + autoinjerto conjuntival',
+  'Resección de pterigión + mitomicina C 0.02 % + autoinjerto conjuntival',
+  'Resección de pterigión + injerto de membrana amniótica',
+  'Resección de pterigión + mitomicina C 0.02 % + injerto de membrana amniótica',
+] as const;
+
 /* ───────── Personal de apoyo no médico (punto I.2) ───────── */
 
 export const ROLES_PERSONAL = [

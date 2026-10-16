@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Download,
   Printer,
+  Scissors,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ClientDate from '@/components/ui/ClientDate';
@@ -34,10 +35,13 @@ import FichaPaciente from '@/components/ui/FichaPaciente';
 import EditorTelefonos from '@/components/pacientes/EditorTelefonos';
 import ListaTelefonos from '@/components/pacientes/ListaTelefonos';
 import { normalizarTelefonos, telefonoPrincipal, type TelefonoPaciente } from '@/lib/telefonos-paciente';
+import { etiquetaOjo } from '@/lib/catalogos/cirugia';
+import { puedeEditarPaciente } from '@/components/pacientes/EditorDatosPaciente';
 
 const historialTabs = [
   { label: 'Resumen', icon: FileText },
   { label: 'Consultas', icon: Calendar },
+  { label: 'Cirugías', icon: Scissors },
   { label: 'Procedimientos', icon: FlaskConical },
   { label: 'Lentes', icon: Glasses },
   { label: 'Estudios', icon: Eye },
@@ -58,10 +62,35 @@ interface PacienteData {
   created_at: string;
   consultas: ConsultaData[];
   total_consultas: number;
+  cirugias?: CirugiaHistorial[];
   /** Alta automática por importación con datos por completar */
   pendiente_completar?: boolean;
   faltantes?: string[];
 }
+
+interface LenteHistorial { orden: string; fabricante: string | null; modelo: string | null; poder_d: number | null; torico: boolean; estado: string }
+interface CirugiaHistorial {
+  id: string;
+  fecha: string | null;
+  hora: string | null;
+  procedimiento: string | null;
+  realizada?: string | null;
+  ojo: string | null;
+  estado: string;
+  diagnostico?: string | null;
+  doctor: string;
+  lentes?: LenteHistorial[];
+}
+
+const ESTADO_CIRUGIA: Record<string, { label: string; cls: string }> = {
+  agendada: { label: 'Agendada', cls: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30' },
+  completada: { label: 'Completada', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' },
+  aplazada: { label: 'Aplazada', cls: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' },
+  reagendada: { label: 'Reagendada', cls: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30' },
+  cancelada: { label: 'Cancelada', cls: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' },
+};
+const textoLente = (l: LenteHistorial) =>
+  [l.fabricante, l.modelo, l.poder_d != null ? `${l.poder_d} D` : null, l.torico ? 'tórico' : null].filter(Boolean).join(' · ') || 'Lente sin datos';
 
 /** Edición de la ficha (completar datos tras una importación). */
 function EditarPacienteModal({
@@ -188,7 +217,7 @@ export default function HistorialMedicoPage() {
   // Enfermería: solo lectura clínica (sin cobros, sin crear ni abrir consultas)
   const { user } = useUser();
   const soloLectura = user?.rol === 'enfermero';
-  const puedeEditar = user?.rol === 'admin' || user?.rol === 'recepcionista';
+  const puedeEditar = puedeEditarPaciente(user?.rol);
   const [editando, setEditando] = useState(false);
   // ?editar=1 (desde el detalle de una consulta): abre la edición de datos.
   useEffect(() => {
@@ -240,8 +269,8 @@ export default function HistorialMedicoPage() {
           </div>
         </div>
         <div className="flex gap-1 border-b border-line overflow-x-auto">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-10 w-24 rounded-t-lg shrink-0" />
+          {historialTabs.map((t) => (
+            <Skeleton key={t.label} className="h-10 w-24 rounded-t-lg shrink-0" />
           ))}
         </div>
         <div className="flex flex-col lg:flex-row gap-6">
@@ -285,6 +314,8 @@ export default function HistorialMedicoPage() {
   }
 
   const { consultas, consultasConProcedimiento, estudiosFromConsultas, diagnosticos } = derivados;
+  const cirugias = paciente?.cirugias ?? [];
+  const lentesCirugias = cirugias.flatMap((c) => (c.lentes ?? []).map((l) => ({ ...l, cirugia: c })));
   const listaTelefonos = normalizarTelefonos(paciente.telefonos, paciente.telefono);
 
   return (
@@ -545,6 +576,52 @@ export default function HistorialMedicoPage() {
             </>
           )}
 
+          {/* ========== CIRUGÍAS ========== */}
+          {activeTab === 'Cirugías' && (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Cirugías</h2>
+                <span className="text-sm text-muted">{cirugias.length} cirugía{cirugias.length !== 1 ? 's' : ''}</span>
+              </div>
+              {cirugias.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <Scissors className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">No hay cirugías registradas</p>
+                </div>
+              ) : (
+                <div className="space-y-3 anim-lista">
+                  {cirugias.map((c) => {
+                    const est = ESTADO_CIRUGIA[String(c.estado).toLowerCase()] ?? { label: c.estado, cls: 'bg-surface-2 text-fg-2 ring-line' };
+                    return (
+                      <Link key={c.id} href={`/cirugias/${c.id}`} className="block rounded-xl border border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 shadow-sm transition-shadow hover:shadow-md dark:border-line dark:bg-surface">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-sm font-bold text-primary-700 dark:text-primary-400">
+                            {c.fecha ? <ClientDate date={c.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /> : 'Sin fecha (por programar)'}
+                            {c.hora ? ` · ${c.hora.slice(0, 5)}` : ''}
+                          </span>
+                          {c.ojo && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold text-fg-2">{etiquetaOjo(c.ojo)}</span>}
+                          <span className={cn('inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1', est.cls)}>{est.label}</span>
+                        </div>
+                        <p className="mt-1 text-sm font-bold text-fg">{c.procedimiento || 'Cirugía sin procedimiento'}</p>
+                        {c.realizada && c.realizada !== c.procedimiento && <p className="text-xs text-fg-2">Realizada: {c.realizada}</p>}
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
+                          {c.doctor && <span>Cirujano: {c.doctor}</span>}
+                          {c.diagnostico && <span>Dx: {c.diagnostico}</span>}
+                        </div>
+                        {(c.lentes ?? []).length > 0 && (
+                          <p className="mt-1 text-xs text-fg-2">
+                            <Glasses className="mr-1 inline h-3.5 w-3.5" />
+                            {(c.lentes ?? []).map((l) => `${textoLente(l)}${l.estado === 'USADO' ? ' (usado)' : ''}`).join(' / ')}
+                          </p>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
           {/* ========== PROCEDIMIENTOS ========== */}
           {activeTab === 'Procedimientos' && (
             <>
@@ -598,11 +675,27 @@ export default function HistorialMedicoPage() {
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-fg">Historial de Lentes</h2>
               </div>
-              <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
-                <Glasses className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
-                <p className="text-sm font-bold text-muted">Módulo de lentes en desarrollo</p>
-                <p className="text-xs text-muted mt-1">Próximamente se conectarán los lentes del inventario al historial del paciente</p>
-              </div>
+              {lentesCirugias.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-xl border border-gray-200 dark:bg-surface dark:border-line">
+                  <Glasses className="h-10 w-10 text-gray-300 dark:text-muted mx-auto mb-3" />
+                  <p className="text-sm font-bold text-muted">Sin lentes intraoculares registrados</p>
+                  <p className="text-xs text-muted mt-1">Aquí aparecen los LIO de sus cirugías (usados o apartados).</p>
+                </div>
+              ) : (
+                <div className="space-y-2 anim-lista">
+                  {lentesCirugias.map((l) => (
+                    <Link key={`${l.cirugia.id}-${l.orden}`} href={`/cirugias/${l.cirugia.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm hover:shadow-md dark:border-line dark:bg-surface">
+                      <Glasses className="h-4 w-4 text-primary-500" />
+                      <span className="font-bold text-fg">{textoLente(l)}</span>
+                      <span className="text-xs text-muted">
+                        {l.cirugia.ojo ? `${etiquetaOjo(l.cirugia.ojo)} · ` : ''}
+                        {l.cirugia.fecha ? <ClientDate date={l.cirugia.fecha} options={{ day: 'numeric', month: 'short', year: 'numeric' }} /> : 'sin fecha'}
+                        {' · '}{l.estado === 'USADO' ? 'implantado' : 'apartado para la cirugía'}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </>
           )}
 

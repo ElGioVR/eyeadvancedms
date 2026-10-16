@@ -33,7 +33,8 @@
     "test:b25": "node scripts/tests/b25-personal-unificado.test.js",
     "test:unit": "node --import tsx --test src/lib/__tests__/*.test.ts",
     "test:cobertura": "node --import tsx --test --experimental-test-coverage src/lib/__tests__/*.test.ts",
-    "test:import": "tsx --conditions=react-server --tsconfig scripts/tests/import/tsconfig.json scripts/tests/import/import-agenda.integration.ts"
+    "test:import": "tsx --conditions=react-server --tsconfig scripts/tests/import/tsconfig.json scripts/tests/import/import-agenda.integration.ts",
+    "test:dod": "tsx --tsconfig scripts/tests/dod/tsconfig.json scripts/tests/dod/agenda-cirugia-16oct.dod.tsx"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.76.0",
