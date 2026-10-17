@@ -234,6 +234,8 @@ export interface AgendaCirugia {
   doctor_nombre: string | null;
   /** Enfermería ve todas las cirugías: true si la persona participa (se resalta). */
   mi_participacion?: boolean;
+  /** IMPORTACION (import masivo) o AGENDA (capturada en el sistema). */
+  origen_registro?: string | null;
   estado: AgendaCirugiaEstado;
   procedencia: string | null;
   anestesia?: string | null;

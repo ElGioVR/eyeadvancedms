@@ -12,6 +12,7 @@ import {
   AlertTriangle, CheckCircle2, History, Users, Package, ExternalLink, Loader2
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import EtiquetaOrigenRegistro from '@/components/ui/EtiquetaOrigenRegistro';
 import { cn } from '@/lib/utils';
 import { etiquetaModeloLio } from '@/lib/catalogos/modelos-lio';
 import { ROLES_PERSONAL, TIPOS_DOCUMENTO_APOYO, etiquetaAnestesia, etiquetaOjo, tipoLioDe, ANESTESIAS, OJOS_CIRUGIA } from '@/lib/catalogos/cirugia';
@@ -514,7 +515,7 @@ export default function CirugiaDetailPage() {
       />
       <PageHeader
         title={cirugia.codigo || 'Cirugía'}
-        subtitle={`${nombrePaciente} — ${cirugia.fecha || 'Sin fecha'} ${cirugia.hora || ''}`}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-2">{`${nombrePaciente} — ${cirugia.fecha || 'Sin fecha'} ${cirugia.hora || ''}`}<EtiquetaOrigenRegistro origen={(cirugia as { origen_registro?: string | null }).origen_registro} /></span>}
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">

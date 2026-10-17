@@ -56,7 +56,7 @@ async function manejarGET(
 
   // Ronda 1 (paralelo): consulta + historial + conceptos + doctor del usuario (solo rol doctor).
   // Lecturas sin efectos: si el RBAC rechaza, se descartan sin devolverse.
-  const [consultaResult, historialResult, conceptosResult, requerido, especialidadResult, indicadosResult] = await Promise.all([
+  const [consultaResult, historialResult, conceptosResult, requerido, especialidadResult, indicadosResult, origenResult] = await Promise.all([
     supabase
       .from('consultas')
       .select(`
@@ -94,6 +94,8 @@ async function manejarGET(
       .select('id, tipo_concepto, texto_original, indicado_por_id, indicado:indicado_por_id (alias)')
       .eq('consulta_id', id)
       .in('tipo_concepto', ['ESTUDIO', 'PROCEDIMIENTO']),
+    // Origen del registro (import masivo / agenda), tolerante a que falte la columna.
+    supabase.from('consultas').select('origen_registro').eq('id', id).maybeSingle(),
   ]);
 
   const { data: consulta, error: consultaError } = consultaResult;
@@ -197,6 +199,7 @@ async function manejarGET(
       ...consulta,
       paciente: pacienteData?.nombre_completo || null,
       iniciales: inicialesDe(pacienteData?.nombre_completo || '?'),
+      origen_registro: origenResult.error ? null : ((origenResult.data as { origen_registro?: string | null } | null)?.origen_registro ?? null),
       especialidad_id: (especialidadResult.data as { especialidad_id?: string | null } | null)?.especialidad_id ?? null,
       especialidad:
         ((especialidadResult.data as { especialidad?: { nombre: string } | { nombre: string }[] | null } | null)?.especialidad as { nombre?: string } | null)?.nombre ?? null,

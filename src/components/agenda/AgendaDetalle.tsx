@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import FichaPaciente from '@/components/ui/FichaPaciente';
 import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { estadoCerrado, puedeEditarCirugia } from '@/lib/permisos-edicion';
+import EtiquetaOrigenRegistro from '@/components/ui/EtiquetaOrigenRegistro';
 import { ETIQUETA_MEDIO, estaConfirmada } from '@/lib/confirmacion-cita';
 import { type AccionRapida, accionesConConfirmar, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
 import { useRouter } from 'next/navigation';
@@ -84,6 +85,7 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-extrabold text-fg truncate">{cirugia.nombre_paciente}</h3>
+          <EtiquetaOrigenRegistro origen={cirugia.origen_registro} className="mt-1" />
           <FichaPaciente
             variante="linea"
             className="mt-0.5 text-xs"
@@ -339,6 +341,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
             <span className={cn('h-1.5 w-1.5 rounded-full', estadoVisual(cirugia).dot)} />
             {estadoVisual(cirugia).label}
           </span>
+          <EtiquetaOrigenRegistro origen={cirugia.origen_registro} />
           {estaConfirmada(cirugia) && cirugia.confirmacion_medio && (
             <span className="text-[10px] font-medium text-muted" title="Medio por el que se confirmó">
               por {ETIQUETA_MEDIO[cirugia.confirmacion_medio]}

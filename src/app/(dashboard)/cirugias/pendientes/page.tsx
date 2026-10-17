@@ -28,7 +28,8 @@ export default function CirugiasPendientesPage() {
   const lista = (data?.data ?? [])
     .filter((c) => !estadoCerrado(c.estado))
     .map((c) => ({ c, ...faltantesCirugia(c) }))
-    .filter((x) => x.faltan.length > 0 || x.info.length > 0)
+    // Solo lo que tiene datos faltantes; los lentes por solicitar/comprar se siguen en Inventario → Plan de resurtimiento.
+    .filter((x) => x.faltan.length > 0)
     .sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));
 
   return (
@@ -40,7 +41,7 @@ export default function CirugiasPendientesPage() {
       />
 
       <p className="text-sm text-muted">
-        Son cirugías importadas sin hora, ojo, procedimiento o anestesia. No se dibujan bien en la agenda hasta completarlas. Entra a cada una y pulsa <strong>Completar datos</strong>.
+        Son cirugías importadas sin hora, ojo, procedimiento o lente. No se dibujan bien en la agenda hasta completarlas. Entra a cada una y pulsa <strong>Completar datos</strong>.
       </p>
 
       {error && (

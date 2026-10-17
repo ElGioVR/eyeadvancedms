@@ -91,6 +91,9 @@ export interface DoctorExistente {
   id: string;
   alias: string;
   activo: boolean;
+  /** MEDICO / ENFERMERO / ANESTESIOLOGO (personal unificado); puede faltar en esquemas viejos. */
+  tipo_personal?: string | null;
+  nombre?: string | null;
 }
 
 export type ResolucionDoctor =

@@ -56,7 +56,7 @@ async function manejarGET(request: Request) {
   // y cirugías con lente (la lectura de qué falta del lente se hace con las reglas de por-completar).
   if (pendientes) {
     query = query
-      .or('hora.is.null,ojo.is.null,anestesia.is.null,servicio_id.is.null,fecha.is.null,procedimiento.ilike.*faco*,procedimiento.ilike.*lio*,procedimiento.ilike.*catarata*')
+      .or('hora.is.null,ojo.is.null,servicio_id.is.null,fecha.is.null,procedimiento.ilike.*faco*,procedimiento.ilike.*lio*,procedimiento.ilike.*catarata*')
       .not('estado', 'in', '(completada,cancelada,reagendada)');
   }
   if (consultaId) {

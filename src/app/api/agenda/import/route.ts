@@ -40,6 +40,7 @@ import {
   type PiezaInventario,
 } from '@/lib/import-lentes-puro';
 import { requiereLente } from '@/lib/por-completar';
+import { hoyTijuana } from '@/lib/ficha-paciente';
 import { exigirLimite } from '@/lib/api/limites';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
@@ -283,9 +284,11 @@ async function insertarEnLotes(
 /* ─────────── Doctores y pacientes ─────────── */
 
 async function cargarDoctores(supabase: Admin): Promise<DoctorExistente[]> {
-  return leerPaginado<DoctorExistente>((d, h) =>
-    supabase.from('doctores').select('id, alias, activo').order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: DoctorExistente[] | null; error: unknown }>
+  const leer = (cols: string) => leerPaginado<DoctorExistente>((d, h) =>
+    supabase.from('doctores').select(cols).order('id', { ascending: true }).range(d, h) as unknown as PromiseLike<{ data: DoctorExistente[] | null; error: unknown }>
   );
+  // Con tipo de personal (anestesiólogos); sin la columna, como antes.
+  try { return await leer('id, alias, activo, tipo_personal, nombre'); } catch { return leer('id, alias, activo'); }
 }
 
 async function cargarPacientes(supabase: Admin): Promise<PacienteExistente[]> {
@@ -1038,12 +1041,14 @@ async function manejarPOST(request: Request) {
           estatus_pago: costo > 0 ? 'PENDIENTE_PAGO' : 'PAGADO',
           // Registro histórico de entradas/salidas: puede traer horarios empalmados reales.
           permite_empalme: true,
+          origen_registro: 'IMPORTACION',
         },
       });
     }
 
     let importadas = 0;
-    const resultados = await insertarEnLotes(supabase, 'consultas', filasConsulta.map((x) => x.row), 'id');
+    // origen_registro es opcional (sin sql/patch-origen-registro-supabase.sql se guarda sin él).
+    const resultados = await insertarEnLotes(supabase, 'consultas', filasConsulta.map((x) => x.row), 'id', ['origen_registro']);
     const conceptosRows: Array<Record<string, unknown>> = [];
     const noEncontrados = new Set<string>();
     const catalogos = await cargarCatalogosServicios(supabase);
@@ -1123,8 +1128,25 @@ async function manejarPOST(request: Request) {
     plan: LentePlanImport[];
     sinGuardar: string[];
     faltantes: string[];
+    /** Anestesiólogo (columna ANESTESIA con un nombre registrado en Personal). */
+    anestesiologoId?: string | null;
   }
   const validasCx: PendCx[] = [];
+  // Hoy en la clínica: las cirugías con fecha anterior se importan como realizadas (historial).
+  const hoyClinica = hoyTijuana();
+  // Anestesiólogos registrados (Personal → tipo Anestesiólogo), por nombre o alias.
+  const anestesiologos = doctores.filter((d) => String(d.tipo_personal ?? '').toUpperCase() === 'ANESTESIOLOGO' && d.activo !== false);
+  const buscarAnestesiologo = (texto: string): string | null => {
+    const k = claveTexto(texto);
+    if (!k) return null;
+    const hit = anestesiologos.filter((d) => [d.alias, d.nombre].some((n) => {
+      const kn = claveTexto(n ?? '');
+      return !!kn && (kn === k || kn.split(' ').includes(k) || k.split(' ').every((w) => kn.split(' ').includes(w)));
+    }));
+    return hit.length === 1 ? hit[0].id : null;
+  };
+  const anestesiologosNoRegistrados = new Set<string>();
+  let importadasComoRealizadas = 0;
   const val = (o: Record<string, string | number>, ...claves: string[]) => {
     for (const k of claves) { const t = texto(o[k]); if (t) return t; }
     return '';
@@ -1263,7 +1285,13 @@ async function manejarPOST(request: Request) {
 
       // Anestesia: solo valores reales; lo demás (nombres de proveedores, etc.) va a notas.
       const anest = esAplazados ? { valor: null, sobrante: null } : anestesiaImport(val(o, 'ANESTESIA'));
-      if (anest.sobrante && !suspendida) { notasExtra.push(`Anestesia (archivo): ${anest.sobrante}`); horaAnestesiaSobrante.push(fila.numero); }
+      // Un nombre en ANESTESIA (CRYSTAL, CYNTAR…) es el anestesiólogo: se asigna al equipo si está en Personal.
+      const anestesiologoId = anest.sobrante ? buscarAnestesiologo(anest.sobrante) : null;
+      if (anest.sobrante && !anestesiologoId && !suspendida) {
+        notasExtra.push(`Anestesiólogo (archivo): ${anest.sobrante}`);
+        horaAnestesiaSobrante.push(fila.numero);
+        anestesiologosNoRegistrados.add(anest.sobrante.trim().toUpperCase());
+      }
 
       // LIO: lectura estricta. Un texto que no es lente (horarios) no se guarda como LIO.
       const interp = interpretarLio(lioTxt, marcaTxt, notasBase);
@@ -1273,7 +1301,9 @@ async function manejarPOST(request: Request) {
       if (!marcaRuido && !marcaEsMarca && !suspendida) notasExtra.push(`Marca/nota: ${marcaTxt}`);
       const notas = notasExtra.length ? notasExtra.join(' · ') : null;
 
-      const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? 'agendada' : 'aplazada';
+      // Fecha ya pasada → la cirugía ya se realizó: entra como completada (historial, sin pendientes).
+      const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? (fecha < hoyClinica ? 'completada' : 'agendada') : 'aplazada';
+      if (estado === 'completada') importadasComoRealizadas++;
       const ojoClave = ojo || '';
       const dedupe = fecha
         ? `F|${nombreV.clave}|${fecha}|${ojoClave}|${claveTexto(procedimiento || '')}`
@@ -1294,7 +1324,7 @@ async function manejarPOST(request: Request) {
       validasCx.push({
         hoja, fila, clave: nombreV.clave, nombre: nombreV.nombre,
         paciente: pac.ref, pacienteNuevo: pac.nuevo, doctor: doc.ref, doctorTexto, doctorNuevo: !!doc.nuevo, dedupe, ojoDia,
-        interp, plan: [], sinGuardar: [], faltantes: [],
+        interp, plan: [], sinGuardar: [], faltantes: [], anestesiologoId,
         data: {
           nombre_paciente: nombreV.nombre,
           expediente: val(o, 'No. Expediente', 'NO. EXPEDIENTE', 'NO. EXP', 'No. Exp') || null,
@@ -1311,6 +1341,7 @@ async function manejarPOST(request: Request) {
           anestesia: anest.valor,
           estado,
           notas,
+          ...(estado === 'completada' ? { diagnostico_definitivo: val(o, 'DIAGNOSTICO') || null, cirugia_realizada: procedimiento } : {}),
           // PROCEDENCIA se guarda siempre (antes solo en aplazadas: las agendadas quedaban sin ella).
           procedencia: val(o, 'PROCEDENCIA') || null,
           ...(estado === 'aplazada' ? { motivo_aplazamiento: motivoAplazamiento } : {}),
@@ -1322,7 +1353,8 @@ async function manejarPOST(request: Request) {
   if (notasArchivo.length > 0) avisos.push(`Notas sueltas del archivo (no son pacientes, no se importan): ${notasArchivo.slice(0, 5).join('; ')}${notasArchivo.length > 5 ? ` y ${notasArchivo.length - 5} más` : ''}.`);
   if (sinProcedimientoConsultados.length > 0) avisos.push(`CONSULTADOS: ${sinProcedimientoConsultados.length} paciente${sinProcedimientoConsultados.length === 1 ? '' : 's'} sin procedimiento definido (estudios pendientes, interconsulta…) no se importaron como pendientes de programar (${listaFilas(sinProcedimientoConsultados)}).`);
   if (fechasNacDescartadas.length > 0) avisos.push(`Fechas de nacimiento descartadas por ser futuras o no cuadrar con la edad (${listaFilas(fechasNacDescartadas)}). El paciente se importa con la edad.`);
-  if (horaAnestesiaSobrante.length > 0) avisos.push(`ANESTESIA trae texto que no es un tipo de anestesia (${listaFilas(horaAnestesiaSobrante)}): se guardó en notas y la anestesia queda por completar.`);
+  if (anestesiologosNoRegistrados.size > 0) avisos.push(`ANESTESIA trae nombres que no están registrados como anestesiólogos en Personal (${Array.from(anestesiologosNoRegistrados).join(', ')}; ${listaFilas(horaAnestesiaSobrante)}): se guardaron en notas. Regístralos en Personal como «Anestesiólogo» y vuelve a importar para asignarlos.`);
+  if (importadasComoRealizadas > 0) avisos.push(`${importadasComoRealizadas} cirugía${importadasComoRealizadas === 1 ? '' : 's'} con fecha anterior a hoy se importa${importadasComoRealizadas === 1 ? '' : 'n'} como realizada${importadasComoRealizadas === 1 ? '' : 's'} (historial): sin pendientes, sin recordatorios y sin descontar lentes del inventario.`);
   if (filasPorCompletar > 0) avisos.push(`${filasPorCompletar} fila${filasPorCompletar === 1 ? '' : 's'} se importaron sin hora porque la hora no es válida. Quedaron marcadas «Por completar» en notas; corrige la hora en la agenda.`);
 
   // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.
@@ -1460,13 +1492,20 @@ async function manejarPOST(request: Request) {
   for (const p of porInsertarCx) {
     const estadoFila = p.data.estado as string;
     if (estadoFila === 'cancelada') continue;
+    if (estadoFila === 'completada') {
+      // Historial: el lente solo se registra (no aparta ni descuenta inventario) y no hay pendientes.
+      const r = planificarLentes(p.interp, [], new Map(), false);
+      p.plan = r.plan.map((l) => ({ ...l, modo: 'SIN_TRAMITE' as const, inventario_item_id: null }));
+      p.sinGuardar = [];
+      p.faltantes = [];
+      continue;
+    }
     const r = planificarLentes(p.interp, inventario.piezas, inventario.libres, estadoFila === 'agendada');
     p.plan = r.plan;
     p.sinGuardar = r.sinGuardar;
     const f: string[] = [];
     if (estadoFila === 'agendada') {
       if (!p.data.hora) f.push('hora');
-      if (!p.data.anestesia) f.push('anestesia');
     }
     if (!p.data.ojo) f.push('ojo');
     if (!p.data.procedimiento) f.push('procedimiento');
@@ -1503,7 +1542,8 @@ async function manejarPOST(request: Request) {
     doctoresNuevos: Array.from(doctoresNuevos.values()),
     pacientesNuevos: pacientesNuevos.size,
     porCompletar: porInsertarCx.filter((p) => p.faltantes.length > 0).length,
-    faltantes: { hora: sinHoraCx, ojo: conteoFalta('ojo'), anestesia: conteoFalta('anestesia'), lente: conteoFalta('lente'), procedimiento: conteoFalta('procedimiento') },
+    faltantes: { hora: sinHoraCx, ojo: conteoFalta('ojo'), lente: conteoFalta('lente'), procedimiento: conteoFalta('procedimiento') },
+    realizadas: porInsertarCx.filter((p) => p.data.estado === 'completada').length,
     lentes: { asignar: conteoModo('ASIGNAR'), solicitar: conteoModo('SOLICITAR'), compraDirecta: conteoModo('COMPRA_DIRECTA') },
   };
 
@@ -1556,15 +1596,16 @@ async function manejarPOST(request: Request) {
       continue;
     }
     const anterior = reagendaDe.get(p);
-    filasCx.push({ p, row: { ...p.data, paciente_id: pacienteId, doctor_id: doctorId, ...(anterior ? { reagenda_de_id: anterior } : {}) } });
+    filasCx.push({ p, row: { ...p.data, paciente_id: pacienteId, doctor_id: doctorId, origen_registro: 'IMPORTACION', ...(anterior ? { reagenda_de_id: anterior } : {}) } });
   }
 
   let importadas = 0;
   let aplazadasImportadas = 0;
   let completadas = 0;
   const reagendadas: string[] = [];
-  const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', filasCx.map((x) => x.row), 'id, doctor_id');
+  const resultados = await insertarEnLotes(supabase, 'agenda_cirugias', filasCx.map((x) => x.row), 'id, doctor_id', ['origen_registro']);
   const doctorRows: Array<Record<string, unknown>> = [];
+  const participantesRows: Array<{ cirugia_id: string; medico_id: string; clave: string }> = [];
   resultados.forEach((r, i) => {
     const { p } = filasCx[i];
     if (r.ok) {
@@ -1572,6 +1613,9 @@ async function manejarPOST(request: Request) {
       if (anterior) reagendadas.push(anterior);
       if (p.data.estado === 'aplazada') aplazadasImportadas++;
       else importadas++;
+      // Equipo homologado (lo que lee el formulario de edición): cirujano y anestesiólogo.
+      if (r.row.doctor_id) participantesRows.push({ cirugia_id: String(r.row.id), medico_id: String(r.row.doctor_id), clave: 'cirujano' });
+      if (p.anestesiologoId) participantesRows.push({ cirugia_id: String(r.row.id), medico_id: p.anestesiologoId, clave: 'anestesiologo' });
       if (r.row.doctor_id) {
         doctorRows.push({ cirugia_id: r.row.id, doctor_id: r.row.doctor_id, rol: 'CIRUJANO_PRINCIPAL', porcentaje_participacion: 100 });
       }
@@ -1640,7 +1684,13 @@ async function manejarPOST(request: Request) {
     for (const l of plan) {
       if (l.modo === 'ASIGNAR') lentesAsignados++;
       else if (l.modo === 'SOLICITAR') lentesPorSolicitar++;
-      else lentesCompraDirecta++;
+      else if (l.modo === 'COMPRA_DIRECTA') lentesCompraDirecta++;
+    }
+    // Cirugía realizada (historial): el primer lente quedó usado; los demás, liberados.
+    if (p.data.estado === 'completada') {
+      const ahora = new Date().toISOString();
+      await supabase.from('cirugia_lentes').update({ estado: 'USADO', requerido: true, updated_at: ahora }).eq('cirugia_id', id).eq('orden', 'PRIMERO');
+      await supabase.from('cirugia_lentes').update({ estado: 'LIBERADO', liberado_at: ahora, motivo_liberacion: 'HISTORIAL_IMPORTADO', updated_at: ahora }).eq('cirugia_id', id).neq('orden', 'PRIMERO');
     }
     const primero = plan.find((l) => l.orden === 'PRIMERO' && l.modo === 'ASIGNAR' && l.inventario_item_id);
     if (primero) await supabase.from('agenda_cirugias').update({ inventario_item_id: primero.inventario_item_id }).eq('id', id);
@@ -1649,6 +1699,17 @@ async function manejarPOST(request: Request) {
   for (const lote of trozos(doctorRows, LOTE_INSERT)) {
     const { error } = await supabase.from('agenda_cirugia_doctores').insert(lote);
     if (error) handleSupabaseError(error, 'agenda.import.doctores');
+  }
+  if (participantesRows.length) {
+    const { data: rolesCat } = await supabase.from('cat_roles_participante').select('id, clave').in('clave', ['cirujano', 'anestesiologo']);
+    const rolId = new Map(((rolesCat ?? []) as Array<{ id: string; clave: string }>).map((x) => [x.clave, x.id]));
+    const filasPart = participantesRows
+      .filter((x) => rolId.has(x.clave))
+      .map((x) => ({ cirugia_id: x.cirugia_id, medico_id: x.medico_id, rol_id: rolId.get(x.clave)! }));
+    for (const lote of trozos(filasPart, LOTE_INSERT)) {
+      const { error } = await supabase.from('cirugia_participantes').insert(lote);
+      if (error) handleSupabaseError(error, 'agenda.import.participantes');
+    }
   }
 
   await supabase.from('agenda_import_log').insert({

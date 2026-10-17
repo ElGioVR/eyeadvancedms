@@ -63,7 +63,7 @@ export function faltantesCirugia(c: CirugiaParaCompletar): FaltantesCirugia {
   const faltan: string[] = [];
   const info: string[] = [];
   let detalleLente: string[] = [];
-  // Una aplazada está pendiente de programar: no se le exige fecha, hora ni anestesia.
+  // Una aplazada está pendiente de programar: no se le exige fecha ni hora.
   if (!aplazada) {
     if (!c.fecha) faltan.push('fecha');
     if (!c.hora || c.hora.slice(0, 5) === '00:00') faltan.push('hora');
@@ -71,7 +71,8 @@ export function faltantesCirugia(c: CirugiaParaCompletar): FaltantesCirugia {
   if (!c.ojo) faltan.push('ojo');
   const proc = c.servicio?.nombre || c.procedimiento;
   if (!proc) faltan.push('procedimiento');
-  if (!aplazada && !c.anestesia) faltan.push('anestesia');
+  // La anestesia no se exige como pendiente: el Excel de la clínica no trae el tipo (16 oct 2026);
+  // se captura al editar o completar la cirugía (el alta manual sí la pide).
 
   if (c.lentes !== undefined && c.lentes !== null && requiereLente(proc)) {
     const interp = interpretarLio(c.lio, c.marca_lio, c.notas);

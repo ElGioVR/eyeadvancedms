@@ -161,12 +161,14 @@ async function manejarGET(
     if (clinicos.data) Object.assign(cirugia, clinicos.data);
     // Cierre de la cirugía (dx definitivo, realizada, complicaciones): consulta aparte y tolerante
     // a que el parche de columnas aún no esté aplicado.
-    const cierre = await supabase
-      .from('agenda_cirugias')
-      .select('diagnostico_definitivo, cirugia_realizada, complicaciones')
-      .eq('id', id)
-      .maybeSingle();
-    if (!cierre.error && cierre.data) Object.assign(cirugia, cierre.data);
+    // También el origen del registro (import masivo / agenda), si existe la columna.
+    for (const cols of ['diagnostico_definitivo, cirugia_realizada, complicaciones, origen_registro', 'diagnostico_definitivo, cirugia_realizada, complicaciones', 'origen_registro']) {
+      const cierre = await supabase.from('agenda_cirugias').select(cols).eq('id', id).maybeSingle();
+      if (!cierre.error) {
+        if (cierre.data) Object.assign(cirugia, cierre.data);
+        break;
+      }
+    }
     // Teléfonos del paciente para WhatsApp (varios números, mig. 1800000000470).
     const pacienteId = cirugia.paciente_id as string | null;
     if (pacienteId && cirugia.pacientes && typeof cirugia.pacientes === 'object') {

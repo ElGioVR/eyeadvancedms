@@ -330,6 +330,52 @@ async function main() {
     assert.equal(c.diagnostico, 'Catarata senil');
   });
 
+  // ───────────── 8. Excel real: historial, anestesiólogo y origen (16 oct) ─────────────
+  await prueba('8. Import Excel', 'Cirugía con fecha pasada entra como completada (historial) sin pendientes ni inventario', async () => {
+    sesion.rol = 'admin';
+    db.agenda_cirugias = []; db.cirugia_lentes = []; db.cirugia_participantes = []; db.agenda_cirugia_doctores = [];
+    db.doctores = [
+      { id: U(150), alias: 'DR BAYARDO GARZA', activo: true, tipo_personal: 'MEDICO' },
+      { id: U(151), alias: 'DRA CRYSTAL', nombre: 'Crystal Ruiz', activo: true, tipo_personal: 'ANESTESIOLOGO' },
+    ];
+    db.cat_roles_participante = [{ id: U(160), clave: 'cirujano' }, { id: U(161), clave: 'anestesiologo' }];
+    const H = 'FECHA,NOMBRE PX,No. Exp,HORA CX,CIRUGÍA,OJO,LIO,CIRUJANO,ANESTESIA';
+    const csv8 = [H,
+      '2026-08-01,Ana Pasado Uno,7001,08:00,FACO + LIO,OD,22.5 CLAREON,BAYARDO,CRYSTAL',
+      '2030-01-10,Beto Futuro Dos,7002,,FACO + LIO,OI,21.0 CLAREON,BAYARDO,CYNTAR',
+    ].join('\n');
+    const r = await importarCx(csv8, true, false);
+    const pasada = db.agenda_cirugias.find((c) => c.nombre_paciente === 'Ana Pasado Uno')!;
+    const futura = db.agenda_cirugias.find((c) => c.nombre_paciente === 'Beto Futuro Dos')!;
+    assert.equal(pasada.estado, 'completada');
+    assert.equal(pasada.cirugia_realizada, 'FACO + LIO');
+    assert.equal(futura.estado, 'agendada');
+    const lp = db.cirugia_lentes.filter((l) => l.cirugia_id === pasada.id);
+    assert.equal(lp.length, 1);
+    assert.equal(lp[0].modo, 'SIN_TRAMITE');
+    assert.equal(lp[0].estado, 'USADO');
+    assert.equal(lp[0].inventario_item_id, null);
+    assert.ok(r.avisos.some((a: string) => /CYNTAR/.test(a)), 'avisa del anestesiólogo no registrado');
+  });
+  await prueba('8. Import Excel', 'CRYSTAL (registrado) queda como anestesiólogo y el cirujano entra al equipo', () => {
+    const pasada = db.agenda_cirugias.find((c) => c.nombre_paciente === 'Ana Pasado Uno')!;
+    const eq = db.cirugia_participantes.filter((p) => p.cirugia_id === pasada.id);
+    assert.ok(eq.some((p) => p.medico_id === U(151) && p.rol_id === U(161)));
+    assert.ok(eq.some((p) => p.medico_id === U(150) && p.rol_id === U(160)));
+    const futura = db.agenda_cirugias.find((c) => c.nombre_paciente === 'Beto Futuro Dos')!;
+    assert.match(String(futura.notas), /CYNTAR/);
+  });
+  await prueba('8. Import Excel', 'Todo lo importado lleva el origen «IMPORTACION»', () => {
+    assert.ok(db.agenda_cirugias.length >= 2 && db.agenda_cirugias.every((c) => c.origen_registro === 'IMPORTACION'));
+  });
+  await prueba('8. Import Excel', 'Sin anestesia ya no es pendiente; sin hora sí', async () => {
+    const { faltantesCirugia } = await import('@/lib/por-completar');
+    const futura = db.agenda_cirugias.find((c) => c.nombre_paciente === 'Beto Futuro Dos')!;
+    const f = faltantesCirugia({ ...futura, lentes: db.cirugia_lentes.filter((l) => l.cirugia_id === futura.id) as any });
+    assert.ok(!f.faltan.includes('anestesia'));
+    assert.ok(f.faltan.includes('hora'));
+  });
+
   // ───────────── Reporte ─────────────
   const fallas = resultados.filter((r) => !r.ok);
   for (const r of resultados) console.log(`${r.ok ? 'PASA' : 'FALLA'} | ${r.punto} | ${r.prueba}${r.error ? ` → ${r.error}` : ''}`);

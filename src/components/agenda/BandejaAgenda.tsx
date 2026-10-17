@@ -318,7 +318,8 @@ export default function BandejaAgenda({
   const listaCompletar = (pendCompletar.data?.data ?? [])
     .filter((c) => !estadoCerrado(c.estado))
     .map((c) => ({ c, ...faltantesCirugia(c) }))
-    .filter((x) => x.faltan.length > 0 || x.info.length > 0)
+    // Solo lo que tiene datos faltantes; los lentes por solicitar/comprar se siguen en Inventario → Plan de resurtimiento.
+    .filter((x) => x.faltan.length > 0)
     .sort((a, b) => (a.c.fecha || '9999').localeCompare(b.c.fecha || '9999'));
   const listaConsultas = (pendConsultas.data?.data ?? []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
   const urgentes = porCerrar.length;
@@ -489,7 +490,7 @@ export default function BandejaAgenda({
                 <>
                   {pestana === 'completar' && (
                     <div className="space-y-3">
-                      <p className="text-xs text-muted">Cirugías y consultas con datos faltantes (hora, ojo, anestesia, lente…) y lentes por solicitar o comprar. Entra a cada una para completarla.</p>
+                      <p className="text-xs text-muted">Cirugías y consultas con datos faltantes (hora, ojo, lente…) y lentes por solicitar o comprar. Entra a cada una para completarla.</p>
                       {(pendCompletar.error || pendConsultas.error) && <p className="py-3 text-center text-sm text-red-600">No se pudo cargar parte de la lista. Intenta de nuevo.</p>}
                       {pendCompletar.data && pendConsultas.data && listaCompletar.length === 0 && listaConsultas.length === 0 && <p className="py-12 text-center text-sm text-muted">No hay cirugías ni consultas por completar.</p>}
                       {listaCompletar.length > 0 && <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Cirugías ({listaCompletar.length})</p>}

@@ -11,9 +11,9 @@ test('requiereLente: facoemulsificación, +LIO y catarata; vitrectomía sola no'
   assert.equal(requiereLente(null), false);
 });
 
-test('cirugía agendada sin hora, anestesia ni lente', () => {
+test('cirugía agendada sin hora ni lente (la anestesia ya no cuenta como pendiente)', () => {
   const r = faltantesCirugia({ ...lente(), fecha: '2026-10-20', hora: null, ojo: 'OD', procedimiento: 'FACO+LIO', anestesia: null, lio: '22.5', lentes: [] });
-  assert.deepEqual(r.faltan, ['hora', 'anestesia', 'lente']);
+  assert.deepEqual(r.faltan, ['hora', 'lente']);
   assert.match(r.detalleLente[0], /marca/);
 });
 

@@ -57,10 +57,17 @@ async function manejarGET(_request: Request, { params }: { params: Promise<{ id:
     const qxIds = (qx.data ?? []).map((x: { catalogo_quirurgico_id: string }) => x.catalogo_quirurgico_id);
     if (qxIds.length === 0 && cirugia.catalogo_quirurgico_id) qxIds.push(cirugia.catalogo_quirurgico_id as string);
 
+    // Cirugías importadas antes del equipo homologado: el cirujano solo está en doctor_id.
+    let equipo = (participantes.data ?? []) as Array<{ medico_id: string; rol_id: string; hora_inicio: string | null; hora_fin: string | null }>;
+    if (equipo.length === 0 && cirugia.doctor_id) {
+      const { data: rol } = await supabase.from('cat_roles_participante').select('id').eq('clave', 'cirujano').maybeSingle();
+      if (rol?.id) equipo = [{ medico_id: cirugia.doctor_id as string, rol_id: rol.id as string, hora_inicio: null, hora_fin: null }];
+    }
+
     return {
       cirugia,
       paciente: paciente ?? { id: cirugia.paciente_id, nombre_completo: cirugia.nombre_paciente, telefono: null, email: null },
-      participantes: participantes.data ?? [],
+      participantes: equipo,
       personal: personal.data ?? [],
       qx_ids: qxIds,
       lentes: lentes.data ?? [],

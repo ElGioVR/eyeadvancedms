@@ -13,8 +13,8 @@ import { ruta } from '@/lib/api/ruta';
 import { enSegundoPlano } from '@/lib/segundo-plano';
 import { detalleEvento } from '@/lib/bandeja-agenda';
 
-interface DatosConfirmacion { confirmacion: string | null; confirmacion_medio: string | null; confirmacion_at: string | null }
-const SIN_CONFIRMACION: DatosConfirmacion = { confirmacion: null, confirmacion_medio: null, confirmacion_at: null };
+interface DatosConfirmacion { confirmacion: string | null; confirmacion_medio: string | null; confirmacion_at: string | null; origen_registro: string | null }
+const SIN_CONFIRMACION: DatosConfirmacion = { confirmacion: null, confirmacion_medio: null, confirmacion_at: null, origen_registro: null };
 
 /** Lee la confirmación de las citas por id; si faltan columnas, degrada sin romper la agenda. */
 async function leerConfirmaciones(
@@ -24,7 +24,8 @@ async function leerConfirmaciones(
 ): Promise<Map<string, DatosConfirmacion>> {
   const mapa = new Map<string, DatosConfirmacion>();
   if (ids.length === 0) return mapa;
-  for (const columnas of ['id, confirmacion, confirmacion_medio, confirmacion_at', 'id, confirmacion, confirmacion_at']) {
+  // También el origen del registro (import masivo / agenda); cada columna faltante degrada sin romper.
+  for (const columnas of ['id, confirmacion, confirmacion_medio, confirmacion_at, origen_registro', 'id, confirmacion, confirmacion_medio, confirmacion_at', 'id, confirmacion, confirmacion_at', 'id, origen_registro']) {
     let ok = true;
     for (let i = 0; i < ids.length; i += 200) {
       const { data, error } = await supabase.from(tabla).select(columnas).in('id', ids.slice(i, i + 200));
@@ -34,6 +35,7 @@ async function leerConfirmaciones(
           confirmacion: f.confirmacion ?? null,
           confirmacion_medio: f.confirmacion_medio ?? null,
           confirmacion_at: f.confirmacion_at ?? null,
+          origen_registro: f.origen_registro ?? null,
         });
       }
     }

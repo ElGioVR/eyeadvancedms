@@ -170,7 +170,7 @@ export interface PiezaInventario {
 
 export interface LentePlanImport {
   orden: LenteImport['orden'];
-  modo: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA';
+  modo: 'ASIGNAR' | 'SOLICITAR' | 'COMPRA_DIRECTA' | 'SIN_TRAMITE';
   torico: boolean;
   marca: boolean;
   fabricante: string | null;
@@ -245,5 +245,5 @@ export function planificarLentes(
 }
 
 export function etiquetaModoLente(m: LentePlanImport['modo']): string {
-  return m === 'ASIGNAR' ? 'Asignar' : m === 'SOLICITAR' ? 'Solicitar' : 'Compra directa';
+  return m === 'ASIGNAR' ? 'Asignar' : m === 'SOLICITAR' ? 'Solicitar' : m === 'SIN_TRAMITE' ? 'Solo registro (historial)' : 'Compra directa';
 }

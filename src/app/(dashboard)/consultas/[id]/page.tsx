@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Printer, Edit3, Clock, CheckCircle2, AlertCircle, FileText, Stethoscope, Calendar, CreditCard, Activity, Shield, Scissors, CalendarPlus, Loader2, Banknote } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import EtiquetaOrigenRegistro from '@/components/ui/EtiquetaOrigenRegistro';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
@@ -366,7 +367,7 @@ export default function ConsultaDetailPage() {
       <BarraRevalidando activo={validandoDetalle} className="-top-2 no-print" />
       <PageHeader
         title={`Consulta ${consulta.folio || consulta.id.slice(0, 8)}`}
-        subtitle={consulta.fecha}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-2">{consulta.fecha}<EtiquetaOrigenRegistro origen={(consulta as { origen_registro?: string | null }).origen_registro} /></span>}
         backLink={{ href: '/agenda', label: 'Agenda' }}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
