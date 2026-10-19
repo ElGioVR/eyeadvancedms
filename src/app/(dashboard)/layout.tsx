@@ -1,7 +1,7 @@
 'use client';
 
 import { RutaNavegacionProvider } from '@/components/layout/RutaNavegacion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
@@ -20,6 +20,16 @@ export default function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+
+  // Escritorio mediano (1280–1535 px): el menú arranca colapsado para dar más espacio al contenido.
+  // Desde 1536 px se expande. Al cruzar el umbral se reajusta; el usuario puede alternarlo a mano.
+  useEffect(() => {
+    const amplio = window.matchMedia('(min-width: 1536px)');
+    setSidebarCollapsed(!amplio.matches);
+    const alCambiar = (e: MediaQueryListEvent) => setSidebarCollapsed(!e.matches);
+    amplio.addEventListener('change', alCambiar);
+    return () => amplio.removeEventListener('change', alCambiar);
+  }, []);
 
   return (
     <ToastProvider>

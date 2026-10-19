@@ -228,10 +228,13 @@ function useCampoEditable(
 
   const props = {
     value: texto ?? original,
-    onChange: (e: ChangeEvent<HTMLInputElement>) => setTexto(e.target.value),
+    onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setTexto(e.target.value),
     onBlur: () => void confirmar(),
-    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') e.currentTarget.blur();
+    onKeyDown: (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault(); // en textarea evita el salto de línea: Enter guarda
+        e.currentTarget.blur();
+      }
       if (e.key === 'Escape') {
         cancelado.current = true;
         e.currentTarget.blur();
@@ -241,9 +244,17 @@ function useCampoEditable(
   return { props, guardando, ok };
 }
 
-function Indicador({ guardando, ok }: { guardando: boolean; ok: boolean }) {
+function Indicador({ guardando, ok, flotante = false }: { guardando: boolean; ok: boolean; flotante?: boolean }) {
   return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-live="polite">
+    <span
+      className={cn(
+        'flex h-4 w-4 shrink-0 items-center justify-center',
+        // Flotante: no reserva espacio en la fila; aparece como insignia sobre la esquina del campo.
+        flotante && 'pointer-events-none absolute -right-1 -top-1 rounded-full bg-surface',
+        flotante && !guardando && !ok && 'hidden',
+      )}
+      aria-live="polite"
+    >
       {guardando ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" aria-label="Guardando" />
       ) : ok ? (
@@ -267,10 +278,18 @@ function TextoEditable({
 }) {
   const { props, guardando, ok } = useCampoEditable(valor, onGuardar);
   return (
-    <>
-      <input type="text" maxLength={255} aria-label={etiqueta} title={props.value} {...props} className={cn(CAMPO_BASE, 'min-w-0 flex-1')} />
-      <Indicador guardando={guardando} ok={ok} />
-    </>
+    <span className="relative flex min-w-0 flex-1">
+      {/* textarea de una línea que crece con el texto: los nombres largos se leen completos en vez de cortarse */}
+      <textarea
+        rows={1}
+        maxLength={255}
+        aria-label={etiqueta}
+        title={props.value}
+        {...props}
+        className={cn(CAMPO_BASE, 'block w-full min-w-0 resize-none overflow-hidden break-words leading-5 [field-sizing:content]')}
+      />
+      <Indicador guardando={guardando} ok={ok} flotante />
+    </span>
   );
 }
 
@@ -285,7 +304,7 @@ function CostoEditable({
 }) {
   const { props, guardando, ok } = useCampoEditable(String(Number(valor) || 0), onGuardar);
   return (
-    <span className="flex shrink-0 items-center gap-1 text-sm text-gray-500">
+    <span className="relative flex shrink-0 items-center gap-0.5 text-sm text-gray-500">
       $
       <input
         type="number"
@@ -295,9 +314,9 @@ function CostoEditable({
         aria-label={etiqueta}
         onFocus={(e) => e.currentTarget.select()}
         {...props}
-        className={cn(CAMPO_BASE, 'w-24 text-right')}
+        className={cn(CAMPO_BASE, 'w-20 px-1.5 text-right tabular-nums [field-sizing:content] supports-[field-sizing:content]:w-auto supports-[field-sizing:content]:min-w-[3.5rem] supports-[field-sizing:content]:max-w-[8rem]')}
       />
-      <Indicador guardando={guardando} ok={ok} />
+      <Indicador guardando={guardando} ok={ok} flotante />
     </span>
   );
 }
@@ -585,7 +604,7 @@ const FilaQuirurgica = memo(function FilaQuirurgica({
         aria-label={`Ojo de ${item.nombre}`}
         value={item.ojo ?? ''}
         onChange={(e) => void onGuardar(item, { ojo: e.target.value === '' ? null : e.target.value })}
-        className="shrink-0 rounded-md border border-line bg-transparent px-2 py-1 text-xs text-gray-600"
+        className="shrink-0 rounded-md border border-line bg-transparent py-1 pl-2 pr-1 text-xs text-gray-600 [field-sizing:content]"
       >
         <option value="">Sin ojo</option>
         <option value="OD">OD</option>
@@ -618,12 +637,12 @@ interface PropsFilaServicio {
 
 const FilaServicio = memo(function FilaServicio({ s, nombreAseguradora, duplicado, onGuardarServicio, onGuardarCosto, onQuitar }: PropsFilaServicio) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1.5 dark:bg-gray-800/60">
+    <div className="flex items-center gap-1 rounded-lg bg-gray-50 px-1.5 py-1.5 dark:bg-gray-800/60 sm:gap-1.5 sm:px-2">
       <select
         aria-label={`Tipo de ${s.nombre} en ${nombreAseguradora}`}
         value={s.tipo}
         onChange={(e) => void onGuardarServicio(s, { tipo: e.target.value })}
-        className={cn('shrink-0 rounded-full border-0 px-2 py-0.5 text-[11px] font-semibold', COLOR_SERVICIO[s.tipo])}
+        className={cn('max-w-[7.5rem] shrink-0 rounded-full border-0 py-0.5 pl-2 pr-1 text-[11px] font-semibold [field-sizing:content]', COLOR_SERVICIO[s.tipo])}
       >
         {TIPOS.map((t) => (
           <option key={t} value={t}>
@@ -1756,7 +1775,7 @@ export default function ConceptosPage() {
                 : 'Marca varios o arrastra ⋮⋮ a una aseguradora. El precio de la copia es independiente.'}
             </p>
           </div>
-          <div role="tablist" aria-label="Tipo de concepto" className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+          <div role="tablist" aria-label="Tipo de concepto" className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
             {PESTANAS.map((p) => {
               const activa = p.clave === pestana;
               return (
@@ -1772,12 +1791,12 @@ export default function ConceptosPage() {
                     setAgregando(false);
                   }}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-semibold transition-colors',
+                    'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-semibold transition-colors',
                     activa ? 'bg-white text-fg shadow-sm dark:bg-gray-900' : 'text-gray-500 hover:text-gray-700',
                   )}
                 >
-                  {p.etiqueta}
-                  <span className="rounded-full bg-gray-200 px-1.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                  <span className="truncate">{p.etiqueta}</span>
+                  <span className="shrink-0 rounded-full bg-gray-200 px-1.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                     {conteoPestana(p.clave)}
                   </span>
                 </button>
@@ -1973,7 +1992,7 @@ export default function ConceptosPage() {
       </div>
 
       {cargando ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]" aria-busy="true">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:gap-6 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]" aria-busy="true">
           <div className="h-96 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
           <div className="space-y-3">
             {[0, 1, 2, 3].map((i) => (
@@ -1982,7 +2001,7 @@ export default function ConceptosPage() {
           </div>
         </div>
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:gap-6 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
           {renderPanelIzquierdo()}
 
           <section className="space-y-3">
