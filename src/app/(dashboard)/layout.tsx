@@ -22,6 +22,16 @@ export default function DashboardLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
+  // Llegada desde la bienvenida: <html> trae .app-entrando (lo pone la bienvenida
+  // justo antes de navegar) → el velo «abre los párpados» y el panel entra
+  // escalonado. Se quita al terminar para que no se repita al navegar.
+  useEffect(() => {
+    const html = document.documentElement;
+    if (!html.classList.contains('app-entrando')) return;
+    const t = window.setTimeout(() => html.classList.remove('app-entrando'), 1700);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // Escritorio mediano (1280–1535 px): el menú arranca colapsado para dar más espacio al contenido.
   // Desde 1536 px se expande. Al cruzar el umbral se reajusta; el usuario puede alternarlo a mano.
   useEffect(() => {
@@ -36,7 +46,13 @@ export default function DashboardLayout({
     <ToastProvider>
       <PestanaUnica>
         <RutaNavegacionProvider>
-        <div className="min-h-screen flex bg-canvas">
+        <div className="app-shell min-h-screen flex bg-canvas">
+          {/* Velo de entrada (solo visible con html.app-entrando) */}
+          <div aria-hidden className="app-entrada-velo">
+            <div className="app-velo-tapa app-velo-tapa--sup welcome-bg" />
+            <div className="app-velo-tapa app-velo-tapa--inf welcome-bg" />
+            <div className="app-velo-linea" />
+          </div>
           <Sidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -46,7 +62,7 @@ export default function DashboardLayout({
 
           <div
             className={cn(
-              'flex-1 flex flex-col min-w-0 transition-[margin] duration-300',
+              'app-shell-columna flex-1 flex flex-col min-w-0 transition-[margin] duration-300',
               'lg:ml-[76px] print:!ml-0',
               sidebarCollapsed ? 'xl:ml-[76px]' : 'xl:ml-[272px]'
             )}

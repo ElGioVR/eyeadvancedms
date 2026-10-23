@@ -185,7 +185,29 @@ export default function BienvenidaPage() {
       navegoRef.current = true;
       setProgreso(1);
       setSaliendo(true);
-      setTimeout(() => router.replace(destino), 280);
+      const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const alPanel = destino !== '/login' && !reducido;
+      if (alPanel) {
+        // Salida conectada con el panel: el ojo baja al centro y se cierra en una
+        // línea de luz; el layout del panel arranca con esa misma línea y «abre
+        // los párpados» (ver .app-entrada-velo en globals.css).
+        const el = ojoRef.current;
+        if (el && typeof el.animate === 'function') {
+          const r = el.getBoundingClientRect();
+          const dy = window.innerHeight / 2 - (r.top + r.height / 2);
+          el.style.animation = 'none';
+          el.animate(
+            [
+              { transform: 'translateY(0) scale(1, 1)', opacity: 1 },
+              { transform: `translateY(${dy * 0.85}px) scale(1.15, 1)`, opacity: 1, offset: 0.55 },
+              { transform: `translateY(${dy}px) scale(1.6, 0.04)`, opacity: 0.9 },
+            ],
+            { duration: 560, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', fill: 'forwards' },
+          );
+        }
+        document.documentElement.classList.add('app-entrando');
+      }
+      setTimeout(() => router.replace(destino), alPanel ? 700 : 280);
       // Red de seguridad: si la navegación del cliente no termina (en desarrollo la
       // primera compilación del panel puede tardar o fallar) la pantalla quedaba en
       // negro sobre /bienvenida. Pasados 6 s se hace una navegación completa.
@@ -292,11 +314,10 @@ export default function BienvenidaPage() {
 
   return (
     <div
-      className={cn(
-        'welcome-bg relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden transition-opacity duration-300',
-        saliendo && 'opacity-0',
-      )}
+      className="welcome-bg relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden"
     >
+      {/* Línea de luz en la que se cierra el ojo al entrar al panel */}
+      {saliendo && <span aria-hidden className="welcome-linea z-10" />}
       {/* Luces ambientales */}
       {/* Degradados radiales en vez de `blur-3xl`: en iOS Safari un filter: blur()
           animado debajo del texto deja recuadros oscuros alrededor de cada línea. */}
@@ -311,10 +332,12 @@ export default function BienvenidaPage() {
       <div className="relative flex flex-col items-center px-6">
         {/* Ojo + ondas */}
         <div className="relative flex h-48 w-48 items-center justify-center sm:h-60 sm:w-60">
-          <span className="welcome-ring" />
-          <span className="welcome-ring" style={{ animationDelay: '0.9s' }} />
-          <span className="welcome-ring" style={{ animationDelay: '1.8s' }} />
-          <span className="welcome-halo absolute inset-6 rounded-full" />
+          <div className={cn('absolute inset-0', saliendo && 'welcome-salida-contenido')}>
+            <span className="welcome-ring" />
+            <span className="welcome-ring" style={{ animationDelay: '0.9s' }} />
+            <span className="welcome-ring" style={{ animationDelay: '1.8s' }} />
+            <span className="welcome-halo absolute inset-6 rounded-full" />
+          </div>
 
           <div ref={ojoRef} className="welcome-eye relative h-28 w-28 sm:h-32 sm:w-32">
             <img
@@ -327,7 +350,8 @@ export default function BienvenidaPage() {
           </div>
         </div>
 
-        <div className="welcome-fade mt-4 flex flex-col items-center gap-5 text-center" style={{ animationDelay: '0.6s' }}>
+        <div className={cn('mt-4', saliendo && 'welcome-salida-contenido')}>
+        <div className="welcome-fade flex flex-col items-center gap-5 text-center" style={{ animationDelay: '0.6s' }}>
           <div>
             {/* Palabra por palabra; el nombre entra cuando llega el perfil */}
             <p className="text-lg font-semibold tracking-tight text-white sm:text-xl">
@@ -407,10 +431,14 @@ export default function BienvenidaPage() {
             ¿Tarda mucho? Entrar ahora
           </button>
         </div>
+        </div>
       </div>
 
       <p
-        className="welcome-fade absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] text-[11px] font-medium uppercase tracking-[0.25em] text-white/35"
+        className={cn(
+          'absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] text-[11px] font-medium uppercase tracking-[0.25em] text-white/35',
+          saliendo ? 'welcome-salida-contenido' : 'welcome-fade',
+        )}
         style={{ animationDelay: '1s' }}
       >
         EyeAdvanced · Medical Solutions
