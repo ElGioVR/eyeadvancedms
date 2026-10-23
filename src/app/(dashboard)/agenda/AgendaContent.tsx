@@ -4,6 +4,7 @@ import { Doctor, toDateStr, rangoVista, urlAgenda, desplazarVista, aplicarCambio
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { agendaSoloPropia, puedeFiltrarSoloMio, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { useEspecialidades } from '@/hooks/useEspecialidades';
+import { useUser } from '@/hooks/useUser';
 import { type AgendaCirugia, type AgendaCirugiaEstado } from '@/types';
 import { useRouter } from 'next/navigation';
 import { type AccionRapida, accionesConConfirmar, AccionRapidaModal, AgendarRapidoModal } from '@/components/agenda/AccionesRapidasAgenda';
@@ -238,7 +239,8 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   }, []);
 
   const paramsPara = useCallback((d: Date): Record<string, string> => {
-    const p: Record<string, string> = { ...rangoVista(calendarView, d), pageSize: '500' };
+    // Rango completo en una página (antes 500: en meses llenos se perdían los últimos días).
+    const p: Record<string, string> = { ...rangoVista(calendarView, d), pageSize: '5000' };
     if (filterDoctor) p.doctorId = filterDoctor;
     if (searchQuery) p.search = searchQuery;
     return p;
@@ -247,7 +249,20 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
   const fetchParams = paramsPara(currentDate);
   const { fechaDesde, fechaHasta } = fetchParams;
 
-  const { data: cirugias, loading, validating, refetch: refetchAgenda, mutate: mutateAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams, { refreshInterval: REFRESCO_COMPARTIDO_MS });
+  const { data: cirugias, total: totalAgenda, loading, validating, refetch: refetchAgenda, mutate: mutateAgenda } = useFetch<AgendaCirugia>('/api/agenda', fetchParams, { refreshInterval: REFRESCO_COMPARTIDO_MS });
+  // Si el servidor tiene más citas de las que llegaron, se avisa en vez de ocultarlas en silencio.
+  const agendaIncompleta = !loading && totalAgenda > cirugias.length;
+  // Admin con «modo focus» y ficha de doctor: el servidor solo devuelve SUS citas.
+  // Se avisa en la agenda (antes parecía que «faltaban» pacientes).
+  const { user: usuarioSesion } = useUser();
+  const [modoFocus, setModoFocus] = useState(false);
+  useEffect(() => { setModoFocus(usuarioSesion?.modo_focus === true); }, [usuarioSesion]);
+  useEffect(() => {
+    const onCambio = (e: Event) => setModoFocus((e as CustomEvent<boolean>).detail === true);
+    window.addEventListener('modo-focus-changed', onCambio);
+    return () => window.removeEventListener('modo-focus-changed', onCambio);
+  }, []);
+  const agendaEnFocus = userRol === 'admin' && !!usuarioSesion?.doctor_id && modoFocus;
   const urlActual = urlAgenda(fetchParams);
   const invalidar = useInvalidar();
   const { cache } = useSWRConfig();
@@ -660,6 +675,16 @@ export default function AgendaContent({ userRol, doctores, userId, initialDate }
           }
         />
 
+        {agendaEnFocus && (
+          <p role="status" className="mb-2 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-800 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300">
+            Modo focus activo: solo ves tus propias citas. Desactívalo en la barra superior para ver la agenda completa.
+          </p>
+        )}
+        {agendaIncompleta && (
+          <p role="alert" className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+            Se muestran {cirugias.length} de {totalAgenda} eventos de este periodo. Cambia a vista semana o día, o filtra por doctor, para ver todos.
+          </p>
+        )}
         {/* Resumen de eventos */}
         <ResumenAgenda
           items={[

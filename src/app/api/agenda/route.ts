@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { ruta } from '@/lib/api/ruta';
 import { enSegundoPlano } from '@/lib/segundo-plano';
 import { detalleEvento } from '@/lib/bandeja-agenda';
+import { LOTE_FILAS, MAX_FILAS_FUENTE, leerPorLotes } from '@/lib/supabase/leer-por-lotes';
 
 interface DatosConfirmacion { confirmacion: string | null; confirmacion_medio: string | null; confirmacion_at: string | null; origen_registro: string | null }
 const SIN_CONFIRMACION: DatosConfirmacion = { confirmacion: null, confirmacion_medio: null, confirmacion_at: null, origen_registro: null };
@@ -27,8 +28,11 @@ async function leerConfirmaciones(
   // También el origen del registro (import masivo / agenda); cada columna faltante degrada sin romper.
   for (const columnas of ['id, confirmacion, confirmacion_medio, confirmacion_at, origen_registro', 'id, confirmacion, confirmacion_medio, confirmacion_at', 'id, confirmacion, confirmacion_at', 'id, origen_registro']) {
     let ok = true;
-    for (let i = 0; i < ids.length; i += 200) {
-      const { data, error } = await supabase.from(tabla).select(columnas).in('id', ids.slice(i, i + 200));
+    // Lotes de 200 ids en paralelo (con miles de citas en serie era lento).
+    const lotes: string[][] = [];
+    for (let i = 0; i < ids.length; i += 200) lotes.push(ids.slice(i, i + 200));
+    const respuestas = await Promise.all(lotes.map((lote) => supabase.from(tabla).select(columnas).in('id', lote)));
+    for (const { data, error } of respuestas) {
       if (error) { ok = false; mapa.clear(); break; }
       for (const f of (data || []) as unknown as Array<Record<string, string | null>>) {
         mapa.set(f.id as string, {
@@ -99,15 +103,15 @@ const ESTADO_CONSULTA_A_AGENDA: Record<string, string> = {
 
 /** Rango máximo (días) que puede pedir el calendario/productividad sin búsqueda. */
 const MAX_DIAS_RANGO = 731; // igual que los reportes de productividad (DoctorDetalle)
-/** Tope de filas por fuente (cirugías / consultas) antes de fusionar y paginar. */
-const MAX_FILAS_FUENTE = 2000;
+/** Tope de eventos por respuesta (el calendario pide el rango completo en una página). */
+const MAX_PAGE_SIZE = 5000;
 
 const ESTADOS_AGENDA = ['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada'] as const;
 
 const agendaQuerySchema = z.object({
   page: z.coerce.number().int().catch(1).transform((n) => Math.min(100_000, Math.max(1, n))),
-  // El front pide 500; valores mayores se recortan (antes: Math.min(500, …)).
-  pageSize: z.coerce.number().int().catch(50).transform((n) => Math.min(500, Math.max(1, n))),
+  // El calendario pide el rango completo (antes se recortaba a 500 y se perdían citas).
+  pageSize: z.coerce.number().int().catch(50).transform((n) => Math.min(MAX_PAGE_SIZE, Math.max(1, n))),
   fechaDesde: fechaISO.optional(),
   fechaHasta: fechaISO.optional(),
   doctorId: uuid.optional(),
@@ -190,86 +194,107 @@ async function manejarGET(request: Request) {
 
 
   // ── Cirugías ──
-  let queryCirugias = supabase
-    .from('agenda_cirugias')
-    .select(`
-      id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
-      procedimiento, procedencia, tiempo_estimado, ojo, diagnostico, notas,
-      doctores:doctor_id (alias),
-      paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
-      origen:origen_id (nombre),
-      servicio:servicio_id (nombre)
-    `);
-
-  if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
-  if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
+  // Equipo de la persona filtrada (cirujano principal o participante: anestesiólogo,
+  // instrumentista, enfermero, circulante…). Se resuelve antes de armar la consulta.
   // Enfermería ve todas las cirugías (solo se marcan las suyas); el filtro de doctor aplica a los demás.
   const doctorFiltroCirugias = propia ? null : doctorFiltro;
+  let idsParticipacion: string[] = [];
   if (doctorFiltroCirugias) {
-    // Ocupación completa de la persona: cirugías como cirujano principal o como
-    // participante del equipo (anestesiólogo, instrumentista, enfermero, circulante…).
-    let qPart = supabase
-      .from('cirugia_participantes')
-      .select('cirugia_id, agenda_cirugias!inner(fecha)')
-      .eq('medico_id', doctorFiltro)
-      .limit(MAX_FILAS_FUENTE);
-    if (fechaDesde) qPart = qPart.gte('agenda_cirugias.fecha', fechaDesde);
-    if (fechaHasta) qPart = qPart.lte('agenda_cirugias.fecha', fechaHasta);
-    const { data: participaciones } = await qPart;
-    const ids = Array.from(new Set((participaciones || []).map((p: { cirugia_id: string }) => p.cirugia_id)));
-    queryCirugias = ids.length
-      ? queryCirugias.or(`doctor_id.eq.${doctorFiltro},id.in.(${ids.join(',')})`)
-      : queryCirugias.eq('doctor_id', doctorFiltro);
+    const { data: participaciones } = await leerPorLotes<{ cirugia_id: string }>(() => {
+      let qPart = supabase
+        .from('cirugia_participantes')
+        .select('cirugia_id, agenda_cirugias!inner(fecha)')
+        .eq('medico_id', doctorFiltroCirugias)
+        .order('cirugia_id', { ascending: true });
+      if (fechaDesde) qPart = qPart.gte('agenda_cirugias.fecha', fechaDesde);
+      if (fechaHasta) qPart = qPart.lte('agenda_cirugias.fecha', fechaHasta);
+      return qPart;
+    });
+    idsParticipacion = Array.from(new Set(participaciones.map((p) => p.cirugia_id)));
   }
-  if (estado) queryCirugias = queryCirugias.eq('estado', estado);
-  if (searchSeguro) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${searchSeguro}%,expediente.ilike.%${searchSeguro}%`);
+
+  // Cada lote necesita un builder nuevo (los builders de supabase-js acumulan filtros).
+  const construirCirugias = () => {
+    let queryCirugias = supabase
+      .from('agenda_cirugias')
+      .select(`
+        id, paciente_id, nombre_paciente, expediente, fecha, hora, doctor_id, estado,
+        procedimiento, procedencia, tiempo_estimado, ojo, diagnostico, notas,
+        doctores:doctor_id (alias),
+        paciente:paciente_id (sexo, fecha_nacimiento, edad, numero_expediente),
+        origen:origen_id (nombre),
+        servicio:servicio_id (nombre)
+      `);
+    if (fechaDesde) queryCirugias = queryCirugias.gte('fecha', fechaDesde);
+    if (fechaHasta) queryCirugias = queryCirugias.lte('fecha', fechaHasta);
+    if (doctorFiltroCirugias) {
+      queryCirugias = idsParticipacion.length
+        ? queryCirugias.or(`doctor_id.eq.${doctorFiltroCirugias},id.in.(${idsParticipacion.join(',')})`)
+        : queryCirugias.eq('doctor_id', doctorFiltroCirugias);
+    }
+    if (estado) queryCirugias = queryCirugias.eq('estado', estado);
+    if (searchSeguro) queryCirugias = queryCirugias.or(`nombre_paciente.ilike.%${searchSeguro}%,expediente.ilike.%${searchSeguro}%`);
+    // Orden total (id desempata): sin él, los lotes por rango pueden repetir u omitir filas.
+    return queryCirugias
+      .order('fecha', { ascending: true })
+      .order('hora', { ascending: true })
+      .order('id', { ascending: true });
+  };
 
   // ── Consultas ──
-  let queryConsultas = supabase
-    .from('consultas')
-    .select(`
-      id,
-      paciente_id,
-      doctor_id,
-      fecha,
-      hora_inicio,
-      tipo_consulta,
-      tipo_visita,
-      estatus,
-      estudio_1,
-      estudio_2,
-      estudio_3,
-      procedimiento,
-      notas,
-      doctores:doctor_id (alias),
-      especialidad:especialidad_id (nombre),
-      pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente)
-    `);
-
-  if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
-  if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
-  // Consultas propias y estudios asignados a la persona (p. ej. enfermería con honorarios).
-  if (doctorFiltro) {
-    queryConsultas = queryConsultas.or(
-      `doctor_id.eq.${doctorFiltro},estudio_1_doctor_id.eq.${doctorFiltro},estudio_2_doctor_id.eq.${doctorFiltro},estudio_3_doctor_id.eq.${doctorFiltro}`
-    );
-  }
-  // Con `!inner` el filtro sobre pacientes sí reduce las consultas.
-  if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
+  const construirConsultas = () => {
+    let queryConsultas = supabase
+      .from('consultas')
+      .select(`
+        id,
+        paciente_id,
+        doctor_id,
+        fecha,
+        hora_inicio,
+        tipo_consulta,
+        tipo_visita,
+        estatus,
+        estudio_1,
+        estudio_2,
+        estudio_3,
+        procedimiento,
+        notas,
+        doctores:doctor_id (alias),
+        especialidad:especialidad_id (nombre),
+        pacientes:paciente_id${searchSeguro ? '!inner' : ''} (nombre_completo, sexo, fecha_nacimiento, edad, numero_expediente)
+      `);
+    if (fechaDesde) queryConsultas = queryConsultas.gte('fecha', fechaDesde);
+    if (fechaHasta) queryConsultas = queryConsultas.lte('fecha', fechaHasta);
+    // Consultas propias y estudios asignados a la persona (p. ej. enfermería con honorarios).
+    if (doctorFiltro) {
+      queryConsultas = queryConsultas.or(
+        `doctor_id.eq.${doctorFiltro},estudio_1_doctor_id.eq.${doctorFiltro},estudio_2_doctor_id.eq.${doctorFiltro},estudio_3_doctor_id.eq.${doctorFiltro}`
+      );
+    }
+    // Con `!inner` el filtro sobre pacientes sí reduce las consultas.
+    if (searchSeguro) queryConsultas = queryConsultas.or(`nombre_completo.ilike.%${searchSeguro}%`, { foreignTable: 'pacientes' });
+    return queryConsultas
+      .order('fecha', { ascending: true })
+      .order('hora_inicio', { ascending: true })
+      .order('id', { ascending: true });
+  };
 
   const shouldQueryCirugias = !tipo || tipo === 'cirugia';
   // Consultas: enfermería solo ve las suyas (sin vínculo a `doctores`, ninguna).
   const shouldQueryConsultas = (!tipo || tipo === 'consulta' || tipo === 'estudio') && !(propia && !sessionDoctorId);
 
-  const [{ data: cirugias, error: errorCirugias }, { data: consultas, error: errorConsultas }] = await Promise.all([
-    shouldQueryCirugias
-      ? queryCirugias.order('fecha', { ascending: true }).order('hora', { ascending: true }).limit(MAX_FILAS_FUENTE)
-      : Promise.resolve({ data: [], error: null }),
-    shouldQueryConsultas
-      ? queryConsultas.order('fecha', { ascending: true }).order('hora_inicio', { ascending: true }).limit(MAX_FILAS_FUENTE)
-      : Promise.resolve({ data: [], error: null }),
+  const vacio = { data: [], error: null, truncado: false };
+  const [resCirugias, resConsultas] = await Promise.all([
+    // Cada fuente viene ordenada: para la página pedida bastan sus primeras `to + 1` filas.
+    shouldQueryCirugias ? leerPorLotes(construirCirugias, to + 1) : Promise.resolve(vacio),
+    shouldQueryConsultas ? leerPorLotes(construirConsultas, to + 1) : Promise.resolve(vacio),
   ]);
-
+  const { data: cirugias, error: errorCirugias } = resCirugias;
+  const { data: consultas, error: errorConsultas } = resConsultas;
+  const truncado = resCirugias.truncado || resConsultas.truncado;
+  if (truncado) {
+    console.warn('[agenda.listar] tope de filas alcanzado', { fechaDesde, fechaHasta, doctorFiltro, tope: MAX_FILAS_FUENTE });
+  }
   const dbDur = performance.now() - startedAt - authDur;
 
   // Cirugías en las que participa la persona (cirujano o equipo), para resaltarlas.
@@ -279,7 +304,7 @@ async function manejarGET(request: Request) {
       .from('cirugia_participantes')
       .select('cirugia_id, agenda_cirugias!inner(fecha)')
       .eq('medico_id', sessionDoctorId)
-      .limit(MAX_FILAS_FUENTE);
+      .limit(LOTE_FILAS);
     if (fechaDesde) qMias = qMias.gte('agenda_cirugias.fecha', fechaDesde);
     if (fechaHasta) qMias = qMias.lte('agenda_cirugias.fecha', fechaHasta);
     const { data: partMias } = await qMias;
@@ -367,7 +392,7 @@ async function manejarGET(request: Request) {
   const total = todos.length;
   const result = todos.slice(from, to + 1);
 
-  const response = NextResponse.json({ data: result, total, page, pageSize });
+  const response = NextResponse.json({ data: result, total, page, pageSize, truncado });
   response.headers.set(
     'Server-Timing',
     `auth;dur=${authDur.toFixed(1)}, db;dur=${dbDur.toFixed(1)}, agenda;dur=${(performance.now() - startedAt).toFixed(1)}`

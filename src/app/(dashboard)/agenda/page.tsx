@@ -2,6 +2,7 @@ import { getVerifiedUserId } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import AgendaContent from './AgendaContent';
+import { hoyTijuana } from '@/lib/rangos';
 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ fecha?: string }> }) {
   // Vuelta desde el detalle: la agenda abre el mismo día (?fecha=YYYY-MM-DD).
@@ -38,7 +39,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       userRol={usuario.rol}
       doctores={doctores || []}
       userId={userId}
-      initialDate={fechaPedida ?? new Date().toISOString().slice(0, 10)}
+      // «Hoy» en la zona de la clínica (antes UTC: después de las 17:00 abría el día siguiente).
+      initialDate={fechaPedida ?? hoyTijuana()}
     />
   );
 }
