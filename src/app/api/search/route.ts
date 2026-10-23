@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { esquemaInventario } from '@/lib/inventario-esquema';
 import { sanitizarBusqueda } from '@/lib/text';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/server';
@@ -173,17 +174,33 @@ async function manejarGET(request: NextRequest) {
   const verLentes = !esEnfermero || (await enfermeroCobraHonorarios(auth.user.id));
   const vacio = Promise.resolve({ data: null });
 
+  // Lentes según el esquema real de inventario_items: el legacy (marca/modelo)
+  // ya no existe en producción y la búsqueda fallaba en silencio (error 42703).
+  const buscarLentes = async (): Promise<{ data: Record<string, any>[] | null }> => {
+    const esq = await esquemaInventario(supabase);
+    if (!esq.conocido || esq.legacy) {
+      return supabase
+        .from('inventario_items')
+        .select('id,marca,modelo,codigo_barras,categoria:categorias_lentes(nombre)')
+        .or(`marca.ilike.${pattern},modelo.ilike.${pattern},codigo_barras.ilike.${pattern}`)
+        .limit(MAX_RESULTS_PER_TYPE) as never;
+    }
+    const buscables = ['manufacturer', 'model', 'product_name', 'serial_number', 'barcode', 'codigo_barras']
+      .filter((c) => esq.columnas.has(c));
+    const codigo = esq.columnas.has('barcode') ? 'codigo_barras:barcode' : esq.columnas.has('codigo_barras') ? 'codigo_barras' : null;
+    const columnas = ['id', 'marca:manufacturer', 'modelo:model', codigo].filter(Boolean).join(',');
+    return supabase
+      .from('inventario_items')
+      .select(columnas)
+      .or(buscables.map((c) => `${c}.ilike.${pattern}`).join(','))
+      .limit(MAX_RESULTS_PER_TYPE) as never;
+  };
+
   const [pacientes, consultas, lentes, doctores, cobros] = await Promise.all([
     pacientesQuery,
     esEnfermero ? vacio : consultasQuery(),
 
-    verLentes
-      ? supabase
-          .from('inventario_items')
-          .select('id,marca,modelo,codigo_barras,categoria:categorias_lentes(nombre)')
-          .or(`marca.ilike.${pattern},modelo.ilike.${pattern},codigo_barras.ilike.${pattern}`)
-          .limit(MAX_RESULTS_PER_TYPE)
-      : vacio,
+    verLentes ? buscarLentes() : vacio,
 
     esEnfermero
       ? vacio
@@ -225,7 +242,7 @@ async function manejarGET(request: NextRequest) {
       results.push({
         tipo: 'lente',
         id: l.id,
-        titulo: `${l.marca} ${l.modelo}`,
+        titulo: [l.marca, l.modelo].filter(Boolean).join(' ') || 'Lente',
         subtitulo: [l.codigo_barras, categoria?.nombre].filter(Boolean).join(' · ') || 'Sin categoría',
         href: `/inventario/${l.id}/editar`,
       });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { esquemaInventario } from '@/lib/inventario-esquema';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
@@ -100,11 +101,19 @@ async function manejarGET(
     let cirugia: Record<string, unknown> | null = null;
     let error: { message: string } | null = null;
 
+    // Embed del LIO según el esquema real de inventario_items (legacy o nuevo).
+    const esquemaInv = await esquemaInventario(supabase);
+    const embedLio = !esquemaInv.conocido || esquemaInv.legacy
+      ? 'marca, modelo, tipo_lio, lote, fecha_caducidad'
+      : [['marca', 'manufacturer'], ['modelo', 'model'], ['tipo_lio', 'tipo_lio'], ['lote', 'lote'], ['fecha_caducidad', 'expiration_date']]
+          .filter(([, col]) => esquemaInv.columnas.has(col))
+          .map(([alias, col]) => (alias === col ? col : `${alias}:${col}`))
+          .join(', ');
     const primero = await supabase
       .from('agenda_cirugias')
       .select(
         `${BASE_COLUMNS},
-        lio:inventario_item_id (marca, modelo, tipo_lio, lote, fecha_caducidad)
+        lio:inventario_item_id (${embedLio})
       `
       )
       .eq('id', id)
@@ -132,7 +141,7 @@ async function manejarGET(
           if (lioQuery.error) {
             lioQuery = await supabase
               .from('inventario_items')
-              .select('manufacturer AS marca, model AS modelo, lote, expiration_date AS fecha_caducidad')
+              .select('marca:manufacturer, modelo:model, lote, fecha_caducidad:expiration_date')
               .eq('id', itemId)
               .maybeSingle();
           }

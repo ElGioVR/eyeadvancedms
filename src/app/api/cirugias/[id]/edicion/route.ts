@@ -53,6 +53,8 @@ async function manejarGET(_request: Request, { params }: { params: Promise<{ id:
       paciente = data as Record<string, unknown> | null;
     }
 
+    // Antes la falla de esta consulta pasaba en silencio; se registra y se usa el principal.
+    if (qx.error) handleSupabaseError(qx.error, 'cirugias.edicion.procedimientos-qx');
     // Catálogo quirúrgico: sin filas en la tabla de varios (cirugías anteriores) → el principal.
     const qxIds = (qx.data ?? []).map((x: { catalogo_quirurgico_id: string }) => x.catalogo_quirurgico_id);
     if (qxIds.length === 0 && cirugia.catalogo_quirurgico_id) qxIds.push(cirugia.catalogo_quirurgico_id as string);

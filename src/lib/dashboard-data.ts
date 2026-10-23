@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { hoyTijuana } from '@/lib/rangos';
+import { esquemaInventario } from '@/lib/inventario-esquema';
 
 // Dashboard operativo: sólo información de valor del momento.
 // Los costos/ingresos viven en el módulo de Productividad.
@@ -93,13 +94,18 @@ export async function getDashboardData(
 
     // Bajo stock: sólo LIOs (tipo = 'LENTE_INTRAOCULAR'). Cascada de esquemas:
     // legacy (marca/modelo) → nuevo (manufacturer/model) → nuevo sin filtro tipo.
-    supabase
-      .from('inventario_items')
-      .select('id, marca, modelo, grado_esferico, color, stock, stock_minimo')
-      .eq('tipo', 'LENTE_INTRAOCULAR')
-      .gt('stock', 0)
-      .order('stock', { ascending: true })
-      .limit(50),
+    // Con el esquema nuevo detectado se omite la consulta legacy (fallaría con 42703).
+    esquemaInventario(supabase).then(async (esq): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> =>
+      esq.conocido && !esq.legacy
+        ? { data: null, error: { message: 'esquema nuevo' } }
+        : await supabase
+            .from('inventario_items')
+            .select('id, marca, modelo, grado_esferico, color, stock, stock_minimo')
+            .eq('tipo', 'LENTE_INTRAOCULAR')
+            .gt('stock', 0)
+            .order('stock', { ascending: true })
+            .limit(50),
+    ),
 
     supabase
       .from('doctores')
@@ -122,7 +128,8 @@ export async function getDashboardData(
       const filtered = conTipo ? q.eq('tipo', 'LENTE_INTRAOCULAR') : q;
       return filtered.gt('stock', 0).order('stock', { ascending: true }).limit(50);
     };
-    let nueva = await intentoNuevo(true);
+    const esq = await esquemaInventario(supabase);
+    let nueva = await intentoNuevo(!esq.conocido || esq.columnas.has('tipo'));
     if (nueva.error && /column|does not exist/i.test(nueva.error.message)) {
       nueva = await intentoNuevo(false);
     }

@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/supabase/server';
 import { requireRoleInventario } from '@/lib/acceso-enfermeria';
 import { hoyTijuana } from '@/lib/rangos';
 import { ruta } from '@/lib/api/ruta';
+import { esquemaInventario, soloExistentes } from '@/lib/inventario-esquema';
 
 // Proyecciones tolerantes a esquema: legacy (marca/modelo/lote/fecha_caducidad)
 // y nuevo (manufacturer/model/product_name/sphere/serial_number/expiration_date).
@@ -55,6 +56,15 @@ async function manejarGET(request: Request) {
   let errorColumnas = false;
   let errorFinal: string | null = null;
 
+  // Con el esquema detectado se va directo a las columnas que existen (sin
+  // consultas de prueba que fallan y ensucian los logs de Postgres).
+  const esquema = await esquemaInventario(supabase);
+  const saltarLegacy = esquema.conocido && !esquema.legacy;
+  if (saltarLegacy) errorColumnas = true;
+  const proyeccionesNuevas = esquema.conocido
+    ? [soloExistentes(esquema, PROYECCION_NUEVA.split(', ')).join(', ')]
+    : [PROYECCION_NUEVA, PROYECCION_NUEVA_MINIMA];
+
   // Modo aplicable según las columnas que incluye la proyección.
   const modoAplica = (modo: ModoTipo, proyeccion: string): boolean => {
     if (modo === 'solo_lio' && !/(^|, )tipo(,|$)/.test(proyeccion)) return false;
@@ -73,7 +83,7 @@ async function manejarGET(request: Request) {
   };
 
   // Intento 1: esquema legacy (marca/modelo/lote/fecha_caducidad)
-  for (const modo of MODOS) {
+  for (const modo of saltarLegacy ? [] : MODOS) {
     if (!modoAplica(modo, 'id, marca, modelo, tipo, tipo_lio, potencia_dioptrias, lote, fecha_caducidad, stock, estado')) continue;
     let query = supabase
       .from('inventario_items')
@@ -104,7 +114,7 @@ async function manejarGET(request: Request) {
 
   // Intento 2+: esquema nuevo (manufacturer/model) si el legacy no existe
   if (filas.length === 0 && errorColumnas) {
-    for (const proyeccion of [PROYECCION_NUEVA, PROYECCION_NUEVA_MINIMA]) {
+    for (const proyeccion of proyeccionesNuevas) {
       let proyeccionValida = true;
       for (const modo of MODOS) {
         if (!proyeccionValida || !modoAplica(modo, proyeccion)) continue;

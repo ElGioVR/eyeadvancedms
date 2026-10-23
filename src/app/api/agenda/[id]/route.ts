@@ -307,16 +307,23 @@ async function manejarPATCH(
   // Procedimientos quirúrgicos (varios): se reemplazan y el primero queda como principal.
   if (data.procedimientos_qx_ids !== undefined) {
     const qxIds = Array.from(new Set(data.procedimientos_qx_ids));
-    await supabase.from('agenda_cirugias_procedimientos_qx').delete().eq('cirugia_id', id);
+    // El principal se guarda primero: aunque falle la tabla de varios, la cirugía queda coherente.
+    await supabase.from('agenda_cirugias').update({ catalogo_quirurgico_id: qxIds[0] ?? null }).eq('id', id);
+    const errorQx = (err: Parameters<typeof handleSupabaseError>[0]) => {
+      handleSupabaseError(err, 'agenda.procedimientos-qx');
+      return NextResponse.json(
+        { error: 'Los demás cambios se guardaron, pero no la lista de procedimientos quirúrgicos. Intenta de nuevo o avisa a soporte.' },
+        { status: 500 },
+      );
+    };
+    const { error: errDel } = await supabase.from('agenda_cirugias_procedimientos_qx').delete().eq('cirugia_id', id);
+    if (errDel) return errorQx(errDel);
     if (qxIds.length) {
       const { error: errQx } = await supabase
         .from('agenda_cirugias_procedimientos_qx')
         .insert(qxIds.map((qid, i) => ({ cirugia_id: id, catalogo_quirurgico_id: qid, orden: i + 1 })));
-      if (errQx) {
-        return NextResponse.json({ error: handleSupabaseError(errQx, 'agenda.procedimientos-qx').mensaje }, { status: 500 });
-      }
+      if (errQx) return errorQx(errQx);
     }
-    await supabase.from('agenda_cirugias').update({ catalogo_quirurgico_id: qxIds[0] ?? null }).eq('id', id);
   }
 
   // Trazabilidad: corrección de una cirugía ya completada (qué campos se tocaron).
