@@ -186,8 +186,13 @@ export default function BienvenidaPage() {
       setProgreso(1);
       setSaliendo(true);
       const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const alPanel = destino !== '/login' && !reducido;
-      if (alPanel) {
+      const alPanel = destino !== '/login';
+      if (alPanel && reducido) {
+        // «Reducir movimiento»: el ojo y los textos solo se desvanecen; el panel
+        // aparece con el fondo de marca desvaneciéndose (sin párpados ni línea).
+        ojoRef.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', fill: 'forwards' });
+        document.documentElement.classList.add('app-entrando');
+      } else if (alPanel) {
         // Salida conectada con el panel: el ojo baja al centro y se cierra en una
         // línea de luz; el layout del panel arranca con esa misma línea y «abre
         // los párpados» (ver .app-entrada-velo en globals.css).
@@ -207,7 +212,7 @@ export default function BienvenidaPage() {
         }
         document.documentElement.classList.add('app-entrando');
       }
-      setTimeout(() => router.replace(destino), alPanel ? 700 : 280);
+      setTimeout(() => router.replace(destino), alPanel ? (reducido ? 380 : 700) : 280);
       // Red de seguridad: si la navegación del cliente no termina (en desarrollo la
       // primera compilación del panel puede tardar o fallar) la pantalla quedaba en
       // negro sobre /bienvenida. Pasados 6 s se hace una navegación completa.

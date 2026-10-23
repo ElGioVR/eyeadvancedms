@@ -312,10 +312,26 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* «Reducir movimiento» (Windows: efectos de animación apagados; iOS: Reducir
+   movimiento): mismas transiciones, pero solo con desvanecimientos — sin
+   desplazamientos, zoom, giros ni círculos que se expanden. */
+@keyframes suaveEntrar {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes suaveSalir {
+  to { opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .login-reveal { animation: none; -webkit-clip-path: none; clip-path: none; }
-  .login-reveal-glow { animation: none; opacity: 1; }
-  .login-marca-salida { animation: none; opacity: 0; }
+  .login-reveal {
+    -webkit-clip-path: none;
+    clip-path: none;
+    opacity: 0;
+    animation: suaveEntrar 0.45s ease-out 0.1s forwards;
+  }
+  .login-reveal-glow { animation: suaveEntrar 0.5s ease-out 0.2s backwards; opacity: 1; }
+  .login-marca-salida { animation: suaveSalir 0.3s ease-out 0.15s forwards; }
+  .login-logo-halo { animation: none; }
 }
 
 /* ─────────────────────────────────────────────
@@ -414,10 +430,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-eye, .welcome-shine, .welcome-halo, .welcome-ring, .welcome-blob, .welcome-fade, .welcome-fade-soft, .welcome-word {
-    animation: none !important;
-  }
+  .welcome-shine, .welcome-halo, .welcome-ring, .welcome-blob { animation: none !important; }
   .welcome-ring { display: none; }
+  /* Versión suave: aparecen con un desvanecimiento, sin moverse */
+  .welcome-eye { animation: suaveEntrar 0.7s ease-out both !important; }
+  .welcome-fade, .welcome-fade-soft, .welcome-word { animation-name: suaveEntrar !important; }
 }
 
 /* ─────────────────────────────────────────────
@@ -550,11 +567,14 @@ body {
   100% { width: 260vmax; height: 260vmax; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .login-entrada, .login-tarjeta, .login-form > *, .login-kenburns, .login-barrido, .login-flotar,
-  .login-tarjeta-salida, .login-panel-salida, .login-hero, .login-hero-halo, .login-ojo-movil,
-  .login-marca-movil > * { animation: none !important; }
+  .login-kenburns, .login-barrido, .login-flotar { animation: none !important; }
   .login-onda { display: none; }
   .login-dot-progreso { animation: none; width: 100%; }
+  /* Mismos tiempos y escalonado, solo con opacidad */
+  .login-entrada, .login-tarjeta, .login-form > *, .login-hero, .login-hero-halo,
+  .login-marca-movil > * { animation-name: suaveEntrar !important; }
+  .login-ojo-movil { animation: suaveEntrar 0.7s ease-out 0.2s both !important; }
+  .login-tarjeta-salida, .login-panel-salida { animation-name: suaveSalir !important; }
 }
 
 /* ─────────────────────────────────────────────
@@ -661,11 +681,14 @@ html.app-entrando .app-shell-columna > main { animation: appEntraContenido 1s cu
   to { opacity: 1; translate: 0 0; scale: 1; filter: blur(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  html.app-entrando .app-entrada-velo { display: none; }
+  /* El velo no se abre como párpados: el fondo de marca se desvanece */
+  html.app-entrando .app-entrada-velo { animation: suaveSalir 0.6s ease-out 0.15s forwards; }
+  .app-velo-tapa--sup, .app-velo-tapa--inf { animation: none; }
+  .app-velo-linea, .welcome-linea, .app-velo-tapa::after { display: none; }
   html.app-entrando .app-shell > aside,
   html.app-entrando .app-shell-columna > :first-child,
-  html.app-entrando .app-shell-columna > main { animation: none; }
-  .welcome-linea, .welcome-salida-contenido { animation: none; }
+  html.app-entrando .app-shell-columna > main { animation-name: suaveEntrar; }
+  .welcome-salida-contenido { animation: suaveSalir 0.3s ease-out forwards; }
 }
 
 /* ─────────────────────────────────────────────

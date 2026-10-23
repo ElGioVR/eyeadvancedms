@@ -181,7 +181,8 @@ export default function LoginPage() {
     // Se navega cuando el círculo ya cubre la pantalla; la capa sigue visible
     // hasta que la bienvenida (mismo fondo) la reemplaza → sin salto.
     const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.setTimeout(() => router.replace('/bienvenida'), reducido ? 150 : 820);
+    // Con «reducir movimiento» la transición es un desvanecimiento (más corta).
+    window.setTimeout(() => router.replace('/bienvenida'), reducido ? 520 : 820);
   }, [email, rememberMe, router]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
