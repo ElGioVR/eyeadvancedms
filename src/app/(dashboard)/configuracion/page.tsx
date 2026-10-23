@@ -9,6 +9,7 @@ import Skeleton from '@/components/ui/Skeleton';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { useToast } from '@/components/ui/Toast';
 import dynamic from 'next/dynamic';
+import PushDispositivo from '@/components/notificaciones/PushDispositivo';
 
 // Carga diferida: react-image-crop y supabase-js solo se descargan al usarse
 const AvatarCropModal = dynamic(() => import('@/components/ui/AvatarCropModal'), { ssr: false });
@@ -426,12 +427,16 @@ export default function PerfilPage() {
               <p className="text-xs text-muted">Elige qué notificaciones deseas recibir</p>
             </div>
           </div>
+          <div className="border-b border-line/70">
+            <PushDispositivo />
+          </div>
           <div className="p-6">
+            <p className="pb-1 text-[11px] font-bold uppercase tracking-wider text-muted">Qué avisos recibir</p>
             {[
               { key: 'PAGO_HONORARIOS', label: 'Pago de honorarios', desc: 'Cuando se registre un pago de tus honorarios' },
-              { key: 'RECORDATORIO_CONSULTA', label: 'Recordatorio de consulta', desc: '10 minutos antes de una consulta programada' },
-              { key: 'ASIGNACION_SERVICIO', label: 'Asignación de servicio', desc: 'Cuando se te asigne un estudio o procedimiento' },
-              { key: 'PROXIMA_CIRUGIA', label: 'Próxima cirugía', desc: 'Cirugía programada y quién atiende' },
+              { key: 'RECORDATORIO_CONSULTA', label: 'Próxima consulta o estudio', desc: 'Aviso antes de que empiece tu cita' },
+              { key: 'ASIGNACION_SERVICIO', label: 'Citas asignadas', desc: 'Cuando te agregan una consulta, estudio o cirugía' },
+              { key: 'PROXIMA_CIRUGIA', label: 'Próxima cirugía', desc: 'Aviso antes de que empiece tu cirugía' },
               { key: 'CANCELACION', label: 'Cancelaciones', desc: 'Cuando se cancele una consulta o cirugía' },
               { key: 'REAGENDADO', label: 'Reagendados', desc: 'Cuando se posponga o reagende una cita' },
             ].map((item) => (
@@ -445,9 +450,10 @@ export default function PerfilPage() {
                   role="switch"
                   aria-checked={notifPrefs[item.key] ?? true}
                   aria-label={item.label}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${(notifPrefs[item.key] ?? true) ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${(notifPrefs[item.key] ?? true) ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                 >
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${(notifPrefs[item.key] ?? true) ? 'translate-x-5.5 ml-0.5' : 'translate-x-0.5'}`} />
+                  {/* translate-x-5.5 no existe en Tailwind: la bolita se quedaba a la izquierda aunque estuviera activo */}
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${(notifPrefs[item.key] ?? true) ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                 </button>
               </div>
             ))}
