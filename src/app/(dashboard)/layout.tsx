@@ -7,6 +7,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
 import DoctorBottomNav from '@/components/layout/DoctorBottomNav';
 import OfflineAndInstall from '@/components/layout/OfflineAndInstall';
+import ActivarPush from '@/components/notificaciones/ActivarPush';
 import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
 import PestanaUnica from '@/components/providers/PestanaUnica';
@@ -61,6 +62,7 @@ export default function DashboardLayout({
 
           <DoctorBottomNav onMenuOpen={() => setMobileMenuOpen(true)} />
           <OfflineAndInstall />
+          <ActivarPush />
           <TiempoReal />
         </div>
         </RutaNavegacionProvider>

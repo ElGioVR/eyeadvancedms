@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { doctorRequerido, inicialesDe, verificarDueno } from '@/lib/consultas-acceso';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
-import { notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
+import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { detectarConflictosAgenda, esEmpalmeAgenda, MENSAJE_EMPALME } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
@@ -253,7 +253,7 @@ async function manejarPATCH(
   const [existingResult, requerido] = await Promise.all([
     supabase
       .from('consultas')
-      .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id, notas, pacientes:paciente_id (nombre_completo)')
+      .select('id, estatus, estatus_pago, fecha, hora_inicio, hora_fin, doctor_id, estudio_1_doctor_id, estudio_2_doctor_id, estudio_3_doctor_id, procedimiento_doctor_id, tipo_consulta, notas, pacientes:paciente_id (nombre_completo)')
       .eq('id', id)
       .maybeSingle(),
     doctorRequerido(auth.user.id, auth.perfil),
@@ -436,7 +436,42 @@ async function manejarPATCH(
   const pacienteNombre =
     (Array.isArray(pacienteJoin) ? pacienteJoin[0]?.nombre_completo : pacienteJoin?.nombre_completo) || 'Paciente';
 
+  // Médicos que entran a la cita en esta edición (cita, estudios o procedimiento).
+  const previos = existing as Record<string, unknown>;
+  const yaAsignados = new Set(
+    ['doctor_id', 'estudio_1_doctor_id', 'estudio_2_doctor_id', 'estudio_3_doctor_id', 'procedimiento_doctor_id']
+      .map((k) => previos[k])
+      .filter(Boolean) as string[],
+  );
+  const nuevosAsignados = new Map<string, 'Consulta' | 'Estudio'>();
+  for (const [campo, tipoServicio] of [
+    ['procedimiento_doctor_id', 'Consulta'],
+    ['estudio_3_doctor_id', 'Estudio'],
+    ['estudio_2_doctor_id', 'Estudio'],
+    ['estudio_1_doctor_id', 'Estudio'],
+    ['doctor_id', String(previos.tipo_consulta || '').toUpperCase().includes('ESTUDIO') ? 'Estudio' : 'Consulta'],
+  ] as const) {
+    const valor = (data as Record<string, unknown>)[campo];
+    if (typeof valor === 'string' && !yaAsignados.has(valor)) nuevosAsignados.set(valor, tipoServicio);
+  }
+
   const notificar = async () => {
+    if (updated && !cancelada && nuevosAsignados.size) {
+      await Promise.all(
+        Array.from(nuevosAsignados).map(([doctorId, tipoServicio]) =>
+          notificarAsignacion({
+            doctorId,
+            tipoServicio,
+            paciente: pacienteNombre,
+            fecha: updated.fecha,
+            hora: updated.hora_inicio,
+            entidadTipo: 'consulta',
+            entidadId: id,
+            actorUserId: auth.user.id,
+          }),
+        ),
+      );
+    }
     if (!updated || !(cancelada || reprogramada || cambioFecha)) return;
     const base = {
       doctorId: updated.doctor_id as string | null,

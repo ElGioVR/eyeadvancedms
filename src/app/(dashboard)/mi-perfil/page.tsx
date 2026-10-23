@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 import Avatar from '@/components/ui/Avatar';
 import ClientDate from '@/components/ui/ClientDate';
 import { logout } from '@/app/actions/auth';
+import PushDispositivo from '@/components/notificaciones/PushDispositivo';
+import { desactivarPush } from '@/lib/push-cliente';
 
 interface PrefsResp {
   data?: { tipo_evento: string; canal?: string; activo: boolean }[];
@@ -33,9 +35,9 @@ const AvatarCropModal = dynamic(() => import('@/components/ui/AvatarCropModal'),
 
 const notifEventos = [
   { key: 'PAGO_HONORARIOS', label: 'Pago de honorarios', desc: 'Cuando se registre un pago' },
-  { key: 'RECORDATORIO_CONSULTA', label: 'Recordatorio', desc: '10 min antes de una consulta' },
-  { key: 'ASIGNACION_SERVICIO', label: 'Asignación', desc: 'Estudio o procedimiento asignado' },
-  { key: 'PROXIMA_CIRUGIA', label: 'Próxima cirugía', desc: 'Cirugía programada' },
+  { key: 'RECORDATORIO_CONSULTA', label: 'Próxima consulta o estudio', desc: 'Aviso antes de que empiece tu cita' },
+  { key: 'ASIGNACION_SERVICIO', label: 'Citas asignadas', desc: 'Cuando te agregan una consulta, estudio o cirugía' },
+  { key: 'PROXIMA_CIRUGIA', label: 'Próxima cirugía', desc: 'Aviso antes de que empiece tu cirugía' },
   { key: 'CANCELACION', label: 'Cancelaciones', desc: 'Consulta o cirugía cancelada' },
   { key: 'REAGENDADO', label: 'Reagendados', desc: 'Cita pospuesta o reagendada' },
 ];
@@ -106,19 +108,20 @@ export default function MiPerfilPage() {
   const { data: prefsResp, mutate: mutatePrefs } = useSWR<PrefsResp>(user ? '/api/notificaciones/preferencias' : null);
   const notifPrefs = useMemo(() => {
     const prefs: Record<string, boolean> = {};
-    for (const p of prefsResp?.data ?? []) prefs[p.tipo_evento] = p.activo;
+    // Solo el canal de la app (IN_APP); sin registro = activa (así lo trata el servidor).
+    for (const p of prefsResp?.data ?? []) if ((p.canal ?? 'IN_APP') === 'IN_APP') prefs[p.tipo_evento] = p.activo;
     return prefs;
   }, [prefsResp]);
 
   const togglePref = useCallback(async (tipo: string) => {
-    const next = !notifPrefs[tipo];
+    const next = !(notifPrefs[tipo] ?? true);
     const conCambio = (actual: PrefsResp | undefined): PrefsResp => {
       const lista = actual?.data ?? [];
-      const existe = lista.some((p) => p.tipo_evento === tipo);
+      const existe = lista.some((p) => p.tipo_evento === tipo && (p.canal ?? 'IN_APP') === 'IN_APP');
       return {
         ...(actual ?? {}),
         data: existe
-          ? lista.map((p) => (p.tipo_evento === tipo ? { ...p, activo: next } : p))
+          ? lista.map((p) => (p.tipo_evento === tipo && (p.canal ?? 'IN_APP') === 'IN_APP' ? { ...p, activo: next } : p))
           : [...lista, { tipo_evento: tipo, canal: 'IN_APP', activo: next }],
       };
     };
@@ -251,6 +254,10 @@ export default function MiPerfilPage() {
           <Bell className="h-4 w-4 text-primary-500" />
           <h2 className="text-xs font-extrabold uppercase tracking-widest text-muted">Notificaciones</h2>
         </div>
+        <div className="border-b border-line/60">
+          <PushDispositivo />
+        </div>
+        <p className="px-5 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted">Qué avisos recibir</p>
         <div className="divide-y divide-line/60">
           {notifEventos.map((item) => (
             <div key={item.key} className="flex items-center justify-between px-5 py-3.5">
@@ -261,13 +268,13 @@ export default function MiPerfilPage() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={!!notifPrefs[item.key]}
+                aria-checked={notifPrefs[item.key] ?? true}
                 aria-label={item.label}
                 onClick={() => togglePref(item.key)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${notifPrefs[item.key] ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${(notifPrefs[item.key] ?? true) ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
               >
                 {/* translate-x-5.5 no existe en Tailwind: la bolita se quedaba siempre a la izquierda */}
-                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${notifPrefs[item.key] ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${(notifPrefs[item.key] ?? true) ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
               </button>
             </div>
           ))}
@@ -309,7 +316,7 @@ export default function MiPerfilPage() {
             <p className="text-sm text-muted mt-2">¿Estás seguro que deseas cerrar sesión?</p>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">Cancelar</button>
-              <form action={logout} onSubmit={() => { clearUserCache(); borrarTodosLosBorradores(); }} className="flex-1">
+              <form action={logout} onSubmit={() => { clearUserCache(); borrarTodosLosBorradores(); void desactivarPush(); }} className="flex-1">
                 <button type="submit" className="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-colors">Cerrar</button>
               </form>
             </div>

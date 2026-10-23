@@ -11,6 +11,7 @@ import { aMinutos } from '@/lib/agenda-slots';
 import { calcularProductividadCirugia } from '@/lib/productividad';
 import { ROL_ANESTESIOLOGO, esAnestesiologo } from '@/lib/catalogos/personal';
 import { enSegundoPlano } from '@/lib/segundo-plano';
+import { fechaHoraLegible, notificarDoctores } from '@/services/notificaciones';
 import { horaHHMM, leerJSON, uuid } from '@/lib/api/validar';
 import { z } from 'zod';
 import { TIPOS_LIO, VALORES_ANESTESIA, VALORES_ROL_PERSONAL } from '@/lib/catalogos/cirugia';
@@ -378,13 +379,19 @@ async function manejarPOST(request: Request) {
       .eq('id', cirugiaId);
   }
   const qxIds = Array.from(new Set(data.procedimientos_qx_ids ?? []));
+  // Sin esto, una falla aquí (p. ej. tabla no migrada) perdía en silencio los procedimientos extra.
+  let advertenciaQx: string | null = null;
   if (cirugiaId && qxIds.length) {
-    await supabase
+    const { error: errQx } = await supabase
       .from('agenda_cirugias_procedimientos_qx')
       .upsert(
         qxIds.map((id, i) => ({ cirugia_id: cirugiaId, catalogo_quirurgico_id: id, orden: i + 1 })),
         { onConflict: 'cirugia_id,catalogo_quirurgico_id' },
       );
+    if (errQx) {
+      handleSupabaseError(errQx, 'cirugias.procedimientos-qx');
+      advertenciaQx = 'La cirugía se creó, pero no se guardaron todos los procedimientos quirúrgicos; revísalos en el detalle.';
+    }
   }
   if (cirugiaId && data.tipo_caso) {
     await supabase
@@ -540,8 +547,34 @@ async function manejarPOST(request: Request) {
     }
   }
 
-  if (advertencia && result && typeof result === 'object') {
-    return NextResponse.json({ ...(result as object), advertencia }, { status: 201 });
+  // Aviso (campanita + celular) a cada médico del equipo quirúrgico, salvo a quien la creó.
+  if (cirugiaId) {
+    enSegundoPlano(
+      (async () => {
+        const { data: cx } = await supabase
+          .from('agenda_cirugias')
+          .select('nombre_paciente, procedimiento, ojo, fecha, hora')
+          .eq('id', cirugiaId)
+          .maybeSingle();
+        const detalle = [cx?.procedimiento, cx?.ojo].filter(Boolean).join(' ');
+        await notificarDoctores(medicoIds, {
+          tipo: 'ASIGNACION_SERVICIO',
+          titulo: 'Nueva cirugía asignada',
+          mensaje: [cx?.nombre_paciente, detalle || null, fechaHoraLegible(cx?.fecha ?? data.fecha, cx?.hora ?? data.hora)]
+            .filter(Boolean)
+            .join(' · '),
+          entidadTipo: 'agenda_cirugia',
+          entidadId: cirugiaId,
+          actorUserId: auth.user.id,
+        });
+      })(),
+      'cirugias.notificar',
+    );
+  }
+
+  const advertenciaFinal = [advertenciaQx, advertencia].filter(Boolean).join(' ') || null;
+  if (advertenciaFinal && result && typeof result === 'object') {
+    return NextResponse.json({ ...(result as object), advertencia: advertenciaFinal }, { status: 201 });
   }
   return NextResponse.json(result, { status: 201 });
 }

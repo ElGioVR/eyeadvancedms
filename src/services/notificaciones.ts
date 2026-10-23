@@ -1,5 +1,7 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { urlDeNotificacion } from '@/lib/notificaciones-rutas';
+import { enviarPush } from '@/services/push';
 
 /**
  * Servicio único de notificaciones in-app.
@@ -9,7 +11,10 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  *   guardan `doctor_id` (= `doctores.id`), por eso SIEMPRE hay que resolver
  *   `doctores.usuario_id` antes de insertar (antes se insertaba el doctor_id
  *   directo y la FK hacía fallar el insert en silencio → nadie recibía nada).
- * - Respeta `notificacion_preferencias` (canal IN_APP); sin registro = activo.
+ * - Respeta `notificacion_preferencias`; sin registro = activo (por defecto todo
+ *   notifica). IN_APP desactivado = no se notifica; PUSH desactivado = solo la
+ *   campanita, sin aviso en el celular.
+ * - Además de la campanita, se envía push a los dispositivos del usuario.
  * - Nunca lanza: una notificación fallida no debe romper la operación principal.
  */
 
@@ -56,28 +61,47 @@ export async function notificarUsuarios(userIds: Array<string | null | undefined
     const supabase = getSupabaseAdmin();
     const { data: prefs } = await supabase
       .from('notificacion_preferencias')
-      .select('user_id, activo')
+      .select('user_id, canal, activo')
       .in('user_id', destinatarios)
       .eq('tipo_evento', params.tipo)
-      .eq('canal', 'IN_APP');
-    const desactivados = new Set((prefs ?? []).filter((p) => p.activo === false).map((p) => p.user_id));
-    const finales = destinatarios.filter((u) => !desactivados.has(u));
+      .in('canal', ['IN_APP', 'PUSH']);
+    const apagado = (canal: string) =>
+      new Set((prefs ?? []).filter((p) => p.canal === canal && p.activo === false).map((p) => p.user_id));
+    const sinInApp = apagado('IN_APP');
+    const sinPush = apagado('PUSH');
+    const finales = destinatarios.filter((u) => !sinInApp.has(u));
     if (finales.length === 0) return 0;
 
-    const { error } = await supabase.from('notificaciones').insert(
-      finales.map((user_id) => ({
-        user_id,
-        tipo: SEVERIDAD[params.tipo],
-        titulo: params.titulo.slice(0, 255),
-        mensaje: params.mensaje.slice(0, 2000),
-        entidad_tipo: params.entidadTipo ?? null,
-        entidad_id: params.entidadId ?? null,
-      })),
-    );
+    const { data: insertadas, error } = await supabase
+      .from('notificaciones')
+      .insert(
+        finales.map((user_id) => ({
+          user_id,
+          tipo: SEVERIDAD[params.tipo],
+          titulo: params.titulo.slice(0, 255),
+          mensaje: params.mensaje.slice(0, 2000),
+          entidad_tipo: params.entidadTipo ?? null,
+          entidad_id: params.entidadId ?? null,
+        })),
+      )
+      .select('id, user_id');
     if (error) {
       console.error('[notificaciones] insert', { code: error.code, message: error.message });
       return 0;
     }
+
+    // Push al celular / computadora (mismo texto; al tocarla abre la pantalla de la entidad).
+    const idPorUsuario = new Map((insertadas ?? []).map((n) => [n.user_id as string, n.id as string]));
+    const url = urlDeNotificacion(params.entidadTipo, params.entidadId);
+    const tag = params.entidadId ? `${params.tipo}-${params.entidadId}` : undefined;
+    await enviarPush(
+      finales
+        .filter((u) => !sinPush.has(u))
+        .map((userId) => ({
+          userId,
+          mensaje: { tipo: params.tipo, titulo: params.titulo, mensaje: params.mensaje, url, tag, notificacionId: idPorUsuario.get(userId) },
+        })),
+    );
     return finales.length;
   } catch (err) {
     console.error('[notificaciones] error', err);
@@ -127,6 +151,10 @@ export async function notificarRoles(roles: string[], params: NotificarParams): 
 }
 
 // ── Helpers de dominio ─────────────────────────────────────────────
+
+export function fechaHoraLegible(fecha?: string | null, hora?: string | null): string {
+  return fechaLegible(fecha, hora);
+}
 
 function fechaLegible(fecha?: string | null, hora?: string | null): string {
   if (!fecha) return 'sin fecha';

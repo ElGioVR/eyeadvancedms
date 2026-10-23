@@ -27,6 +27,8 @@ import { enviarJSON } from "@/lib/fetcher";
 import BarraRevalidando from "@/components/ui/BarraRevalidando";
 import { cn } from "@/lib/utils";
 import Modal from "@/components/ui/Modal";
+import { urlDeNotificacion } from '@/lib/notificaciones-rutas';
+import { desactivarPush } from '@/lib/push-cliente';
 
 interface SearchResult {
   tipo: string;
@@ -77,22 +79,9 @@ const notifEntityIcon: Record<string, typeof User> = {
   honorarios: Wallet,
 };
 
-/** A dónde lleva cada notificación al tocarla. */
+/** A dónde lleva cada notificación al tocarla (misma regla que el push del celular). */
 function notifHref(n: Notificacion): string | null {
-  switch (n.entidad_tipo) {
-    case "consulta":
-      return n.entidad_id ? `/consultas/${n.entidad_id}` : "/agenda";
-    case "agenda_cirugia":
-    case "cirugia":
-      return n.entidad_id ? `/cirugias/${n.entidad_id}` : "/agenda";
-    case "inventario_item":
-    case "lente":
-      return "/inventario";
-    case "honorarios":
-      return "/mis-honorarios";
-    default:
-      return null;
-  }
+  return n.entidad_tipo ? urlDeNotificacion(n.entidad_tipo, n.entidad_id) : null;
 }
 
 function formatNotifTime(dateStr: string, now: Date): string {
@@ -141,6 +130,8 @@ export default function TopBar(_props: TopBarProps) {
     setSaliendo(true);
     clearUserCache();
     borrarTodosLosBorradores();
+    // Este dispositivo deja de recibir avisos con datos de pacientes.
+    await Promise.race([desactivarPush(), new Promise((r) => setTimeout(r, 1500))]);
     // Aunque falle la red, se sale a /login (la sesión expira sola).
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     window.location.href = "/login";

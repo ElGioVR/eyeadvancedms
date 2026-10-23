@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { procesarRecordatoriosCirugia } from '@/services/recordatorios';
+import { procesarTodosLosRecordatorios } from '@/services/recordatorios';
 import { ruta } from '@/lib/api/ruta';
 
 export const dynamic = 'force-dynamic';
@@ -21,8 +21,9 @@ async function manejarGET(request: Request) {
   }
 
   try {
-    const r = await procesarRecordatoriosCirugia();
-    return NextResponse.json({ notificaciones: r.enviadas, revisadas: r.revisadas });
+    // Cirugías, consultas/estudios y lentes de compra directa (también envía los push).
+    const r = await procesarTodosLosRecordatorios();
+    return NextResponse.json(r);
   } catch {
     return NextResponse.json({ error: 'Error al procesar recordatorios' }, { status: 500 });
   }

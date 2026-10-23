@@ -54,12 +54,12 @@ export default function PerfilPage() {
   const { data: prefsResp, mutate: mutatePrefs } = useSWR<PrefsResp>(user ? '/api/notificaciones/preferencias' : null);
   const notifPrefs = useMemo(() => {
     const prefs: Record<string, boolean> = {};
-    for (const p of prefsResp?.data ?? []) prefs[p.tipo_evento] = p.activo;
+    for (const p of prefsResp?.data ?? []) if ((p.canal ?? 'IN_APP') === 'IN_APP') prefs[p.tipo_evento] = p.activo;
     return prefs;
   }, [prefsResp]);
 
   const toggleNotifPref = useCallback(async (tipo: string) => {
-    const next = !notifPrefs[tipo];
+    const next = !(notifPrefs[tipo] ?? true);
     const conCambio = (actual: PrefsResp | undefined): PrefsResp => {
       const lista = actual?.data ?? [];
       const existe = lista.some((p) => p.tipo_evento === tipo);
@@ -443,11 +443,11 @@ export default function PerfilPage() {
                 <button
                   onClick={() => toggleNotifPref(item.key)}
                   role="switch"
-                  aria-checked={!!notifPrefs[item.key]}
+                  aria-checked={notifPrefs[item.key] ?? true}
                   aria-label={item.label}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${notifPrefs[item.key] ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${(notifPrefs[item.key] ?? true) ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                 >
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${notifPrefs[item.key] ? 'translate-x-5.5 ml-0.5' : 'translate-x-0.5'}`} />
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${(notifPrefs[item.key] ?? true) ? 'translate-x-5.5 ml-0.5' : 'translate-x-0.5'}`} />
                 </button>
               </div>
             ))}

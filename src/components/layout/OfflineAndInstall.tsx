@@ -157,7 +157,7 @@ export default function OfflineAndInstall() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-fg">Agregar a inicio</p>
-                <p className="text-xs text-muted mt-0.5">Abre EyeAdvanced como app desde tu pantalla de inicio</p>
+                <p className="text-xs text-muted mt-0.5">Ábrela como app y recibe las notificaciones en tu celular</p>
               </div>
               <button onClick={dismissIOS} className="shrink-0 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X className="h-4 w-4" />

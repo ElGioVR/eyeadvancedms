@@ -614,18 +614,31 @@ async function manejarPOST(request: Request) {
     }),
     // Honorarios: se devengan al completar la consulta/estudio (no al crearla).
     // Notificación al doctor (best-effort)
-    consultaData.doctor_id
-      ? notificarAsignacion({
-          doctorId: consultaData.doctor_id,
-          tipoServicio: tipoConsulta === 'ESTUDIO' ? 'Estudio' : 'Consulta',
-          paciente: `${pacienteCheck.data.nombre_completo ?? 'un paciente'} (${folio})`,
-          fecha: data.fecha,
-          hora: data.hora_inicio,
-          entidadTipo: 'consulta',
-          entidadId: consultaData.id,
-          actorUserId: auth.user.id,
-        }).catch(() => 0)
-      : null,
+    // Médico de la cita y, si son otros, los asignados a estudios / procedimiento.
+    ...Array.from(
+      new Map<string, 'Consulta' | 'Estudio'>(
+        [
+          [consultaData.doctor_id, tipoConsulta === 'ESTUDIO' ? 'Estudio' : 'Consulta'] as const,
+          [est0?.doctor_id, 'Estudio'] as const,
+          [est1?.doctor_id, 'Estudio'] as const,
+          [est2?.doctor_id, 'Estudio'] as const,
+          [data.procedimiento_doctor_id, 'Consulta'] as const,
+        ]
+          .filter((x): x is readonly [string, 'Consulta' | 'Estudio'] => !!x[0])
+          .reverse(), // el médico de la cita gana si se repite
+      ),
+    ).map(([doctorId, tipoServicio]) =>
+      notificarAsignacion({
+        doctorId,
+        tipoServicio,
+        paciente: `${pacienteCheck.data?.nombre_completo ?? 'un paciente'} (${folio})`,
+        fecha: data.fecha,
+        hora: data.hora_inicio,
+        entidadTipo: 'consulta',
+        entidadId: consultaData.id,
+        actorUserId: auth.user.id,
+      }).catch(() => 0),
+    ),
   ]), 'consultas.crear.posteriores');
 
   return NextResponse.json(consultaData, { status: 201 });

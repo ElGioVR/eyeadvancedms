@@ -94,3 +94,86 @@ self.addEventListener('fetch', (event) => {
   }
   // Resto (RSC, etc.): comportamiento por defecto del navegador, sin caché del SW
 });
+
+/* ───────────── Notificaciones push ─────────────
+ * El servidor (src/services/push.ts) manda { titulo, cuerpo, url, tag, id, urgente }.
+ * Al tocarla: se marca como leída y se abre la pantalla de la cita/cirugía,
+ * reutilizando la ventana de la app si ya está abierta.
+ */
+self.addEventListener('push', (event) => {
+  let datos = {};
+  try {
+    datos = event.data ? event.data.json() : {};
+  } catch (e) {
+    datos = { cuerpo: event.data ? event.data.text() : '' };
+  }
+  const titulo = datos.titulo || 'EyeAdvanced';
+  const opciones = {
+    body: datos.cuerpo || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
+    tag: datos.tag || undefined,
+    // Con el mismo tag (misma cita) reemplaza la anterior, pero vuelve a sonar.
+    renotify: !!datos.tag,
+    // Recordatorios de cita: se quedan en pantalla hasta que se atiendan.
+    requireInteraction: !!datos.urgente,
+    vibrate: datos.urgente ? [200, 100, 200] : [120],
+    timestamp: Date.now(),
+    data: { url: datos.url || '/dashboard', id: datos.id || null },
+    actions: [{ action: 'abrir', title: 'Ver detalle' }],
+  };
+  event.waitUntil(self.registration.showNotification(titulo, opciones));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const datos = event.notification.data || {};
+  const destino = new URL(datos.url || '/dashboard', self.location.origin).href;
+
+  const marcarLeida = datos.id
+    ? fetch('/api/notificaciones', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [datos.id] }),
+      }).catch(() => undefined)
+    : Promise.resolve();
+
+  const abrir = self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ventanas) => {
+    const propia = ventanas.find((v) => new URL(v.url).origin === self.location.origin);
+    if (propia) {
+      return propia
+        .focus()
+        .then((v) => (v && 'navigate' in v ? v.navigate(destino) : null))
+        .catch(() => self.clients.openWindow(destino));
+    }
+    return self.clients.openWindow(destino);
+  });
+
+  event.waitUntil(Promise.all([marcarLeida, abrir]));
+});
+
+// El navegador renovó la suscripción (caducó o cambió la clave): se vuelve a registrar.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    fetch('/api/notificaciones/push', { credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((info) => {
+        if (!info || !info.publicKey) return null;
+        const pad = '='.repeat((4 - (info.publicKey.length % 4)) % 4);
+        const raw = atob((info.publicKey + pad).replace(/-/g, '+').replace(/_/g, '/'));
+        const clave = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+        return self.registration.pushManager
+          .subscribe({ userVisibleOnly: true, applicationServerKey: clave })
+          .then((sub) =>
+            fetch('/api/notificaciones/push', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sub.toJSON()),
+            })
+          );
+      })
+      .catch(() => undefined)
+  );
+});

@@ -1,6 +1,8 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { notificarRoles, notificarUsuarios, usuariosDeDoctores } from '@/services/notificaciones';
+import { detalleEvento, ESTATUS_ACTIVOS_CONSULTA } from '@/lib/bandeja-agenda';
+import { etiquetaTipoConsulta } from '@/lib/catalogos/tipos-consulta';
 
 const MINUTOS_ANTES = parseInt(process.env.AGENDA_NOTIFICACION_MINUTOS || '30', 10);
 
@@ -16,59 +18,208 @@ function ahoraTijuana(): number {
   return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
 }
 
+/** Clave de la cita (fecha+hora) para saber a qué horario ya se le avisó. */
+function claveCita(fecha: string, hora: string): string {
+  return `${fecha}T${hora.slice(0, 5)}`;
+}
+
+/** Minutos que faltan para la cita (null = fuera de la ventana de aviso). */
+function minutosParaCita(ahora: number, fecha: string | null, hora: string | null): number | null {
+  if (!fecha || !hora) return null;
+  const [y, m, d] = fecha.split('-').map(Number);
+  const [h, mi] = hora.split(':').map(Number);
+  const diff = Math.round((Date.UTC(y, m - 1, d, h, mi) - ahora) / 60_000);
+  return diff >= 0 && diff <= MINUTOS_ANTES ? diff : null;
+}
+
+function enCuanto(min: number): string {
+  if (min <= 1) return 'ya va a empezar';
+  return min >= 60 ? `en ${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}` : `en ${min} min`;
+}
+
+const faltaColumna = (e: { code?: string; message?: string } | null) =>
+  !!e && (e.code === '42703' || e.code === 'PGRST204' || /recordatorio_para/.test(e.message || ''));
+
 /**
- * Envía el recordatorio "Cirugía próxima" a los doctores con cirugías en los
- * próximos MINUTOS_ANTES minutos. Es seguro correrlo en paralelo desde varias
- * instancias: cada cirugía se "reclama" de forma atómica (notificado false→true)
- * y solo quien la reclama envía el aviso → nunca se duplica.
+ * Sin sql/patch-push-notificaciones-supabase.sql no existe `recordatorio_para`:
+ * cirugías usan el método anterior (`notificado`) y las consultas no se recuerdan.
+ * Se detecta una vez por instancia para no generar errores en cada vuelta.
+ */
+const sinColumna = { cirugias: false, consultas: false };
+
+/**
+ * Reclama de forma atómica el recordatorio de cada cita (recordatorio_para ← clave).
+ * Si la cita se mueve de horario la clave cambia y se vuelve a avisar.
+ * Devuelve los ids que reclamó ESTA ejecución (nunca se duplica entre instancias).
+ */
+async function reclamar(tabla: 'agenda_cirugias' | 'consultas', citas: Array<{ id: string; clave: string }>): Promise<Set<string>> {
+  const supabase = getSupabaseAdmin();
+  const mias = new Set<string>();
+  await Promise.all(
+    citas.map(async ({ id, clave }) => {
+      const { data } = await supabase
+        .from(tabla)
+        .update({ recordatorio_para: clave })
+        .eq('id', id)
+        .or(`recordatorio_para.is.null,recordatorio_para.neq."${clave}"`)
+        .select('id');
+      if (data?.length) mias.add(id);
+    }),
+  );
+  return mias;
+}
+
+/**
+ * Recordatorio "Cirugía próxima" (MINUTOS_ANTES antes) al cirujano y a los
+ * médicos del equipo quirúrgico. Incluye cirugías reagendadas a una nueva fecha;
+ * excluye las que fueron sustituidas por otra (reagenda con cirugía nueva).
  */
 export async function procesarRecordatoriosCirugia(): Promise<{ revisadas: number; enviadas: number }> {
   const supabase = getSupabaseAdmin();
   const ahora = ahoraTijuana();
   const aFecha = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
-  const { data: cirugias, error } = await supabase
-    .from('agenda_cirugias')
-    .select('id, doctor_id, nombre_paciente, procedimiento, fecha, hora, jornada')
-    .eq('estado', 'agendada')
-    .eq('notificado', false)
-    .not('doctor_id', 'is', null)
-    .not('hora', 'is', null)
-    .gte('fecha', aFecha(ahora))
-    .lte('fecha', aFecha(ahora + MINUTOS_ANTES * 60_000))
-    .limit(200);
+  const columnas = 'id, doctor_id, nombre_paciente, procedimiento, ojo, fecha, hora, jornada, estado';
+  const base = (cols: string) =>
+    supabase
+      .from('agenda_cirugias')
+      .select(cols)
+      .not('estado', 'in', '(aplazada,completada,cancelada)')
+      .not('doctor_id', 'is', null)
+      .not('hora', 'is', null)
+      .gte('fecha', aFecha(ahora))
+      .lte('fecha', aFecha(ahora + MINUTOS_ANTES * 60_000))
+      .limit(200);
 
-  if (error) throw new Error('Error al consultar cirugías');
+  let filas: Array<Record<string, any>> = [];
+  if (!sinColumna.cirugias) {
+    const r = await base(`${columnas}, recordatorio_para`);
+    if (faltaColumna(r.error)) sinColumna.cirugias = true;
+    else if (r.error) throw new Error('Error al consultar cirugías');
+    else filas = (r.data ?? []) as unknown as Array<Record<string, any>>;
+  }
+  if (sinColumna.cirugias) {
+    const r = await base(columnas).eq('notificado', false).eq('estado', 'agendada');
+    if (r.error) throw new Error('Error al consultar cirugías');
+    filas = (r.data ?? []) as unknown as Array<Record<string, any>>;
+  }
 
-  const proximas = (cirugias ?? []).filter((c) => {
-    if (!c.fecha || !c.hora) return false;
-    const [y, m, d] = c.fecha.split('-').map(Number);
-    const [h, mi] = c.hora.split(':').map(Number);
-    const diff = (Date.UTC(y, m - 1, d, h, mi) - ahora) / 60_000;
-    return diff >= 0 && diff <= MINUTOS_ANTES;
-  });
+  let proximas = filas
+    .map((c) => ({ c, min: minutosParaCita(ahora, c.fecha, c.hora) }))
+    .filter((x): x is { c: Record<string, any>; min: number } => x.min !== null)
+    .filter(({ c }) => sinColumna.cirugias || c.recordatorio_para !== claveCita(c.fecha, c.hora));
   if (proximas.length === 0) return { revisadas: 0, enviadas: 0 };
 
-  // Reclamo atómico: solo las filas que ESTA ejecución pasó a notificado=true
-  const { data: reclamadas } = await supabase
-    .from('agenda_cirugias')
-    .update({ notificado: true, updated_at: new Date().toISOString() })
-    .in('id', proximas.map((c) => c.id))
-    .eq('notificado', false)
-    .select('id');
-  const mias = new Set((reclamadas ?? []).map((r) => r.id));
-  const aEnviar = proximas.filter((c) => mias.has(c.id));
+  // Reagendadas que ya tienen una cirugía nueva que las sustituye: no se avisan.
+  const reagendadas = proximas.filter(({ c }) => c.estado === 'reagendada').map(({ c }) => c.id as string);
+  if (reagendadas.length) {
+    const { data: sustitutas } = await supabase.from('agenda_cirugias').select('reagenda_de_id').in('reagenda_de_id', reagendadas);
+    const sustituidas = new Set((sustitutas ?? []).map((s) => s.reagenda_de_id as string));
+    proximas = proximas.filter(({ c }) => !sustituidas.has(c.id));
+    if (proximas.length === 0) return { revisadas: 0, enviadas: 0 };
+  }
 
-  const usuarios = await usuariosDeDoctores(aEnviar.map((c) => c.doctor_id));
+  let mias: Set<string>;
+  if (sinColumna.cirugias) {
+    const { data: reclamadas } = await supabase
+      .from('agenda_cirugias')
+      .update({ notificado: true, updated_at: new Date().toISOString() })
+      .in('id', proximas.map(({ c }) => c.id))
+      .eq('notificado', false)
+      .select('id');
+    mias = new Set((reclamadas ?? []).map((r) => r.id as string));
+  } else {
+    mias = await reclamar('agenda_cirugias', proximas.map(({ c }) => ({ id: c.id, clave: claveCita(c.fecha, c.hora) })));
+  }
+  const aEnviar = proximas.filter(({ c }) => mias.has(c.id));
+  if (aEnviar.length === 0) return { revisadas: 0, enviadas: 0 };
+
+  // Equipo quirúrgico (ayudantes, anestesiólogo…) además del cirujano.
+  const { data: participantes } = await supabase
+    .from('cirugia_participantes')
+    .select('cirugia_id, medico_id')
+    .in('cirugia_id', aEnviar.map(({ c }) => c.id));
+  const medicosPorCirugia = new Map<string, string[]>();
+  for (const p of participantes ?? []) {
+    medicosPorCirugia.set(p.cirugia_id, [...(medicosPorCirugia.get(p.cirugia_id) ?? []), p.medico_id]);
+  }
+  const usuarios = await usuariosDeDoctores([
+    ...aEnviar.map(({ c }) => c.doctor_id),
+    ...(participantes ?? []).map((p) => p.medico_id),
+  ]);
+
   let enviadas = 0;
-  for (const c of aEnviar) {
+  for (const { c, min } of aEnviar) {
+    const destinatarios = [c.doctor_id, ...(medicosPorCirugia.get(c.id) ?? [])].map((d) => usuarios.get(d));
+    const detalle = detalleEvento({ tipo: 'cirugia', procedimiento: c.procedimiento, ojo: c.ojo });
+    enviadas += await notificarUsuarios(destinatarios, {
+      tipo: 'PROXIMA_CIRUGIA',
+      titulo: `Cirugía a las ${String(c.hora).slice(0, 5)} · ${enCuanto(min)}`,
+      mensaje: [c.nombre_paciente, detalle, c.jornada ? `Jornada ${c.jornada}` : null].filter(Boolean).join(' · '),
+      entidadTipo: 'agenda_cirugia',
+      entidadId: c.id,
+    });
+  }
+  return { revisadas: aEnviar.length, enviadas };
+}
+
+/**
+ * Recordatorio de la próxima consulta / estudio (MINUTOS_ANTES antes) al médico
+ * asignado. Requiere sql/patch-push-notificaciones-supabase.sql.
+ */
+export async function procesarRecordatoriosConsulta(): Promise<{ revisadas: number; enviadas: number }> {
+  if (sinColumna.consultas) return { revisadas: 0, enviadas: 0 };
+  const supabase = getSupabaseAdmin();
+  const ahora = ahoraTijuana();
+  const aFecha = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from('consultas')
+    .select(`id, doctor_id, fecha, hora_inicio, tipo_consulta, tipo_visita, procedimiento, estudio_1, estudio_2, estudio_3,
+             recordatorio_para, especialidad:especialidad_id (nombre), pacientes:paciente_id (nombre_completo)`)
+    .in('estatus', [...ESTATUS_ACTIVOS_CONSULTA])
+    .not('doctor_id', 'is', null)
+    .not('hora_inicio', 'is', null)
+    .gte('fecha', aFecha(ahora))
+    .lte('fecha', aFecha(ahora + MINUTOS_ANTES * 60_000))
+    .limit(300);
+  if (faltaColumna(error)) {
+    sinColumna.consultas = true;
+    return { revisadas: 0, enviadas: 0 };
+  }
+  if (error) throw new Error('Error al consultar consultas');
+
+  const proximas = ((data ?? []) as Array<Record<string, any>>)
+    .map((c) => ({ c, min: minutosParaCita(ahora, c.fecha, c.hora_inicio) }))
+    .filter((x): x is { c: Record<string, any>; min: number } => x.min !== null)
+    .filter(({ c }) => c.recordatorio_para !== claveCita(c.fecha, c.hora_inicio));
+  if (proximas.length === 0) return { revisadas: 0, enviadas: 0 };
+
+  const mias = await reclamar('consultas', proximas.map(({ c }) => ({ id: c.id, clave: claveCita(c.fecha, c.hora_inicio) })));
+  const aEnviar = proximas.filter(({ c }) => mias.has(c.id));
+  if (aEnviar.length === 0) return { revisadas: 0, enviadas: 0 };
+
+  const usuarios = await usuariosDeDoctores(aEnviar.map(({ c }) => c.doctor_id));
+  const uno = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+  let enviadas = 0;
+  for (const { c, min } of aEnviar) {
     const userId = usuarios.get(c.doctor_id);
     if (!userId) continue;
+    const esEstudio = String(c.tipo_consulta || '').toUpperCase().includes('ESTUDIO');
+    const detalle = detalleEvento({
+      tipo: esEstudio ? 'estudio' : 'consulta',
+      tipo_consulta: c.tipo_consulta,
+      tipo_consulta_label: etiquetaTipoConsulta(c.tipo_consulta, c.tipo_visita),
+      especialidad: uno<{ nombre?: string }>(c.especialidad)?.nombre,
+      procedimiento: c.procedimiento,
+      estudios: [c.estudio_1, c.estudio_2, c.estudio_3],
+    });
+    const paciente = uno<{ nombre_completo?: string }>(c.pacientes)?.nombre_completo || 'Paciente';
     enviadas += await notificarUsuarios([userId], {
-      tipo: 'PROXIMA_CIRUGIA',
-      titulo: 'Cirugía próxima',
-      mensaje: `${c.nombre_paciente}${c.procedimiento ? ' · ' + c.procedimiento : ''} a las ${c.hora!.slice(0, 5)}${c.jornada ? ' (' + c.jornada + ')' : ''}`,
-      entidadTipo: 'agenda_cirugia',
+      tipo: 'RECORDATORIO_CONSULTA',
+      titulo: `${esEstudio ? 'Estudio' : 'Consulta'} a las ${String(c.hora_inicio).slice(0, 5)} · ${enCuanto(min)}`,
+      mensaje: [paciente, detalle].filter(Boolean).join(' · '),
+      entidadTipo: 'consulta',
       entidadId: c.id,
     });
   }
@@ -165,13 +316,22 @@ export async function procesarRecordatoriosSiToca(): Promise<void> {
   const ahora = Date.now();
   if (enCurso || ahora - ultimaCorrida < INTERVALO_MS) return;
   ultimaCorrida = ahora;
-  enCurso = Promise.all([
-    procesarRecordatoriosCirugia(),
-    procesarRecordatorioLentesCompraDirecta(),
-  ])
+  enCurso = procesarTodosLosRecordatorios()
     .catch((e) => console.error('[recordatorios]', e))
     .finally(() => {
       enCurso = null;
     });
   await enCurso;
+}
+
+/** Todos los recordatorios (sondeo de la app y cron de Supabase). */
+export async function procesarTodosLosRecordatorios() {
+  const [cirugias, consultas, lentes] = await Promise.allSettled([
+    procesarRecordatoriosCirugia(),
+    procesarRecordatoriosConsulta(),
+    procesarRecordatorioLentesCompraDirecta(),
+  ]);
+  for (const r of [cirugias, consultas, lentes]) if (r.status === 'rejected') console.error('[recordatorios]', r.reason);
+  const valor = <T,>(r: PromiseSettledResult<T>) => (r.status === 'fulfilled' ? r.value : null);
+  return { cirugias: valor(cirugias), consultas: valor(consultas), lentes: valor(lentes) };
 }
