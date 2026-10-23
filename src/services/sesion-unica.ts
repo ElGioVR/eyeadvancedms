@@ -2,6 +2,7 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { invalidarPerfil, type createClient } from '@/lib/supabase/server';
 import { sessionIdDeToken } from '@/lib/sesion-unica';
+import { limpiarSuscripcionesDeSesion, moverSuscripcionesDeSesion } from '@/services/push';
 
 /**
  * Persistencia de la sesión única (columnas de `usuarios`, migración 450).
@@ -40,6 +41,8 @@ export async function registrarSesion(userId: string, sessionId: string, disposi
     .eq('id', userId);
   invalidarPerfil(userId);
   if (error) console.error('[sesion.registrar]', error.message);
+  // Los dispositivos de otras sesiones dejan de recibir notificaciones push.
+  else await limpiarSuscripcionesDeSesion(userId, sessionId, 'otras');
   return !error;
 }
 
@@ -54,6 +57,8 @@ export async function liberarSesion(userId: string, sessionId: string): Promise<
     .eq('sesion_activa_id', sessionId);
   invalidarPerfil(userId);
   if (error && error.code !== '42703') console.error('[sesion.liberar]', error.message);
+  // Este dispositivo deja de recibir push aunque el navegador no alcance a darse de baja.
+  await limpiarSuscripcionesDeSesion(userId, sessionId, 'esta');
 }
 
 /**
@@ -128,6 +133,8 @@ export async function renovarSesionVentana(
   // La sesión única pasa a la nueva solo si era de este navegador (o no había).
   const actual = await leerSesionUsuario(userId);
   if (actual && (!actual.activaId || actual.activaId === sesionAnterior)) {
+    // Antes de registrar: este navegador conserva sus notificaciones push.
+    await moverSuscripcionesDeSesion(userId, sesionAnterior, sesionNueva);
     await registrarSesion(userId, sesionNueva, dispositivo);
   }
   await revocarSesion(tokenAnterior);

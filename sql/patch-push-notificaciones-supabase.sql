@@ -25,6 +25,10 @@ CREATE INDEX IF NOT EXISTS idx_push_suscripciones_user ON push_suscripciones (us
 -- Solo el backend (service role) la lee y escribe.
 ALTER TABLE push_suscripciones ENABLE ROW LEVEL SECURITY;
 
+-- Sesión (claim session_id del JWT) con la que se registró el dispositivo: con la
+-- sesión única solo recibe avisos el dispositivo donde se está trabajando.
+ALTER TABLE push_suscripciones ADD COLUMN IF NOT EXISTS session_id TEXT;
+
 ALTER TABLE consultas       ADD COLUMN IF NOT EXISTS recordatorio_para TEXT;
 ALTER TABLE agenda_cirugias ADD COLUMN IF NOT EXISTS recordatorio_para TEXT;
 

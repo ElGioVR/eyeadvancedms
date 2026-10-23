@@ -34,12 +34,15 @@ async function manejarGET(request: Request) {
   if (endpoint && pushDisponible()) {
     const { data } = await getSupabaseAdmin()
       .from('push_suscripciones')
-      .select('discreta')
+      .select('*')
       .eq('endpoint', endpoint)
       .eq('user_id', auth.user.id)
       .maybeSingle();
-    registrada = !!data;
-    discreta = !!data?.discreta;
+    // Registrada para ESTA sesión (si se registró con una sesión anterior, el
+    // cliente la vuelve a registrar y queda ligada a la sesión actual).
+    const fila = data as { discreta?: boolean; session_id?: string | null } | null;
+    registrada = !!fila && (!('session_id' in fila) || !auth.user.sessionId || fila.session_id === auth.user.sessionId);
+    discreta = !!fila?.discreta;
   }
   return NextResponse.json(
     { disponible: pushDisponible(), publicKey: clavePublicaVapid(), registrada, discreta },
@@ -66,7 +69,13 @@ async function manejarPOST(request: Request) {
     updated_at: new Date().toISOString(),
   };
   if (body.discreta !== undefined) fila.discreta = body.discreta;
-  const { error } = await supabase.from('push_suscripciones').upsert(fila, { onConflict: 'endpoint' });
+  let { error } = await supabase
+    .from('push_suscripciones')
+    .upsert({ ...fila, session_id: auth.user.sessionId ?? null }, { onConflict: 'endpoint' });
+  // Sin la columna session_id (patch anterior): se guarda sin ella.
+  if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+    ({ error } = await supabase.from('push_suscripciones').upsert(fila, { onConflict: 'endpoint' }));
+  }
   if (error) {
     return NextResponse.json({ error: handleSupabaseError(error, 'notificaciones.push.alta').mensaje }, { status: 500 });
   }

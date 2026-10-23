@@ -71,6 +71,8 @@ interface Suscripcion {
   p256dh: string;
   auth: string;
   discreta: boolean;
+  /** Sesión con la que se registró (sql/patch-push-notificaciones-supabase.sql). */
+  session_id?: string | null;
 }
 
 /** Envía cada mensaje a todos los dispositivos de su usuario. Devuelve cuántos se entregaron. */
@@ -79,11 +81,11 @@ export async function enviarPush(envios: Array<{ userId: string; mensaje: Mensaj
   try {
     const supabase = getSupabaseAdmin();
     const userIds = Array.from(new Set(envios.map((e) => e.userId)));
-    const { data, error } = await supabase
-      .from('push_suscripciones')
-      .select('id, user_id, endpoint, p256dh, auth, discreta')
-      .in('user_id', userIds)
-      .limit(500);
+    const [subsRes, usuariosRes] = await Promise.all([
+      supabase.from('push_suscripciones').select('*').in('user_id', userIds).limit(500),
+      supabase.from('usuarios').select('id, sesion_activa_id').in('id', userIds),
+    ]);
+    const { data, error } = subsRes;
     if (error) {
       // Sin la tabla (patch sin aplicar) no se registra como error en cada aviso.
       if (error.code !== 'PGRST205' && error.code !== '42P01') {
@@ -91,8 +93,16 @@ export async function enviarPush(envios: Array<{ userId: string; mensaje: Mensaj
       }
       return 0;
     }
+    // Sesión única: si el usuario tiene una sesión vigente, solo se avisa al
+    // dispositivo registrado con esa sesión (no al que se quedó con la sesión
+    // reemplazada por «Trabajar aquí»). Sin sesión vigente: todos sus dispositivos.
+    const sesionActiva = new Map(
+      ((usuariosRes.error ? [] : usuariosRes.data) ?? []).map((u) => [u.id as string, (u.sesion_activa_id as string | null) ?? null]),
+    );
     const porUsuario = new Map<string, Suscripcion[]>();
     for (const s of (data ?? []) as Suscripcion[]) {
+      const activa = sesionActiva.get(s.user_id);
+      if (activa && 'session_id' in s && s.session_id !== activa) continue;
       porUsuario.set(s.user_id, [...(porUsuario.get(s.user_id) ?? []), s]);
     }
 
@@ -132,5 +142,44 @@ export async function enviarPush(envios: Array<{ userId: string; mensaje: Mensaj
   } catch (err) {
     console.error('[push] error', err);
     return 0;
+  }
+}
+
+/**
+ * Da de baja los dispositivos del usuario que NO pertenecen a la sesión indicada
+ * (al iniciar sesión / «Trabajar aquí») o los de esa sesión (al cerrarla).
+ * El dispositivo vigente se vuelve a registrar solo al cargar la app.
+ */
+export async function limpiarSuscripcionesDeSesion(
+  userId: string,
+  sessionId: string,
+  modo: 'otras' | 'esta',
+): Promise<void> {
+  try {
+    const q = getSupabaseAdmin().from('push_suscripciones').delete().eq('user_id', userId);
+    const { error } =
+      modo === 'esta' ? await q.eq('session_id', sessionId) : await q.or(`session_id.is.null,session_id.neq.${sessionId}`);
+    if (error && !['PGRST205', '42P01', '42703', 'PGRST204'].includes(error.code)) {
+      console.error('[push] limpiar', { code: error.code, message: error.message });
+    }
+  } catch (err) {
+    console.error('[push] limpiar', err);
+  }
+}
+
+/** La sesión del mismo navegador se renovó: sus dispositivos pasan a la sesión nueva. */
+export async function moverSuscripcionesDeSesion(userId: string, anterior: string | null, nueva: string): Promise<void> {
+  if (!anterior) return;
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from('push_suscripciones')
+      .update({ session_id: nueva, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('session_id', anterior);
+    if (error && !['PGRST205', '42P01', '42703', 'PGRST204'].includes(error.code)) {
+      console.error('[push] mover', { code: error.code, message: error.message });
+    }
+  } catch (err) {
+    console.error('[push] mover', err);
   }
 }
