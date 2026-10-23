@@ -383,11 +383,11 @@ export default function LoginPage() {
                 src="/images/logo-eye.png"
                 alt=""
                 aria-hidden
-                className="relative h-14 w-14 select-none object-contain drop-shadow-[0_6px_20px_rgba(125,211,252,0.35)]"
+                className="login-ojo-movil relative h-14 w-14 select-none object-contain drop-shadow-[0_6px_20px_rgba(125,211,252,0.35)]"
                 draggable={false}
               />
             </div>
-            <div ref={marcaRef} className="flex flex-col items-center">
+            <div ref={marcaRef} className="login-marca-movil flex flex-col items-center">
               <p className="text-xl font-extrabold tracking-tight text-white">EyeAdvanced</p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">Medical Solutions</p>
             </div>

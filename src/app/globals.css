@@ -444,6 +444,46 @@ body {
   .login-tarjeta-salida { animation: loginTarjetaSalida 0.55s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards; }
   .login-panel-salida { animation: loginPanelSalida 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 }
+/* Celular (< sm): la cabecera azul se despliega, el ojo se abre y parpadea,
+   la hoja blanca sube y los campos entran escalonados. Sin filter: blur()
+   (en iOS Safari deja recuadros alrededor del texto). */
+@media (max-width: 639px) {
+  .login-hero { animation: loginHeroMovil 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .login-hero-halo { animation: loginHaloMovil 1s cubic-bezier(0.22, 1, 0.36, 1) 0.25s backwards; }
+  .login-ojo-movil {
+    animation:
+      welcomeOpen 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both,
+      welcomeBlink 3.2s ease-in-out 1.3s both;
+  }
+  .login-marca-movil > * { animation: loginSubir 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .login-marca-movil > :nth-child(1) { animation-delay: 0.45s; }
+  .login-marca-movil > :nth-child(2) { animation-delay: 0.55s; }
+  .login-tarjeta { animation: loginHojaMovil 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s backwards; }
+  .login-tarjeta .login-entrada { animation: loginSubir 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.5s backwards; }
+  .login-form > * { animation: loginSubir 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .login-form > :nth-child(1) { animation-delay: 0.58s; }
+  .login-form > :nth-child(2) { animation-delay: 0.65s; }
+  .login-form > :nth-child(3) { animation-delay: 0.72s; }
+  .login-form > :nth-child(4) { animation-delay: 0.78s; }
+  .login-form > :nth-child(5) { animation-delay: 0.84s; }
+}
+@keyframes loginHeroMovil {
+  from { -webkit-clip-path: inset(0 0 100% 0); clip-path: inset(0 0 100% 0); }
+  to { -webkit-clip-path: inset(0 0 0 0); clip-path: inset(0 0 0 0); }
+}
+@keyframes loginHaloMovil {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes loginHojaMovil {
+  from { opacity: 0; translate: 0 56px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes loginSubir {
+  from { opacity: 0; translate: 0 14px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
 /* Brillo del botón principal al pasar el mouse */
 .login-boton::after {
   content: '';
@@ -511,7 +551,8 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .login-entrada, .login-tarjeta, .login-form > *, .login-kenburns, .login-barrido, .login-flotar,
-  .login-tarjeta-salida, .login-panel-salida { animation: none !important; }
+  .login-tarjeta-salida, .login-panel-salida, .login-hero, .login-hero-halo, .login-ojo-movil,
+  .login-marca-movil > * { animation: none !important; }
   .login-onda { display: none; }
   .login-dot-progreso { animation: none; width: 100%; }
 }
