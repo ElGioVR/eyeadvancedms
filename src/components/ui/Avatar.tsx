@@ -17,27 +17,35 @@ const sizeClasses = {
 };
 
 export default function Avatar({ initials, src, className, size = 'md' }: AvatarProps) {
-  const [imgError, setImgError] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
 
-  if (src && !imgError) {
+  // El error se recuerda por URL: al cambiar la foto se vuelve a intentar mostrarla.
+  if (src && imgError !== src) {
+    // Contenedor circular con recorte propio: en Safari (iPhone) un <img> con
+    // display:flex/rounded dentro de un flex podía encogerse o verse cortado.
     return (
-      <img
-        src={src}
-        alt={initials}
+      <span
         className={cn(
-          'inline-flex items-center justify-center rounded-full object-cover',
+          'relative inline-block shrink-0 aspect-square overflow-hidden rounded-full bg-surface-2',
           sizeClasses[size],
           className
         )}
-        onError={() => setImgError(true)}
-      />
+      >
+        <img
+          src={src}
+          alt={initials}
+          className="absolute inset-0 block h-full w-full max-w-none object-cover object-center"
+          draggable={false}
+          onError={() => setImgError(src)}
+        />
+      </span>
     );
   }
 
   return (
     <div
       className={cn(
-        'inline-flex items-center justify-center rounded-full font-bold text-white',
+        'inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white',
         sizeClasses[size],
         className
       )}

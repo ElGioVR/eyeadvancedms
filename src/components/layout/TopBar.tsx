@@ -586,6 +586,20 @@ export default function TopBar(_props: TopBarProps) {
                 </div>
 
                 <div className="p-1.5">
+                  {/* Mi perfil (foto, notificaciones, tema): disponible para todos los roles */}
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      router.push("/mi-perfil");
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                  >
+                    <User className="h-4 w-4 text-muted" />
+                    <div className="flex-1">
+                      <span className="text-sm text-fg">Mi perfil</span>
+                      <p className="text-[11px] text-muted">Foto de perfil y preferencias</p>
+                    </div>
+                  </button>
                   {user?.rol === "admin" && (
                     <button
                       onClick={toggleModoFocus}

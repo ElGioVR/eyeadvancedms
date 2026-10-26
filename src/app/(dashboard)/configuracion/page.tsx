@@ -6,7 +6,8 @@ import useSWR from 'swr';
 import { useUser, refreshUser } from '@/hooks/useUser';
 import { enviarJSON } from '@/lib/fetcher';
 import Skeleton from '@/components/ui/Skeleton';
-import { useAvatarUpload } from '@/hooks/useAvatarUpload';
+import { useAvatarUpload, AVATAR_ACCEPT } from '@/hooks/useAvatarUpload';
+import Avatar from '@/components/ui/Avatar';
 import { useToast } from '@/components/ui/Toast';
 import dynamic from 'next/dynamic';
 import PushDispositivo from '@/components/notificaciones/PushDispositivo';
@@ -222,15 +223,16 @@ export default function PerfilPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept={AVATAR_ACCEPT}
                     className="hidden"
                     onChange={handleAvatarChange}
                   />
                   {displayAvatar ? (
-                    <img
+                    <Avatar
+                      key={displayAvatar}
+                      initials={user.iniciales}
                       src={displayAvatar}
-                      alt={user.nombre}
-                      className="flex h-20 w-20 items-center justify-center rounded-full object-cover"
+                      className="h-20 w-20 text-2xl bg-primary-500"
                     />
                   ) : (
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-500 text-2xl font-bold text-white">

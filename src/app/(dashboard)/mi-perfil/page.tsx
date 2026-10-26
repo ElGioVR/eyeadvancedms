@@ -12,7 +12,7 @@ import { useUser, clearUserCache } from '@/hooks/useUser';
 import { borrarTodosLosBorradores } from '@/lib/borradores';
 import { enviarJSON } from '@/lib/fetcher';
 import Skeleton from '@/components/ui/Skeleton';
-import { useAvatarUpload } from '@/hooks/useAvatarUpload';
+import { useAvatarUpload, AVATAR_ACCEPT } from '@/hooks/useAvatarUpload';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import Avatar from '@/components/ui/Avatar';
@@ -32,6 +32,13 @@ interface DoctorInfo {
 
 // react-image-crop solo se descarga al elegir una foto
 const AvatarCropModal = dynamic(() => import('@/components/ui/AvatarCropModal'), { ssr: false });
+
+const ETIQUETA_ROL: Record<string, string> = {
+  admin: 'Administrador',
+  doctor: 'Doctor',
+  enfermero: 'Enfermería',
+  recepcionista: 'Recepción',
+};
 
 const notifEventos = [
   { key: 'PAGO_HONORARIOS', label: 'Pago de honorarios', desc: 'Cuando se registre un pago' },
@@ -167,7 +174,7 @@ export default function MiPerfilPage() {
         <input
           ref={avatar.fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={AVATAR_ACCEPT}
           className="hidden"
           onChange={avatar.onFileChange}
         />
@@ -190,7 +197,7 @@ export default function MiPerfilPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-extrabold text-fg truncate">{user.nombre || user.email}</h1>
-          <p className="text-sm text-muted">Doctor</p>
+          <p className="text-sm text-muted">{ETIQUETA_ROL[user.rol] ?? user.rol}</p>
           {doctorInfo?.especialidad && (
             <p className="text-xs text-primary-500 font-medium mt-0.5">{doctorInfo.especialidad}</p>
           )}

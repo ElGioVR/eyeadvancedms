@@ -256,7 +256,7 @@ export default function DashboardContent({
   const festivo = festivoActivo?.festivo ?? null;
   // Vista previa: simula un festivo activo para ver el banner decorado
   const festivoEfectivo: FestivoActivo | null = previewFestivo
-    ? { festivo: previewFestivo, inicioHoy: false, diasFestivoRestantes: 1 }
+    ? { festivo: previewFestivo, inicioHoy: false, diasFestivoRestantes: 1, diasParaInicio: 0 }
     : festivoActivo;
   const festivoMostrado = festivoEfectivo?.festivo ?? null;
   const mostrarBannerFestivo =
@@ -409,6 +409,10 @@ export default function DashboardContent({
                 >
                   {previewFestivo
                     ? "Vista previa"
+                    : festivoEfectivo.diasParaInicio > 0
+                      ? festivoEfectivo.diasParaInicio === 1
+                        ? "¡Es mañana!"
+                        : `Faltan ${festivoEfectivo.diasParaInicio} días`
                     : festivoEfectivo.inicioHoy
                       ? "¡Es hoy!"
                       : festivoEfectivo.diasFestivoRestantes === 1
@@ -436,7 +440,9 @@ export default function DashboardContent({
               )}
             >
               {mostrarBannerFestivo && festivoMostrado
-                ? festivoMostrado.mensaje
+                ? festivoEfectivo && festivoEfectivo.diasParaInicio > 0 && festivoMostrado.mensajePrevio
+                  ? festivoMostrado.mensajePrevio
+                  : festivoMostrado.mensaje
                 : `Tienes ${data.stats.consultasHoy} consulta${data.stats.consultasHoy !== 1 ? "s" : ""} y ${data.citas.length} cita${data.citas.length !== 1 ? "s" : ""} para hoy.`}
             </p>
             {mostrarFestividad &&

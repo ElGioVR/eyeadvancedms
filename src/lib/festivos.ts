@@ -18,12 +18,21 @@ export interface Festivo {
   anillo: string; // borde del banner
   texto: string; // color de acento del texto
   decoraciones: string[]; // emojis flotantes decorativos
+  mensajePrevio?: string; // mensaje mientras se acerca (días de anticipación)
 }
+
+/**
+ * Días antes del inicio en que el banner ya se decora con el tema del festivo
+ * (cuenta regresiva «Faltan N días»). Cada festivo puede sobrescribirlo con `anticipacion`.
+ */
+export const DIAS_ANTICIPACION = 5;
 
 export interface FestivoActivo {
   festivo: Festivo;
   inicioHoy: boolean; // es el primer día de la celebración
   diasFestivoRestantes: number; // días que faltan para que termine (incluye hoy)
+  /** > 0 cuando aún no empieza: días que faltan para el inicio (modo anticipación). */
+  diasParaInicio: number;
 }
 
 interface FestivoDef {
@@ -34,6 +43,8 @@ interface FestivoDef {
   mes: number; // 1-12
   dia: number; // día de inicio
   duracion: number; // días inclusivos que dura la decoración
+  anticipacion?: number; // días previos con banner decorado (default DIAS_ANTICIPACION)
+  mensajePrevio?: string;
   gradient: string;
   anillo: string;
   texto: string;
@@ -98,6 +109,7 @@ const FESTIVOS: FestivoDef[] = [
     nombre: 'Halloween',
     emoji: '🎃',
     mensaje: '¡Feliz Halloween! Cuidando tu visión… sin sustos.',
+    mensajePrevio: 'Se acerca Halloween… ¡que nada te asuste, ni las consultas!',
     mes: 10,
     dia: 31,
     duracion: 2,
@@ -166,6 +178,7 @@ function obtenerThanksgiving(fecha: Date): FestivoActivo | null {
       },
       inicioHoy: fecha.getDate() === fourthThursday,
       diasFestivoRestantes: 1 + (fourthThursday + 1 - fecha.getDate()),
+      diasParaInicio: 0,
     };
   }
   return null;
@@ -183,7 +196,40 @@ export const FESTIVO_EJEMPLO: Festivo = {
   decoraciones: ['🎃', '👻', '🦇', '🕸️'],
 };
 
+function aFestivo(def: FestivoDef): Festivo {
+  return {
+    id: def.id,
+    nombre: def.nombre,
+    emoji: def.emoji,
+    mensaje: def.mensaje,
+    mensajePrevio: def.mensajePrevio ?? `¡Se acerca ${def.nombre}!`,
+    gradient: def.gradient,
+    anillo: def.anillo,
+    texto: def.texto,
+    decoraciones: def.decoraciones,
+  };
+}
+
+/**
+ * Festivo a decorar hoy: el que está en curso o, si no hay, el próximo cuando
+ * faltan `anticipacion` días o menos (p. ej. Halloween desde el 26 de octubre).
+ */
 export function obtenerFestivo(fecha: Date): FestivoActivo | null {
+  const enCurso = obtenerFestivoEnCurso(fecha);
+  if (enCurso) return enCurso;
+  const proximo = obtenerFestivoProximoDef(fecha);
+  if (!proximo) return null;
+  const anticipacion = proximo.def.anticipacion ?? DIAS_ANTICIPACION;
+  if (proximo.diasRestantes < 1 || proximo.diasRestantes > anticipacion) return null;
+  return {
+    festivo: aFestivo(proximo.def),
+    inicioHoy: false,
+    diasFestivoRestantes: proximo.def.duracion,
+    diasParaInicio: proximo.diasRestantes,
+  };
+}
+
+function obtenerFestivoEnCurso(fecha: Date): FestivoActivo | null {
   const mes = fecha.getMonth() + 1;
   const dia = fecha.getDate();
 
@@ -207,6 +253,7 @@ export function obtenerFestivo(fecha: Date): FestivoActivo | null {
         },
         inicioHoy: offsetDia === 0,
         diasFestivoRestantes: def.duracion - offsetDia,
+        diasParaInicio: 0,
       };
     }
   }
@@ -218,8 +265,7 @@ export interface FestivoProximo {
   diasRestantes: number;
 }
 
-/** Siguiente celebración a partir de una fecha (incluye año siguiente). */
-export function obtenerFestivoProximo(fecha: Date): FestivoProximo | null {
+function obtenerFestivoProximoDef(fecha: Date): { def: FestivoDef; diasRestantes: number } | null {
   const inicioHoy = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
 
   const candidatos: Array<{ def: FestivoDef; fechaInicio: Date }> = [];
@@ -229,6 +275,7 @@ export function obtenerFestivoProximo(fecha: Date): FestivoProximo | null {
     }
     // Thanksgiving (4.º jueves de noviembre) por año
     const firstThursdayOffset = (4 - new Date(year, 10, 1).getDay() + 7) % 7;
+    const dia = 1 + firstThursdayOffset + 21;
     candidatos.push({
       def: {
         id: 'thanksgiving',
@@ -236,36 +283,28 @@ export function obtenerFestivoProximo(fecha: Date): FestivoProximo | null {
         emoji: '🦃',
         mensaje: 'Feliz Thanksgiving. Gracias por confiar en nosotros.',
         mes: 11,
-        dia: 0,
-        duracion: 1,
+        dia,
+        duracion: 2,
         gradient: 'from-amber-700 via-orange-600 to-rose-600',
         anillo: 'ring-amber-400/40',
         texto: 'text-white',
         decoraciones: ['🦃', '🍂', '🥧', '🍁'],
       },
-      fechaInicio: new Date(year, 10, 1 + firstThursdayOffset + 21),
+      fechaInicio: new Date(year, 10, dia),
     });
   }
 
-  let mejor: { festivo: Festivo; diasRestantes: number } | null = null;
+  let mejor: { def: FestivoDef; diasRestantes: number } | null = null;
   for (const { def, fechaInicio } of candidatos) {
     if (fechaInicio < inicioHoy) continue;
     const diasRestantes = Math.round((fechaInicio.getTime() - inicioHoy.getTime()) / 86400000);
-    if (!mejor || diasRestantes < mejor.diasRestantes) {
-      mejor = {
-        festivo: {
-          id: def.id,
-          nombre: def.nombre,
-          emoji: def.emoji,
-          mensaje: def.mensaje,
-          gradient: def.gradient,
-          anillo: def.anillo,
-          texto: def.texto,
-          decoraciones: def.decoraciones,
-        },
-        diasRestantes,
-      };
-    }
+    if (!mejor || diasRestantes < mejor.diasRestantes) mejor = { def, diasRestantes };
   }
   return mejor;
+}
+
+/** Siguiente celebración a partir de una fecha (incluye año siguiente). */
+export function obtenerFestivoProximo(fecha: Date): FestivoProximo | null {
+  const p = obtenerFestivoProximoDef(fecha);
+  return p ? { festivo: aFestivo(p.def), diasRestantes: p.diasRestantes } : null;
 }
