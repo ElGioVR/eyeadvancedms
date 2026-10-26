@@ -41,7 +41,7 @@ const pedir = async (body: unknown) => {
   const res = await PATCH(new Request('http://x/api/inventario/plan-resurtimiento', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
   return { status: res.status, json: (await res.json()) as any };
 };
-const plan = async () => (await (await GET(new Request('http://x/api/inventario/plan-resurtimiento'))).json()) as any[];
+const plan = async () => (await (await GET()).json()) as any[];
 const solicitarLente = (cx: string, usuarioId: string | null, extra: Record<string, unknown> = {}) =>
   guardarPlanLentes(cx, [{ orden: 'PRIMERO', modo: 'SOLICITAR', torico: false, marca: true, fabricante: 'Alcon', modelo: 'Clareon CNA0T0', poder_d: 21.5, ...extra } as any], { usuarioId });
 const lenteDe = (cx: string) => db.cirugia_lentes.find((l) => l.cirugia_id === cx && l.orden === 'PRIMERO')!;
