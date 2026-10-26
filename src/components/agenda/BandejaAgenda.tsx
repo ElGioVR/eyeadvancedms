@@ -11,7 +11,8 @@
  */
 
 import { estadoCerrado } from '@/lib/permisos-edicion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { faltantesCirugia, ETIQUETA_FALTANTE, ETIQUETA_INFO, type CirugiaParaCompletar } from '@/lib/por-completar';
@@ -239,7 +240,17 @@ export default function BandejaAgenda({
 }) {
   const { toast } = useToast();
   const [abierto, setAbierto] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
+  // Bloquea el scroll de la página mientras el panel está abierto (en móvil el gesto se iba al fondo).
+  useEffect(() => {
+    if (!abierto) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [abierto]);
   const [pestana, setPestana] = useState<'confirmar' | 'cerrar' | 'completar'>('confirmar');
+  // Al cambiar de pestaña, vuelve al inicio de la lista.
+  useEffect(() => { panelRef.current?.scrollTo({ top: 0 }); }, [pestana]);
   const [accion, setAccion] = useState<{ item: CitaAccion; accion: AccionRapida } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [porCompletar, setPorCompletar] = useState<string | null>(null);
@@ -348,10 +359,12 @@ export default function BandejaAgenda({
         )}
       </button>
 
-      {abierto && (
-        <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label="Pendientes de la agenda">
+      {abierto && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[60] flex h-[100dvh] justify-end overscroll-contain" role="dialog" aria-modal="true" aria-label="Pendientes de la agenda">
           <div className="absolute inset-0 bg-black/30" onClick={() => !accion && setAbierto(false)} />
-          <aside className="relative flex h-full w-full max-w-md flex-col bg-surface shadow-2xl">
+          <aside ref={panelRef} className="relative flex h-full max-h-[100dvh] min-h-0 w-full max-w-md flex-col overflow-y-auto overscroll-contain bg-surface shadow-2xl [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
+            {/* Encabezado + pestañas fijos arriba; todo lo demás se desplaza con el mismo gesto. */}
+            <div className="sticky top-0 z-10 shrink-0 bg-surface">
             <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
               <div>
                 <h2 className="text-base font-bold text-fg">Pendientes de la agenda</h2>
@@ -382,9 +395,10 @@ export default function BandejaAgenda({
                 </button>
               ))}
             </div>
+            </div>
 
             {pestana === 'cerrar' && (
-              <div className="space-y-2 border-b border-line p-3">
+              <div className="shrink-0 space-y-2 border-b border-line p-3">
                 <label className="relative block">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                   <input
@@ -432,13 +446,13 @@ export default function BandejaAgenda({
             )}
 
             {data?.migracionPendiente && (
-              <p className="mx-3 mt-3 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+              <p className="mx-3 mt-3 flex shrink-0 gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Falta aplicar el SQL de confirmaciones: «Mensaje enviado» y «Confirmó» no se guardarán todavía.
               </p>
             )}
 
-            <div className="flex-1 space-y-2 overflow-y-auto p-3">
+            <div className="flex-1 space-y-2 p-3">
               {/* ───── Seguimiento: buscador de citas pasadas ───── */}
               {modoSeguimiento ? (
                 <>
@@ -672,7 +686,8 @@ export default function BandejaAgenda({
               )}
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {accion && (
