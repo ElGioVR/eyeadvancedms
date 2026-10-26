@@ -364,7 +364,7 @@ export default function BandejaAgenda({
           <div className="absolute inset-0 bg-black/30" onClick={() => !accion && setAbierto(false)} />
           <aside ref={panelRef} className="relative flex h-full max-h-[100dvh] min-h-0 w-full max-w-md flex-col overflow-y-auto overscroll-contain bg-surface shadow-2xl [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
             {/* Encabezado + pestañas fijos arriba; todo lo demás se desplaza con el mismo gesto. */}
-            <div className="sticky top-0 z-10 shrink-0 bg-surface">
+            <div className="sticky top-0 z-10 shrink-0 bg-surface pt-[env(safe-area-inset-top)]">
             <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
               <div>
                 <h2 className="text-base font-bold text-fg">Pendientes de la agenda</h2>
@@ -452,7 +452,7 @@ export default function BandejaAgenda({
               </p>
             )}
 
-            <div className="flex-1 space-y-2 p-3">
+            <div className="flex-1 space-y-2 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               {/* ───── Seguimiento: buscador de citas pasadas ───── */}
               {modoSeguimiento ? (
                 <>
