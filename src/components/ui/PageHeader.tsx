@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRutaNavegacion, useVolver } from '@/components/layout/RutaNavegacion';
 import { usePathname } from 'next/navigation';
 import { rutaSinQuery } from '@/lib/navegacion/rutas';
@@ -34,18 +34,29 @@ export default function PageHeader({ title, subtitle, action, backLink, eyebrow,
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between lg:mb-5">
       <div className="min-w-0">
+        {/* Móvil: botón «Volver» grande y visible para todos los roles. */}
+        {backLink && (
+          <Link
+            href={volver.href}
+            onClick={backLink.onClick}
+            className="mb-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 text-sm font-bold text-primary-700 shadow-sm transition-colors active:scale-[0.98] dark:border-primary-500/40 dark:bg-primary-500/15 dark:text-primary-200 lg:hidden"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+            Volver a {volver.label}
+          </Link>
+        )}
         {backLink && !usarRuta && (
           <Link
             href={backLink.href}
             onClick={backLink.onClick}
-            className="mb-2 inline-flex items-center gap-1 rounded-lg py-1 pr-2 text-sm font-medium text-muted transition-colors hover:text-fg"
+            className="mb-2 hidden items-center gap-1 rounded-lg py-1 pr-2 text-sm font-medium text-muted transition-colors hover:text-fg lg:inline-flex"
           >
             <ChevronLeft className="h-4 w-4" />
             {backLink.label}
           </Link>
         )}
         {usarRuta && (
-          <nav aria-label="Ruta de navegación" className="mb-2 flex flex-wrap items-center gap-x-0.5 gap-y-1 text-sm font-medium text-muted">
+          <nav aria-label="Ruta de navegación" className="mb-2 hidden flex-wrap lg:flex items-center gap-x-0.5 gap-y-1 text-sm font-medium text-muted">
             {previas.map((e, i) => (
               <span key={`${e.href}-${i}`} className="inline-flex items-center">
                 {i > 0 && <ChevronRight className="mx-0.5 h-3.5 w-3.5 opacity-60" aria-hidden />}
