@@ -58,6 +58,7 @@ const TITULO_DISCRETO: Record<TipoEventoNotificacion, string> = {
   CANCELACION: 'Se canceló una cita',
   REAGENDADO: 'Se movió una cita',
   STOCK_BAJO: 'Inventario con stock bajo',
+  LENTE_RECIBIDO: 'Llegó un lente para cirugía',
   SISTEMA: 'EyeAdvanced',
 };
 

@@ -64,14 +64,17 @@ export default function PlanResurtimiento({ puedeEditar }: { puedeEditar: boolea
     if (!recibiendo) return;
     setTrabajando(true);
     try {
-      await enviarJSON(URL_PLAN, 'PATCH', {
+      const r = await enviarJSON<{ paciente?: string | null; notificados?: number }>(URL_PLAN, 'PATCH', {
         accion: 'RECIBIR',
         id: recibiendo.id,
         lote: lote.trim() || null,
         expiration_date: caducidad || null,
         serial_number: serie.trim() || null,
       });
-      toast('Lente recibido: entró al inventario y quedó listo para la cirugía', 'success');
+      toast(
+        `Lente recibido y asignado a ${r?.paciente ?? recibiendo.paciente ?? 'la cirugía'}${r?.notificados ? ` · se notificó a ${r.notificados} usuario(s)` : ''}`,
+        'success',
+      );
       setRecibiendo(null);
       setLote(''); setCaducidad(''); setSerie('');
       await refrescar();
@@ -198,7 +201,7 @@ export default function PlanResurtimiento({ puedeEditar }: { puedeEditar: boolea
               {recibiendo.fabricante} {recibiendo.modelo} · {recibiendo.poder_d != null ? `${recibiendo.poder_d}D` : ''}
               {recibiendo.torico && recibiendo.cilindro != null ? ` · cil. ${recibiendo.cilindro}` : ''}
               <br />
-              Para la cirugía de {recibiendo.paciente} ({fmtFecha(recibiendo.fecha)}). Entra al inventario y queda comprometido a esa cirugía.
+              Para la cirugía de {recibiendo.paciente} ({fmtFecha(recibiendo.fecha)}). Entra al inventario, se asigna automáticamente a este paciente y se notifica a quien lo pidió y a quien lo recibe.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="block text-xs font-bold text-muted">Lote

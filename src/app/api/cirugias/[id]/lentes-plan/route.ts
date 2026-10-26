@@ -52,7 +52,7 @@ async function manejarPUT(request: Request, { params }: { params: Promise<{ id: 
     if (!enPlan.has(a.orden as OrdenLente)) await liberarLentes(id, a.orden as OrdenLente);
   }
 
-  const r = await guardarPlanLentes(id, cuerpo.plan, { reservarPrimero: true });
+  const r = await guardarPlanLentes(id, cuerpo.plan, { reservarPrimero: true, usuarioId: auth.user.id });
   if (!r.ok) return NextResponse.json({ error: `Lente ${r.orden.toLowerCase()}: ${r.error}` }, { status: 409 });
 
   // Pieza del primer lente en la fila de la cirugía (la usan el detalle y el cierre).

@@ -227,7 +227,7 @@ export interface LentePlanInput {
 export async function guardarPlanLentes(
   cirugiaId: string,
   plan: LentePlanInput[],
-  opciones: { reservarPrimero?: boolean } = {},
+  opciones: { reservarPrimero?: boolean; usuarioId?: string | null } = {},
 ): Promise<{ ok: true } | { ok: false; orden: OrdenLente; error: string }> {
   const supabase = getSupabaseAdmin();
   const ahora = new Date().toISOString();
@@ -317,6 +317,16 @@ export async function guardarPlanLentes(
         return { ok: false, orden: l.orden, error: 'Falta aplicar sql/patch-agenda-cirugia-comentarios-16oct-supabase.sql para guardar lentes sin Asignar/Solicitar/Compra directa.' };
       }
       return { ok: false, orden: l.orden, error: 'No se pudo guardar el plan del lente.' };
+    }
+    // Quién pidió el lente (se le avisa cuando se reciba). Best-effort: si la BD aún
+    // no tiene la columna (sql/patch-lente-recibido-notificacion.sql), se ignora.
+    if (l.modo === 'SOLICITAR' && opciones.usuarioId) {
+      await supabase
+        .from('cirugia_lentes')
+        .update({ creado_por: opciones.usuarioId })
+        .eq('cirugia_id', cirugiaId)
+        .eq('orden', l.orden)
+        .then(() => undefined, () => undefined);
     }
   }
   return { ok: true };

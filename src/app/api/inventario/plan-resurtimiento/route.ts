@@ -7,14 +7,17 @@ import { translateError } from '@/lib/supabase/errors';
 import { ingresarLenteAInventario } from '@/lib/inventario-lentes';
 import { leerJSON } from '@/lib/api/validar';
 import { ruta } from '@/lib/api/ruta';
+import { notificarLenteRecibido } from '@/services/notificaciones';
 
 /*
  * Plan de resurtimiento: lentes en modo SOLICITAR de cirugías activas.
  * GET   → pendientes, priorizados por la fecha de cirugía más próxima.
  * PATCH → { ids, accion: 'SOLICITAR' }  marca como solicitados.
  *         { id, accion: 'RECIBIR', lote?, expiration_date?, serial_number? }
- *           da entrada al inventario (Kardex ENTRADA), compromete la pieza a la
- *           cirugía y deja el lente LISTO.
+ *           da entrada al inventario (Kardex ENTRADA), asigna automáticamente la
+ *           pieza a la cirugía/paciente que la pidió (LISTO) y notifica a quien
+ *           la pidió (creado_por o, si no hay, quien creó la cirugía), a quien
+ *           la marcó como solicitada y a quien la recibió.
  * Requiere sql/patch-lentes-logistica-supabase.sql.
  */
 
@@ -130,7 +133,7 @@ async function manejarPATCH(request: Request) {
   // RECIBIR
   const { data: lente } = await supabase
     .from('cirugia_lentes')
-    .select('id, cirugia_id, orden, fabricante, modelo, poder_d, cilindro, torico, estado, estado_logistica, inventario_item_id')
+    .select('id, cirugia_id, orden, fabricante, modelo, poder_d, cilindro, torico, estado, estado_logistica, inventario_item_id, solicitado_por')
     .eq('id', data.id)
     .eq('modo', 'SOLICITAR')
     .maybeSingle();
@@ -165,8 +168,8 @@ async function manejarPATCH(request: Request) {
   if (!ingreso.ok) return NextResponse.json({ error: ingreso.error }, { status: ingreso.status });
   const itemId = ingreso.itemId;
 
-  // 3) Se compromete a la cirugía y queda listo.
-  const { error: errLente } = await supabase
+  // 2) Asignación automática: la pieza queda comprometida a la cirugía (paciente) que la pidió.
+  const { data: asignado, error: errLente } = await supabase
     .from('cirugia_lentes')
     .update({
       inventario_item_id: itemId,
@@ -175,9 +178,35 @@ async function manejarPATCH(request: Request) {
       recibido_por: auth.user.id,
       updated_at: ahora,
     })
-    .eq('id', lente.id);
+    .eq('id', lente.id)
+    .is('inventario_item_id', null)
+    .select('id');
   if (errLente) return NextResponse.json({ error: translateError(errLente.message) }, { status: 500 });
-  return NextResponse.json({ ok: true, inventario_item_id: itemId });
+  if (!asignado?.length) {
+    return NextResponse.json({ error: 'Otro usuario recibió este lente al mismo tiempo; la pieza quedó en inventario sin asignar.' }, { status: 409 });
+  }
+
+  // 3) Avisos: quien lo pidió + quien lo marcó como solicitado + quien lo recibió.
+  const { data: cx } = await supabase
+    .from('agenda_cirugias')
+    .select('nombre_paciente, fecha, hora, created_by')
+    .eq('id', lente.cirugia_id)
+    .maybeSingle();
+  // creado_por es opcional (sql/patch-lente-recibido-notificacion.sql): si no existe, se usa quien creó la cirugía.
+  const { data: extra } = await supabase.from('cirugia_lentes').select('creado_por').eq('id', lente.id).maybeSingle();
+  const { data: receptor } = await supabase.from('usuarios').select('nombre').eq('id', auth.user.id).maybeSingle();
+  const solicitante = (extra as { creado_por?: string | null } | null)?.creado_por ?? (cx as { created_by?: string | null } | null)?.created_by ?? null;
+  const notificados = await notificarLenteRecibido({
+    userIds: [solicitante, lente.solicitado_por, auth.user.id],
+    cirugiaId: lente.cirugia_id,
+    paciente: cx?.nombre_paciente ?? 'paciente',
+    fecha: cx?.fecha ? String(cx.fecha).slice(0, 10) : null,
+    hora: cx?.hora ?? null,
+    lente: [lente.fabricante, lente.modelo, lente.poder_d != null ? `${lente.poder_d}D` : null, lente.torico && lente.cilindro != null ? `cil. ${lente.cilindro}` : null].filter(Boolean).join(' '),
+    orden: lente.orden === 'PRIMERO' ? 'primer lente' : lente.orden === 'SEGUNDO' ? 'segundo lente' : 'respaldo',
+    recibidoPor: (receptor as { nombre?: string | null } | null)?.nombre ?? null,
+  });
+  return NextResponse.json({ ok: true, inventario_item_id: itemId, paciente: cx?.nombre_paciente ?? null, notificados });
 }
 
 export const GET = ruta('inventario/plan-resurtimiento#GET', manejarGET);

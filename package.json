@@ -34,6 +34,7 @@
     "test:unit": "node --import tsx --test src/lib/__tests__/*.test.ts",
     "test:cobertura": "node --import tsx --test --experimental-test-coverage src/lib/__tests__/*.test.ts",
     "test:import": "tsx --conditions=react-server --tsconfig scripts/tests/import/tsconfig.json scripts/tests/import/import-agenda.integration.ts",
+    "test:lentes": "tsx --conditions=react-server --tsconfig scripts/tests/lentes/tsconfig.json scripts/tests/lentes/recepcion-plan.integration.ts",
     "test:dod": "tsx --tsconfig scripts/tests/dod/tsconfig.json scripts/tests/dod/agenda-cirugia-16oct.dod.tsx"
   },
   "dependencies": {

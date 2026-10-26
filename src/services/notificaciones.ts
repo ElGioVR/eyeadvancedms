@@ -26,6 +26,7 @@ export type TipoEventoNotificacion =
   | 'CANCELACION'
   | 'REAGENDADO'
   | 'STOCK_BAJO'
+  | 'LENTE_RECIBIDO'
   | 'SISTEMA';
 
 /** Tipo de entidad → la UI decide a qué pantalla navegar. */
@@ -39,6 +40,7 @@ const SEVERIDAD: Record<TipoEventoNotificacion, 'info' | 'warning' | 'error'> = 
   CANCELACION: 'warning',
   REAGENDADO: 'warning',
   STOCK_BAJO: 'warning',
+  LENTE_RECIBIDO: 'info',
   SISTEMA: 'info',
 };
 
@@ -160,6 +162,30 @@ function fechaLegible(fecha?: string | null, hora?: string | null): string {
   if (!fecha) return 'sin fecha';
   const [y, m, d] = fecha.split('-');
   return `${d}/${m}/${y}${hora ? ` ${hora.slice(0, 5)}` : ''}`;
+}
+
+/**
+ * Lente del plan de resurtimiento recibido y asignado a su cirugía.
+ * Se avisa a quien lo pidió y a quien lo recibió (incluido el propio receptor,
+ * como constancia: por eso no se pasa actorUserId).
+ */
+export function notificarLenteRecibido(opts: {
+  userIds: Array<string | null | undefined>;
+  cirugiaId: string;
+  paciente: string;
+  fecha?: string | null;
+  hora?: string | null;
+  lente: string;
+  orden: string;
+  recibidoPor?: string | null;
+}) {
+  return notificarUsuarios(opts.userIds, {
+    tipo: 'LENTE_RECIBIDO',
+    titulo: `Lente recibido y asignado — ${opts.paciente}`,
+    mensaje: `${opts.lente} (${opts.orden}) quedó asignado a la cirugía de ${opts.paciente} · ${fechaLegible(opts.fecha, opts.hora)}${opts.recibidoPor ? `. Recibió: ${opts.recibidoPor}` : ''}.`,
+    entidadTipo: 'agenda_cirugia',
+    entidadId: opts.cirugiaId,
+  });
 }
 
 export function notificarAsignacion(opts: {

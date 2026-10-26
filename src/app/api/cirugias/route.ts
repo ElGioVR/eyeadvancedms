@@ -539,7 +539,7 @@ async function manejarPOST(request: Request) {
   }
 
   if (cirugiaId && data.lentes_plan?.length) {
-    const r = await guardarPlanLentes(cirugiaId, data.lentes_plan);
+    const r = await guardarPlanLentes(cirugiaId, data.lentes_plan, { usuarioId: auth.user.id });
     if (!r.ok) {
       await liberarLentes(cirugiaId);
       await supabase.from('agenda_cirugias').update({ estado: 'cancelada', updated_at: new Date().toISOString() }).eq('id', cirugiaId);

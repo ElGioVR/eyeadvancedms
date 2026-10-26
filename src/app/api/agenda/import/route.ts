@@ -1644,7 +1644,7 @@ async function manejarPOST(request: Request) {
       tocada = true;
     }
     if (u.lentes && !conLentesGuardados.has(u.id)) {
-      const r = await guardarPlanLentes(u.id, u.p.plan, { reservarPrimero: true });
+      const r = await guardarPlanLentes(u.id, u.p.plan, { reservarPrimero: true, usuarioId: auth.user.id });
       if (r.ok) {
         lentesCompletados++;
         tocada = true;
@@ -1668,13 +1668,13 @@ async function manejarPOST(request: Request) {
   const idsInsertadas = resultados.map((r, i) => (r.ok ? { id: (r.row as { id: string }).id, p: filasCx[i].p } : null)).filter((x): x is { id: string; p: PendCx } => !!x && x.p.plan.length > 0);
   await mapConLimite(idsInsertadas, 6, async ({ id, p }) => {
     let plan = p.plan;
-    let r = await guardarPlanLentes(id, plan, { reservarPrimero: true });
+    let r = await guardarPlanLentes(id, plan, { reservarPrimero: true, usuarioId: auth.user.id });
     if (!r.ok) {
       // La pieza ya no está libre (otro usuario la reservó): ese lente pasa a «Solicitar».
       const fallido = r.orden;
       plan = plan.map((l) => (l.orden === fallido && l.modo === 'ASIGNAR' ? { ...l, modo: 'SOLICITAR' as const, inventario_item_id: null } : l));
       await liberarLentes(id);
-      r = await guardarPlanLentes(id, plan, { reservarPrimero: true });
+      r = await guardarPlanLentes(id, plan, { reservarPrimero: true, usuarioId: auth.user.id });
       if (r.ok) avisosLentes.push(`Fila ${p.fila.numero}: el ${fallido.toLowerCase()} ya no tenía pieza libre; quedó por solicitar.`);
     }
     if (!r.ok) {
