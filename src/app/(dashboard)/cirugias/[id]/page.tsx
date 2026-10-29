@@ -20,6 +20,7 @@ import { puedeEditarCirugia } from '@/lib/permisos-edicion';
 import Avatar from '@/components/ui/Avatar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ClientDate from '@/components/ui/ClientDate';
+import Modal from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/hooks/useUser';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -28,6 +29,7 @@ import FichaPaciente from '@/components/ui/FichaPaciente';
 import HojaMembretada from '@/components/print/HojaMembretada';
 import OtrasCirugiasPaciente from '@/components/cirugia/OtrasCirugiasPaciente';
 import type { TelefonoPaciente } from '@/lib/telefonos-paciente';
+import { puedeAnularCirugia } from '@/lib/permisos-agenda';
 
 interface RelacionSimple { nombre_completo?: string; alias?: string; nombre?: string; telefono?: string | null; email?: string | null; sexo?: string | null; fecha_nacimiento?: string | null; edad?: number | null; numero_expediente?: string | null; telefonos?: TelefonoPaciente[]; }
 interface Origen { nombre?: string; }
@@ -262,6 +264,9 @@ export default function CirugiaDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ archivo: Archivo; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [mostrarAnulacion, setMostrarAnulacion] = useState(false);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [anulando, setAnulando] = useState(false);
   // Datos que la agenda necesita para mostrar la cirugía (las importaciones masivas a veces no los traen).
   const faltantesAgenda = (() => {
     const c = data?.cirugia;
@@ -434,6 +439,23 @@ export default function CirugiaDetailPage() {
     }
   }
 
+  async function anularCirugia() {
+    const motivo = motivoAnulacion.trim();
+    if (!motivo || anulando) return;
+    setAnulando(true);
+    try {
+      await enviarJSON(`/api/agenda/${id}`, 'PATCH', { estado: 'cancelada', motivo });
+      setMostrarAnulacion(false);
+      setMotivoAnulacion('');
+      toast('Cirugía anulada');
+      await mutate();
+    } catch (err) {
+      toast(mensajeDeError(err, 'No se pudo anular la cirugía'), 'error');
+    } finally {
+      setAnulando(false);
+    }
+  }
+
   if (loading && !data) {
     return <CirugiaDetalleSkeleton />;
   }
@@ -455,10 +477,42 @@ export default function CirugiaDetailPage() {
   const procedimientoOjo = cirugia.ojo ? `${procedimiento} ${etiquetaOjo(cirugia.ojo)}` : procedimiento;
   const cirujano =
     participantes.find((p) => /CIRUJANO/i.test(p.roles?.clave || p.roles?.nombre || ''))?.doctores?.alias || null;
+  const puedeAnular = cirugia.estado === 'completada' && puedeAnularCirugia(user?.rol);
 
   return (
     <div className="print-page relative animate-fadeIn" aria-busy={validating}>
       <BarraRevalidando activo={validating} className="no-print" />
+      <Modal isOpen={mostrarAnulacion} onClose={() => !anulando && setMostrarAnulacion(false)} maxWidth="max-w-md">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-fg">Anular cirugía completada</h3>
+            <p className="mt-1 text-sm text-muted">
+              Úsalo únicamente si la cirugía no se realizó. Se retirarán los honorarios no pagados y el lente marcado como usado volverá al inventario.
+            </p>
+          </div>
+          <label className="block text-sm font-semibold text-fg" htmlFor="motivo-anulacion-detalle">
+            Motivo <span className="text-red-600">*</span>
+          </label>
+          <textarea
+            id="motivo-anulacion-detalle"
+            value={motivoAnulacion}
+            onChange={(e) => setMotivoAnulacion(e.target.value)}
+            rows={4}
+            maxLength={500}
+            placeholder="Ej. el paciente no se presentó; se marcó como completada por error"
+            className="input-field resize-none"
+            disabled={anulando}
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setMostrarAnulacion(false)} disabled={anulando} className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-fg-2 hover:bg-surface-2 disabled:opacity-50">
+              Volver
+            </button>
+            <button type="button" onClick={anularCirugia} disabled={!motivoAnulacion.trim() || anulando} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
+              {anulando ? 'Anulando...' : 'Anular cirugía'}
+            </button>
+          </div>
+        </div>
+      </Modal>
       <HojaMembretada
         documento="Programación quirúrgica"
         folio={cirugia.codigo}
@@ -521,6 +575,11 @@ export default function CirugiaDetailPage() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {puedeEditarCirugia(data?.cirugia?.estado, user?.rol) && (
               <button type="button" onClick={iniciarEdicion} className="inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-fg-2 hover:bg-surface-2">Editar cirugía</button>
+            )}
+            {puedeAnular && (
+              <button type="button" onClick={() => setMostrarAnulacion(true)} className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">
+                Anular cirugía
+              </button>
             )}
             <EnviarPaciente
               cita={{
