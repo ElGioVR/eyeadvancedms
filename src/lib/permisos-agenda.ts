@@ -18,11 +18,18 @@ export const ROLES_VER_AGENDA: readonly UserRole[] = ['admin', 'doctor', 'recepc
 /** Roles que administran la agenda (crear / editar / mover / cambiar estado). */
 export const ROLES_GESTION_AGENDA: readonly UserRole[] = ['admin', 'recepcionista', 'doctor', 'enfermero'];
 
+/** Roles que pueden anular una cirugía ya marcada como completada. */
+export const ROLES_ANULAR_CIRUGIA: readonly UserRole[] = ['admin', 'doctor', 'recepcionista'];
+
 /** Roles que importan agenda desde Excel/CSV. */
 export const ROLES_IMPORTAR_AGENDA: readonly UserRole[] = ['admin', 'recepcionista'];
 
 export function puedeGestionarAgenda(rol: string | null | undefined): boolean {
   return !!rol && (ROLES_GESTION_AGENDA as readonly string[]).includes(rol);
+}
+
+export function puedeAnularCirugia(rol: string | null | undefined): boolean {
+  return !!rol && (ROLES_ANULAR_CIRUGIA as readonly string[]).includes(rol);
 }
 
 /**

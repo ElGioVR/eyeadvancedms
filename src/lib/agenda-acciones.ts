@@ -3,7 +3,7 @@
  * Sin dependencias de React: se prueba en src/lib/__tests__/agenda-acciones.test.ts.
  */
 import type { AgendaCirugia } from '@/types';
-import { puedeGestionarAgenda } from '@/lib/permisos-agenda';
+import { puedeAnularCirugia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { puedeConfirmarse } from '@/lib/confirmacion-cita';
 
 // «Aplazar» se eliminó: aplazar y reagendar son lo mismo; solo queda reagendar.
@@ -22,17 +22,17 @@ export function esEventoConsulta(e: Pick<AgendaCirugia, 'tipo'>): boolean {
 /**
  * Acciones válidas para el evento según su tipo, estado y el rol del usuario.
  * Cirugías: agendada → reagendada | cancelada; reagendada solo admite moverla de nuevo;
- * completada → cancelada solo admin (anulación de una cirugía que no se realizó).
+ * completada → cancelada para quien gestiona la agenda (anulación de una cirugía que no se realizó).
  * Consultas/estudios: cualquier estado activo.
- * Admin, recepción y doctor gestionan toda la agenda; enfermería solo la consulta.
+ * Admin, recepción y doctor pueden anular una cirugía completada; enfermería no.
  */
 export function accionesDisponibles(
   evento: Pick<AgendaCirugia, 'tipo' | 'estado'>,
   userRol: string
 ): AccionRapida[] {
   if (!puedeGestionarAgenda(userRol)) return [];
-  // Cirugía marcada completada que no se realizó: solo admin puede anularla (cancelar con motivo).
-  if (evento.estado === 'completada' && !esEventoConsulta(evento) && userRol === 'admin') return ['cancelar'];
+  // Cirugía marcada completada que no se realizó: quien gestiona la agenda puede anularla (cancelar con motivo).
+  if (evento.estado === 'completada' && !esEventoConsulta(evento) && puedeAnularCirugia(userRol)) return ['cancelar'];
   if (evento.estado === 'completada' || evento.estado === 'cancelada') return [];
   if (esEventoConsulta(evento)) return ['reagendar', 'cancelar'];
   if (evento.estado === 'agendada') return ['reagendar', 'cancelar'];

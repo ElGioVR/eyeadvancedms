@@ -31,7 +31,7 @@ export function estadosValidos(): CirugiaEstado[] {
 
 /**
  * Anulación: una cirugía quedó COMPLETADA pero no se realizó (p. ej. importada con fecha pasada).
- * No es una transición normal (completada sigue siendo terminal): solo admin, con motivo.
+ * No es una transición normal (completada sigue siendo terminal): admin, doctor o recepción, con motivo.
  * El servidor devuelve lentes al inventario y retira honorarios no pagados.
  */
 export function esAnulacionDeCompletada(de: CirugiaEstado | null | undefined, a: CirugiaEstado): boolean {

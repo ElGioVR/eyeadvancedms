@@ -36,7 +36,7 @@ describe('lib/agenda-acciones accionesDisponibles (doctor con acceso total)', ()
     assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'agendada' }, 'enfermero'), ['reagendar', 'cancelar']);
   });
   it('estados finales: sin acciones', () => {
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' }, 'admin'), []);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' }, 'admin'), ['cancelar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'cancelada' }, 'doctor'), []);
   });
 });

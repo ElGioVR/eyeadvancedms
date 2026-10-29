@@ -25,9 +25,11 @@ describe('confirmación de citas', () => {
   });
   it('no ofrece Confirmar si ya está confirmada, cerrada o el rol no gestiona', () => {
     assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'agendada', confirmacion: 'confirmada' }, 'admin'), ['reagendar', 'cancelar']);
-    // Completada: sin Confirmar; admin solo puede anularla (oct 2026: cirugías que no se realizaron).
-    assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'admin'), ['cancelar']);
-    assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'recepcionista'), []);
+    // Completada: sin Confirmar; quien gestiona la agenda puede anularla (oct 2026), enfermería no.
+     assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'admin'), ['cancelar']);
+     assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'doctor'), ['cancelar']);
+     assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'recepcionista'), ['cancelar']);
+     assert.deepEqual(accionesConConfirmar({ tipo: 'cirugia', estado: 'completada', confirmacion: null }, 'enfermero'), []);
     assert.deepEqual(accionesConConfirmar({ tipo: 'consulta', estado: 'agendada', confirmacion: null }, 'paciente'), []);
   });
 });

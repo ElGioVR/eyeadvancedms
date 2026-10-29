@@ -198,7 +198,7 @@ export async function completarLentesCirugia(
 }
 
 /**
- * Anulación de una cirugía completada que no se realizó (solo admin).
+ * Anulación de una cirugía completada que no se realizó (admin, doctor o recepción).
  * - Lentes USADOS de inventario: se devuelve la pieza (DEVOLUCION, idempotente por cirugía).
  * - Todos los USADOS pasan a LIBERADO con motivo CIRUGIA_ANULADA.
  * Los de hospital / compra directa / historial importado no tienen pieza que devolver.

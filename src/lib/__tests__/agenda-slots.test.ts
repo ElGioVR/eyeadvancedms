@@ -62,18 +62,18 @@ describe('agenda-acciones (reagendar / cancelar)', () => {
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'cancelada' }, 'admin'), []);
   });
 
-  it('enfermería (rol restringido) solo consulta su agenda', () => {
-    assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'agendada' }, 'enfermero'), []);
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), []);
+  it('enfermería conserva las acciones normales de agenda', () => {
+    assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'agendada' }, 'enfermero'), ['reagendar', 'cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), ['reagendar', 'cancelar']);
   });
 
   it('cirugías respetan la máquina de estados y el rol', () => {
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'recepcionista'), ['reagendar', 'cancelar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'reagendada' }, 'admin'), ['reagendar']);
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'aplazada' }, 'admin'), []);
-    // Doctor con acceso total a la agenda (oct 2026); enfermería solo consulta.
+    // Doctor y enfermería conservan acceso a las acciones normales de agenda.
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'doctor'), ['reagendar', 'cancelar']);
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), []);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'agendada' }, 'enfermero'), ['reagendar', 'cancelar']);
     assert.deepEqual(accionesDisponibles({ estado: 'agendada' }, 'admin'), ['reagendar', 'cancelar']);
   });
 });

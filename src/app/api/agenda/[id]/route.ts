@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { notificarAsignacion, notificarCancelacion, notificarReagendado } from '@/services/notificaciones';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { leerConRol, requireAuth, requireRole } from '@/lib/supabase/server';
-import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
+import { ROLES_ANULAR_CIRUGIA, ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { estadoCerrado } from '@/lib/permisos-edicion';
 import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
@@ -210,11 +210,11 @@ async function manejarPATCH(
   const nuevoEstado = data.estado;
   const estadoAnterior = prev.estado as CirugiaEstado;
 
-  // Anulación: completada → cancelada cuando la cirugía no se realizó (solo admin).
+  // Anulación: completada → cancelada cuando la cirugía no se realizó (admin, doctor y recepción; no enfermería).
   const anulacion = !!nuevoEstado && esAnulacionDeCompletada(estadoAnterior, nuevoEstado);
   if (anulacion) {
-    if ((await requireRole(auth.user, ['admin'])) !== null) {
-      return NextResponse.json({ error: 'Solo un administrador puede anular una cirugía completada' }, { status: 403 });
+    if ((await requireRole(auth.user, [...ROLES_ANULAR_CIRUGIA])) !== null) {
+      return NextResponse.json({ error: 'No tienes permiso para anular una cirugía completada' }, { status: 403 });
     }
     const { data: pagados, error: errPag } = await supabase
       .from('eventos_honorario')

@@ -245,3 +245,7 @@ grep -oE "^\| *${P}-[0-9]+ *\|" docs/cirugias/auditoria-fase-1.md       | grep -
 
 Salida: especificación → 89 filas con ID / 89 IDs únicos; matriz → 89 filas / 89 IDs únicos; `diff` de ambas listas ordenadas → vacío; `uniq -d` → sin duplicados.
 **Conclusión: la matriz contiene exactamente los 89 IDs de la especificación (mismo número y mismo conjunto), incluidos ALC-01..16 y FUE-001.**
+
+## Nota posterior — Anulación de cirugía completada (2026-10-29)
+
+La anulación de una cirugía marcada como completada, cuando no se realizó, queda autorizada para `admin`, `doctor` y `recepcionista`, con motivo obligatorio; `enfermero` no puede ejecutarla. La misma regla se aplica en UI y backend mediante `ROLES_ANULAR_CIRUGIA` (`src/lib/permisos-agenda.ts:21-30`, `src/lib/agenda-acciones.ts:34-36`, `src/app/api/agenda/[id]/route.ts:213-233`). La ruta conserva la protección contra honorarios ya pagados, registra el cambio en `cirugia_historial`, retira honorarios no pagados y revierte lentes. Prueba de acciones: `src/lib/__tests__/confirmacion-cita.test.ts:26-33`.

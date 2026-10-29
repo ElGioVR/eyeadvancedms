@@ -402,17 +402,26 @@ async function main() {
     db.eventos_honorario = [];
     registro.devengos = [];
   };
-  await prueba('9. No realizadas', 'Solo admin ve «Anular» en una cirugía completada', () => {
+  await prueba('9. No realizadas', 'Admin, doctor y recepción ven «Anular» en una cirugía completada; enfermería no', () => {
     assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'admin'), ['cancelar']);
-    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'recepcionista'), []);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'doctor'), ['cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'recepcionista'), ['cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'enfermero'), []);
     assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'completada' } as any, 'admin'), []);
   });
-  await prueba('9. No realizadas', 'Recepción no puede anular una completada (403)', async () => {
+  await prueba('9. No realizadas', 'Enfermería no puede anular una completada (403)', async () => {
     completadaPorError();
-    sesion.rol = 'recepcionista';
+    sesion.rol = 'enfermero';
     const res = await patchAgenda(json('PATCH', { estado: 'cancelada', motivo: 'No se operó' }), params(CXN));
     assert.equal(res.status, 403);
     assert.equal(db.agenda_cirugias[0].estado, 'completada');
+  });
+  await prueba('9. No realizadas', 'La doctora puede anular una completada', async () => {
+    completadaPorError();
+    sesion.rol = 'doctor';
+    const res = await patchAgenda(json('PATCH', { estado: 'cancelada', motivo: 'No se operó' }), params(CXN));
+    assert.equal(res.status, 200, await res.clone().text());
+    assert.equal(db.agenda_cirugias[0].estado, 'cancelada');
   });
   await prueba('9. No realizadas', 'Con honorarios pagados no se anula (409)', async () => {
     completadaPorError();

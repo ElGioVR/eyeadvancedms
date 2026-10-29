@@ -211,7 +211,7 @@ function AccionRapidaModalBase({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Anular: la cirugía figura como completada pero no se realizó (solo admin).
+   // Anular: la cirugía figura como completada pero no se realizó.
   const anular = !consulta && accion === 'cancelar' && evento.estado === 'completada';
   const pideHora = accion === 'reagendar';
   const pideFecha = accion === 'reagendar';
