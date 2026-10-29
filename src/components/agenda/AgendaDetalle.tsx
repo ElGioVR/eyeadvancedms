@@ -13,7 +13,7 @@ import { agendaSoloPropia, puedeGestionarAgenda } from '@/lib/permisos-agenda';
 import { estadoCerrado, puedeEditarCirugia } from '@/lib/permisos-edicion';
 import EtiquetaOrigenRegistro from '@/components/ui/EtiquetaOrigenRegistro';
 import { ETIQUETA_MEDIO, estaConfirmada } from '@/lib/confirmacion-cita';
-import { type AccionRapida, accionesConConfirmar, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
+import { AccionRapidaModal, type AccionRapida, accionesConConfirmar, ETIQUETA_ACCION } from '@/components/agenda/AccionesRapidasAgenda';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { type TelefonoPaciente } from '@/lib/telefonos-paciente';
@@ -27,7 +27,9 @@ import { type OrdenLente } from '@/lib/cirugia-lentes-puro';
 export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetch }: { cirugia: AgendaCirugia; userRol: string; onEdit: () => void; onClose: () => void; onRefetch: () => void }) {
   const [updating, setUpdating] = useState(false);
   const [completando, setCompletando] = useState(false);
+  const [accionRapida, setAccionRapida] = useState<AccionRapida | null>(null);
   const { toast } = useToast();
+  const puedeAnular = cirugia.estado === 'completada' && accionesConConfirmar(cirugia, userRol).includes('cancelar');
   const updateEstado = async (s: AgendaCirugiaEstado) => {
     setUpdating(true);
     try {
@@ -59,6 +61,18 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
 
   return (
     <div className="space-y-5">
+      {accionRapida && (
+        <AccionRapidaModal
+          evento={cirugia}
+          accion={accionRapida}
+          onClose={() => setAccionRapida(null)}
+          onDone={(_, texto) => {
+            setAccionRapida(null);
+            toast(texto, 'success');
+            onRefetch();
+          }}
+        />
+      )}
       {completando && (
         <CompletarCirugiaLentes
           cirugiaId={cirugia.id}
@@ -133,6 +147,11 @@ export function CirugiaDetailModal({ cirugia, userRol, onEdit, onClose, onRefetc
           {puedeEditarCirugia(cirugia.estado, userRol) && (
             <button onClick={onEdit} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-fg-2 hover:bg-surface-2 transition-colors">
               {cirugia.estado === 'completada' ? 'Corregir datos' : 'Editar'}
+            </button>
+          )}
+          {puedeAnular && (
+            <button onClick={() => setAccionRapida('cancelar')} disabled={updating} className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
+              <X className="h-4 w-4" /> Anular cirugía
             </button>
           )}
         </div>
