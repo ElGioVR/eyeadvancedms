@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { consumirLIO } from '@/lib/inventario';
+import { consumirLIO, liberarLIO } from '@/lib/inventario';
 import { ingresarLenteAInventario } from '@/lib/inventario-lentes';
 
 /*
@@ -195,6 +195,44 @@ export async function completarLentesCirugia(
     .order('orden');
   if (errFinal) return { ok: false, codigo: 'ERROR_INTERNO', error: MENSAJES.ERROR_INTERNO };
   return { ok: true, data: (final ?? []) as LenteCirugia[] } as ResultadoLente<LenteCirugia[]>;
+}
+
+/**
+ * Anulación de una cirugía completada que no se realizó (solo admin).
+ * - Lentes USADOS de inventario: se devuelve la pieza (DEVOLUCION, idempotente por cirugía).
+ * - Todos los USADOS pasan a LIBERADO con motivo CIRUGIA_ANULADA.
+ * Los de hospital / compra directa / historial importado no tienen pieza que devolver.
+ */
+export async function revertirLentesUsados(
+  cirugiaId: string,
+  usuarioId: string,
+): Promise<ResultadoLente<{ devueltos: number; liberados: number }>> {
+  const supabase = getSupabaseAdmin();
+  const { data: filas, error } = await supabase
+    .from('cirugia_lentes')
+    .select('id, origen, inventario_item_id, estado')
+    .eq('cirugia_id', cirugiaId)
+    .eq('estado', 'USADO');
+  if (error) return { ok: false, codigo: 'ERROR_INTERNO', error: MENSAJES.ERROR_INTERNO };
+  const usados = (filas ?? []) as Array<{ id: string; origen: string; inventario_item_id: string | null }>;
+
+  let devueltos = 0;
+  for (const l of usados) {
+    if (l.origen === 'INVENTARIO' && l.inventario_item_id) {
+      const r = await liberarLIO(l.inventario_item_id, cirugiaId, usuarioId);
+      if (!r.success) return { ok: false, codigo: 'ERROR_INTERNO', error: r.error ?? MENSAJES.ERROR_INTERNO };
+      devueltos++;
+    }
+  }
+  if (usados.length > 0) {
+    const ahora = new Date().toISOString();
+    const { error: errUpd } = await supabase
+      .from('cirugia_lentes')
+      .update({ estado: 'LIBERADO', requerido: false, liberado_at: ahora, motivo_liberacion: 'CIRUGIA_ANULADA', updated_at: ahora })
+      .in('id', usados.map((l) => l.id));
+    if (errUpd) return { ok: false, codigo: 'ERROR_INTERNO', error: MENSAJES.ERROR_INTERNO };
+  }
+  return { ok: true, data: { devueltos, liberados: usados.length } } as ResultadoLente<{ devueltos: number; liberados: number }>;
 }
 
 /* ───────── Logística de lentes (asignar / solicitar / compra directa) ───────── */

@@ -41,6 +41,7 @@ import {
 } from '@/lib/import-lentes-puro';
 import { requiereLente } from '@/lib/por-completar';
 import { hoyTijuana } from '@/lib/ficha-paciente';
+import { DIAS_ATRAS_BANDEJA, sumarDias } from '@/lib/bandeja-agenda';
 import { exigirLimite } from '@/lib/api/limites';
 
 // Import con lotes de cientos de filas: margen amplio en Vercel.
@@ -1134,6 +1135,9 @@ async function manejarPOST(request: Request) {
   const validasCx: PendCx[] = [];
   // Hoy en la clínica: las cirugías con fecha anterior se importan como realizadas (historial).
   const hoyClinica = hoyTijuana();
+  // Fechas pasadas dentro de la ventana de la bandeja: nadie ha confirmado si se operó.
+  // Entran como agendadas y aparecen en «Por cerrar» (completar o cancelar con motivo).
+  const limiteHistorial = sumarDias(hoyClinica, -DIAS_ATRAS_BANDEJA);
   // Anestesiólogos registrados (Personal → tipo Anestesiólogo), por nombre o alias.
   const anestesiologos = doctores.filter((d) => String(d.tipo_personal ?? '').toUpperCase() === 'ANESTESIOLOGO' && d.activo !== false);
   const buscarAnestesiologo = (texto: string): string | null => {
@@ -1147,6 +1151,7 @@ async function manejarPOST(request: Request) {
   };
   const anestesiologosNoRegistrados = new Set<string>();
   let importadasComoRealizadas = 0;
+  let importadasPorCerrar = 0;
   const val = (o: Record<string, string | number>, ...claves: string[]) => {
     for (const k of claves) { const t = texto(o[k]); if (t) return t; }
     return '';
@@ -1301,9 +1306,14 @@ async function manejarPOST(request: Request) {
       if (!marcaRuido && !marcaEsMarca && !suspendida) notasExtra.push(`Marca/nota: ${marcaTxt}`);
       const notas = notasExtra.length ? notasExtra.join(' · ') : null;
 
-      // Fecha ya pasada → la cirugía ya se realizó: entra como completada (historial, sin pendientes).
-      const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? (fecha < hoyClinica ? 'completada' : 'agendada') : 'aplazada';
+      // Fecha pasada:
+      //  - reciente (ventana de la bandeja): agendada → «Por cerrar»; alguien confirma si se operó.
+      //  - antigua: historial, entra como completada (sin pendientes ni inventario).
+      // Antes toda fecha pasada entraba completada y una cirugía no realizada no se podía cancelar.
+      const historial = !!fecha && fecha < limiteHistorial;
+      const estado = esAplazados ? 'aplazada' : suspendida ? 'cancelada' : fecha ? (historial ? 'completada' : 'agendada') : 'aplazada';
       if (estado === 'completada') importadasComoRealizadas++;
+      else if (estado === 'agendada' && fecha && fecha < hoyClinica) importadasPorCerrar++;
       const ojoClave = ojo || '';
       const dedupe = fecha
         ? `F|${nombreV.clave}|${fecha}|${ojoClave}|${claveTexto(procedimiento || '')}`
@@ -1354,7 +1364,8 @@ async function manejarPOST(request: Request) {
   if (sinProcedimientoConsultados.length > 0) avisos.push(`CONSULTADOS: ${sinProcedimientoConsultados.length} paciente${sinProcedimientoConsultados.length === 1 ? '' : 's'} sin procedimiento definido (estudios pendientes, interconsulta…) no se importaron como pendientes de programar (${listaFilas(sinProcedimientoConsultados)}).`);
   if (fechasNacDescartadas.length > 0) avisos.push(`Fechas de nacimiento descartadas por ser futuras o no cuadrar con la edad (${listaFilas(fechasNacDescartadas)}). El paciente se importa con la edad.`);
   if (anestesiologosNoRegistrados.size > 0) avisos.push(`ANESTESIA trae nombres que no están registrados como anestesiólogos en Personal (${Array.from(anestesiologosNoRegistrados).join(', ')}; ${listaFilas(horaAnestesiaSobrante)}): se guardaron en notas. Regístralos en Personal como «Anestesiólogo» y vuelve a importar para asignarlos.`);
-  if (importadasComoRealizadas > 0) avisos.push(`${importadasComoRealizadas} cirugía${importadasComoRealizadas === 1 ? '' : 's'} con fecha anterior a hoy se importa${importadasComoRealizadas === 1 ? '' : 'n'} como realizada${importadasComoRealizadas === 1 ? '' : 's'} (historial): sin pendientes, sin recordatorios y sin descontar lentes del inventario.`);
+  if (importadasComoRealizadas > 0) avisos.push(`${importadasComoRealizadas} cirugía${importadasComoRealizadas === 1 ? '' : 's'} con fecha de hace más de ${DIAS_ATRAS_BANDEJA} días se importa${importadasComoRealizadas === 1 ? '' : 'n'} como realizada${importadasComoRealizadas === 1 ? '' : 's'} (historial): sin pendientes, sin recordatorios y sin descontar lentes del inventario.`);
+  if (importadasPorCerrar > 0) avisos.push(`${importadasPorCerrar} cirugía${importadasPorCerrar === 1 ? '' : 's'} con fecha de los últimos ${DIAS_ATRAS_BANDEJA} días entra${importadasPorCerrar === 1 ? '' : 'n'} como agendada${importadasPorCerrar === 1 ? '' : 's'}: aparecen en la bandeja «Por cerrar» para marcarlas como completadas o cancelarlas.`);
   if (filasPorCompletar > 0) avisos.push(`${filasPorCompletar} fila${filasPorCompletar === 1 ? '' : 's'} se importaron sin hora porque la hora no es válida. Quedaron marcadas «Por completar» en notas; corrige la hora en la agenda.`);
 
   // Duplicados: cirugías de las fechas del archivo + aplazadas sin fecha.

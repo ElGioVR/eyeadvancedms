@@ -238,7 +238,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
           {acciones.includes('cancelar') && (
             <button onClick={() => onAccion('cancelar')} disabled={updating}
               className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors text-gray-400 hover:text-red-500"
-              title="Cancelar cita" aria-label="Cancelar cita">
+              title={cirugia.estado === 'completada' ? 'Anular cirugía' : 'Cancelar cita'} aria-label={cirugia.estado === 'completada' ? 'Anular cirugía' : 'Cancelar cita'}>
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
             </button>
           )}
@@ -373,7 +373,7 @@ export function DetailPopoverCard({ cirugia, position, userRol, onEdit, onClose,
                       ? 'border-pink-300 bg-pink-400/10 text-pink-700 hover:bg-pink-400/20 dark:border-pink-400/40 dark:text-pink-300'
                       : 'border-line text-fg-2 hover:bg-surface-2'
                 )}>
-                {ETIQUETA_ACCION[a]}
+                {a === 'cancelar' && cirugia.estado === 'completada' ? 'Anular' : ETIQUETA_ACCION[a]}
               </button>
             ))}
           </div>

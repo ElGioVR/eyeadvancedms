@@ -1,14 +1,14 @@
 /**
- * Incidencias de cancelación (SEMI-IMPLEMENTADO).
+ * Incidencias de cancelación.
  *
  * Las citas canceladas ya no se muestran en la agenda; este reporte las cuenta
  * para productividad: cuántas, de qué tipo, motivo y quién las canceló.
  *
  * Estado actual:
  *  - Consultas y estudios: motivo y usuario salen de consulta_historial (CANCELACION).
- *  - Cirugías: se listan y cuentan, pero el motivo NO se guarda al cancelar
- *    (PATCH /api/agenda/[id] solo persiste motivo_aplazamiento) y no hay
- *    columna de quién canceló. Quedan como `pendiente`.
+ *  - Cirugías: motivo y usuario salen de cirugia_historial (ESTADO_CAMBIADO → cancelada,
+ *    que PATCH /api/agenda/[id] registra con el motivo obligatorio). Cancelaciones previas
+ *    sin ese registro quedan como `pendiente` («Sin registrar»).
  *
  * Pendiente: ver claude/incidencias-cancelacion-pendiente.md en el proyecto.
  */
@@ -90,14 +90,33 @@ async function manejarGET(request: Request) {
 
     const consultas = consultasRes.data || [];
     const ids = consultas.map((c) => c.id as string);
-    const historial = ids.length
-      ? (await supabase
-          .from('consulta_historial')
-          .select('consulta_id, usuario_id, payload, created_at')
-          .eq('tipo_evento', 'CANCELACION')
-          .in('consulta_id', ids)
-          .order('created_at', { ascending: false })).data || []
-      : [];
+    const idsCx = (cirugiasRes.data || []).map((c) => c.id as string);
+    const [historial, historialCx] = await Promise.all([
+      ids.length
+        ? supabase
+            .from('consulta_historial')
+            .select('consulta_id, usuario_id, payload, created_at')
+            .eq('tipo_evento', 'CANCELACION')
+            .in('consulta_id', ids)
+            .order('created_at', { ascending: false })
+            .then((r) => r.data || [])
+        : Promise.resolve([]),
+      idsCx.length
+        ? supabase
+            .from('cirugia_historial')
+            .select('cirugia_id, usuario_id, detalle, created_at')
+            .eq('accion', 'ESTADO_CAMBIADO')
+            .in('cirugia_id', idsCx)
+            .order('created_at', { ascending: false })
+            .then((r) => r.data || [])
+        : Promise.resolve([]),
+    ]);
+    // Cirugías: el cambio a cancelada más reciente.
+    const cancelacionCx = new Map<string, { usuario_id: string | null; motivo: string | null }>();
+    for (const h of historialCx as Array<{ cirugia_id: string; usuario_id: string | null; detalle: { a?: string; motivo?: string } | null }>) {
+      if (String(h.detalle?.a ?? '').toLowerCase() !== 'cancelada' || cancelacionCx.has(h.cirugia_id)) continue;
+      cancelacionCx.set(h.cirugia_id, { usuario_id: h.usuario_id || null, motivo: h.detalle?.motivo || null });
+    }
     // Un registro por consulta: el cancelamiento más reciente.
     const cancelacion = new Map<string, { usuario_id: string | null; motivo: string | null }>();
     for (const h of historial) {
@@ -107,7 +126,7 @@ async function manejarGET(request: Request) {
         cancelacion.set(cid, { usuario_id: (h.usuario_id as string) || null, motivo: payload.motivo || null });
       }
     }
-    const usuarioIds = [...new Set([...cancelacion.values()].map((v) => v.usuario_id).filter(Boolean) as string[])];
+    const usuarioIds = [...new Set([...cancelacion.values(), ...cancelacionCx.values()].map((v) => v.usuario_id).filter(Boolean) as string[])];
     const usuarios = usuarioIds.length
       ? (await supabase.from('usuarios').select('id, nombre').in('id', usuarioIds)).data || []
       : [];
@@ -134,20 +153,25 @@ async function manejarGET(request: Request) {
       };
     });
 
-    // Cirugías: motivo y responsable aún no se guardan al cancelar (pendiente).
-    const filasCirugia: Fila[] = (cirugiasRes.data || []).map((c) => ({
-      id: c.id as string,
-      tipo: 'cirugia',
-      fecha: (c.fecha as string) || null,
-      hora: (c.hora as string) || null,
-      paciente: (c.nombre_paciente as string) || null,
-      doctor_id: (c.doctor_id as string) || null,
-      doctor: (c as any).doctores?.alias || null,
-      motivo: null,
-      cancelado_por_id: null,
-      cancelado_por: null,
-      pendiente: ['motivo', 'quien'],
-    }));
+    const filasCirugia: Fila[] = (cirugiasRes.data || []).map((c) => {
+      const info = cancelacionCx.get(c.id as string);
+      const pendiente: string[] = [];
+      if (!info?.motivo) pendiente.push('motivo');
+      if (!info?.usuario_id) pendiente.push('quien');
+      return {
+        id: c.id as string,
+        tipo: 'cirugia',
+        fecha: (c.fecha as string) || null,
+        hora: (c.hora as string) || null,
+        paciente: (c.nombre_paciente as string) || null,
+        doctor_id: (c.doctor_id as string) || null,
+        doctor: (c as any).doctores?.alias || null,
+        motivo: info?.motivo || null,
+        cancelado_por_id: info?.usuario_id || null,
+        cancelado_por: info?.usuario_id ? nombreUsuario.get(info.usuario_id) || null : null,
+        pendiente,
+      };
+    });
 
     const filas = [...filasConsulta, ...filasCirugia].sort((a, b) =>
       (b.fecha || '').localeCompare(a.fecha || '') || (a.hora || '').localeCompare(b.hora || '')

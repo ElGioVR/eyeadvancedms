@@ -21,7 +21,8 @@ export function esEventoConsulta(e: Pick<AgendaCirugia, 'tipo'>): boolean {
 
 /**
  * Acciones válidas para el evento según su tipo, estado y el rol del usuario.
- * Cirugías: agendada → reagendada | cancelada; reagendada solo admite moverla de nuevo.
+ * Cirugías: agendada → reagendada | cancelada; reagendada solo admite moverla de nuevo;
+ * completada → cancelada solo admin (anulación de una cirugía que no se realizó).
  * Consultas/estudios: cualquier estado activo.
  * Admin, recepción y doctor gestionan toda la agenda; enfermería solo la consulta.
  */
@@ -30,6 +31,8 @@ export function accionesDisponibles(
   userRol: string
 ): AccionRapida[] {
   if (!puedeGestionarAgenda(userRol)) return [];
+  // Cirugía marcada completada que no se realizó: solo admin puede anularla (cancelar con motivo).
+  if (evento.estado === 'completada' && !esEventoConsulta(evento) && userRol === 'admin') return ['cancelar'];
   if (evento.estado === 'completada' || evento.estado === 'cancelada') return [];
   if (esEventoConsulta(evento)) return ['reagendar', 'cancelar'];
   if (evento.estado === 'agendada') return ['reagendar', 'cancelar'];

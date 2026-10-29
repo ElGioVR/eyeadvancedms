@@ -8,8 +8,8 @@ import { handleSupabaseError } from '@/lib/supabase/handle-error';
 import { fechaISO, horaHHMM, leerJSON, validarId } from '@/lib/api/validar';
 import { liberarLIO } from '@/lib/inventario';
 import { VALORES_ANESTESIA } from '@/lib/catalogos/cirugia';
-import { completarLentesCirugia, liberarLentes, reservarLente, type OrdenLente } from '@/lib/cirugia-lentes';
-import { esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
+import { completarLentesCirugia, liberarLentes, reservarLente, revertirLentesUsados, type OrdenLente } from '@/lib/cirugia-lentes';
+import { esAnulacionDeCompletada, esTransicionValida, type CirugiaEstado } from '@/lib/cirugia-estados';
 import { detectarConflictosAgenda } from '@/lib/agenda-conflictos';
 import { MotorDevengoService } from '@/services/productividad';
 import { resolverServicioFacturacion } from '@/lib/cirugia-servicio-facturacion';
@@ -210,8 +210,30 @@ async function manejarPATCH(
   const nuevoEstado = data.estado;
   const estadoAnterior = prev.estado as CirugiaEstado;
 
+  // Anulación: completada → cancelada cuando la cirugía no se realizó (solo admin).
+  const anulacion = !!nuevoEstado && esAnulacionDeCompletada(estadoAnterior, nuevoEstado);
+  if (anulacion) {
+    if ((await requireRole(auth.user, ['admin'])) !== null) {
+      return NextResponse.json({ error: 'Solo un administrador puede anular una cirugía completada' }, { status: 403 });
+    }
+    const { data: pagados, error: errPag } = await supabase
+      .from('eventos_honorario')
+      .select('id')
+      .eq('origen_tipo', 'OPERACION')
+      .eq('origen_id', id)
+      .eq('estado', 'PAGADO')
+      .limit(1);
+    if (errPag) return NextResponse.json({ error: 'No se pudo revisar los honorarios de la cirugía' }, { status: 500 });
+    if ((pagados ?? []).length > 0) {
+      return NextResponse.json(
+        { error: 'La cirugía tiene honorarios ya pagados. Corrige el pago en Productividad antes de anularla.' },
+        { status: 409 }
+      );
+    }
+  }
+
   if (nuevoEstado && nuevoEstado !== estadoAnterior) {
-    if (!esTransicionValida(estadoAnterior, nuevoEstado)) {
+    if (!anulacion && !esTransicionValida(estadoAnterior, nuevoEstado)) {
       return NextResponse.json(
         { error: `Transición de estado no permitida: ${estadoAnterior} → ${nuevoEstado}` },
         { status: 400 }
@@ -369,6 +391,7 @@ async function manejarPATCH(
         de: estadoAnterior,
         a: nuevoEstado,
         motivo: data.motivo,
+        ...(anulacion ? { anulacion: true } : {}),
       },
     });
   }
@@ -425,6 +448,24 @@ async function manejarPATCH(
     if (itemId) await liberarLIO(itemId, id, auth.user.id); // legado
   }
 
+  // Anulación: el lente marcado como usado no se usó → vuelve al inventario.
+  if (anulacion) {
+    const r = await revertirLentesUsados(id, auth.user.id);
+    await supabase.from('cirugia_historial').insert({
+      cirugia_id: id,
+      usuario_id: auth.user.id,
+      // accion con CHECK en BD: se reutiliza LENTES_RESUELTOS (sin migración).
+      accion: 'LENTES_RESUELTOS',
+      detalle: { anulacion: true, motivo: data.motivo, ...(r.ok ? r.data : { error: r.error }) },
+    });
+    if (!r.ok) {
+      return NextResponse.json(
+        { error: `La cirugía se anuló, pero no se pudo devolver el lente al inventario: ${r.error}. Revísalo en Inventario.` },
+        { status: 500 }
+      );
+    }
+  }
+
   // Devengo y notificaciones (best-effort) corren juntos; se esperan antes de responder.
   const pendientes: Array<Promise<unknown>> = [];
   if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
@@ -450,7 +491,9 @@ async function manejarPATCH(
   const horaFinal = data.hora !== undefined ? data.hora : prev.hora;
   const paciente = (data.nombre_paciente as string | undefined) || prev.nombre_paciente || 'Paciente';
   const base = { paciente, entidadTipo: 'agenda_cirugia' as const, entidadId: id, actorUserId: auth.user.id };
-  if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
+  if (anulacion) {
+    // Corrección de un registro pasado: no se avisa al doctor como si fuera una cancelación nueva.
+  } else if (nuevoEstado === 'cancelada' && estadoAnterior !== 'cancelada') {
     pendientes.push(notificarCancelacion({ ...base, doctorId: doctorFinal, fecha: prev.fecha, hora: prev.hora, motivo: data.motivo }));
   } else {
     if (data.doctor_id !== undefined && data.doctor_id !== prev.doctor_id) {

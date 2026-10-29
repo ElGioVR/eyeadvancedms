@@ -211,6 +211,8 @@ function AccionRapidaModalBase({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Anular: la cirugía figura como completada pero no se realizó (solo admin).
+  const anular = !consulta && accion === 'cancelar' && evento.estado === 'completada';
   const pideHora = accion === 'reagendar';
   const pideFecha = accion === 'reagendar';
   const duracion = consulta ? DURACION_CITA_MIN : evento.duracion_min ?? 60;
@@ -223,7 +225,7 @@ function AccionRapidaModalBase({
     setError(null);
     try {
       const cambios = await ejecutarAccion(evento, accion, { motivo: motivo.trim(), fecha, hora });
-      const texto = accion === 'cancelar' ? 'Cita cancelada' : 'Cita reagendada';
+      const texto = anular ? 'Cirugía anulada' : accion === 'cancelar' ? 'Cita cancelada' : 'Cita reagendada';
       onDone(cambios, texto);
     } catch (err) {
       setError(mensaje(err));
@@ -237,7 +239,7 @@ function AccionRapidaModalBase({
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-bold text-fg">
-            {ETIQUETA_ACCION[accion]} {consulta ? (evento.tipo === 'estudio' ? 'estudio' : 'consulta') : 'cirugía'}
+            {anular ? 'Anular cirugía completada' : `${ETIQUETA_ACCION[accion]} ${consulta ? (evento.tipo === 'estudio' ? 'estudio' : 'consulta') : 'cirugía'}`}
           </h3>
           <p className="text-sm text-muted">
             {evento.nombre_paciente}
@@ -246,6 +248,13 @@ function AccionRapidaModalBase({
             {evento.doctor_nombre ? ` · ${evento.doctor_nombre}` : ''}
           </p>
         </div>
+
+        {anular && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+            Úsalo solo si la cirugía <strong>no se realizó</strong>. Pasa a cancelada, se retiran los honorarios no pagados y el lente
+            marcado como usado vuelve al inventario. Queda registrado en el historial con tu usuario y el motivo.
+          </p>
+        )}
 
         {pideFecha && (
           <FormField label="Nueva fecha" required>
@@ -271,7 +280,7 @@ function AccionRapidaModalBase({
             onChange={(e) => setMotivo(e.target.value)}
             rows={3}
             maxLength={500}
-            placeholder="Ej. el paciente solicitó cambio de horario"
+            placeholder={anular ? 'Ej. el paciente no se presentó; se marcó como completada por error' : 'Ej. el paciente solicitó cambio de horario'}
             className="input-field resize-none"
           />
         </FormField>
@@ -295,7 +304,7 @@ function AccionRapidaModalBase({
             )}
           >
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
-            {accion === 'cancelar' ? 'Cancelar cita' : `Confirmar`}
+            {anular ? 'Anular cirugía' : accion === 'cancelar' ? 'Cancelar cita' : `Confirmar`}
           </button>
         </div>
       </div>

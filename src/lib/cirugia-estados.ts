@@ -28,3 +28,12 @@ export function esTransicionValida(de: CirugiaEstado | null | undefined, a: Ciru
 export function estadosValidos(): CirugiaEstado[] {
   return ['agendada', 'aplazada', 'reagendada', 'completada', 'cancelada'];
 }
+
+/**
+ * Anulación: una cirugía quedó COMPLETADA pero no se realizó (p. ej. importada con fecha pasada).
+ * No es una transición normal (completada sigue siendo terminal): solo admin, con motivo.
+ * El servidor devuelve lentes al inventario y retira honorarios no pagados.
+ */
+export function esAnulacionDeCompletada(de: CirugiaEstado | null | undefined, a: CirugiaEstado): boolean {
+  return String(de ?? '').toLowerCase() === 'completada' && a === 'cancelada';
+}

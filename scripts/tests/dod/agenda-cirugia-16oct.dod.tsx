@@ -21,6 +21,9 @@ import LenteLogistica, { lenteVacio, validarLente } from '@/components/cirugia/L
 import SelectorModeloLio from '@/components/cirugia/SelectorModeloLio';
 import EditorDatosPaciente, { faltantesDatosGenerales } from '@/components/pacientes/EditorDatosPaciente';
 import CompletarCirugiaLentes from '@/components/agenda/CompletarCirugiaLentes';
+import { hoyTijuana } from '@/lib/ficha-paciente';
+import { sumarDias } from '@/lib/bandeja-agenda';
+import { accionesDisponibles } from '@/lib/agenda-acciones';
 
 const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const json = (metodo: string, body: unknown) =>
@@ -374,6 +377,70 @@ async function main() {
     const f = faltantesCirugia({ ...futura, lentes: db.cirugia_lentes.filter((l) => l.cirugia_id === futura.id) as any });
     assert.ok(!f.faltan.includes('anestesia'));
     assert.ok(f.faltan.includes('hora'));
+  });
+
+  // ───────────── 9. Cirugías no realizadas (29 oct 2026) ─────────────
+  await prueba('9. No realizadas', 'Import: fecha de los últimos 15 días entra agendada («Por cerrar»), no completada', async () => {
+    sesion.rol = 'admin';
+    db.agenda_cirugias = []; db.cirugia_lentes = []; db.cirugia_participantes = []; db.agenda_cirugia_doctores = [];
+    const reciente = sumarDias(hoyTijuana(), -3);
+    const csv9 = ['FECHA,NOMBRE PX,No. Exp,HORA CX,CIRUGÍA,OJO,LIO,CIRUJANO,ANESTESIA',
+      `${reciente},Carla Reciente Tres,7101,08:00,FACO + LIO,OD,22.5 CLAREON,BAYARDO,`,
+    ].join('\n');
+    const r = await importarCx(csv9, true, false);
+    const c = db.agenda_cirugias.find((x) => x.nombre_paciente === 'Carla Reciente Tres')!;
+    assert.ok(c, 'se importó');
+    assert.equal(c.estado, 'agendada');
+    assert.equal(c.cirugia_realizada ?? null, null, 'no se da por realizada');
+    assert.ok(r.avisos.some((a: string) => /Por cerrar/.test(a)), 'avisa que quedan por cerrar');
+  });
+  const CXN = U(910);
+  const completadaPorError = () => {
+    db.agenda_cirugias = [{ id: CXN, nombre_paciente: 'Don Prueba', fecha: '2026-10-13', hora: '08:00:00', estado: 'completada', doctor_id: null, origen_registro: 'IMPORTACION', inventario_item_id: null }];
+    db.cirugia_lentes = [{ id: U(911), cirugia_id: CXN, orden: 'PRIMERO', origen: 'HOSPITAL', modo: 'SIN_TRAMITE', inventario_item_id: null, estado: 'USADO', requerido: true }];
+    db.cirugia_historial = [];
+    db.eventos_honorario = [];
+    registro.devengos = [];
+  };
+  await prueba('9. No realizadas', 'Solo admin ve «Anular» en una cirugía completada', () => {
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'admin'), ['cancelar']);
+    assert.deepEqual(accionesDisponibles({ tipo: 'cirugia', estado: 'completada' } as any, 'recepcionista'), []);
+    assert.deepEqual(accionesDisponibles({ tipo: 'consulta', estado: 'completada' } as any, 'admin'), []);
+  });
+  await prueba('9. No realizadas', 'Recepción no puede anular una completada (403)', async () => {
+    completadaPorError();
+    sesion.rol = 'recepcionista';
+    const res = await patchAgenda(json('PATCH', { estado: 'cancelada', motivo: 'No se operó' }), params(CXN));
+    assert.equal(res.status, 403);
+    assert.equal(db.agenda_cirugias[0].estado, 'completada');
+  });
+  await prueba('9. No realizadas', 'Con honorarios pagados no se anula (409)', async () => {
+    completadaPorError();
+    db.eventos_honorario = [{ id: U(912), origen_tipo: 'OPERACION', origen_id: CXN, estado: 'PAGADO' }];
+    sesion.rol = 'admin';
+    const res = await patchAgenda(json('PATCH', { estado: 'cancelada', motivo: 'No se operó' }), params(CXN));
+    assert.equal(res.status, 409);
+    assert.equal(db.agenda_cirugias[0].estado, 'completada');
+  });
+  await prueba('9. No realizadas', 'Admin anula: cancelada, motivo y usuario en historial, lente liberado, honorarios retirados', async () => {
+    completadaPorError();
+    sesion.rol = 'admin';
+    const sinMotivo = await patchAgenda(json('PATCH', { estado: 'cancelada' }), params(CXN));
+    assert.equal(sinMotivo.status, 400, 'el motivo es obligatorio');
+    const res = await patchAgenda(json('PATCH', { estado: 'cancelada', motivo: 'El paciente no se presentó' }), params(CXN));
+    assert.equal(res.status, 200, await res.clone().text());
+    await espera();
+    assert.equal(db.agenda_cirugias[0].estado, 'cancelada');
+    const h = db.cirugia_historial.find((x) => x.accion === 'ESTADO_CAMBIADO')!;
+    assert.equal(h.detalle.a, 'cancelada');
+    assert.equal(h.detalle.motivo, 'El paciente no se presentó');
+    assert.equal(h.detalle.anulacion, true);
+    assert.ok(h.usuario_id, 'queda quién lo anuló');
+    const l = db.cirugia_lentes[0];
+    assert.equal(l.estado, 'LIBERADO');
+    assert.equal(l.motivo_liberacion, 'CIRUGIA_ANULADA');
+    assert.equal(l.requerido, false);
+    assert.ok(registro.devengos.includes(`cancelar:${CXN}`), 'retira honorarios no pagados');
   });
 
   // ───────────── Reporte ─────────────

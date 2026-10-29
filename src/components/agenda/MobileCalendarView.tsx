@@ -597,7 +597,7 @@ export default function MobileCalendarView({ cirugiasPorFecha, onDateSelect, onA
                             : 'border-line text-fg-2 active:bg-surface-2'
                       )}
                     >
-                      {ETIQUETA_ACCION[a]}
+                      {a === 'cancelar' && selectedCirugia.estado === 'completada' ? 'Anular' : ETIQUETA_ACCION[a]}
                     </button>
                   ))}
                 </div>
