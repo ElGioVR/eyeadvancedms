@@ -77,7 +77,9 @@ export function validarLente(l: LenteForm, modelos: ModeloLio[]): string | null 
   if (!Number.isFinite(p) || p < 0 || p > 40) return `${nombre}: captura la dioptría/potencia (0 a 40).`;
   if (l.torico && (l.modo !== 'SIN_TRAMITE' || l.cilindro.trim() !== '')) {
     const c = num(l.cilindro);
-    if (!Number.isFinite(c) || c <= 0 || c > 12) return `${nombre}: captura el cilindro del lente tórico.`;
+    // 0.00 es un valor válido (la API y la BD lo aceptan); antes se rechazaba con «captura el cilindro».
+    if (!Number.isFinite(c)) return `${nombre}: captura el cilindro del lente tórico.`;
+    if (c < 0 || c > 12) return `${nombre}: el cilindro del lente tórico debe estar entre 0 y 12 D.`;
   }
   return null;
 }
