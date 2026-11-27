@@ -3,6 +3,7 @@
 import Aislado from '@/components/ui/Aislado';
 import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Camera,
@@ -23,6 +24,7 @@ import {
   ArrowUp,
   RotateCcw,
   Wrench,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFetch, useDebounce, useInvalidar } from '@/hooks';
@@ -41,6 +43,7 @@ import ClientDate from '@/components/ui/ClientDate';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
 import { SkeletonTarjetas } from '@/components/ui/Skeleton';
 import PlanResurtimiento from '@/components/inventario/PlanResurtimiento';
+import type { LenteComprometido } from '@/app/api/inventario/lentes-comprometidos/route';
 
 const BarcodeScanner = dynamic(() => import('@/components/inventario/BarcodeScanner'), { ssr: false });
 
@@ -91,6 +94,7 @@ const kardexTipoConfig: Record<string, { bg: string; text: string; icon: typeof 
 
 const estadoConfig: Record<string, { bg: string; text: string; dot?: string }> = {
   DISPONIBLE: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  COMPROMETIDO: { bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
   OCUPADO: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
   DANADO: { bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-600 dark:text-red-300', dot: 'bg-red-500' },
   VENCIDO: { bg: 'bg-red-50 dark:bg-red-500/10', text: 'text-red-600 dark:text-red-300', dot: 'bg-red-500' },
@@ -107,11 +111,16 @@ function mensajeError(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-function getEstadoLente(stock: number, minimo: number): string {
+function getEstadoLente(stock: number, minimo: number, apartadas = 0): string {
   if (stock === 0) return 'SIN STOCK';
+  // Todas las piezas están apartadas para cirugías: hay stock físico pero no está libre.
+  if (apartadas >= stock) return 'COMPROMETIDO';
   if (stock < minimo) return 'BAJO';
   return 'DISPONIBLE';
 }
+
+const ETIQUETA_ORDEN_LENTE: Record<string, string> = { PRIMERO: 'Primer lente', SEGUNDO: 'Segundo lente', RESPALDO: 'Lente de respaldo' };
+const fechaCorta = (f: string) => f.slice(0, 10).split('-').reverse().join('/');
 
 /** Reemplaza campos de una fila en la respuesta paginada cacheada. */
 function conFila(actual: unknown, id: string, cambios: Partial<LenteAPI>): unknown {
@@ -165,6 +174,20 @@ export default function InventarioPage() {
   );
 
   const debouncedSearch = useDebounce(search);
+
+  // Piezas apartadas (RESERVADO) para cirugías activas: el stock baja hasta completar la cirugía,
+  // así que aquí se muestra para qué cirugía está comprometida cada pieza.
+  const { data: comprometidosData } = useSWR<LenteComprometido[]>('/api/inventario/lentes-comprometidos', { revalidateOnFocus: true });
+  const comprometidosPorItem = useMemo(() => {
+    const m = new Map<string, LenteComprometido[]>();
+    for (const c of Array.isArray(comprometidosData) ? comprometidosData : []) {
+      const lista = m.get(c.inventario_item_id) ?? [];
+      lista.push(c);
+      m.set(c.inventario_item_id, lista);
+    }
+    return m;
+  }, [comprometidosData]);
+  const kardexComprometidos = kardexItemId ? comprometidosPorItem.get(kardexItemId) ?? [] : [];
 
   const proveedores = useMemo(() => {
     const unique = [...new Set(lentes.map((l) => l.proveedor).filter((p): p is string => Boolean(p)))];
@@ -367,7 +390,9 @@ export default function InventarioPage() {
           {filtered.map((lente) => {
             const stockBajo = lente.stock > 0 && lente.stock < lente.stock_minimo;
             const sinStock = lente.stock === 0;
-            const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo);
+            const apartados = comprometidosPorItem.get(lente.id) ?? [];
+            const estadoLente = getEstadoLente(lente.stock, lente.stock_minimo, apartados.length);
+            const libresLente = Math.max(0, lente.stock - apartados.length);
             return (
               <div key={lente.id} className={cn(
                 'rounded-2xl border bg-surface shadow-soft overflow-hidden transition-[box-shadow,border-color] duration-200 hover:shadow-card dark:shadow-none',
@@ -408,6 +433,9 @@ export default function InventarioPage() {
                       { label: 'N\u00b0 Serie', value: lente.serial_number || '—' },
                       { label: 'Caducidad', value: lente.expiration_date || '—' },
                       { label: 'Stock', value: `${lente.stock} pzas`, className: sinStock ? 'text-red-600' : stockBajo ? 'text-amber-600' : 'text-fg' },
+                      ...(apartados.length > 0
+                        ? [{ label: 'Libres', value: `${libresLente} de ${lente.stock}`, className: libresLente === 0 ? 'text-violet-700 dark:text-violet-300' : 'text-fg' }]
+                        : []),
                       { label: 'M\u00ednimo', value: `${lente.stock_minimo} pzas`, className: 'text-muted' },
                     ].map((item) => (
                       <div key={item.label} className="min-w-0 rounded-xl border border-line bg-surface px-2.5 py-2 sm:px-4 sm:py-3">
@@ -417,6 +445,24 @@ export default function InventarioPage() {
                     ))}
                   </div>
                 </div>
+
+                {apartados.length > 0 && (
+                  <div className="space-y-1 border-t border-violet-200/70 bg-violet-50/60 px-3 py-2.5 dark:border-violet-500/20 dark:bg-violet-500/5 sm:px-6">
+                    {apartados.map((a) => (
+                      <p key={`${a.cirugia_id}-${a.orden}`} className="flex flex-wrap items-center gap-1.5 text-xs text-violet-800 dark:text-violet-200">
+                        <Lock className="h-3.5 w-3.5 shrink-0" />
+                        <span>Comprometida para <strong>{a.paciente || 'paciente sin nombre'}</strong></span>
+                        <span>·</span>
+                        <Link href={`/cirugias/${a.cirugia_id}`} className="font-bold underline underline-offset-2 hover:text-violet-950 dark:hover:text-white">
+                          {a.codigo || 'Ver cirugía'}
+                        </Link>
+                        {a.fecha && <span>· {fechaCorta(a.fecha)}{a.hora ? ` ${a.hora.slice(0, 5)}` : ''}</span>}
+                        <span className="text-violet-600/80 dark:text-violet-300/80">· {ETIQUETA_ORDEN_LENTE[a.orden] ?? a.orden}</span>
+                      </p>
+                    ))}
+                    <p className="text-[11px] text-violet-700/80 dark:text-violet-300/70">Se descuenta del stock al completar la cirugía.</p>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-3 border-t border-line/70 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
                   <div className="hidden flex-wrap items-center gap-4 text-xs text-muted sm:flex">
@@ -633,6 +679,24 @@ export default function InventarioPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6" aria-busy={kardexLoading}>
+              {kardexComprometidos.length > 0 && (
+                <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                    <Lock className="h-3.5 w-3.5" /> Comprometida · {kardexComprometidos.length} pza(s)
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {kardexComprometidos.map((a) => (
+                      <li key={`${a.cirugia_id}-${a.orden}`} className="text-xs text-violet-900 dark:text-violet-100">
+                        <Link href={`/cirugias/${a.cirugia_id}`} className="font-bold underline underline-offset-2">{a.codigo || 'Ver cirugía'}</Link>
+                        {' · '}{a.paciente || 'paciente sin nombre'}
+                        {a.fecha && <> · {fechaCorta(a.fecha)}{a.hora ? ` ${a.hora.slice(0, 5)}` : ''}</>}
+                        {' · '}{ETIQUETA_ORDEN_LENTE[a.orden] ?? a.orden}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-violet-700/80 dark:text-violet-300/70">Apartada sin bajar el stock; la salida se registra al completar la cirugía.</p>
+                </div>
+              )}
               {kardexLoading ? (
                 <SkeletonTarjetas cantidad={4} className="sm:grid-cols-1 lg:grid-cols-1" />
               ) : kardexData.length === 0 ? (

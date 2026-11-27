@@ -10,6 +10,9 @@ export interface LenteComprometido {
   orden: string;
   fecha: string | null;
   paciente: string | null;
+  /** Código de la cirugía (CIR-00026) y hora, para mostrarlos en inventario/kardex. */
+  codigo?: string | null;
+  hora?: string | null;
 }
 
 /**
@@ -25,7 +28,7 @@ async function manejarGET() {
 
   const { data, error } = await getSupabaseAdmin()
     .from('cirugia_lentes')
-    .select('inventario_item_id, cirugia_id, orden, agenda_cirugias!inner(fecha, nombre_paciente, estado)')
+    .select('inventario_item_id, cirugia_id, orden, agenda_cirugias!inner(fecha, hora, codigo, nombre_paciente, estado)')
     .eq('estado', 'RESERVADO')
     .not('inventario_item_id', 'is', null)
     .limit(1000);
@@ -43,6 +46,8 @@ async function manejarGET() {
       orden: r.orden as string,
       fecha: (c.fecha as string) ?? null,
       paciente: (c.nombre_paciente as string) ?? null,
+      codigo: (c.codigo as string) ?? null,
+      hora: (c.hora as string) ?? null,
     }));
   return NextResponse.json(filas);
 }
