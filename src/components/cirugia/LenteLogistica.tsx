@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle2, Info, PackageSearch, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clasificarPieza, coincideConModeloInventario, DISENOS_LIO, fabricanteCanonico, type ModeloLio } from '@/lib/catalogos/modelos-lio';
@@ -176,6 +176,21 @@ export default function LenteLogistica({
   };
   const etiquetaClase = (c: ReturnType<typeof clasificarPieza>) =>
     c ? `${DISENOS_LIO.find((d) => d.value === c.diseno)?.label ?? c.diseno}${c.torico ? ' · Tórico' : ''}` : null;
+  // Pieza ya asignada (p. ej. al editar): se muestra cuál es y, si la cirugía se guardó sin modelo
+  // ni potencia, se completan con los datos de la pieza para que el formulario no quede vacío.
+  const piezaElegida = lente.itemId ? lios.find((i) => i.id === lente.itemId) ?? null : null;
+  useEffect(() => {
+    if (!piezaElegida || lente.modo !== 'ASIGNAR' || lente.modeloId || lente.fabricante.trim() || lente.potencia.trim()) return;
+    const modelo = modelos
+      .filter((m) => m.activo && m.torico === lente.torico && coincideConModeloInventario(piezaElegida, m))
+      .sort((a, b) => b.modelo.length - a.modelo.length)[0];
+    onChange({
+      fabricante: modelo?.fabricante ?? fabricanteCanonico(piezaElegida.marca),
+      ...(modelo ? { modeloId: modelo.id } : {}),
+      ...(piezaElegida.potencia_dioptrias != null ? { potencia: String(piezaElegida.potencia_dioptrias) } : {}),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piezaElegida?.id, modelos.length]);
   const soloComprometidos = coincidencias.filter((c) => c.libres <= 0 && c.comprometidos.length > 0);
   const modoInfo = MODOS_LENTE.find((m) => m.value === lente.modo) ?? null;
 
@@ -354,7 +369,9 @@ export default function LenteLogistica({
           )}
           {lente.itemId && (
             <p className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" /> Pieza elegida: se compromete a esta cirugía al guardar.
+              <CheckCircle2 className="h-4 w-4" /> Pieza elegida{piezaElegida
+                ? `: ${fabricanteCanonico(piezaElegida.marca)} ${piezaElegida.modelo ?? ''}${piezaElegida.potencia_dioptrias != null ? ` · ${piezaElegida.potencia_dioptrias}D` : ''}${piezaElegida.lote ? ` · Lote ${piezaElegida.lote}` : ''}`
+                : ''}. Se compromete a esta cirugía al guardar.
             </p>
           )}
         </div>

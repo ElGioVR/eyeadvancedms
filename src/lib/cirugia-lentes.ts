@@ -315,9 +315,16 @@ export async function guardarPlanLentes(
         });
         if (!r.ok) return { ok: false, orden: l.orden, error: r.error };
       }
+      // El primer lente lo aparta la alta solo con la pieza: se guardan también modelo y potencia
+      // para que «Editar cirugía» los muestre (antes quedaban vacíos).
+      const datosPieza = {
+        ...(l.fabricante ? { fabricante: l.fabricante } : {}),
+        ...(l.modelo ? { modelo: l.modelo } : {}),
+        ...(l.poder_d != null ? { poder_d: l.poder_d } : {}),
+      };
       const { data: act } = await supabase
         .from('cirugia_lentes')
-        .update({ ...meta, estado_logistica: 'LISTO' })
+        .update({ ...meta, ...datosPieza, estado_logistica: 'LISTO' })
         .eq('cirugia_id', cirugiaId)
         .eq('orden', l.orden)
         .select('id');
