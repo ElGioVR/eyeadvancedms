@@ -1,4 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { esItemLIO } from '@/lib/lio-item';
+
+export { esItemLIO };
 
 /*
  * Movimientos de inventario (Kardex) seguros ante concurrencia.
@@ -214,7 +217,7 @@ export async function consumirLIO(
     supabase.from('inventario_items').select('*').eq('id', inventarioItemId).maybeSingle(),
   ]);
 
-  const item = itemRes.data as { stock: number; tipo?: string | null; tipo_lio?: string | null; potencia_dioptrias?: number | null } | null;
+  const item = itemRes.data as { stock: number; tipo?: string | null; tipo_lio?: string | null; potencia_dioptrias?: number | null; sphere?: number | null } | null;
   if (!item) {
     return { success: false, error: 'Ítem de inventario no encontrado' };
   }
@@ -222,14 +225,20 @@ export async function consumirLIO(
     return { success: true, stock_resultante: item.stock };
   }
 
-  const esLIO =
-    item.tipo === 'LENTE_INTRAOCULAR' ||
-    item.tipo_lio != null ||
-    item.potencia_dioptrias != null;
+  // Esquema actual del inventario: solo lentes intraoculares, con la potencia en «sphere» y sin
+  // columna «tipo». Antes solo se aceptaba el esquema legacy (tipo/tipo_lio/potencia_dioptrias),
+  // así que ningún lente dado de alta con el formulario actual se descontaba al completar.
+  const esLIO = esItemLIO(item);
   if (!esLIO) {
     return { success: false, error: 'El ítem seleccionado no es un LIO' };
   }
 
+  // El kardex dice en qué cirugía y para qué paciente salió la pieza.
+  const { data: cx } = await supabase
+    .from('agenda_cirugias')
+    .select('codigo, nombre_paciente')
+    .eq('id', cirugiaId)
+    .maybeSingle();
   const r = await registrarMovimiento({
     itemId: inventarioItemId,
     delta: -1,
@@ -237,7 +246,7 @@ export async function consumirLIO(
     usuarioId,
     referenciaTipo: 'CIRUGIA',
     referenciaId: cirugiaId,
-    motivo: 'Consumo LIO por cirugía',
+    motivo: ['Consumo LIO por cirugía', cx?.codigo, cx?.nombre_paciente].filter(Boolean).join(' · '),
   });
 
   if (!r.ok) {

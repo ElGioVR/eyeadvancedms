@@ -429,6 +429,18 @@ async function manejarPATCH(
     const requeridos: OrdenLente[] = data.lentes_requeridos ?? (itemId ? ['PRIMERO'] : []);
     const result = await completarLentesCirugia(id, requeridos, auth.user.id, data.lentes_ingresar_inventario ?? []);
     if (!result.ok) {
+      // Sin lentes resueltos la cirugía NO queda completada: se regresa a su estado anterior
+      // (antes quedaba «completada» con la pieza sin descontar y apartada para nadie).
+      await supabase
+        .from('agenda_cirugias')
+        .update({ estado: estadoAnterior, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      await supabase.from('cirugia_historial').insert({
+        cirugia_id: id,
+        usuario_id: auth.user.id,
+        accion: 'ESTADO_CAMBIADO',
+        detalle: { de: 'completada', a: estadoAnterior, motivo: `No se pudo completar: ${result.error}` },
+      });
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
     // Trazabilidad: qué lentes se usaron y cuáles se liberaron queda en el historial.
