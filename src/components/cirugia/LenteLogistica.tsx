@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Info, PackageSearch, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { coincideConModelo, fabricanteCanonico, type ModeloLio } from '@/lib/catalogos/modelos-lio';
+import { clasificarPieza, coincideConModeloInventario, DISENOS_LIO, fabricanteCanonico, type ModeloLio } from '@/lib/catalogos/modelos-lio';
 import SelectorModeloLio, { type NuevoModeloLio } from '@/components/cirugia/SelectorModeloLio';
 import type { DisenoLio } from '@/lib/catalogos/modelos-lio';
 import type { LIODisponible } from '@/components/cirugia/LIOSelector';
@@ -126,7 +126,8 @@ export default function LenteLogistica({
   const coincidencias = useMemo(() => {
     if (!hayFiltro) return [];
     return lios
-      .filter((i) => (modeloSel ? coincideConModelo(i, modeloSel) : !fabSel || mismoFabricante(i.marca, fabSel)))
+      // Reconoce la pieza aunque el inventario use el código del fabricante y el catálogo el nombre oficial.
+      .filter((i) => (modeloSel ? coincideConModeloInventario(i, modeloSel) : !fabSel || mismoFabricante(i.marca, fabSel)))
       .filter((i) => !Number.isFinite(p) || (i.potencia_dioptrias != null && Math.abs(i.potencia_dioptrias - p) < 0.005))
       .map((i) => {
         const prop = comprometidos.filter((c) => c.inventario_item_id === i.id && c.cirugia_id !== cirugiaIdActual);
@@ -137,6 +138,44 @@ export default function LenteLogistica({
   }, [lios, modeloSel, fabSel, p, hayFiltro, comprometidos, itemsEnOtrosLentes, cirugiaIdActual]);
 
   const libres = coincidencias.filter((c) => c.libres > 0);
+
+  // Explorador: todo el inventario de LIO disponible, para elegir la pieza aunque no coincida con el catálogo.
+  const [verInventario, setVerInventario] = useState(false);
+  const [buscarInv, setBuscarInv] = useState('');
+  const inventario = useMemo(() => {
+    const q = buscarInv.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return lios
+      .map((i) => {
+        const prop = comprometidos.filter((c) => c.inventario_item_id === i.id && c.cirugia_id !== cirugiaIdActual);
+        const enOtros = itemsEnOtrosLentes.filter((x) => x === i.id).length;
+        return { item: i, libres: i.stock - prop.length - enOtros, comprometidos: prop, clase: clasificarPieza(i, modelos) };
+      })
+      .filter(({ item }) => {
+        if (!q) return true;
+        const t = `${item.marca} ${item.modelo ?? ''} ${item.producto ?? ''} ${item.lote ?? ''} ${item.potencia_dioptrias ?? ''}`
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return q.split(/\s+/).every((w) => t.includes(w));
+      })
+      // Primero: misma clasificación (tórico) y misma potencia; luego por potencia.
+      .sort((a, b) => {
+        const pa = (a.clase?.torico ?? false) === lente.torico ? 0 : 1;
+        const pb = (b.clase?.torico ?? false) === lente.torico ? 0 : 1;
+        const ea = Number.isFinite(p) && a.item.potencia_dioptrias != null && Math.abs(a.item.potencia_dioptrias - p) < 0.005 ? 0 : 1;
+        const eb = Number.isFinite(p) && b.item.potencia_dioptrias != null && Math.abs(b.item.potencia_dioptrias - p) < 0.005 ? 0 : 1;
+        return ea - eb || pa - pb || (a.item.potencia_dioptrias ?? 99) - (b.item.potencia_dioptrias ?? 99);
+      });
+  }, [lios, comprometidos, itemsEnOtrosLentes, cirugiaIdActual, modelos, buscarInv, lente.torico, p]);
+  const elegirDelInventario = (i: LIODisponible) => {
+    onChange({
+      itemId: i.id,
+      // Completa lo que falte con los datos de la pieza (no pisa lo ya capturado).
+      ...(lente.potencia.trim() === '' && i.potencia_dioptrias != null ? { potencia: String(i.potencia_dioptrias) } : {}),
+      ...(!lente.modeloId && !lente.fabricante ? { fabricante: fabricanteCanonico(i.marca) } : {}),
+    });
+    setVerInventario(false);
+  };
+  const etiquetaClase = (c: ReturnType<typeof clasificarPieza>) =>
+    c ? `${DISENOS_LIO.find((d) => d.value === c.diseno)?.label ?? c.diseno}${c.torico ? ' · Tórico' : ''}` : null;
   const soloComprometidos = coincidencias.filter((c) => c.libres <= 0 && c.comprometidos.length > 0);
   const modoInfo = MODOS_LENTE.find((m) => m.value === lente.modo) ?? null;
 
@@ -222,8 +261,70 @@ export default function LenteLogistica({
 
       {lente.modo === 'ASIGNAR' && (
         <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-fg-2">Piezas del inventario</p>
+            <button
+              type="button"
+              onClick={() => setVerInventario((v) => !v)}
+              aria-expanded={verInventario}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-bold text-primary-700 hover:bg-surface-2 dark:text-primary-300"
+            >
+              <PackageSearch className="h-3.5 w-3.5" /> {verInventario ? 'Ocultar inventario' : 'Ver todo el inventario'}
+            </button>
+          </div>
+          {verInventario && (
+            <div className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/40 p-2.5 dark:border-primary-500/30 dark:bg-primary-500/5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                <input
+                  type="text"
+                  value={buscarInv}
+                  onChange={(e) => setBuscarInv(e.target.value)}
+                  placeholder="Buscar por marca, modelo, nombre, lote o dioptría (ej. clareon 24)"
+                  className={cn(inputCls, 'pl-8')}
+                  aria-label="Buscar en el inventario de lentes"
+                />
+              </div>
+              {inventario.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted">{lios.length === 0 ? 'No hay lentes intraoculares disponibles en el inventario.' : 'Ninguna pieza coincide con la búsqueda.'}</p>
+              ) : (
+                <ul className="max-h-72 space-y-1 overflow-y-auto pr-1" aria-label="Inventario de lentes">
+                  {inventario.map(({ item, libres: n, comprometidos: c, clase }) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        disabled={n <= 0}
+                        onClick={() => elegirDelInventario(item)}
+                        className={cn(
+                          'flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors',
+                          lente.itemId === item.id ? 'border-primary-500 bg-surface' : 'border-line bg-surface hover:border-primary-300',
+                          n <= 0 && 'cursor-not-allowed opacity-50',
+                        )}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium text-fg">{fabricanteCanonico(item.marca)} {item.modelo ?? ''}</span>
+                          {item.potencia_dioptrias != null && <span className="font-semibold text-fg"> · {item.potencia_dioptrias} D</span>}
+                          {item.producto && <span className="block truncate text-xs text-fg-2">{item.producto}</span>}
+                          <span className="block text-[11px] text-muted">
+                            Lote {item.lote || 'N/A'} · Cad. {item.fecha_caducidad || 'N/A'} ·{' '}
+                            {n > 0 ? `${n} pza(s) libre(s)` : `sin piezas libres${c.length ? ` (apartada para ${c.map((x) => x.paciente ?? 'otra cirugía').join(', ')})` : ''}`}
+                          </span>
+                        </span>
+                        {etiquetaClase(clase) && (
+                          <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold', clase?.torico === lente.torico ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-surface-2 text-fg-2')}>
+                            {etiquetaClase(clase)}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="px-1 text-[11px] text-muted">Al elegir una pieza se aparta para esta cirugía al guardar y se descuenta del inventario al completarla.</p>
+            </div>
+          )}
           {!hayFiltro ? (
-            <p className="text-xs text-muted">Elige el fabricante y el modelo para buscar piezas en el inventario; la potencia es opcional y afina la búsqueda.</p>
+            <p className="text-xs text-muted">Elige el fabricante y el modelo para ver las piezas que coinciden, o usa <strong>Ver todo el inventario</strong> para elegirla directamente.</p>
           ) : libres.length > 0 ? (
             <ul className="space-y-1.5">
               {libres.map(({ item, libres: n, comprometidos: c }) => (
@@ -248,7 +349,7 @@ export default function LenteLogistica({
           ) : (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>No hay piezas libres con estos datos. Cambia a <strong>Solicitar</strong> o <strong>Compra directa</strong>, o quita la opción para solo registrar el lente.</span>
+              <span>No encontramos piezas libres que coincidan con el modelo elegido. Usa <strong>Ver todo el inventario</strong> para elegir la pieza directamente, o cambia a <strong>Solicitar</strong> o <strong>Compra directa</strong>.</span>
             </div>
           )}
           {lente.itemId && (

@@ -167,6 +167,8 @@ async function manejarGET(request: Request) {
         item.manufacturer !== undefined || item.product_name !== undefined
           ? (item.model as string) || (item.product_name as string) || null
           : (item.modelo as string) || null,
+      // Nombre comercial (p. ej. «Clareon Monofocal IOL»): ayuda a reconocer la pieza al asignarla.
+      producto: (item.product_name as string) || null,
       tipo_lio: (item.tipo_lio as string) ?? null,
       potencia_dioptrias:
         (item.potencia_dioptrias as number) ??

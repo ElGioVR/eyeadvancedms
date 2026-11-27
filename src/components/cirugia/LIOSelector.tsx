@@ -10,6 +10,8 @@ export interface LIODisponible {
   id: string;
   marca: string;
   modelo: string | null;
+  /** Nombre comercial (inventario nuevo: product_name). */
+  producto?: string | null;
   tipo_lio: string | null;
   potencia_dioptrias: number | null;
   lote: string | null;

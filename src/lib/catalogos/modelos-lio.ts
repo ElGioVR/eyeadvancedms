@@ -157,6 +157,59 @@ export function coincideConModelo(
   return fab && mod;
 }
 
+/** Palabras que no distinguen un modelo de otro («lente», «IOL»…). */
+const GENERICAS = new Set(['iol', 'lio', 'lente', 'lens', 'intraocular', 'piece', 'pieza', 'de', 'the', 'one', 'pc']);
+const palabras = (t: string | null | undefined) =>
+  quitarAcentos(t || '').split(/[^a-z0-9]+/).filter((w) => w.length >= 2 && !GENERICAS.has(w));
+const fabCompacto = (t: string | null | undefined) => compacto(fabricanteCanonico(t ?? ''));
+
+/**
+ * Coincidencia amplia pieza ↔ modelo para ASIGNAR desde el inventario.
+ * El inventario se captura con el código del fabricante (p. ej. «CNA0T0») y el nombre comercial
+ * en otro campo («Clareon Monofocal IOL»), mientras el catálogo usa el nombre oficial; por eso,
+ * además de la regla estricta, compara contra el nombre comercial y por palabras.
+ * Fabricante con alias unificados (J&J = Johnson & Johnson, B&L = Bausch + Lomb…).
+ */
+export function coincideConModeloInventario(
+  item: { marca: string | null | undefined; modelo: string | null | undefined; producto?: string | null },
+  modelo: { fabricante: string; modelo: string }
+): boolean {
+  if (coincideConModelo(item, modelo)) return true;
+  const fi = fabCompacto(item.marca);
+  const fm = fabCompacto(modelo.fabricante);
+  if (!fi || !fm || !(fi.includes(fm) || fm.includes(fi))) return false;
+  const textoItem = `${item.modelo ?? ''} ${item.producto ?? ''}`;
+  const ci = compacto(textoItem);
+  const cm = compacto(modelo.modelo);
+  if (!cm || !ci) return false;
+  if (ci.includes(cm)) return true;
+  const cp = compacto(item.producto);
+  if (cp && cp.length >= 4 && cm.includes(cp)) return true;
+  // Por palabras: todas las del modelo del catálogo (sin el nombre del fabricante) están en la pieza.
+  const delFabricante = new Set(palabras(modelo.fabricante));
+  const pm = palabras(modelo.modelo).filter((w) => !delFabricante.has(w));
+  const pi = new Set(palabras(textoItem));
+  return pm.length > 0 && pm.every((w) => pi.has(w));
+}
+
+/** Clasificación (diseño y tórico) de una pieza, tomada del modelo del catálogo con que coincide. */
+export function clasificarPieza<T extends Pick<ModeloLio, 'fabricante' | 'modelo' | 'diseno' | 'torico' | 'activo'>>(
+  item: { marca: string | null | undefined; modelo: string | null | undefined; producto?: string | null },
+  modelos: T[]
+): { diseno: DisenoLio; torico: boolean } | null {
+  // Preferir el modelo del catálogo más específico (nombre más largo) entre los que coinciden.
+  const candidatos = modelos.filter((m) => m.activo && coincideConModeloInventario(item, m)).sort((a, b) => b.modelo.length - a.modelo.length);
+  if (candidatos.length) return { diseno: candidatos[0].diseno, torico: candidatos[0].torico };
+  const texto = quitarAcentos(`${item.modelo ?? ''} ${item.producto ?? ''}`);
+  if (!texto.trim()) return null;
+  const torico = /toric/.test(texto);
+  const diseno: DisenoLio | null = /panoptix|trifocal|\btri\b|fine ?vision|synergy/.test(texto) ? 'TRIFOCAL'
+    : /vivity|symfony|edof|eyhance/.test(texto) ? 'EDOF'
+    : /monofocal|acrysof iq|tecnis 1|\bsn60|\bzcb00|clareon(?! panoptix| vivity)/.test(texto) ? 'MONOFOCAL'
+    : null;
+  return diseno ? { diseno, torico } : torico ? { diseno: 'OTRO', torico } : null;
+}
+
 /** Alias de fabricante → nombre unificado (mismo mapa que patch-modelos-lio-oficiales). */
 const ALIAS_FABRICANTE: Record<string, string> = {
   'johnson & johnson vision': 'Johnson & Johnson', 'j&j': 'Johnson & Johnson', 'j&j vision': 'Johnson & Johnson',
