@@ -164,6 +164,17 @@ const palabras = (t: string | null | undefined) =>
 const fabCompacto = (t: string | null | undefined) => compacto(fabricanteCanonico(t ?? ''));
 
 /**
+ * Palabras que distinguen el diseño dentro de una misma familia («Clareon» vs «Clareon Toric»
+ * vs «Clareon PanOptix»). En la coincidencia amplia deben estar en ambos lados o en ninguno:
+ * así una pieza capturada solo como «Clareon» no se ofrece para un modelo tórico ni trifocal.
+ */
+const DISTINTIVAS = ['toric', 'panoptix', 'vivity', 'trifocal', 'multifocal', 'symfony', 'synergy', 'eyhance', 'edof', 'puresee', 'odyssey'];
+const distintivas = (t: string) => {
+  const c = compacto(t);
+  return new Set(DISTINTIVAS.filter((w) => c.includes(w)));
+};
+
+/**
  * Coincidencia amplia pieza ↔ modelo para ASIGNAR desde el inventario.
  * El inventario se captura con el código del fabricante (p. ej. «CNA0T0») y el nombre comercial
  * en otro campo («Clareon Monofocal IOL»), mientras el catálogo usa el nombre oficial; por eso,
@@ -182,6 +193,9 @@ export function coincideConModeloInventario(
   const ci = compacto(textoItem);
   const cm = compacto(modelo.modelo);
   if (!cm || !ci) return false;
+  const dm = distintivas(modelo.modelo);
+  const di = distintivas(textoItem);
+  if (dm.size !== di.size || Array.from(dm).some((w) => !di.has(w))) return false;
   if (ci.includes(cm)) return true;
   const cp = compacto(item.producto);
   if (cp && cp.length >= 4 && cm.includes(cp)) return true;

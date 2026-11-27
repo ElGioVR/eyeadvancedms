@@ -32,6 +32,14 @@ describe('asignar LIO desde inventario', () => {
     assert.equal(coincideConModeloInventario(clareonMono, catalogo[3]), false);
     assert.equal(coincideConModeloInventario({ marca: 'Alcon', modelo: null, producto: null }, catalogo[0]), false);
   });
+  it('una pieza capturada solo con la familia («Clareon») no se ofrece para el modelo tórico', () => {
+    // Caso real del inventario: SY60WF / «Clareon» (monofocal no tórico).
+    const sy60 = { marca: 'Alcon', modelo: 'SY60WF', producto: 'Clareon' };
+    assert.equal(coincideConModeloInventario(sy60, catalogo[0]), true);
+    assert.equal(coincideConModeloInventario(sy60, catalogo[1]), false);
+    assert.equal(coincideConModeloInventario(sy60, catalogo[2]), false);
+    assert.equal(coincideConModeloInventario({ marca: 'Alcon', modelo: 'Clareon Toric', producto: null }, catalogo[1]), true);
+  });
   it('clasifica la pieza (monofocal / trifocal, tórico)', () => {
     assert.deepEqual(clasificarPieza(clareonMono, catalogo), { diseno: 'MONOFOCAL', torico: false });
     assert.deepEqual(clasificarPieza(panoptixToric, catalogo), { diseno: 'TRIFOCAL', torico: true });
