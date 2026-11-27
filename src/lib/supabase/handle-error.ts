@@ -57,3 +57,18 @@ export function mensajeSeguro(err: unknown, contexto: string, generico = 'Error 
   if (PATRON_INTERNO.test(message) || message.length > 200) return generico;
   return message;
 }
+
+/**
+ * Validación de negocio lanzada por una función SQL (RAISE EXCEPTION → código P0001), p. ej.
+ * «El LIO seleccionado no tiene piezas disponibles». Es un aviso para el usuario, no una falla:
+ * se responde 409 con el mensaje y NO se reporta a Sentry. Devuelve null si no aplica.
+ */
+export function mensajeDeNegocio(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  const { code, message } = err as { code?: unknown; message?: unknown };
+  if (code !== 'P0001' || typeof message !== 'string' || !message) return null;
+  const traducido = errorTranslations[message];
+  if (traducido) return traducido;
+  if (PATRON_INTERNO.test(message) || message.length > 200) return null;
+  return message;
+}

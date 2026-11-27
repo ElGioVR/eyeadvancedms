@@ -1,7 +1,7 @@
 import { resolverServicioFacturacion } from '@/lib/cirugia-servicio-facturacion';
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { handleSupabaseError, mensajeSeguro } from '@/lib/supabase/handle-error';
+import { handleSupabaseError, mensajeSeguro, mensajeDeNegocio } from '@/lib/supabase/handle-error';
 import { requireAuth, requireRole } from '@/lib/supabase/server';
 import { ROLES_GESTION_AGENDA } from '@/lib/permisos-agenda';
 import { errorTranslations } from '@/lib/supabase/errors';
@@ -361,6 +361,9 @@ async function manejarPOST(request: Request) {
 
   if (error) {
     const friendly = errorTranslations[error.message];
+    // Validaciones del RPC (sin piezas libres, empalmes…): aviso al usuario, no error para Sentry.
+    const negocio = friendly ? null : mensajeDeNegocio(error);
+    if (negocio) return NextResponse.json({ error: negocio }, { status: 409 });
     return NextResponse.json(
       { error: friendly || mensajeSeguro(error, 'cirugias') },
       { status: friendly ? 400 : 500 }
