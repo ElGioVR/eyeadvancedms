@@ -102,6 +102,11 @@ body {
     @apply bg-surface/80 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/70;
   }
 
+  /* Ver TecladoMovil: barras fijas inferiores fuera mientras el teclado está abierto (bug de iOS). */
+  html[data-teclado='abierto'] .ocultar-con-teclado {
+    display: none !important;
+  }
+
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }

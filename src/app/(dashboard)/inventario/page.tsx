@@ -1,7 +1,7 @@
 'use client';
 
 import Aislado from '@/components/ui/Aislado';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -38,6 +38,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
+import PanelInsumos from '@/components/inventario/insumos/PanelInsumos';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ClientDate from '@/components/ui/ClientDate';
 import BarraRevalidando from '@/components/ui/BarraRevalidando';
@@ -139,6 +140,18 @@ function sinFila(actual: unknown, id: string): unknown {
 export default function InventarioPage() {
   const [page, setPage] = useState(1);
   const { user } = useUser();
+  // Pestaña Lentes / Insumos; se refleja en ?vista=insumos para poder compartir el enlace.
+  const [vista, setVista] = useState<'lentes' | 'insumos'>('lentes');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('vista') === 'insumos') setVista('insumos');
+  }, []);
+  const cambiarVista = (v: 'lentes' | 'insumos') => {
+    setVista(v);
+    const url = new URL(window.location.href);
+    if (v === 'insumos') url.searchParams.set('vista', 'insumos');
+    else url.searchParams.delete('vista');
+    window.history.replaceState(window.history.state, '', url);
+  };
   // Misma URL que la precarga de /bienvenida (page=1&pageSize=15).
   const { data: lentes, loading, validating, error, mutate, total } = useFetch<LenteAPI>('/api/inventario', { page: String(page), pageSize: '15' });
   // SWR mantiene `isLoading` al paginar aunque muestre la página anterior (keepPreviousData):
@@ -335,8 +348,25 @@ export default function InventarioPage() {
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-4 sm:space-y-6">
-      <PageHeader title="Inventario" subtitle="Lentes intraoculares, especificaciones y stock clínico." action={headerActions} />
+      <PageHeader
+        title="Inventario"
+        subtitle={vista === 'insumos' ? 'Cassettes, medicamentos y material: existencias por lote, ubicación y caducidad.' : 'Lentes intraoculares, especificaciones y stock clínico.'}
+        action={vista === 'lentes' ? headerActions : undefined}
+      />
 
+      <div className="inline-flex rounded-xl border border-line bg-surface p-1 shadow-soft dark:shadow-none" role="tablist" aria-label="Tipo de inventario">
+        {([['lentes', 'Lentes'], ['insumos', 'Insumos']] as const).map(([v, t]) => (
+          <button key={v} type="button" role="tab" aria-selected={vista === v} onClick={() => cambiarVista(v)}
+            className={cn('rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors', vista === v ? 'bg-primary-600 text-white shadow-sm' : 'text-fg-2 hover:bg-surface-2')}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {vista === 'insumos' ? (
+        <PanelInsumos puedeEscribir={puedeEscribir} esAdmin={user?.rol === 'admin'} />
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-4 gap-2 sm:gap-3">
         {[
@@ -509,6 +539,8 @@ export default function InventarioPage() {
         onPageChange={(p) => setPage(p)}
         label="lentes"
       />
+      </>
+      )}
 
       {/* Scanner Modal */}
       <Modal isOpen={showScanner} onClose={() => { setShowScanner(false); setScanResult(null); setScanError(''); setBarcodeInput(''); setScannerMode('camera'); }} maxWidth="max-w-md">

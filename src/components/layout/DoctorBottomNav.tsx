@@ -85,7 +85,7 @@ export default function DoctorBottomNav({ onMenuOpen }: DoctorBottomNavProps) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line/80 glass pb-safe lg:hidden"
+      className="ocultar-con-teclado fixed inset-x-0 bottom-0 z-40 border-t border-line/80 glass pb-safe lg:hidden"
       aria-label="Navegación principal"
     >
       <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-2">

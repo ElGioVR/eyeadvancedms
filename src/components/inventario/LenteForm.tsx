@@ -281,7 +281,7 @@ export default function LenteForm({ initialData, mode }: LenteFormProps) {
       </section>
 
       {/* Guardar fijo abajo en móvil */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-line/70 glass p-3 sm:hidden">
+      <div className="ocultar-con-teclado fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-line/70 glass p-3 sm:hidden">
         <button onClick={handleSave} disabled={saving} className="btn-primary w-full">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saving ? 'Guardando…' : mode === 'edit' ? 'Guardar cambios' : 'Guardar lente'}

@@ -104,7 +104,7 @@ export default function ConsultaAccionesFab({
   return (
     <>
       {/* En móvil se coloca arriba de la barra inferior para no tapar el menú. */}
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[90] lg:bottom-6 lg:right-6 flex flex-col items-end gap-3 no-print">
+      <div className="ocultar-con-teclado fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[90] lg:bottom-6 lg:right-6 flex flex-col items-end gap-3 no-print">
         {open && (
           <div className="flex flex-col items-end gap-2 animate-fadeIn">
             {opciones.map(({ accion: a, label, icon: Icon, color }) => (
